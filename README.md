@@ -1,4 +1,4 @@
-# Antigravity Skills Repository
+# Agent Skills Repository
 
 A centralized, multi-skill repository for Google Antigravity agents. This repository houses reusable, production-grade skills that can be consumed globally across workspaces or linked directly into individual projects.
 
