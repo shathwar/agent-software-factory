@@ -18,25 +18,32 @@ Execute every review through this standardized single-reviewer pipeline:
 ```text
 SKILL.md (Orchestrator)
     ↓
-inspect_changes.sh (Change Discovery)
+inspect_changes.sh (Change Discovery & Trigger Signals)
     ↓
-review pipeline (9-Stage Hierarchy)
+review mode selection (Targeted Mode Matrix: review_modes.md)
     ↓
-single Principal Reviewer (Exhaustive Analysis)
+single Principal Reviewer (Analysis of Active Stages)
     ↓
 structured findings (Contract: finding_schema.md)
 ```
 
-1. **Change Discovery**: Run `scripts/inspect_changes.sh` (or `git diff`) to identify all modified files, lines, and branch differences.
-2. **Deep Inspection**: Read target files **IN FULL**. Trace callers, call-sites, and consumers across the codebase. Never review diffs in isolation.
-3. **9-Stage Cascade**: Evaluate the code sequentially through the 9-stage ladder below.
+1. **Change Discovery**: Run `scripts/inspect_changes.sh` (or `git diff`) to identify all modified files, lines, and review mode trigger signals.
+2. **Targeted Mode Selection**: Consult [`review_modes.md`](./references/review_modes.md) to select the appropriate targeted review mode based on change signals:
+   - **Standard Code Change** $\rightarrow$ `Correctness + Design`
+   - **Shared State / Async** $\rightarrow$ `Correctness + Concurrency + Design`
+   - **Database Migration** $\rightarrow$ `Correctness + Migration + Production Risk`
+   - **Public API** $\rightarrow$ `Correctness + Contract + Compatibility`
+   - **Dependency Change** $\rightarrow$ `Production Risk + Compatibility`
+   - **Financial / Precision Critical** $\rightarrow$ `Correctness + Concurrency + Domain Invariant + Production Risk`
+   - **Full Adversarial Audit** $\rightarrow$ `All 9 Stages + Production Risk` (on explicit user request)
+3. **Deep Inspection**: Read active target files **IN FULL**. Trace callers, call-sites, and consumers across the codebase. Never review diffs in isolation.
 4. **Contract Adherence**: Format every identified issue using the strict 11-field schema defined in [`finding_schema.md`](./references/finding_schema.md).
 
 ---
 
 ## 2. The 9-Stage Hierarchy (Short Rules — Always Loaded)
 
-Evaluate code strictly along this prioritized cascade. Foundational stages (1–3) must pass before evaluating craftsmanship and architecture.
+Evaluate active stages strictly along this prioritized cascade. Foundational stages (1–3) must pass before evaluating craftsmanship and architecture.
 
 1. **Correctness**: Does it actually work? Logic bugs, off-by-one, boundary values, null/None safety, float precision (`BigDecimal`/`Decimal`), presentation vs domain separation.
 2. **Concurrency / Safety**: Thread-safe under load? Mutexes, keyed locks, deadlock prevention, double release, atomicity on concurrent maps (`computeIfAbsent`), virtual thread pinning, asyncio task lifecycles.
@@ -54,12 +61,12 @@ Evaluate code strictly along this prioritized cascade. Foundational stages (1–
 
 Consult these reference documents **only when required** to deep-dive into specific areas:
 
+- [Targeted Review Modes (`review_modes.md`)](./references/review_modes.md): Selection matrix and rules for targeting review stages to the specific change profile.
 - [Finding Contract Schema (`finding_schema.md`)](./references/finding_schema.md): **The official 11-field data contract** that every finding must satisfy for automated evaluation and future Judge arbitration.
 - [Foundations Handbook (`handbook_foundations.md`)](./references/handbook_foundations.md): Deep-dive checklists for **Stage 1 (Correctness)**, **Stage 2 (Concurrency & Safety)**, and **Stage 3 (Failure & Resilience)**.
 - [Craftsmanship Handbook (`handbook_craftsmanship.md`)](./references/handbook_craftsmanship.md): Detailed criteria for **Stage 4 (Simplicity)**, **Stage 5 (Maintainability)**, **Stage 6 (Reuse)**, and **Stage 7 (Performance)**.
 - [Architecture Handbook (`handbook_architecture.md`)](./references/handbook_architecture.md): Principles and failure cases for **Stage 8 (SOLID)** and **Stage 9 (Patterns & Anti-Patterns)**.
 - [Production Risk Matrix (`production_risk_matrix.md`)](./references/production_risk_matrix.md): Live operational hazards, contract drift, DB migration safety, and blast radius.
-- [Review Modes Guide (`review_modes.md`)](./references/review_modes.md): Tailoring reviews for targeted passes (reusability pass, cognitive load pass, pre-deploy audit).
 
 ---
 
@@ -72,20 +79,22 @@ Every review must produce output conforming to this template:
 
 ## Executive Summary
 - **Overall Verdict**: [READY TO DEPLOY / CHANGES REQUIRED / HIGH RISK - BLOCKED]
+- **Targeted Review Mode**: [e.g. Shared State & Async (Correctness + Concurrency + Design)]
 - **Summary**: Concise, authoritative assessment of changes, architecture, and operational risk.
 
-## 9-Stage Hierarchy Scorecard
-| Stage | Dimension | Status | Principal Engineer Assessment |
-|---|---|---|---|
-| 1 | **Correctness** | [PASS / WARN / FAIL] | Concrete observation |
-| 2 | **Concurrency / Safety** | [PASS / WARN / FAIL] | Concrete observation |
-| 3 | **Failure / Resilience** | [PASS / WARN / FAIL] | Concrete observation |
-| 4 | **Simplicity** | [PASS / WARN / FAIL] | Concrete observation |
-| 5 | **Maintainability** | [PASS / WARN / FAIL] | Concrete observation |
-| 6 | **Reuse** | [PASS / WARN / FAIL] | Concrete observation |
-| 7 | **Performance** | [PASS / WARN / FAIL] | Concrete observation |
-| 8 | **SOLID** | [PASS / WARN / FAIL] | Concrete observation |
-| 9 | **Patterns** | [PASS / WARN / FAIL] | Concrete observation |
+## Review Scorecard
+| Stage / Area | Status | Principal Engineer Assessment |
+|---|---|---|
+| 1. **Correctness** | [PASS / WARN / FAIL] | Concrete observation |
+| 2. **Concurrency / Safety** | [PASS / WARN / FAIL / SKIPPED] | Concrete observation |
+| 3. **Failure / Resilience** | [PASS / WARN / FAIL / SKIPPED] | Concrete observation |
+| 4. **Simplicity** | [PASS / WARN / FAIL / SKIPPED] | Concrete observation |
+| 5. **Maintainability** | [PASS / WARN / FAIL / SKIPPED] | Concrete observation |
+| 6. **Reuse** | [PASS / WARN / FAIL / SKIPPED] | Concrete observation |
+| 7. **Performance** | [PASS / WARN / FAIL / SKIPPED] | Concrete observation |
+| 8. **SOLID** | [PASS / WARN / FAIL / SKIPPED] | Concrete observation |
+| 9. **Patterns** | [PASS / WARN / FAIL / SKIPPED] | Concrete observation |
+| **Production Risk / Contract** | [PASS / WARN / FAIL / SKIPPED] | Concrete observation |
 
 ---
 
