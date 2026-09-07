@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor & IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Temporary & logs
+*.log
+scratch/
