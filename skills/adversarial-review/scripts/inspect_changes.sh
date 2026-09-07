@@ -96,7 +96,78 @@ fi
 echo "Scope:  $DIFF_SPEC ($MODE)"
 echo ""
 
-# --- 3. Categorized Changed Files ---
+# --- 3. Spec & Requirements Discovery ---
+echo "Spec & Requirements Discovery:"
+SPEC_FOUND=false
+
+COMMITS_TO_CHECK=""
+if [[ "$MODE" == "WORKING_TREE" ]]; then
+    COMMITS_TO_CHECK=$(git log -n 5 --oneline 2>/dev/null || true)
+else
+    COMMITS_TO_CHECK=$(git log "$DIFF_SPEC" --oneline 2>/dev/null || true)
+fi
+
+ISSUE_REFS=$(echo "$COMMITS_TO_CHECK" | grep -o -E '(#|GH-|[A-Z]{2,10}-)[0-9]+' | sort -u | tr '\n' ' ' || true)
+if [[ -n "${ISSUE_REFS// }" ]]; then
+    echo "  • Linked Issues in Commits: $ISSUE_REFS"
+    SPEC_FOUND=true
+fi
+
+SPEC_FILES=()
+while IFS= read -r f; do
+    [[ -n "$f" ]] && SPEC_FILES+=("$f")
+done < <(git ls-files "*spec*.md" "*PRD*.md" "*RFC*.md" "docs/specs/*" "docs/rfcs/*" ".scratch/*" 2>/dev/null || true)
+
+if [[ ${#SPEC_FILES[@]} -gt 0 ]]; then
+    echo "  • Available Spec / PRD Documents:"
+    for sf in "${SPEC_FILES[@]}"; do
+        echo "    - $sf"
+    done
+    SPEC_FOUND=true
+fi
+
+if [[ "$SPEC_FOUND" == "false" ]]; then
+    echo "  • No explicit issue keys or spec markdown files detected."
+    echo "    (If a spec exists, provide its path or summary; otherwise Stage 0 evaluates as SKIPPED)."
+fi
+echo ""
+
+# --- 4. Repository Standards & Tooling ---
+echo "Repository Standards & Conventions:"
+STANDARDS_FOUND=false
+
+STANDARDS_DOCS=()
+while IFS= read -r f; do
+    [[ -n "$f" ]] && STANDARDS_DOCS+=("$f")
+done < <(git ls-files "*CODING_STANDARDS*" "*CONTRIBUTING*" "*STYLEGUIDE*" "docs/standards/*" 2>/dev/null || true)
+
+if [[ ${#STANDARDS_DOCS[@]} -gt 0 ]]; then
+    echo "  • Documented Standards:"
+    for doc in "${STANDARDS_DOCS[@]}"; do
+        echo "    - $doc"
+    done
+    STANDARDS_FOUND=true
+fi
+
+LINTER_CONFIGS=()
+while IFS= read -r f; do
+    [[ -n "$f" ]] && LINTER_CONFIGS+=("$f")
+done < <(git ls-files ".eslintrc*" "eslint.config.*" "biome.json" "ruff.toml" ".ruff.toml" "pyproject.toml" ".clang-format" "checkstyle.xml" ".golangci.*" "rustfmt.toml" 2>/dev/null || true)
+
+if [[ ${#LINTER_CONFIGS[@]} -gt 0 ]]; then
+    echo "  • Project Linters / Formatters Configured:"
+    for cfg in "${LINTER_CONFIGS[@]}"; do
+        echo "    - $cfg"
+    done
+    STANDARDS_FOUND=true
+fi
+
+if [[ "$STANDARDS_FOUND" == "false" ]]; then
+    echo "  • No custom coding standards or linter configs detected (using Fowler Code Smell baseline)."
+fi
+echo ""
+
+# --- 5. Categorized Changed Files ---
 echo "Changed files:"
 
 ADDED_FILES=()
@@ -170,7 +241,7 @@ if [[ ${#MODIFIED_FILES[@]} -gt 0 ]]; then
     for f in "${MODIFIED_FILES[@]}"; do ALL_CHANGED_FILES+=("$f"); done
 fi
 
-# --- 4. Diff Statistics ---
+# --- 6. Diff Statistics ---
 echo "Diff statistics:"
 if [[ "$MODE" == "WORKING_TREE" ]]; then
     git diff --stat HEAD 2>/dev/null || true
@@ -182,7 +253,7 @@ else
 fi
 echo ""
 
-# --- 5. Intelligent Review Mode Triggers ---
+# --- 7. Intelligent Review Mode Triggers ---
 echo "Suggested Review Modes:"
 TRIGGERS_COUNT=0
 
@@ -252,7 +323,7 @@ if [[ "$TRIGGERS_COUNT" -eq 0 ]]; then
 fi
 echo ""
 
-# --- 6. Relevant Tests Mapping ---
+# --- 8. Relevant Tests Mapping ---
 echo "Relevant tests:"
 PROD_FILES=()
 
@@ -355,7 +426,7 @@ else
 fi
 echo ""
 
-# --- 7. Potentially Affected Callers ---
+# --- 9. Potentially Affected Callers ---
 echo "Potentially affected callers:"
 if [[ ${#PROD_FILES[@]} -eq 0 ]]; then
     echo "  (No production source files changed)"
@@ -386,7 +457,7 @@ else
 fi
 echo ""
 
-# --- 8. Full Diff Output ---
+# --- 10. Full Diff Output ---
 if [[ "$PRINT_DIFF" == "true" ]]; then
     echo "Full diff:"
     if [[ "$MODE" == "WORKING_TREE" ]]; then

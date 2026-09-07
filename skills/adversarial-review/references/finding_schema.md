@@ -12,7 +12,7 @@ Every finding must include the following 11 fields without exception:
 |---|---|---|---|
 | **`id`** | String | Unique finding identifier within the review session. | `FINDING-001`, `FINDING-002`, ... |
 | **`severity`** | Enum | The critical level and urgency of the finding. | `CRITICAL` (P0), `HIGH` (P1), `MEDIUM` (P2), `LOW` (P3) |
-| **`category`** | Enum | The specific stage of the 9-stage engineering hierarchy. | `Correctness`, `Concurrency`, `Failure/Resilience`, `Simplicity`, `Maintainability`, `Reuse`, `Performance`, `SOLID`, `Patterns`, `ProductionRisk` |
+| **`category`** | Enum | The specific stage of the 10-stage engineering hierarchy. | `SpecAlignment`, `Correctness`, `Concurrency`, `Failure/Resilience`, `Simplicity`, `Maintainability`, `Reuse`, `Performance`, `SOLID`, `Patterns`, `ProductionRisk` |
 | **`file`** | String | Workspace-relative path to the inspected file (with clickable link). | `src/main/java/.../Service.java` |
 | **`line`** | String | Exact line number or range containing the issue. | `L120` or `L120-L135` |
 | **`title`** | String | Crisp, one-line summary of the defect. | 5–12 words, domain-specific |
@@ -75,6 +75,35 @@ When rendering findings in the final review report, reviewers must adhere strict
   // Use atomic computeIfAbsent:
   symbolLocks.computeIfAbsent(symbol, k -> new ReentrantLock()).lock();
   ```
+
+### [FINDING-002] [HIGH] Missing mandatory idempotency key enforcement specified in ticket PROJ-882
+- **Category**: SpecAlignment
+- **Location**: [PaymentWebhookController.java:L55-L80](file:///path/to/PaymentWebhookController.java#L55-L80)
+- **Confidence**: CERTAIN (1.0)
+- **Problem**: Ticket acceptance criteria AC-2 in PROJ-882 explicitly mandates validating and recording the `X-Idempotency-Key` header before dispatching payout events. The implemented controller ignores the header entirely.
+- **Evidence**:
+  ```java
+  @PostMapping("/webhooks/payout")
+  public ResponseEntity<Void> handlePayout(@RequestBody PayoutPayload payload) {
+      // Missing check for X-Idempotency-Key header mandated by spec
+      payoutService.process(payload);
+      return ResponseEntity.ok().build();
+  }
+  ```
+- **Impact on Live Production**: Payment gateway retries or network replays will execute duplicate payouts, causing financial loss.
+- **Recommendation**:
+  ```java
+  @PostMapping("/webhooks/payout")
+  public ResponseEntity<Void> handlePayout(
+          @RequestHeader("X-Idempotency-Key") String idempotencyKey,
+          @RequestBody PayoutPayload payload) {
+      if (!idempotencyService.recordIfAbsent(idempotencyKey)) {
+          return ResponseEntity.status(HttpStatus.CONFLICT).build();
+      }
+      payoutService.process(payload);
+      return ResponseEntity.ok().build();
+  }
+  ```
 ```
 
 ---
@@ -101,8 +130,14 @@ For programmatic consumption by the **Judge** or automated CI pipelines:
 
 ---
 
-## 6. Multi-Agent Evolution: Role of the Judge
+## 6. Multi-Agent Protocol: Role of the Principal Judge
 
-In Phase 2 / multi-agent architecture:
-1. **Specialist Agents** (Correctness, Concurrency, Design) will each independently generate findings matching this schema.
-2. The **Judge** agent will ingest all structured findings, deduplicate overlapping issues, verify call-site evidence, filter out findings where `confidence < 0.70`, and assemble the authoritative final report.
+In Parallel Dual-Agent execution:
+1. **Spec Verifier Sub-Agent**: Inspects originating issue/PRD and git diff, producing findings restricted to `category: SpecAlignment`.
+2. **Systems Auditor Sub-Agent**: Inspects correctness, concurrency, failure resilience, and production risk across the codebase.
+3. **The Principal Judge**:
+   - Ingests all structured findings from both sub-agents.
+   - Deduplicates any overlapping findings (e.g. where a spec requirement bug also triggers a correctness failure).
+   - Verifies evidence against full file contents.
+   - Filters out phantom or speculative findings where `confidence < 0.70`.
+   - Compiles the final authoritative report without allowing one axis to suppress the other.

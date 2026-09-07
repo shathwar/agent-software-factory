@@ -15,6 +15,13 @@ Consult this reference when evaluating Simplicity, Maintainability, Reuse, and P
 - **Standard Library First**:
   - Prefer native platform and standard library capabilities (`java.time`, `java.util.concurrent`, Python `math`, `asyncio`, `pathlib`) over introducing third-party dependencies or custom utility wheels.
   - Shortest sound working diff wins.
+- **Fowler Code Smells Baseline (Simplification Focus)**:
+  - *Repo standards precedence*: Documented repo standards (`CODING_STANDARDS.md`, `CONTRIBUTING.md`) always override baseline heuristics.
+  - *Tooling exemption*: Skip formatting or stylistic issues already enforced by repo linters (Ruff, ESLint, Checkstyle).
+  - **Speculative Generality**: Abstraction, parameters, or hooks added for hypothetical needs not in the spec. $\rightarrow$ delete it; inline back until real need shows.
+  - **Middle Man**: A class or method that mostly just forwards calls directly onward without adding value. $\rightarrow$ cut it, call the real target direct.
+  - **Duplicated Code**: Identical or nearly identical logic shapes appearing in multiple hunks. $\rightarrow$ extract the shared helper, call from both sites.
+  - **Refused Bequest**: Subclass or implementer that ignores or throws `UnsupportedOperationException` on inherited methods. $\rightarrow$ drop inheritance, use composition.
 
 ---
 
@@ -28,6 +35,15 @@ Consult this reference when evaluating Simplicity, Maintainability, Reuse, and P
   - Variables and methods must use terms from the business domain (e.g. `isSquareOffTime()`, `activeTrailOrders`, `ltpThreshold`) instead of implementation mechanics (`flag1`, `processData()`, `tempObj`).
 - **Testability & Determinism**:
   - Isolate non-deterministic elements (system clock, random numbers, external networks) so logic can be tested deterministically.
+- **Fowler Code Smells Baseline (Maintainability Focus)**:
+  - **Mysterious Name**: A function, variable, or type whose name doesn't reveal what it does or holds. $\rightarrow$ rename it; if no honest name comes, the design is murky.
+  - **Feature Envy**: A method that reaches into another object's fields or getters more than its own. $\rightarrow$ move the method onto the data it envies.
+  - **Data Clumps**: The same 3+ fields or parameters travelling together across multiple signatures. $\rightarrow$ bundle into a cohesive domain type or value object.
+  - **Primitive Obsession**: Raw primitives (`String`, `int`) standing in for domain concepts (e.g. `orderId`, `currency`, `percentage`). $\rightarrow$ introduce small type-safe domain wrappers.
+  - **Repeated Switches**: The same `switch` or `if/else` cascade on the same type recurring across files. $\rightarrow$ replace with polymorphism or a centralized strategy map.
+  - **Shotgun Surgery**: One logical change forces scattered modifications across dozens of files. $\rightarrow$ gather what changes together into one cohesive module.
+  - **Divergent Change**: One file or class is repeatedly edited for completely unrelated business reasons. $\rightarrow$ split so each module has a single axis of change (SRP).
+  - **Message Chains**: Deep traversal like `a.getB().getC().getD().execute()`. $\rightarrow$ hide the navigation behind a method on the immediate object (Law of Demeter).
 
 ---
 

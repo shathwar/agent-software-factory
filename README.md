@@ -28,7 +28,7 @@ skills/
 
 | Skill Name | Identifier | Triggers | Description |
 |---|---|---|---|
-| **Adversarial Code Review** | [`adversarial-review`](./skills/adversarial-review/) | `/adversarial-review`, `"adversarial review"`, `"review like a principal engineer"`, `"code review"`, `"PR review"`, `"diff review"`, `"pre-deploy risk review"` | Conducts an exhaustive, zero-blindspot code review adopting the persona of a Senior Principal Engineer. Evaluates code strictly across a 9-stage engineering hierarchy. |
+| **Adversarial Code Review** | [`adversarial-review`](./skills/adversarial-review/) | `/adversarial-review`, `"adversarial review"`, `"review like a principal engineer"`, `"code review"`, `"PR review"`, `"diff review"`, `"pre-deploy risk review"` | Conducts an exhaustive, zero-blindspot code review adopting the persona of a Senior Principal Engineer. Evaluates code strictly across a 10-stage engineering hierarchy (from Spec Alignment to Concurrency and Architecture), featuring auto-discovery of issues/specs, repo standards, and dual-agent execution. |
 
 ---
 
@@ -37,15 +37,17 @@ skills/
 A production-grade code review skill designed around a low-cognition, progressive disclosure architecture:
 
 - **Persona**: Senior Principal Engineer (uncompromising on correctness, allergic to bloat, zero hand-waving, pragmatic minimalism).
-- **The 9-Stage Evaluation Hierarchy**:
+- **The 10-Stage Evaluation Hierarchy**:
   ```text
+  0. Spec Alignment (Issue/PRD Compliance & Scope Creep)
+         ↓
   1. Correctness
          ↓
   2. Concurrency / Safety
          ↓
   3. Failure / Resilience
          ↓
-  4. Simplicity (YAGNI)
+  4. Simplicity (YAGNI & Fowler Code Smells Baseline)
          ↓
   5. Maintainability
          ↓
@@ -57,14 +59,18 @@ A production-grade code review skill designed around a low-cognition, progressiv
          ↓
   9. Patterns
   ```
+- **Execution Flexibility**:
+  - **Single Reviewer (Default)**: Fast, end-to-end evaluation for daily pull requests.
+  - **Parallel Dual-Agent Mode**: For large PRs (>400 diff lines) or explicit request, dispatches **Spec Verifier** and **Systems Auditor** sub-agents concurrently, unified by the Principal Reviewer as Judge.
 - **The Engineering Handbook** (`skills/adversarial-review/references/`):
   - [`handbook_foundations.md`](./skills/adversarial-review/references/handbook_foundations.md): Deep-dive checklists for Correctness, Concurrency, and Failure Resilience.
-  - [`handbook_craftsmanship.md`](./skills/adversarial-review/references/handbook_craftsmanship.md): Criteria for Simplicity, Maintainability, Reuse, and Performance.
+  - [`handbook_craftsmanship.md`](./skills/adversarial-review/references/handbook_craftsmanship.md): Criteria for Simplicity, Fowler 12 Smells Baseline, Maintainability, Reuse, and Performance.
   - [`handbook_architecture.md`](./skills/adversarial-review/references/handbook_architecture.md): Principles for SOLID and Design Patterns / Anti-Patterns.
   - [`production_risk_matrix.md`](./skills/adversarial-review/references/production_risk_matrix.md): Operational hazards, contract drift, DB migrations, and blast radius.
-  - [`review_modes.md`](./skills/adversarial-review/references/review_modes.md): Tailored multi-pass review invocations.
+  - [`review_modes.md`](./skills/adversarial-review/references/review_modes.md): Targeted review mode matrix and Parallel Dual-Agent execution protocol.
+  - [`finding_schema.md`](./skills/adversarial-review/references/finding_schema.md): Strict 11-field data contract with confidence scoring and drop-in code fixes.
 - **Helper Script**:
-  - [`scripts/inspect_changes.sh`](./skills/adversarial-review/scripts/inspect_changes.sh): Automated git inspector for working tree diffs, branch comparisons vs `main`, and commit histories.
+  - [`scripts/inspect_changes.sh`](./skills/adversarial-review/scripts/inspect_changes.sh): Automated inspector for git diffs, linked issues/specs, repo standards/linters, test mappings, and cross-codebase callers.
 
 ---
 
