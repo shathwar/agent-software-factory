@@ -227,17 +227,17 @@ if files_match "(db/migration/|migrations/|V[0-9]+__.*\.sql|schema\.prisma|alemb
     TRIGGERS_COUNT=$((TRIGGERS_COUNT + 1))
 fi
 
-if diff_contains "\b(synchronized|ReentrantLock|Lock|ConcurrentHashMap|AtomicReference|AtomicBoolean|AtomicInteger|AsyncKeyedLock|asyncio\.Lock|Mutex|RWMutex)\b"; then
+if diff_contains "\b(synchronized|ReentrantLock|Lock|ConcurrentHashMap|AtomicReference|AtomicBoolean|AtomicInteger|AsyncKeyedLock|asyncio\.Lock|Mutex|RWMutex|sync\.(Mutex|RWMutex|WaitGroup)|tokio::sync|std::sync::Mutex|pthread_mutex)\b"; then
     echo "  [!] CONCURRENCY REVIEW: Mutexes, locks, or atomic collections in diff (scrutinize deadlock, reentrancy, double release, atomicity)"
     TRIGGERS_COUNT=$((TRIGGERS_COUNT + 1))
 fi
 
-if diff_contains "\b(Executor|CompletableFuture|VirtualThread|Thread\.start|run_in_threadpool|asyncio\.create_task|BackgroundTasks|goroutine|\bgo [a-zA-Z0-9_]+)\b"; then
+if diff_contains "\b(Executor|CompletableFuture|VirtualThread|Thread\.start|run_in_threadpool|asyncio\.create_task|BackgroundTasks|goroutine|\bgo [a-zA-Z0-9_]+|tokio::spawn|Task\.Run|Promise\.all|chan [a-zA-Z0-9_]+)\b"; then
     echo "  [!] THREAD / ASYNC LIFECYCLE REVIEW: Background tasks, thread pools, or async tasks (check unhandled errors, task cancellation, carrier pinning)"
     TRIGGERS_COUNT=$((TRIGGERS_COUNT + 1))
 fi
 
-if files_match "(Controller|Resource|Endpoint|routes|api/|\.proto)" || diff_contains "(@RestController|@Controller|@Get|@Post|@Put|@Delete|@Path|@app\.(get|post|put|delete)|router\.(get|post))"; then
+if files_match "(Controller|Resource|Endpoint|routes|api/|\.proto)" || diff_contains "(@RestController|@Controller|@Get|@Post|@Put|@Delete|@Path|@app\.(get|post|put|delete)|router\.(get|post)|r\.(GET|POST|PUT|DELETE))"; then
     echo "  [!] CONTRACT REVIEW: API controllers / routing modified (check backwards compatibility, status codes, query params, schema serialization)"
     TRIGGERS_COUNT=$((TRIGGERS_COUNT + 1))
 fi
@@ -276,18 +276,38 @@ else
         MATCHING_TESTS=()
 
         # 1. Search tracked git files
-        if [[ "$EXT" == "java" ]]; then
+        if [[ "$EXT" =~ ^(java|kt)$ ]]; then
             while IFS= read -r t; do
                 [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
-            done < <(git ls-files "*${STEM}Test.java" "*${STEM}IT.java" 2>/dev/null || true)
+            done < <(git ls-files "*${STEM}Test.java" "*${STEM}IT.java" "*${STEM}Test.kt" 2>/dev/null || true)
         elif [[ "$EXT" == "py" ]]; then
             while IFS= read -r t; do
                 [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
             done < <(git ls-files "*test_${STEM}.py" "*${STEM}_test.py" 2>/dev/null || true)
-        elif [[ "$EXT" =~ ts|js ]]; then
+        elif [[ "$EXT" =~ ^(ts|js|jsx|tsx)$ ]]; then
             while IFS= read -r t; do
                 [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
             done < <(git ls-files "*${STEM}.spec.*" "*${STEM}.test.*" 2>/dev/null || true)
+        elif [[ "$EXT" == "go" ]]; then
+            while IFS= read -r t; do
+                [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
+            done < <(git ls-files "*${STEM}_test.go" 2>/dev/null || true)
+        elif [[ "$EXT" == "rs" ]]; then
+            while IFS= read -r t; do
+                [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
+            done < <(git ls-files "tests/*${STEM}*.rs" 2>/dev/null || true)
+        elif [[ "$EXT" == "cs" ]]; then
+            while IFS= read -r t; do
+                [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
+            done < <(git ls-files "*${STEM}Tests.cs" "*${STEM}Test.cs" 2>/dev/null || true)
+        elif [[ "$EXT" =~ ^(cpp|cc|cxx)$ ]]; then
+            while IFS= read -r t; do
+                [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
+            done < <(git ls-files "*${STEM}_test.*" "*${STEM}Test.*" "*test_${STEM}.*" 2>/dev/null || true)
+        elif [[ "$EXT" == "rb" ]]; then
+            while IFS= read -r t; do
+                [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
+            done < <(git ls-files "*${STEM}_spec.rb" "*${STEM}_test.rb" 2>/dev/null || true)
         fi
 
         # 2. Also check untracked added files on disk
