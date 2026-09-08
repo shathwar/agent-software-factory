@@ -28,7 +28,7 @@ skills/
 
 | Skill Name | Identifier | Triggers | Description |
 |---|---|---|---|
-| **Adversarial Code Review** | [`adversarial-review`](./skills/adversarial-review/) | `/adversarial-review`, `"adversarial review"`, `"review like a principal engineer"`, `"code review"`, `"PR review"`, `"diff review"`, `"pre-deploy risk review"` | Conducts an exhaustive, zero-blindspot code review adopting the persona of a Senior Principal Engineer. Evaluates code strictly across a 10-stage engineering hierarchy (from Spec Alignment to Concurrency and Architecture), featuring auto-discovery of issues/specs, repo standards, and dual-agent execution. |
+| **Adversarial Code Review** | [`adversarial-review`](./skills/adversarial-review/) | `/adversarial-review`, `"adversarial review"`, `"review like a principal engineer"`, `"code review"`, `"PR review"`, `"diff review"`, `"pre-deploy risk review"` | Conducts an exhaustive, zero-blindspot code review adopting the persona of a Senior Principal Engineer. Evaluates code strictly across a 10-stage engineering hierarchy (from Spec Alignment to Concurrency and Architecture), featuring auto-discovery of issues/specs, repo standards, and three-specialist multi-agent execution. |
 
 ---
 
@@ -61,13 +61,13 @@ A production-grade code review skill designed around a low-cognition, progressiv
   ```
 - **Execution Flexibility**:
   - **Single Reviewer (Default)**: Fast, end-to-end evaluation for daily pull requests.
-  - **Parallel Dual-Agent Mode**: For large PRs (>400 diff lines) or explicit request, dispatches **Spec Verifier** and **Systems Auditor** sub-agents concurrently, unified by the Principal Reviewer as Judge.
+  - **Multi-Agent Mode**: For large PRs (>400 diff lines) or explicit request, dispatches **Correctness**, **Concurrency**, and **Design** specialists from `skills/adversarial-review/agents/`, followed by a dedicated [Judge](./skills/adversarial-review/agents/judge.md) that independently inspects relevant code before accepting submitted findings.
 - **The Engineering Handbook** (`skills/adversarial-review/references/`):
   - [`handbook_foundations.md`](./skills/adversarial-review/references/handbook_foundations.md): Deep-dive checklists for Correctness, Concurrency, and Failure Resilience.
   - [`handbook_craftsmanship.md`](./skills/adversarial-review/references/handbook_craftsmanship.md): Criteria for Simplicity, Fowler 12 Smells Baseline, Maintainability, Reuse, and Performance.
   - [`handbook_architecture.md`](./skills/adversarial-review/references/handbook_architecture.md): Principles for SOLID and Design Patterns / Anti-Patterns.
   - [`production_risk_matrix.md`](./skills/adversarial-review/references/production_risk_matrix.md): Operational hazards, contract drift, DB migrations, and blast radius.
-  - [`review_modes.md`](./skills/adversarial-review/references/review_modes.md): Targeted review mode matrix and Parallel Dual-Agent execution protocol.
+  - [`review_modes.md`](./skills/adversarial-review/references/review_modes.md): Targeted review mode matrix and three-specialist execution protocol.
   - [`finding_schema.md`](./skills/adversarial-review/references/finding_schema.md): Strict 11-field data contract with confidence scoring and drop-in code fixes.
 - **Helper Script**:
   - [`scripts/inspect_changes.sh`](./skills/adversarial-review/scripts/inspect_changes.sh): Automated inspector for git diffs, linked issues/specs, repo standards/linters, test mappings, and cross-codebase callers.

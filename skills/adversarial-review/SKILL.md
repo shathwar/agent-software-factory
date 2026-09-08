@@ -1,6 +1,6 @@
 ---
 name: adversarial-review
-description: Conducts an exhaustive, zero-blindspot adversarial code review strictly adopting the persona of a Senior Principal Engineer. Evaluates code across the 10-stage engineering hierarchy (0. Spec Alignment -> 1. Correctness -> 2. Concurrency/Safety -> 3. Failure/Resilience -> 4. Simplicity -> 5. Maintainability -> 6. Reuse -> 7. Performance -> 8. SOLID -> 9. Patterns). Features auto-discovery of issues/specs, repo coding standards, Fowler smells baseline, and parallel dual-agent execution for large PRs. Use whenever the user asks for a review by a "principal engineer", "adversarial review", "code review", "PR review", "diff review", "pre-deploy risk review", or invokes /adversarial-review.
+description: Conducts an exhaustive, zero-blindspot adversarial code review strictly adopting the persona of a Senior Principal Engineer. Evaluates code across the 10-stage engineering hierarchy (0. Spec Alignment -> 1. Correctness -> 2. Concurrency/Safety -> 3. Failure/Resilience -> 4. Simplicity -> 5. Maintainability -> 6. Reuse -> 7. Performance -> 8. SOLID -> 9. Patterns). Features auto-discovery of issues/specs, repo coding standards, Fowler smells baseline, and three-specialist multi-agent execution for large PRs. Use whenever the user asks for a review by a "principal engineer", "adversarial review", "code review", "PR review", "diff review", "pre-deploy risk review", or invokes /adversarial-review.
 ---
 
 # Adversarial & Principal Engineer Code Review
@@ -20,9 +20,11 @@ SKILL.md (Orchestrator)
     ↓
 inspect_changes.sh (Git Scope, Linked Issues/Specs, Repo Standards, Change Triggers)
     ↓
-Execution Strategy Selection:
-  ├─ Standard Diff (<400 lines)  ──► Single Principal Reviewer (Stage 0 → Stages 1–9)
-  └─ Large PR (>400 lines) / Parallel ──► Parallel Dual-Agent (Spec Verifier + Systems Auditor) ──► Principal Judge
+review_modes.md (Active Stages & Execution Strategy)
+  ├─ Standard Diff (≤400 lines) ──► Single Principal Reviewer
+  └─ Large PR (>400 lines) / Parallel
+       ──► Correctness + Concurrency + Design Agents
+       ──► Review Judge (agents/judge.md)
     ↓
 Structured Findings (Strict 11-Field Contract: finding_schema.md)
 ```
@@ -31,14 +33,10 @@ Structured Findings (Strict 11-Field Contract: finding_schema.md)
    - **Spec Sources**: Linked issue numbers from commits (`#123`, `PROJ-456`), PRD/spec files under `docs/`, `specs/`, `.scratch/`, or user-supplied specs.
    - **Standards Sources**: Repo conventions (`CODING_STANDARDS.md`, `CONTRIBUTING.md`, linter configs). The repo's documented standards always override baseline heuristics; linters enforce syntax, the reviewer enforces logic and clean-code smells.
    - **Scope & Triggers**: Modified files, diff stats, test mappings, and review mode triggers.
-2. **Execution Strategy Selection**:
-   - **Fast Single Reviewer (Default)**: The Principal Reviewer directly evaluates Stage 0 (Spec Alignment) through Stage 9 (Patterns).
-   - **Parallel Dual-Agent Mode (Large PRs >400 lines or on explicit user request)**:
-     - Invoke two sub-agents in parallel via `invoke_subagent`:
-       - **Sub-Agent A (`Spec Verifier`)**: Focuses purely on Stage 0 (Spec completeness, missing criteria, scope creep).
-       - **Sub-Agent B (`Systems Auditor`)**: Focuses on Stages 1–3 (Correctness, Concurrency, Failure Resilience) + Production Risk.
-     - The Principal Reviewer acts as **Judge**: verifies evidence, filters findings with confidence < 0.70, deduplicates overlapping issues, and writes the authoritative report.
-3. **Targeted Mode Selection**: Consult [`review_modes.md`](./references/review_modes.md) to activate the appropriate stages based on change signals.
+2. **Targeted Mode Selection**: Consult [`review_modes.md`](./references/review_modes.md) to activate stages based on change signals before assigning work.
+3. **Execution Strategy Selection**:
+   - **Single Reviewer (Default, ≤400 diff lines)**: Evaluate the active stages directly, including Stage 0 when a spec exists.
+   - **Multi-Agent Mode (>400 diff lines or explicit parallel request)**: Follow the specialist protocol in `review_modes.md`. Dispatch [Correctness](./agents/correctness_reviewer.md), [Concurrency](./agents/concurrency_reviewer.md), and [Design](./agents/design_reviewer.md) as selected by the active mode. Launch all selected specialists before waiting, keep their initial reports independent, and collect every outcome before starting the Judge; follow the parallel execution protocol in `review_modes.md`. The Principal Orchestrator owns Stage 0 and retained checks, then hands submitted candidates to the [Judge](./agents/judge.md) for adjudication. The Judge independently inspects relevant code before accepting findings and does not discover new problems. The orchestrator renders the final report from the adjudicated results. If delegation is unavailable, perform the same scoped passes sequentially and record that execution detail internally.
 4. **Deep Inspection**: Read active target files **IN FULL**. Trace callers, call-sites, and consumers across the codebase. Never review diffs in isolation.
 5. **Contract Adherence**: Format every identified issue using the strict 11-field schema defined in [`finding_schema.md`](./references/finding_schema.md).
 
@@ -65,7 +63,7 @@ Evaluate active stages strictly along this prioritized cascade. Stage 0 verifies
 
 Consult these reference documents **only when required** to deep-dive into specific areas:
 
-- [Targeted Review Modes & Dual-Agent Protocol (`review_modes.md`)](./references/review_modes.md): Selection matrix, sub-agent prompts for parallel execution, and Principal Judge arbitration rules.
+- [Targeted Review Modes & Multi-Agent Protocol (`review_modes.md`)](./references/review_modes.md): Selection matrix, sub-agent prompts for parallel execution, and Principal Judge arbitration rules.
 - [Finding Contract Schema (`finding_schema.md`)](./references/finding_schema.md): **The official 11-field data contract** that every finding must satisfy for automated evaluation and future Judge arbitration.
 - [Foundations Handbook (`handbook_foundations.md`)](./references/handbook_foundations.md): Deep-dive checklists for **Stage 1 (Correctness)**, **Stage 2 (Concurrency & Safety)**, and **Stage 3 (Failure & Resilience)**.
 - [Craftsmanship Handbook (`handbook_craftsmanship.md`)](./references/handbook_craftsmanship.md): Detailed criteria for **Stage 4 (Simplicity & Fowler Smells Baseline)**, **Stage 5 (Maintainability)**, **Stage 6 (Reuse)**, and **Stage 7 (Performance)**.
@@ -76,7 +74,15 @@ Consult these reference documents **only when required** to deep-dive into speci
 
 ## 4. Standardized Output Format
 
-Every review must produce output conforming to this template:
+Every review must produce output conforming to this existing Phase 2 template, regardless of execution strategy. Multi-agent execution changes how the review is performed, not how it is presented.
+
+Keep the report title, Executive Summary, Review Scorecard (Stages 0–9 and Production Risk / Contract), Findings, Reuse & Simplification Opportunities, Testing Gaps & Missing Test Cases, and Verification & Deployment Checklist. Use one consolidated, prioritised findings list with final IDs and the existing 11-field Markdown presentation. Do not add agent sections, attribution, votes, disagreement transcripts, routing notes, internal JSON, or Judge disposition logs. The targeted mode describes review scope, not the execution strategy. Routine progress updates should describe areas being checked and substantive findings, without narrating agent dispatch or handoffs.
+
+Translate internal coverage into the existing scorecard: PASS requires completed checks, FAIL reflects substantiated defects, WARN records incomplete verification or unresolved material evidence, and SKIPPED applies to inactive stages or absent specs. Explain substantive limitations in the relevant scorecard assessment, Executive Summary, or Testing Gaps section (for example, “Cancellation behavior could not be verified because the runtime configuration was unavailable”). Keep execution mechanics internal; do not conceal missing coverage or turn it into PASS. Mark checklist items complete only when verified. Do not add unadjudicated findings under opportunities or testing gaps.
+
+If the user explicitly asks how the review ran, answer truthfully; otherwise keep the multi-agent architecture invisible in the report.
+
+The presentation template remains:
 
 ```markdown
 # Adversarial Code Review Report (Principal Engineer Review)
