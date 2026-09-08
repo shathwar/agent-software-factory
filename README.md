@@ -1,135 +1,98 @@
-# Agent Skills Repository
+# Skills
 
-A centralized, multi-skill repository for Google Antigravity agents. This repository houses reusable, production-grade skills that can be consumed globally across workspaces or linked directly into individual projects.
+One skill lives here: [adversarial-review](./skills/adversarial-review/SKILL.md).
 
----
+It gives a coding agent instructions for reviewing code. The repo contains Markdown prompts, reference guides, and a Bash script. The agent runs the review. The script gathers context.
 
-## Repository Structure
+## Use it
 
-The repository is structured to cleanly scale to multiple independent skills:
+Give your coding agent the [SKILL.md](./skills/adversarial-review/SKILL.md) file and the change to review. Include the issue or spec if you have one.
+
+Example request:
+
+> Use this skill to review my changes against main. Check the code and its callers. Report problems with evidence.
+
+To run just the change inspector, run this from the Git repo you want to review. Replace `/path/to/skills` with this repo's location:
+
+```bash
+bash /path/to/skills/skills/adversarial-review/scripts/inspect_changes.sh --no-diff main...HEAD
+```
+
+The script lists changed files, diff stats, possible specs, review hints, matching test filenames, and possible callers. These are text and filename searches. It does not run tests or prove the code is correct. Remove `--no-diff` to print the diff too.
+
+## How the review works
 
 ```text
-skills/
-├── .gitignore
-├── README.md                             # Skills catalog & repository documentation
-├── skills.json                           # Antigravity customization manifest
-└── skills/                               # Root directory for all skills
-    └── <skill-name>/                     # Individual skill package
-        ├── SKILL.md                      # Core prompt, triggers, and short rules (always loaded)
-        ├── scripts/                      # (Optional) Executable CLI helpers
-        │   └── ...
-        └── references/                   # (Optional) Engineering handbooks (loaded on-demand only)
-            └── ...
+Inspect change → Pick checks → Review → Judge → Report
 ```
 
----
+The instructions use one reviewer for diffs of 400 lines or fewer. Larger diffs, or an explicit parallel request, use the selected specialists in parallel when the host supports it. Without that support, the agent performs the passes itself.
 
-## Skills Catalog
+| Role | Job |
+|---|---|
+| [Correctness](./skills/adversarial-review/agents/correctness_reviewer.md) | Find broken behavior. Includes failure paths, migration integrity, and API compatibility. |
+| [Concurrency](./skills/adversarial-review/agents/concurrency_reviewer.md) | Find races, locking problems, and async lifecycle failures. |
+| [Design](./skills/adversarial-review/agents/design_reviewer.md) | Find needless complexity. No abstraction just because SOLID says so. |
+| [Judge](./skills/adversarial-review/agents/judge.md) | Check submitted claims against the code. Remove duplicates and false positives. Rank what remains. Find no new problems. |
 
-| Skill Name | Identifier | Triggers | Description |
-|---|---|---|---|
-| **Adversarial Code Review** | [`adversarial-review`](./skills/adversarial-review/) | `/adversarial-review`, `"adversarial review"`, `"review like a principal engineer"`, `"code review"`, `"PR review"`, `"diff review"`, `"pre-deploy risk review"` | Conducts an exhaustive, zero-blindspot code review adopting the persona of a Senior Principal Engineer. Evaluates code strictly across a 10-stage engineering hierarchy (from Spec Alignment to Concurrency and Architecture), featuring auto-discovery of issues/specs, repo standards, and three-specialist multi-agent execution. |
+The main agent picks the checks, handles spec alignment, general performance, and broader production risks, then writes the report. Specialist prompts do not register or launch agents by themselves.
 
----
+Specialists work independently. They do not read each other's first reports. The Judge must inspect relevant code before accepting a finding. Evidence wins. Agents do not vote.
 
-## Featured Skill: `adversarial-review`
+## Which reviewers run?
 
-A production-grade code review skill designed around a low-cognition, progressive disclosure architecture:
+| Change | Reviewers |
+|---|---|
+| Standard code | Correctness, Design |
+| Shared state or async | Correctness, Concurrency, Design |
+| Database migration | Correctness |
+| Public API | Correctness |
+| Dependencies or build | Correctness, Design |
+| Financial logic | Correctness, Concurrency, Design |
+| Full audit | Correctness, Concurrency, Design |
 
-- **Persona**: Senior Principal Engineer (uncompromising on correctness, allergic to bloat, zero hand-waving, pragmatic minimalism).
-- **The 10-Stage Evaluation Hierarchy**:
-  ```text
-  0. Spec Alignment (Issue/PRD Compliance & Scope Creep)
-         ↓
-  1. Correctness
-         ↓
-  2. Concurrency / Safety
-         ↓
-  3. Failure / Resilience
-         ↓
-  4. Simplicity (YAGNI & Fowler Code Smells Baseline)
-         ↓
-  5. Maintainability
-         ↓
-  6. Reuse (DRY)
-         ↓
-  7. Performance
-         ↓
-  8. SOLID Principles
-         ↓
-  9. Patterns
-  ```
-- **Execution Flexibility**:
-  - **Single Reviewer (Default)**: Fast, end-to-end evaluation for daily pull requests.
-  - **Multi-Agent Mode**: For large PRs (>400 diff lines) or explicit request, dispatches **Correctness**, **Concurrency**, and **Design** specialists from `skills/adversarial-review/agents/`, followed by a dedicated [Judge](./skills/adversarial-review/agents/judge.md) that independently inspects relevant code before accepting submitted findings.
-- **The Engineering Handbook** (`skills/adversarial-review/references/`):
-  - [`handbook_foundations.md`](./skills/adversarial-review/references/handbook_foundations.md): Deep-dive checklists for Correctness, Concurrency, and Failure Resilience.
-  - [`handbook_craftsmanship.md`](./skills/adversarial-review/references/handbook_craftsmanship.md): Criteria for Simplicity, Fowler 12 Smells Baseline, Maintainability, Reuse, and Performance.
-  - [`handbook_architecture.md`](./skills/adversarial-review/references/handbook_architecture.md): Principles for SOLID and Design Patterns / Anti-Patterns.
-  - [`production_risk_matrix.md`](./skills/adversarial-review/references/production_risk_matrix.md): Operational hazards, contract drift, DB migrations, and blast radius.
-  - [`review_modes.md`](./skills/adversarial-review/references/review_modes.md): Targeted review mode matrix and three-specialist execution protocol.
-  - [`finding_schema.md`](./skills/adversarial-review/references/finding_schema.md): Strict 11-field data contract with confidence scoring and drop-in code fixes.
-- **Helper Script**:
-  - [`scripts/inspect_changes.sh`](./skills/adversarial-review/scripts/inspect_changes.sh): Automated inspector for git diffs, linked issues/specs, repo standards/linters, test mappings, and cross-codebase callers.
+Mixed changes combine checks. Migration locks and async APIs add Concurrency. See [review modes](./skills/adversarial-review/references/review_modes.md) for the full rules.
 
----
+## What gets checked?
 
-## How to Install & Use Skills
+The checklist has ten stages. Only relevant stages apply.
 
-### 1. Global Installation (Machine-Wide)
+0. Spec alignment
+1. Correctness
+2. Concurrency and safety
+3. Failure and resilience
+4. Simplicity
+5. Maintainability
+6. Reuse
+7. Performance
+8. SOLID
+9. Patterns
 
-To make all skills in this repository available across all projects on your machine, add this repo's `skills` folder to your global `~/.gemini/config/skills.json`:
+Fowler's code smells help the Design review. They are not another stage or automatic proof of a problem.
 
-```json
-{
-  "entries": [
-    {
-      "path": "/Users/Sumanth/Documents/Projects/skills/skills"
-    }
-  ]
-}
+## What you get
+
+One report: summary, stage scorecard, prioritised findings, simplification opportunities, test gaps, and a verification checklist. Missing checks stay visible. Agent handoffs stay internal.
+
+Each finding follows the same [11-field schema](./skills/adversarial-review/references/finding_schema.md), including its location, evidence, impact, fix, and confidence.
+
+## Files
+
+```text
+skills/adversarial-review/
+├── SKILL.md
+├── agents/
+│   ├── correctness_reviewer.md
+│   ├── concurrency_reviewer.md
+│   ├── design_reviewer.md
+│   └── judge.md
+├── scripts/
+│   └── inspect_changes.sh
+└── references/
+    ├── review_modes.md
+    ├── finding_schema.md
+    ├── handbook_foundations.md
+    ├── handbook_craftsmanship.md
+    ├── handbook_architecture.md
+    └── production_risk_matrix.md
 ```
-
-Or symlink individual skills into your global config directory:
-```bash
-ln -sfn /Users/Sumanth/Documents/Projects/skills/skills/adversarial-review ~/.gemini/config/skills/adversarial-review
-```
-
-### 2. Workspace Installation (Project-Specific)
-
-To load skills into a specific project workspace, add a `skills.json` under the project's `.agents/` directory:
-
-```json
-{
-  "entries": [
-    {
-      "path": "/Users/Sumanth/Documents/Projects/skills/skills"
-    }
-  ]
-}
-```
-
----
-
-## Adding a New Skill
-
-To contribute a new skill to this repository:
-
-1. **Create Skill Directory**:
-   ```bash
-   mkdir -p skills/<new-skill-name>/references skills/<new-skill-name>/scripts
-   ```
-2. **Author `SKILL.md`**:
-   Ensure it begins with standard YAML frontmatter:
-   ```markdown
-   ---
-   name: my-new-skill
-   description: >-
-     Clear explanation of what the skill does and when the agent should trigger it.
-     Mention trigger phrases (e.g. /my-new-skill).
-   ---
-   ```
-3. **Follow the Low-Cognition Architecture**:
-   - Keep `SKILL.md` lean (~100 lines) with high-density "always loaded" short rules.
-   - Place detailed checklists, manuals, and deep reference material in `references/` so the agent loads them only when required.
-4. **Register in `README.md`**: Add the new skill to the Skills Catalog above.
