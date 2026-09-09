@@ -103,13 +103,5 @@ skills/adversarial-review/
     └── production_risk_matrix.md
 ```
 
-## Ideas borrowed
-
-This workflow adapts a few ideas from other published skills, with its own role split and report format:
-
-- [Matt Pocock: code review](https://github.com/mattpocock/skills/blob/main/skills/engineering/code-review/SKILL.md): establish the comparison point, cite repository rules, and treat smells as judgment calls.
-- [Matt Pocock: TDD](https://github.com/mattpocock/skills/blob/main/skills/engineering/tdd/SKILL.md) and [bug diagnosis](https://github.com/mattpocock/skills/blob/main/skills/engineering/diagnosing-bugs/SKILL.md): test observable behavior, use independent expected results, and check the original failure before and after a fix.
-- [Matt Pocock: codebase design](https://github.com/mattpocock/skills/blob/main/skills/engineering/codebase-design/SKILL.md): judge interfaces by what they hide and what callers must learn.
-- [rdeepak-711: code review](https://github.com/rdeepak-711/claude-code-skills/blob/main/skills/code-review/SKILL.md): check applicable instructions and use targeted history to distinguish regressions from old issues.
 
 These are adapted principles, not installed dependencies.
