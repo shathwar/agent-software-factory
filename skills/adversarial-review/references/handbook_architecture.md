@@ -1,26 +1,19 @@
 # Engineering Handbook: Architecture (Stages 8–9)
 
-Consult this reference when evaluating SOLID principles, design patterns, and architectural decoupling.
+Consult only when active checks require SOLID or pattern analysis.
 
----
+Treat smells and suggested fixes as prompts for investigation, not automatic findings or mandatory refactors. Repository conventions and current requirements govern. Require a concrete cost before recommending change; do not add abstractions merely because SOLID or a pattern permits one.
 
 ## Stage 8: SOLID Principles in Practice
 
-- **Single Responsibility Principle (SRP)**:
-  - *Symptom of Violation*: A service parses inbound messages, makes HTTP broker calls, computes risk formulas, and persists audit logs.
-  - *Fix*: Decompose into cohesive layers: Stream Consumer -> Service Orchestrator -> Domain Formula / Broker Client.
-- **Open/Closed Principle (OCP)**:
-  - *Symptom of Violation*: Adding a new strategy, broker, or indicator requires modifying a 300-line `switch/case` or `if/elif` block.
-  - *Fix*: Use a strategy registry, factory pattern, or polymorphic dispatch via interfaces.
-- **Liskov Substitution Principle (LSP)**:
-  - *Symptom of Violation*: Subclass throws `UnsupportedOperationException` for methods declared on the interface, or requires callers to perform `instanceof` / `isinstance` checks.
-  - *Fix*: Refactor the hierarchy or split the interface.
-- **Interface Segregation Principle (ISP)**:
-  - *Symptom of Violation*: Fat interfaces with 20 methods where consumers only ever use 2.
-  - *Fix*: Break into fine-grained role interfaces (e.g. `OrderReader`, `OrderWriter`).
-- **Dependency Inversion Principle (DIP)**:
-  - *Symptom of Violation*: Business logic instantiates concrete network clients or persistence drivers directly (`new FyersHttpClient()`).
-  - *Fix*: Depend on abstractions (`BrokerClient`) injected via dependency injection or constructors.
+Use these questions to locate costs in the current change. A label alone is not a finding.
+
+- **Single responsibility:** Do unrelated changes repeatedly affect this module or force callers to coordinate its internals? A cohesive operation may legitimately parse, compute, and persist; several verbs do not prove it needs several layers.
+- **Open/closed:** Does a required extension duplicate branching or force scattered edits? Compare a local branch or table with a new strategy hierarchy before recommending either.
+- **Substitution:** Does an implementation violate behavior promised by its interface, including accepted inputs, failures, and lifecycle? Verify the contract rather than treating every unsupported operation as invalid.
+- **Interface segregation:** Must callers learn or depend on operations they do not need? Split only when doing so reduces a demonstrated dependency or maintenance burden.
+- **Dependency inversion:** Does direct construction of an external dependency prevent needed configuration or behavior tests? Reuse the existing boundary or pass a concrete dependency before proposing a new interface.
+
 
 ---
 

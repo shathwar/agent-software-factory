@@ -32,7 +32,7 @@ A checklist for evaluating operational impact, deployment safety, and blast radi
   - Do downstream consumers expect fields that were modified or omitted?
   - Can consumers parse messages produced by both old and new versions during rolling deployments?
 - **Serialization & Reflection (Native Image / Serde)**:
-  - In GraalVM Native Image (or Jackson / Micronaut Serde), are newly created DTOs and models annotated with `@Serdeable` and `@Introspected`?
+  - Does the actual serializer/native-image configuration support the new model, through annotations, generated metadata, or runtime configuration as appropriate?
 
 ---
 
@@ -42,7 +42,7 @@ A checklist for evaluating operational impact, deployment safety, and blast radi
   - Were new environment variables or application properties added? Are default fallback values provided so existing deployments don't crash on startup?
 - **Timezones & Clock Drift**:
   - Operational market time checks must use explicit time zones (`Asia/Kolkata` / `ZoneId`) and not rely on the local container or host system default time zone.
-  - Persisted database timestamps must use UTC (`Instant`).
+  - Distinguish stored instants from domain-local dates/times; preserve the documented timezone semantics.
 - **Telemetry & Observability**:
   - Are metrics incremented on both success and failure branches?
   - Are critical operations logged at `INFO` or `WARN`/`ERROR` with contextual identifiers (`orderId`, `userId`, `symbol`)?

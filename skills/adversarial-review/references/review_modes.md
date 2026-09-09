@@ -10,13 +10,13 @@ Instead of evaluating all 10 stages blindly on every diff, the orchestrator insp
 
 | Change Profile | Detection Signal (`inspect_changes.sh` / Prompt) | Active Stages | Bypassed Stages (Preserves Low Cognition) | Handbook Chapter |
 |---|---|---|---|---|
-| **Standard Code Change** | Standard services, utilities, domain logic (no locks, APIs, or SQL) | **Spec (0)** + **Correctness (1)** + **Design (4 Simplicity & Smells, 5 Maintainability, 6 Reuse, 8 SOLID, 9 Patterns)** | Concurrency (2), Migrations, Public API Contracts | [`handbook_craftsmanship.md`](./handbook_craftsmanship.md)<br>[`handbook_architecture.md`](./handbook_architecture.md) |
+| **Standard Code Change** | Standard services, utilities, domain logic (no locks, APIs, or SQL) | **Spec (0)** + **Correctness (1)** + **Design (4 Simplicity & Smells, 5 Maintainability, 6 Reuse, 8 SOLID, 9 Patterns)** | Concurrency (2), Migrations, Public API Contracts | [`handbook_craftsmanship.md`](./handbook_craftsmanship.md) |
 | **Shared State & Async** | `[!] CONCURRENCY REVIEW`<br>`[!] THREAD / ASYNC LIFECYCLE`<br>(`synchronized`, `Lock`, `ConcurrentHashMap`, `VirtualThread`, `Executor`, `asyncio`) | **Spec (0)** + **Correctness (1)** + **Concurrency / Safety (2)** + **Failure / Resilience (3)** + **Design (4–6, 8–9)** + **Performance (7, Orchestrator)** | Database Migrations, API Serialization (unless endpoints changed) | [`handbook_foundations.md`](./handbook_foundations.md) |
 | **Database Migration** | `[!] MIGRATION REVIEW`<br>(`V*__*.sql`, `db/migration/`, `migrations/`, `schema.prisma`) | **Spec (0)** + **Correctness (1)** + **Migration Integrity** + **Production Risk** | Code SOLID / Patterns, Concurrency (unless table locking) | [`production_risk_matrix.md`](./production_risk_matrix.md) |
 | **Public API & Contract** | `[!] CONTRACT REVIEW`<br>(`*Controller*`, `@RestController`, `@Get`, `@Post`, `routes.py`, `proto`) | **Spec (0)** + **Correctness (1)** + **Contract & Backward Compatibility** + **Failure / Resilience (3)** | Internal Concurrency (unless async routes), DB Migrations | [`production_risk_matrix.md`](./production_risk_matrix.md) |
 | **Dependency & Build** | `[!] DEPENDENCY REVIEW`<br>(`pom.xml`, `package.json`, `requirements.txt`, `go.mod`) | **Production Risk** + **Dependency Compatibility** + **Dependency Simplicity (4)** | Code-level SOLID, Concurrency, Algorithmic performance | [`production_risk_matrix.md`](./production_risk_matrix.md) |
 | **Financial / Precision** | `[!] FINANCIAL / PRECISION REVIEW`<br>(`BigDecimal`, `stopLoss`, `trailing_sl`, `ltp`, `qty`, `pnl`) | **Spec (0)** + **Correctness (1)** + **Concurrency (2)** + **Domain/Presentation Separation** + **Design (4–6, 8–9, scoped to financial logic)** + **Production Risk** | Generic code style, speculative refactoring | [`handbook_foundations.md`](./handbook_foundations.md)<br>[`production_risk_matrix.md`](./production_risk_matrix.md) |
-| **Full Adversarial Audit** | Explicit user prompt: *"do an adversarial review"*, *"full audit"*, *"zero-blindspot review"* | **All 10 Stages + Production Risk Matrix** | None (Exhaustive baseline audit) | All Handbooks |
+| **Full Adversarial Audit** | Explicit user prompt: *"do an adversarial review"*, *"full audit"*, *"zero-blindspot review"* | **All applicable stages + Production Risk Matrix** | None (Exhaustive baseline audit) | All Handbooks |
 
 *Note on Stage 0 (Spec Alignment): If an issue key or spec document is detected, Stage 0 is evaluated in all modes. If no spec exists, Stage 0 is marked `[SKIPPED - No Spec Provided]` without blocking technical review.*
 
@@ -55,8 +55,8 @@ The orchestrator retains spec alignment, general performance (including migratio
 ### Mode B: Shared State & Async (`Spec + Correctness + Concurrency + Design`)
 - **Primary Scrutiny**:
   - Keyed lock ordering, deadlock avoidance, double release in `finally` blocks, reentrancy.
-  - `ConcurrentHashMap` compound atomicity: ensure `computeIfAbsent` / `compute` is used instead of `containsKey` + `get` + `put`.
-  - Virtual thread pinning: ensure carrier threads are not pinned on blocking network calls inside `synchronized` blocks.
+  - `ConcurrentHashMap` compound atomicity: verify compound operations use a suitable atomic primitive or consistent external locking.
+  - Virtual thread pinning: verify the JDK version and blocking path before claiming pinning; monitor behavior changed in JDK 24.
   - Python `asyncio`: ensure background tasks have explicit exception handlers and tasks cannot be silently cancelled in critical sections.
 
 ### Mode C: Database Migration (`Spec + Correctness + Migration + Production Risk`)
@@ -92,7 +92,7 @@ Principal Orchestrator → inspect_changes.sh → review_modes.md
                     Correctness          Concurrency            Design
                          └────────────────────┼───────────────────┘
                                               ↓
-                               Review Judge (agents/judge.md)
+                               Review Judge (agents/review_judge.md)
                                               ↓
                                    Structured Final Findings
 ```
@@ -115,9 +115,9 @@ The orchestrator already knows the active review mode. Never dispatch “review 
 - **Concurrency**: “Find concurrency problems. Review shared state, coordination, and async execution within the assigned scope.”
 - **Design**: “Find unnecessary complexity. Review simplicity and maintenance cost within the assigned scope.”
 
-For example, a standard code change assigns correctness checks to Correctness and complexity checks to Design; Concurrency is skipped. A full audit activates all axes but does not broaden any specialist’s ownership. The Principal handles remaining active checks.
+For example, a standard code change assigns correctness checks to Correctness and complexity checks to Design; Concurrency is skipped. A full audit considers all axes but skips demonstrably inapplicable checks and does not broaden any specialist’s ownership. The Principal handles remaining active checks.
 
-Specialists review independently and return the identical [JSON agent output](./finding_schema.md#5-required-agent-output-json): `reviewer`, `status`, `findings`, `coverage`, `questions`, and `routing_notes`. Each finding uses exactly the shared 11-field contract; no specialist-specific schema is allowed. Keep candidate IDs local to each report until adjudication. Missing evidence is a limitation or question, not a fabricated finding. For an incidental out-of-scope concern, return only a routing note with its location and reason, separate from candidate findings. The orchestrator assigns it to one owner based on the root cause; specialists do not investigate or report findings on another axis. Specialists must not edit source files or make final deployment decisions.
+Specialists review independently and return the identical [JSON agent output](./finding_schema.md#5-required-agent-output-json): `reviewer`, `status`, `findings`, `coverage`, `questions`, and `routing_notes`. Each finding uses exactly the shared 12-field contract; no specialist-specific schema is allowed. Keep candidate IDs local to each report until adjudication. Missing evidence is a limitation or question, not a fabricated finding. For an incidental out-of-scope concern, return only a routing note with its location and reason, separate from candidate findings. The orchestrator assigns it to one owner based on the root cause; specialists do not investigate or report findings on another axis. Specialists must not edit source files or make final deployment decisions.
 
 ### Parallel execution and independence
 
@@ -144,13 +144,21 @@ Do not claim parallel execution when only one specialist is selected, no delegat
 
 ### Review Judge
 
-After the parallel collection and follow-up barrier above, dispatch the [Judge](../agents/judge.md) with change context, reviewed snapshot, selected mode, assignments, specialist JSON reports, and explicit coverage records for skipped or incomplete work. Include any candidates from the orchestrator's retained checks as a separately identified source using the same 11-field contract. The Judge is an adjudicator, not an additional discovery specialist.
+After the parallel collection and follow-up barrier above, dispatch the [Judge](../agents/review_judge.md) with change context, reviewed snapshot, selected mode, assignments, specialist JSON reports, and explicit coverage records for skipped or incomplete work. Include any candidates from the orchestrator's retained checks as a separately identified source using the same 12-field contract. The Judge is an adjudicator, not an additional discovery specialist.
 
-The Judge deduplicates, independently inspects relevant code to validate claims, rejects false positives, resolves conflicts, prioritises, and returns final findings using the shared JSON contract. It must not accept findings solely from specialist reports or discover additional problems. Follow `judge.md` for the acceptance gate and per-candidate disposition records. Apply its [disagreement rules](../agents/judge.md#disagreement-handling): a clean report on another axis is not counterevidence, specialist claims require independent verification, and evidence resolves actual conflicts without voting.
+The Judge deduplicates, independently inspects relevant code to validate claims, rejects false positives, resolves conflicts, prioritises, and returns final findings using the shared JSON contract. It must not accept findings solely from specialist reports or discover additional problems. Follow `review_judge.md` for the acceptance gate and per-candidate disposition records. Apply its [disagreement rules](../agents/review_judge.md#disagreement-handling): a clean report on another axis is not counterevidence, specialist claims require independent verification, and evidence resolves actual conflicts without voting.
 
 The orchestrator renders the unchanged [Phase 2 report template](../SKILL.md#4-standardized-output-format) from the Judge's accepted findings and coverage limitations. Agent identities, execution strategy, and adjudication records remain internal. Any new candidate must be reviewed and adjudicated before publication.
 
-If delegation is unavailable, the Principal performs the scoped specialist passes and then a separate adjudication pass using `judge.md`, re-opening relevant code before acceptance and recording internally that no separate agent ran. The standard single-reviewer path remains the default for diffs of 400 lines or fewer and applies the same adjudication rules.
+If delegation is unavailable, the Principal performs the scoped specialist passes and then a separate adjudication pass using `review_judge.md`, re-opening relevant code before acceptance and recording internally that no separate agent ran. The standard single-reviewer path remains the default for diffs of 400 lines or fewer and applies the same adjudication rules.
+
+---
+
+### Optional implementation after adjudication
+
+For a user-requested fix task, route `Judge → approved findings → [Code Fixer](../agents/code_fixer.md)`. Construct a fresh handoff containing only entries from the Judge's final `findings` array that are within the user's fix scope, their final IDs, and the source snapshot and implementation context. Do not forward the full Judge envelope or raw specialist reports. Preserve approval provenance in the handoff so the Fixer can verify the assigned set without re-evaluating candidates.
+
+A Judge report with incomplete coverage may contain accepted findings; only accepted entries marked `autonomous` are eligible for code changes. Accepted `requires-human` entries are passed through for a decision request, with no code changed for those findings. Deferred candidates and unresolved questions are never eligible. Problems applying an accepted fix return to the orchestrator for clarification, not to the Fixer for a new verdict. Review-only requests do not launch the Fixer.
 
 ---
 

@@ -33,11 +33,15 @@ The instructions use one reviewer for diffs of 400 lines or fewer. Larger diffs,
 | [Correctness](./skills/adversarial-review/agents/correctness_reviewer.md) | Find broken behavior. Includes failure paths, migration integrity, and API compatibility. |
 | [Concurrency](./skills/adversarial-review/agents/concurrency_reviewer.md) | Find races, locking problems, and async lifecycle failures. |
 | [Design](./skills/adversarial-review/agents/design_reviewer.md) | Find needless complexity. No abstraction just because SOLID says so. |
-| [Judge](./skills/adversarial-review/agents/judge.md) | Check submitted claims against the code. Remove duplicates and false positives. Rank what remains. Find no new problems. |
+| [Judge](./skills/adversarial-review/agents/review_judge.md) | Check submitted claims against the code. Remove duplicates and false positives. Rank what remains. Find no new problems. |
 
 The main agent picks the checks, handles spec alignment, general performance, and broader production risks, then writes the report. Specialist prompts do not register or launch agents by themselves.
 
 Specialists work independently. They do not read each other's first reports. The Judge must inspect relevant code before accepting a finding. Evidence wins. Agents do not vote.
+
+## Fixes
+
+If you ask for fixes, the [Code Fixer](./skills/adversarial-review/agents/code_fixer.md) gets only Judge-approved findings and the context needed to implement them. No raw reviewer reports. No rejected claims. It makes scoped changes for `autonomous` findings and reports validation results. For `requires-human`, it reports the decision needed and possible approaches without changing code for that finding. A review request alone does not trigger edits.
 
 ## Which reviewers run?
 
@@ -74,7 +78,7 @@ Fowler's code smells help the Design review. They are not another stage or autom
 
 One report: summary, stage scorecard, prioritised findings, simplification opportunities, test gaps, and a verification checklist. Missing checks stay visible. Agent handoffs stay internal.
 
-Each finding follows the same [11-field schema](./skills/adversarial-review/references/finding_schema.md), including its location, evidence, impact, fix, and confidence.
+Each finding follows the same [12-field schema](./skills/adversarial-review/references/finding_schema.md), including its location, evidence, impact, fix, and confidence.
 
 ## Files
 
@@ -85,7 +89,8 @@ skills/adversarial-review/
 │   ├── correctness_reviewer.md
 │   ├── concurrency_reviewer.md
 │   ├── design_reviewer.md
-│   └── judge.md
+│   ├── review_judge.md
+│   └── code_fixer.md
 ├── scripts/
 │   └── inspect_changes.sh
 └── references/
@@ -94,5 +99,17 @@ skills/adversarial-review/
     ├── handbook_foundations.md
     ├── handbook_craftsmanship.md
     ├── handbook_architecture.md
+    ├── review_pipeline.md
     └── production_risk_matrix.md
 ```
+
+## Ideas borrowed
+
+This workflow adapts a few ideas from other published skills, with its own role split and report format:
+
+- [Matt Pocock: code review](https://github.com/mattpocock/skills/blob/main/skills/engineering/code-review/SKILL.md): establish the comparison point, cite repository rules, and treat smells as judgment calls.
+- [Matt Pocock: TDD](https://github.com/mattpocock/skills/blob/main/skills/engineering/tdd/SKILL.md) and [bug diagnosis](https://github.com/mattpocock/skills/blob/main/skills/engineering/diagnosing-bugs/SKILL.md): test observable behavior, use independent expected results, and check the original failure before and after a fix.
+- [Matt Pocock: codebase design](https://github.com/mattpocock/skills/blob/main/skills/engineering/codebase-design/SKILL.md): judge interfaces by what they hide and what callers must learn.
+- [rdeepak-711: code review](https://github.com/rdeepak-711/claude-code-skills/blob/main/skills/code-review/SKILL.md): check applicable instructions and use targeted history to distinguish regressions from old issues.
+
+These are adapted principles, not installed dependencies.

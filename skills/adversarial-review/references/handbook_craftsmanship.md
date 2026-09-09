@@ -1,17 +1,17 @@
 # Engineering Handbook: Craftsmanship (Stages 4–7)
 
-Consult this reference when evaluating Simplicity, Maintainability, Reuse, and Performance.
+Consult the relevant sections for simplicity, maintainability, reuse, and performance. Design owns complexity checks; the orchestrator retains general performance.
 
----
+Treat smells and suggested fixes as prompts for investigation, not automatic findings or mandatory refactors. Repository conventions and current requirements govern. Require a concrete cost before recommending change; do not add abstractions merely because SOLID or a pattern permits one.
 
 ## Stage 4: Simplicity (YAGNI & Minimalism)
 
 - **The Simplest Solution That Works**:
   - Challenge every new abstraction: *"Do we actually need this interface/factory right now, or is it for speculative future requirements?"*
-  - If a feature has only ONE implementation and no immediate prospect of a second, keep it concrete.
+  - One implementation is not by itself a defect or a reason for an interface. Ask whether the boundary hides meaningful complexity or isolates a present external dependency.
 - **Deletion Over Addition**:
   - Actively hunt for dead code, unused parameters, obsolete imports, and deprecated methods.
-  - The cleanest pull request is often the one that deletes more code than it adds.
+  - Deletion is useful only when it removes an actual cost without losing required behavior.
 - **Standard Library First**:
   - Prefer native platform and standard library capabilities (`java.time`, `java.util.concurrent`, Python `math`, `asyncio`, `pathlib`) over introducing third-party dependencies or custom utility wheels.
   - Shortest sound working diff wins.
@@ -20,7 +20,7 @@ Consult this reference when evaluating Simplicity, Maintainability, Reuse, and P
   - *Tooling exemption*: Skip formatting or stylistic issues already enforced by repo linters (Ruff, ESLint, Checkstyle).
   - **Speculative Generality**: Abstraction, parameters, or hooks added for hypothetical needs not in the spec. $\rightarrow$ delete it; inline back until real need shows.
   - **Middle Man**: A class or method that mostly just forwards calls directly onward without adding value. $\rightarrow$ cut it, call the real target direct.
-  - **Duplicated Code**: Identical or nearly identical logic shapes appearing in multiple hunks. $\rightarrow$ extract the shared helper, call from both sites.
+  - **Duplicated Code**: Similar blocks that encode the same domain rule and must evolve together. $\rightarrow$ consider sharing that rule; independently evolving code may stay separate.
   - **Refused Bequest**: Subclass or implementer that ignores or throws `UnsupportedOperationException` on inherited methods. $\rightarrow$ drop inheritance, use composition.
 
 ---
@@ -70,4 +70,4 @@ Consult this reference when evaluating Simplicity, Maintainability, Reuse, and P
   - Eliminate N+1 query patterns; use batch fetches or joins.
   - Verify that database queries filter on indexed columns (`WHERE symbol = ... AND created_at >= ...`).
 - **Resource Boundedness**:
-  - Caches must have maximum size bounds (eviction policy like LRU) and TTLs to prevent memory exhaustion (`OutOfMemoryError`).
+  - Establish whether cache growth is bounded by its input domain or an eviction policy. Require TTLs only when freshness or lifecycle calls for them.
