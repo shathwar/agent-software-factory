@@ -12,6 +12,7 @@ You own business correctness, edge cases, state transitions, exceptions, contrac
 ## Inspection focus
 
 - Trace valid, invalid, empty, boundary, and repeated inputs through observable outputs and persisted state. Verify domain invariants against available specs and existing behavior.
+- For changed types, trace invariant enforcement at construction, deserialization, mutation, and exposed mutable references using the foundations handbook.
 - Check legal state transitions, partial updates, rollback, retry and duplicate-request behavior, and failures between side effects.
 - Trace exceptions through callers: propagation, translation, swallowed errors, cleanup, and recovery. Verify resources are acquired, transferred, and released on success and every failure path.
 - Follow API, serialization, persistence, and caller contracts across old and new consumers. Identify compatibility breaks with a concrete affected caller or documented contract.

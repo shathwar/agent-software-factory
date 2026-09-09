@@ -18,6 +18,9 @@ Consult relevant sections for Correctness, Concurrency, and Failure Resilience. 
   - Rounding direction (floor vs ceil vs half-up) and integer division truncation (`a / b` vs `a // b`).
 - **Domain vs Presentation Invariant**:
   - Presentation logic (e.g. lot size multiplication, UI currency formatting) must **never** mutate domain or execution engine state (`trail_order.qty`, `tsl`).
+- **Type Invariants**:
+  - For changed models, identify the required relationships between fields and legal states. Trace construction, deserialization, mutation, and exposed mutable references: can a supported caller bypass enforcement?
+  - Report a reachable invalid state and its consequence. A plain data object or runtime check is not inherently defective; choose guarantees that fit the language and current contract.
 - **Sentinel Objects**:
   - If a sentinel value (e.g. `EMPTY_SENTINEL`, `None`, `-1`) represents non-existence, verify downstream logic does not treat it as valid.
 
@@ -48,7 +51,8 @@ Consult relevant sections for Correctness, Concurrency, and Failure Resilience. 
 
 - **Error Propagation & Leaks**:
   - Are exceptions caught at the right boundaries or leaking as unhandled 500s?
-  - Check for silent exception swallows (`catch (Exception e) {}` or `except: pass`). Every failure must be logged with context or propagated.
+  - For each changed handler, trace expected and unexpectedly caught errors, cleanup, and the result observed by its caller. Include default values and recovery callbacks, not just empty catch blocks.
+  - Check whether a fallback turns failed work into apparent success or hides exhausted retries. Verify the intended recovery contract and available diagnostics; logging alone does not establish successful recovery. Do not require duplicate logging or exposing internal errors to end users.
 - **Timeouts & Deadlines**:
   - Trace effective deadlines through clients and callers, including inherited defaults; report missing or ineffective bounds on paths that require them.
 - **Retry Storms & Backoff**:

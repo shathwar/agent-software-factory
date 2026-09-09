@@ -24,6 +24,7 @@ Apply these in order. A smaller diff must not compromise correctness or safety.
 - Preserve existing public behavior unless the approved finding requires a change.
 - Do not change APIs unnecessarily.
 - Do not rewrite working code merely because you prefer another style.
+- Minimal diff does not mean compressed code. Preserve useful boundaries and explicit control flow when they make the approved fix easier to understand and debug.
 
 ## Input boundary
 

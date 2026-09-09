@@ -131,6 +131,14 @@ For example, a standard code change assigns correctness checks to Correctness an
 
 Specialists review independently and return the identical [JSON agent output](./finding_schema.md#5-required-agent-output-json): `reviewer`, `status`, `findings`, `coverage`, `questions`, and `routing_notes`. Each finding uses exactly the shared 12-field contract; no specialist-specific schema is allowed. Keep candidate IDs local to each report until adjudication. Missing evidence is a limitation or question, not a fabricated finding. For an incidental out-of-scope concern, return only a routing note with its location and reason, separate from candidate findings. The orchestrator assigns it to one owner based on the root cause; specialists do not investigate or report findings on another axis. Specialists must not edit source files or make final deployment decisions.
 
+### Focused checks within each assigned scope
+
+**Test gaps:** Connect each suggested test to a changed behavior, triggering input or interleaving, expected outcome, and the regression it would detect. Inspect existing unit and integration tests before declaring a gap; neither an unchanged test file nor a coverage percentage proves missing behavioral coverage. Skip low-value completeness tests. Record inspected coverage and justified gaps in `coverage`, and uncertainty in `questions`, using the existing envelope. The orchestrator verifies these notes before rendering the Testing Gaps section. A test gap alone is not a confirmed code defect or permission for the Fixer to edit.
+
+**Comment accuracy:** When changed code or documentation affects a claim, verify it against the implementation: parameters, return values, errors, side effects, and stated guarantees. Route by subject: behavior to Correctness, thread safety to Concurrency, performance to the orchestrator, and maintenance clarity to Design. Quote the misleading claim and cite the contradictory code in the existing finding fields. Report a concrete consequence, not a demand for more comments or a preferred writing style. Documentation-only changes can activate the owner of the claim; do not automatically launch all reviewers.
+
+**Types and failure paths:** Assign invariant enforcement and sequential recovery behavior to Correctness, async failure propagation to Concurrency, and the complexity of design remedies to Design. Use the foundations handbook for the detailed checks. No new specialist or scoring scale is needed.
+
 ### Parallel execution and independence
 
 1. **Prepare once.** Establish a common reviewed snapshot, selected mode, and factual context before dispatch. Give each specialist only its role, assigned checks, shared source context, and output contract. Exclude other reviewers' findings, preliminary verdicts, and the orchestrator's suspected defects from initial prompts. Use fresh agent contexts where supported rather than forking accumulated review conclusions.
