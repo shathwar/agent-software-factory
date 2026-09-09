@@ -142,7 +142,7 @@ ACCEPT
 
 All four answers must be YES, supported by evidence:
 
-1. **Addresses the finding:** The approved root cause and failing scenario are resolved, not hidden or bypassed.
+1. **Addresses the finding:** The approved root cause and failing scenario are resolved, not hidden or bypassed. Reject a patch that only suppresses an exception, fabricates a success/default result, removes validation, or substitutes a stub for the failing path. A guard or fallback is valid when it implements the approved contract and preserves caller guarantees; verify that distinction through behavior, not just a green test.
 2. **Preserves behavior:** Existing public behavior, APIs, and caller guarantees remain intact except for changes explicitly required by the approved finding. No behavior outside that scope changes.
 3. **Minimal diff:** The pre/post comparison shows only changes necessary for a safe fix and its validation. No unrelated edits, optional refactors, or unnecessary abstractions remain. Minimal means the smallest safe change, not the fewest lines at the expense of correctness.
 4. **Tests pass:** Relevant tests and required repository checks have run successfully against the final patch. Record the commands and results. Skipped, unavailable, inconclusive, or failing tests do not count as YES. Do not weaken tests or remove assertions to make the gate pass.

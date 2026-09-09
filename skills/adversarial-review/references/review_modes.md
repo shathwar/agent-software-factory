@@ -20,6 +20,18 @@ Instead of evaluating all 10 stages blindly on every diff, the orchestrator insp
 
 *Note on Stage 0 (Spec Alignment): If an issue key or spec document is detected, Stage 0 is evaluated in all modes. If no spec exists, Stage 0 is marked `[SKIPPED - No Spec Provided]` without blocking technical review.*
 
+### Check the domain as well as the mode
+
+Mode signals can miss risks in ordinary-looking changes. Add applicable checks below without expanding specialist ownership or adding agents:
+
+| Domain | Extra focus | Owner |
+|---|---|---|
+| UI | Keyboard/accessibility behavior, state updates, effect cleanup | Correctness for observable behavior; Concurrency for async races; orchestrator for render cost |
+| Infrastructure and scripts | Repeated execution, partial failures, rollback, privilege changes | Correctness for execution semantics; orchestrator for deployment/security risks |
+| Security-sensitive boundaries | Input handling, server-side access control, secret exposure | Orchestrator's production-risk pass |
+
+Combine checks when domains overlap. Assign each check once, mark the relevant scorecard area active, and retain the existing report and finding schema. Domain labels are routing hints, not proof of a defect.
+
 ### Phase 3 V1: Mode-to-Agent Routing
 
 Use this table after selecting the active mode. It defines specialist passes for both execution strategies: delegate only the selected specialists in multi-agent mode; perform the same scoped passes locally in single-reviewer mode.
