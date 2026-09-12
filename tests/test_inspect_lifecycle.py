@@ -1224,6 +1224,47 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(res2["gate"], "GATE 4: READY TO SHIP")
             self.assertEqual(res2["state_key"], "DELIVERY_READY")
 
+    def test_archiving_package_does_not_create_phantom_active_spike(self):
+        """Retained delivery evidence in .scratch/<topic> must not be flagged as an active spike after archiving."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
+            pkg_dir = tmppath / "openspec" / "changes" / "auth"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text("- [x] 1. Auth implementation\n")
+
+            scratch_dir = tmppath / ".scratch" / "auth"
+            scratch_dir.mkdir(parents=True)
+            current_fp = inspect_lifecycle.compute_working_tree_fingerprint(tmppath)
+            (scratch_dir / "delivery_evidence.json").write_text(json.dumps({
+                "topic": "auth",
+                "verdict": "PASS",
+                "test_evidence": True,
+                "working_tree_fingerprint": current_fp,
+                "judge_report": {
+                    "reviewer": "judge",
+                    "status": "complete",
+                    "findings": [],
+                    "coverage": ["Reviewed auth."],
+                    "questions": [],
+                    "routing_notes": [],
+                },
+            }))
+
+            # Starts at DELIVERY_READY
+            res_ready = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertEqual(res_ready["gate"], "GATE 4: READY TO SHIP")
+            self.assertEqual(res_ready["state_key"], "DELIVERY_READY")
+
+            # Successfully archive auth
+            inspect_lifecycle.apply_and_archive_openspec(tmppath, topic="auth")
+
+            # Next evaluation must NOT treat .scratch/auth as an active spike
+            res_after = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertNotEqual(res_after["state_key"], "SPIKE_ACTIVE")
+            self.assertEqual(len(res_after["active_spikes"]), 0)
+            self.assertEqual(res_after["gate"], "GATE 1: SPECIFICATION & DESIGN")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -623,17 +623,41 @@ NON_SPIKE_SCRATCH_DIRS = {
 }
 
 
+def is_evidence_dir(dir_path: Path) -> bool:
+    """Distinguish audit and delivery evidence directories from empirical spikes independently of package location."""
+    for evidence_name in ("delivery_evidence.json", "review_report.json"):
+        if (dir_path / evidence_name).exists():
+            return True
+    return False
+
+
 def inspect_spikes(repo_root: Path) -> List[str]:
     """Scan .scratch/ or scratch/ for active, uncompleted spikes."""
     spikes = []
     changes_dir = repo_root / "openspec" / "changes"
-    known_packages = {d.name for d in changes_dir.iterdir() if d.is_dir()} if changes_dir.exists() else set()
+    archive_dir = repo_root / "openspec" / "archive"
+
+    known_packages = set()
+    if changes_dir.exists():
+        known_packages.update(d.name for d in changes_dir.iterdir() if d.is_dir() and not d.name.startswith("."))
+    if archive_dir.exists():
+        for d in archive_dir.iterdir():
+            if d.is_dir() and not d.name.startswith("."):
+                known_packages.add(d.name)
+                m = re.match(r"^\d{4}-\d{2}-\d{2}-(.+)$", d.name)
+                if m:
+                    topic_part = m.group(1)
+                    known_packages.add(topic_part)
+                    if "-" in topic_part:
+                        known_packages.add(re.sub(r"-\d+$", "", topic_part))
 
     for base in [repo_root / ".scratch", repo_root / "scratch"]:
         if base.exists() and base.is_dir():
             for child in base.iterdir():
                 if child.is_dir() and not child.name.startswith("."):
                     if child.name in NON_SPIKE_SCRATCH_DIRS or child.name in known_packages:
+                        continue
+                    if is_evidence_dir(child):
                         continue
                     if not is_spike_completed(child):
                         spikes.append(str(child.relative_to(repo_root)))

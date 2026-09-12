@@ -189,6 +189,27 @@ class TestScanDebt(unittest.TestCase):
             self.assertIn("Go map", shortcuts)
             self.assertNotIn("<Shortcut>", shortcuts)
 
+    def test_tokenizer_detects_debt_marker_after_triple_quote_string(self):
+        """Standard-library tokenizer accurately detects debt comment after single-line string with triple quotes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            py_file = tmppath / "parser.py"
+            py_file.write_text(
+                'DELIMITER = \'"""\'\n'
+                '# ponytail: Unbounded cache.\n'
+            )
+
+            markers = scan_debt.scan_paths([tmppath])
+            self.assertEqual(len(markers), 1)
+            self.assertEqual(markers[0]["shortcut"], "Unbounded cache")
+            self.assertFalse(markers[0]["is_valid"])
+
+            # In strict mode, CLI must fail
+            cmd = [sys.executable, str(SCAN_DEBT), "--strict", str(tmppath)]
+            res = subprocess.run(cmd, capture_output=True, text=True)
+            self.assertEqual(res.returncode, 1)
+            self.assertIn("invalid debt marker", res.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

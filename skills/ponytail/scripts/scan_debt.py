@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import re
 import sys
+import tokenize
 from typing import Any, Dict, List, Optional, Sequence
 
 DEFAULT_EXCLUDES = {
@@ -130,6 +131,24 @@ def parse_debt_marker(raw_text: str, file_path: str, line_number: int) -> Dict[s
     }
 
 
+def scan_python_file(file_path: Path, rel_path: str) -> Optional[List[Dict[str, Any]]]:
+    """Scan a Python file using Python's standard-library tokenizer to identify comments and ignore string literals."""
+    markers = []
+    try:
+        with file_path.open("rb") as f:
+            tokens = tokenize.tokenize(f.readline)
+            for tok in tokens:
+                if tok.type == tokenize.COMMENT:
+                    text = tok.string
+                    if "ponytail:" in text.lower():
+                        parsed = parse_debt_marker(text, rel_path, tok.start[0])
+                        if parsed:
+                            markers.append(parsed)
+        return markers
+    except Exception:
+        return None
+
+
 def scan_file(file_path: Path, base_dir: Path) -> List[Dict[str, Any]]:
     """Scan a single text file for debt markers."""
     if file_path.suffix.lower() in IGNORE_EXTENSIONS:
@@ -152,12 +171,15 @@ def scan_file(file_path: Path, base_dir: Path) -> List[Dict[str, Any]]:
         rel_path = str(file_path.relative_to(Path.cwd().resolve()))
     except ValueError:
         rel_path = str(file_path.relative_to(base_dir))
+
+    if file_path.suffix.lower() == ".py":
+        py_markers = scan_python_file(file_path, rel_path)
+        if py_markers is not None:
+            return py_markers
+
     markers = []
     is_markdown = file_path.suffix.lower() in {".md", ".markdown"}
-    is_python = file_path.suffix.lower() == ".py"
     in_text_fence = False
-    in_py_triple = False
-    py_triple_delim = ""
 
     for idx, line in enumerate(content.splitlines(), start=1):
         if is_markdown:
@@ -173,20 +195,6 @@ def scan_file(file_path: Path, base_dir: Path) -> List[Dict[str, Any]]:
             if in_text_fence:
                 continue
             if re.match(r"^\s*#{1,6}\s+", line):
-                continue
-
-        if is_python:
-            stripped = line.strip()
-            if not in_py_triple:
-                if '"""' in stripped and stripped.count('"""') % 2 == 1:
-                    in_py_triple = True
-                    py_triple_delim = '"""'
-                elif "'''" in stripped and stripped.count("'''") % 2 == 1:
-                    in_py_triple = True
-                    py_triple_delim = "'''"
-            else:
-                if py_triple_delim in stripped and stripped.count(py_triple_delim) % 2 == 1:
-                    in_py_triple = False
                 continue
 
         if "ponytail:" in line.lower():
