@@ -47,6 +47,30 @@ A repository of production-grade engineering skills for AI agents, covering the 
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+## Why Engineering Teams Should Use This Framework
+
+As developers increasingly rely on AI agents, engineering teams face a growing operational challenge: **the "AI Slop" and Reviewer Burnout crisis**. AI agents generate high volumes of plausible-looking code that often introduces subtle race conditions, bloats codebases with unnecessary dependencies, skips real tests in favor of hollow mocks, and erodes architectural consistency.
+
+This framework transforms AI from an unpredictable code generator into a **disciplined, Principal-level engineering partner**:
+
+| Corporate / Engineering Challenge | How This Framework Solves It | Team Impact |
+|---|---|---|
+| **AI Dependency & Boilerplate Bloat** | [**`ponytail`**](./skills/ponytail/SKILL.md) enforces the *Laziness Ladder* (YAGNI, codebase reuse, stdlib built-ins, zero unrequested abstractions). Automated CI scanning via `scan_debt.py`. | **Leaner codebases, zero unneeded npm/pip dependencies, lower maintenance overhead.** |
+| **Reviewer Fatigue on AI PRs** | [**`adversarial-review`**](./skills/adversarial-review/SKILL.md) performs a 10-stage systems audit (Correctness, Concurrency, Failure, Craftsmanship) with an evidence-based Judge that rejects hallucinations. | **Senior/Staff engineers stop wasting hours catching basic race conditions, unindexed queries, and missing timeouts.** |
+| **Hollow, Backfilled Unit Tests** | [**`tdd`**](./skills/tdd/SKILL.md) enforces the *Iron Law of Test-First*. Agents are strictly forbidden from writing production code before proving a behavioral test fails. | **Real regression safety; tests verify observable behavior instead of mock configurations.** |
+| **Vanishing Architectural Context** | [**`adversarial-design`**](./skills/adversarial-design/SKILL.md) enforces the *Facts vs. Decisions Law* and compiles an **Architecture Decision Record (ADR)** and **OpenSpec package** directly into Git. | **Full audit trails for SOC2/compliance, clean RFC records, and effortless onboarding.** |
+| **Security & Compliance Hurdles** | **Zero external dependencies.** The entire test suite, inspector CLIs, debt scanners, and validators run on standard library Python 3.10+ and POSIX bash. | **Zero pip/npm audit hurdles; security and platform teams approve instantly.** |
+| **LLM Token Costs & Latency** | All core skills and agent prompts are **token-optimized ("cavemanned")**, stripping conversational fluff while preserving 100% of hard constraints. | **~50% fewer context tokens, lower API costs, and sharper model instruction adherence.** |
+
+### Team Rollout Playbook
+
+Teams can adopt skills incrementally without changing their entire workflow:
+1. **Phase 1: Pre-PR Defense ([`adversarial-review`](./skills/adversarial-review/SKILL.md))**: Run `/adversarial-review` on pull requests before requesting senior peer review. Catch race conditions and missing error paths early.
+2. **Phase 2: Anti-Bloat Coding ([`ponytail`](./skills/ponytail/SKILL.md))**: Use `/ponytail` on everyday tasks to enforce standard-library reuse. Add `python3 skills/ponytail/scripts/scan_debt.py --strict` to CI to enforce documented debt ceilings.
+3. **Phase 3: Autonomous Lifecycle ([`ship`](./skills/ship/SKILL.md))**: Run `/ship "<feature>"` to drive complete features from architectural grilling (ADRs) through TDD to audited PRs.
+
+---
+
 ## Skills Catalog
 
 | Skill Name | Command / Trigger | Lifecycle Stage | Description |
