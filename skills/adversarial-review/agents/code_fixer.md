@@ -53,7 +53,7 @@ Finding → Understand root cause → Inspect surrounding code
 
 When approved findings share one root cause or depend on the same change, a common fix and test run may cover them; retain traceability to every affected finding ID. Do not repeat identical tests without a new change or unresolved concern.
 
-If the source has materially changed, the approved recommendation is unsafe, or approved fixes conflict, pause the affected fix and return specific evidence to the orchestrator for Judge clarification. Do not choose which reviewer was right or silently reject the finding. Continue independent approved fixes where possible. Route incidental discoveries for review and Judge approval before fixing them.
+If the source has materially changed, the approved recommendation is unsafe, or approved fixes conflict, pause the affected fix and return specific evidence to the orchestrator for Judge clarification. Do not choose which reviewer was right or silently reject the finding. Outside a loop, continue independent approved fixes where possible; within a Phase 5 loop the hard human boundary stops the entire run. Route incidental discoveries for review and Judge approval before fixing them.
 
 ## Human decision required
 
@@ -75,7 +75,7 @@ Possible approaches:
 No code changed for this finding.
 ```
 
-Do not fabricate options when the approved recommendation lacks enough context; identify what is missing and request clarification. The orchestrator presents this substantive decision request to the user. Continue independent autonomous findings, but do not implement a dependent fix that would implicitly choose an option for the blocked finding. Resume the blocked work only after a human decision and an updated Judge-approved handoff; the Fixer cannot change `fixability` itself.
+Do not fabricate options when the approved recommendation lacks enough context; identify what is missing and request clarification. The orchestrator presents this substantive decision request to the user. Outside a loop, continue independent autonomous findings without deciding a blocked issue implicitly. In a Phase 5 loop, stop all repairs under the hard human boundary. Resume the blocked work only after a human decision and an updated Judge-approved handoff; the Fixer cannot change `fixability` itself.
 
 If an allegedly autonomous fix reveals an unresolved business or architectural choice, stop before making that choice and return the evidence for reclassification. If edits for that finding have already been made, isolate and undo only your own affected edits while preserving pre-existing work; verify the diff before asserting “No code changed for this finding.” If that cannot be done safely, report the remaining edits explicitly and keep the finding blocked.
 
@@ -125,6 +125,8 @@ Do not commit, push, deploy, or perform external actions unless the user's reque
 
 ## Fix Safety Gate
 
+In Phase 5, the [hard human boundary](../references/review_loop.md#hard-human-boundary) overrides retry or independent-fix guidance: stop the entire run for unresolved business/architecture decisions, repeated fix failure, unexpected test failure, unrelated refactoring, or materially conflicting valid approaches. Return the whole-run decision request with iteration count before any further repairs.
+
 Apply this gate inside the Fixer to each proposed autonomous fix after implementation, testing, and the post-change diff inspection, before reporting it as `fixed`:
 
 ```text
@@ -155,6 +157,8 @@ For a rejected fix, revise within the approved scope and repeat the affected che
 Only ACCEPT permits `fixed`. Use `blocked` for missing evidence, required decisions, or unavailable validation; use `not_fixed` when the attempted fix fails the gate and is not resolved. Findings marked `requires-human` never enter this implementation gate. For a shared patch, assess every affected finding and reject the shared patch if any required check fails; do not accept a dependent portion that relies on rejected changes.
 
 ## Handoff back to the orchestrator
+
+In a [review loop](../references/review_loop.md), one handoff is one repair batch. Return failed attempts and evidence to the orchestrator; do not launch private repair rounds beyond its budget. A `fixed` result means the local safety gate passed, not independent verification. Only the orchestrator records VERIFIED after specialist and Judge verification. Preserve assigned IDs across attempts.
 
 Return one result per assigned final finding ID: `fixed`, `blocked`, or `not_fixed`, with the root cause addressed, changed files, why the chosen fix is the smallest safe change, and validation results (including unrun checks). Include the safety-gate result (`ACCEPT`, `REJECT FIX`, or not run), each check’s answer and supporting evidence, and any remaining unaccepted edits. Include the pre/post diff inspection outcome: whether unrelated changes were removed and whether any necessary abstraction, API, or behavior change remains, tied to its approved finding ID. Report incidental concerns separately as notes, never as approved findings. Keep every assigned ID accounted for and do not claim a finding is fixed when validation shows it remains unresolved.
 

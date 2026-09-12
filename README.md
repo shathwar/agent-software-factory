@@ -43,6 +43,8 @@ Specialists work independently. They do not read each other's first reports. The
 
 If you ask for fixes, the [Code Fixer](./skills/adversarial-review/agents/code_fixer.md) gets only Judge-approved findings and the context needed to implement them. No raw reviewer reports. No rejected claims. It makes scoped changes for `autonomous` findings and reports validation results. For `requires-human`, it reports the decision needed and possible approaches without changing code for that finding. A review request alone does not trigger edits.
 
+Requested fixes use a [bounded loop](./skills/adversarial-review/references/review_loop.md), with at most three rounds by default. Findings keep the same IDs from review through confirmation, fixing, and verification. Relevant reviewers check the combined fix patch, then the Judge validates the results. Business or architecture decisions, repeated fix failure, unexpected test failures, unrelated refactoring, and unresolved tradeoffs stop the whole loop for a human decision. Approval needs no remaining P0/P1, passing build/tests, no unresolved regression, and no unexplained changes. Optional P2 findings must be explicitly justified. The Autonomous Review summary shows iterations, counts, and verification results.
+
 ## Which reviewers run?
 
 | Change | Reviewers |
@@ -100,6 +102,7 @@ skills/adversarial-review/
     ├── handbook_craftsmanship.md
     ├── handbook_architecture.md
     ├── review_pipeline.md
+    ├── review_loop.md
     └── production_risk_matrix.md
 ```
 

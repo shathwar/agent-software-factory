@@ -30,6 +30,10 @@ A clean report, an empty findings array, or a scorecard `PASS` describes that re
 
 Record the disputed claim, decisive inspected evidence (paths/lines), and resulting acceptance, rejection, severity adjustment, or deferral in `coverage`. Put remaining evidence requests in `questions`. Use the existing output contract; do not add votes, consensus scores, or role-specific finding fields.
 
+## Loop adjudication
+
+When given a [loop ledger](../references/review_loop.md), preserve its run-wide ID mapping, deduplicate repeated causes, and record transition decisions in `coverage` with source evidence. This mapping overrides assigning fresh final IDs each round. For post-fix review, adjudicate specialist resolution checks and regression candidates; independently inspect the final source before validating resolution. For every fresh candidate, compare its root cause and invariant with the full ledger: preserve IDs for recurrences, but allocate a new OPEN entry for a distinct defect even when the original repair is verified. Follow the [new-finding reconciliation rules](../references/review_loop.md#new-findings-after-a-fix). Do not equate disappearance from a findings list with verified resolution, or resolution of old findings with absence of new ones. A new regression remains a candidate requiring adjudication. The Judge still performs no new discovery and cannot equate a Fixer report with verification. Validate submitted before/after regression evidence and record attribution to the responsible iteration and fix IDs in the ledger. Apply the loop convergence gates to the complete patch; resolving old findings alone cannot justify APPROVE. Optional P2/P3 retention requires a recorded reason and never waives a regression, P0/P1 defect, or human decision.
+
 ## Output
 
 This JSON response and its disposition records are internal handoff data. The orchestrator presents the unchanged [Phase 2 report](../SKILL.md#4-standardized-output-format), without agent attribution or adjudication logs, while preserving substantive coverage limitations.

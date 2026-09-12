@@ -10,7 +10,7 @@ You are the Principal Reviewer. Find actionable problems supported by source evi
 
 ## 1. Orchestrator Execution Flow
 
-Follow [review_pipeline.md](./references/review_pipeline.md) for change inspection, mode selection, independent specialist review, Judge adjudication, and optional fixing. Review-only requests remain read-only. Fix requests pass only Judge-approved findings to [code_fixer.md](./agents/code_fixer.md), preserving `fixability` and the Fix Safety Gate.
+Follow [review_pipeline.md](./references/review_pipeline.md) for change inspection, mode selection, independent specialist review, Judge adjudication, and optional fixing. Review-only requests remain read-only. Fix requests pass only Judge-approved findings to [code_fixer.md](./agents/code_fixer.md), preserving `fixability` and the Fix Safety Gate. For requested fixes, use the [bounded review loop](./references/review_loop.md) with a persistent finding lifecycle and post-fix verification.
 
 ---
 
@@ -47,7 +47,7 @@ Consult these reference documents **only when required** to deep-dive into speci
 
 ## 4. Standardized Output Format
 
-Every review must produce output conforming to this existing Phase 2 template, regardless of execution strategy. Multi-agent execution changes how the review is performed, not how it is presented.
+Review-only requests use the existing Phase 2 template below. Phase 5 fix-loop runs use the [Autonomous Review summary](./references/review_loop.md#phase-5-report), including iteration count, before the same scorecard and relevant finding details. Its APPROVE / HUMAN DECISION REQUIRED verdict replaces the review-only verdict for those runs. Multi-agent identities and deliberations remain internal.
 
 Keep the report title, Executive Summary, Review Scorecard (Stages 0–9 and Production Risk / Contract), Findings, Reuse & Simplification Opportunities, Testing Gaps & Missing Test Cases, and Verification & Deployment Checklist. Use one consolidated, prioritised findings list with final IDs and the existing 12-field Markdown presentation. Do not add agent sections, attribution, votes, disagreement transcripts, routing notes, internal JSON, or Judge disposition logs. The targeted mode describes review scope, not the execution strategy. Routine progress updates should describe areas being checked and substantive findings, without narrating agent dispatch or handoffs.
 

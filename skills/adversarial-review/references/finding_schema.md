@@ -141,3 +141,9 @@ The following is an example of one object inside `findings`:
 ## 6. Multi-Agent Protocol: Role of the Principal Judge
 
 In multi-agent execution, the [specialist protocol](./review_modes.md#3-multi-agent-review-protocol) assigns Correctness, Concurrency, and Design reviewers their active scopes. Each returns the JSON envelope in Section 5 with candidates using this same 12-field contract. The Judge checks required keys, types, enums, confidence bounds, locations, and local ID uniqueness before adjudication. Request a corrected response for malformed output; do not silently drop it or treat it as a clean review. If correction is unavailable, record incomplete coverage. Candidate IDs are local to each specialist report; the [Judge](../agents/review_judge.md) independently inspects relevant source before accepting any candidate, reconciles overlaps, filters confidence below 0.70, and assigns session-wide IDs. The Judge adjudicates submitted candidates only, returning the same envelope with `reviewer: "judge"` and the unchanged 12-field findings. The orchestrator renders the final report without adding unadjudicated findings.
+
+## 7. Finding lifecycle across rounds
+
+The [review loop](./review_loop.md) stores OPEN, CONFIRMED, FIXED, VERIFIED, REJECTED, and HUMAN_DECISION in a separate internal ledger. These are not additional finding fields. Use its stable ID mapping across reports; do not restart final numbering each round. Reviewer and Judge output envelopes remain unchanged. The orchestrator records evidence-backed transitions from their findings and coverage records.
+
+For Phase 5, regression attribution and optionality are also ledger metadata; the 12-field finding object is unchanged. `requires-human` stops the entire repair loop under its hard human boundary. A genuinely optional finding remains confirmed and disclosed, never relabeled rejected or verified merely to satisfy convergence.

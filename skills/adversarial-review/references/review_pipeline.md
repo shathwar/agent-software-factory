@@ -31,10 +31,14 @@ Structured Findings (Strict 12-Field Contract: finding_schema.md)
 
 ## Optional Fix Handoff
 
+For requested fixes, the orchestrator owns the state, stable finding IDs, three-round default, and lifecycle transitions defined in [review_loop.md](./review_loop.md). Complete its [scope and validation setup](./review_loop.md#scope-and-validation-setup) before the first repair.
+
 When the user requests fixes, follow [code_fixer.md](../agents/code_fixer.md) after Judge adjudication. Pass only Judge-approved findings within the authorised scope, with final IDs and implementation context. Exclude raw reports, rejected/deferred candidates, and review deliberations. Preserve `fixability` in the handoff: only `autonomous` findings permit edits; `requires-human` findings return a human decision request with no code changed for that finding. The Fixer implements accepted decisions; it does not resolve reviewer disagreements. Review-only requests still end with the existing report.
 
 ---
 
 ## Fix acceptance
 
-The Fixer applies its per-finding workflow, pre/post diff inspection, and four-part safety gate before reporting a fix as complete. Consult [code_fixer.md](../agents/code_fixer.md) for the implementation rules. Preserve human-decision requests and report validation limits; never treat an accepted finding as proof that its fix is safe.
+The Fixer applies its per-finding workflow, pre/post diff inspection, and four-part safety gate before reporting its implementation as `fixed`. This moves a ledger entry to FIXED; only subsequent source-based verification under `review_loop.md` moves it to VERIFIED. Consult [code_fixer.md](../agents/code_fixer.md) for the implementation rules. Preserve human-decision requests and report validation limits; never treat an accepted finding as proof that its fix is safe.
+
+Phase 5 fix-loop runs apply [regression attribution, hard human boundaries, and convergence gates](./review_loop.md#attribute-regressions-to-fixes) before issuing APPROVE. Any unexpected test failure or required business/architecture decision stops all repairs; this overrides independent continuation. Use the Phase 5 summary for these runs.

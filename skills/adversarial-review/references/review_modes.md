@@ -133,6 +133,8 @@ Specialists review independently and return the identical [JSON agent output](./
 
 ### Focused checks within each assigned scope
 
+In post-fix passes, verify assigned repairs and inspect the changed patch for new in-scope defects. Re-evaluate mode signals for that patch; review is not limited to specialists who raised the original findings. Keep resolution evidence in `coverage` and candidate defects in `findings`, following [review_loop.md](./review_loop.md#new-findings-after-a-fix).
+
 **Test gaps:** Connect each suggested test to a changed behavior, triggering input or interleaving, expected outcome, and the regression it would detect. Inspect existing unit and integration tests before declaring a gap; neither an unchanged test file nor a coverage percentage proves missing behavioral coverage. Skip low-value completeness tests. Record inspected coverage and justified gaps in `coverage`, and uncertainty in `questions`, using the existing envelope. The orchestrator verifies these notes before rendering the Testing Gaps section. A test gap alone is not a confirmed code defect or permission for the Fixer to edit.
 
 **Comment accuracy:** When changed code or documentation affects a claim, verify it against the implementation: parameters, return values, errors, side effects, and stated guarantees. Route by subject: behavior to Correctness, thread safety to Concurrency, performance to the orchestrator, and maintenance clarity to Design. Quote the misleading claim and cite the contradictory code in the existing finding fields. Report a concrete consequence, not a demand for more comments or a preferred writing style. Documentation-only changes can activate the owner of the claim; do not automatically launch all reviewers.
@@ -175,6 +177,8 @@ If delegation is unavailable, the Principal performs the scoped specialist passe
 ---
 
 ### Optional implementation after adjudication
+
+Run requested repairs under [review_loop.md](./review_loop.md), including bounded rounds and verification of the combined patch. These loop rules govern repeated handoffs; initial review routing remains unchanged.
 
 For a user-requested fix task, route `Judge → approved findings → [Code Fixer](../agents/code_fixer.md)`. Construct a fresh handoff containing only entries from the Judge's final `findings` array that are within the user's fix scope, their final IDs, and the source snapshot and implementation context. Do not forward the full Judge envelope or raw specialist reports. Preserve approval provenance in the handoff so the Fixer can verify the assigned set without re-evaluating candidates.
 
