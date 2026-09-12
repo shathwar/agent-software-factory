@@ -30,7 +30,7 @@ Every finding must include exactly the following 12 fields without exception. Th
 
 Every reviewer supplies this field and the Judge validates it. Confidence measures whether the defect exists; fixability measures whether its resolution needs a human decision. A certain, high-severity finding can still require a human. Judge approval alone does not make it autonomous. Missing or invalid fixability is malformed input, never an implicit `autonomous` default.
 
-A `requires-human` finding remains in the approved findings and report. The Fixer makes no code changes for it and returns the decision request defined in [code_fixer.md](../agents/code_fixer.md#human-decision-required). Resume only after the human supplies the decision and the orchestrator obtains an updated Judge-approved finding reflecting it.
+A `requires-human` finding remains in the approved findings and report. The Fixer makes no code changes for it and returns the decision request defined in [code_fixer.md](../agents/code_fixer.md#human-decision-required). When presenting human decisions to the author, format them using the Frontier Clarification Protocol (`❓ Q1` + `➡️ Recommended Stance`) under the report's `Architectural Decisions & Clarifications` section so the user can easily answer by number. Resume only after the human supplies the decision and the orchestrator obtains an updated Judge-approved finding reflecting it.
 
 ---
 

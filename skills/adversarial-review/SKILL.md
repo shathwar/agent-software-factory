@@ -14,6 +14,9 @@ At invocation, select `review` (Review Only, default), `review-pr` (Review + PR 
 
 Follow [review_pipeline.md](./references/review_pipeline.md) for change inspection, mode selection, independent specialist review, Judge adjudication, and optional fixing. `review` returns the report without edits or posting. `review-pr` publishes the judged report to the identified PR without modifying the branch; follow the pipeline publication rules. Fix requests pass only Judge-approved findings to [code_fixer.md](./agents/code_fixer.md), preserving `fixability` and the Fix Safety Gate. For requested fixes, use the [bounded review loop](./references/review_loop.md) with a persistent finding lifecycle and post-fix verification.
 
+### The Facts vs. Decisions Law
+Finding facts is your job, never the author's. Never ask the author questions you can settle by reading files, searching callers, checking git history, or inspecting configs. Investigate the codebase autonomously to verify invariants. Reserve questions for the author strictly for intentional architectural tradeoffs, missing product requirements, or unresolvable business intent.
+
 ---
 
 ## 2. The 10-Stage Hierarchy (Short Rules — Always Loaded)
@@ -57,6 +60,7 @@ Apply this rule to every human-facing message in every mode: mode questions, pro
 - Explain findings as a trigger, consequence, and smallest useful fix. Keep the file/line, evidence, severity, and uncertainty. Simplify the wording, not the technical truth.
 - Be calm and respectful. Discuss the code, not the author's ability. Avoid scolding, forced praise, and exaggerated claims.
 - For a blocker, say what could not be checked and why. For a human decision, explain the choice and practical tradeoffs. Do not dump internal state or agent discussions.
+- **Frontier Clarification Protocol (Decision Rounds)**: When human input or architectural decisions are required (for `requires-human` findings, ambiguous specs, or intentional trade-offs), never scatter questions or ask them one by one. Batch all unblocked decisions into a structured **Decision Round**. Number each question behind a `❓` and provide your recommended engineering stance alone on a `➡️` line so the author can answer rapidly by number (e.g. `1: Recommended stance, 2: Option B`).
 - Keep required report sections, finding fields, IDs, status values, and validation results intact. Use plain language inside them. Internal machine contracts remain unchanged; quoted code, commands, errors, and source evidence remain exact.
 
 Example finding wording:
@@ -130,6 +134,13 @@ The presentation template remains:
 
 ## Testing Gaps & Missing Test Cases
 - Scenarios and edge cases lacking automated test coverage.
+
+## Architectural Decisions & Clarifications (Decision Round)
+*(Include only when requires-human findings or intentional trade-offs need author resolution)*
+
+❓ **Q1** - **<Decision Title>**: <Context, affected files, and practical tradeoffs>
+
+➡️ **Recommended Stance**: <Principal Engineer's recommended answer or default option>
 
 ## Verification & Deployment Checklist
 - [ ] Automated tests passing
