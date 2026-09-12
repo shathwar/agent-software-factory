@@ -447,6 +447,10 @@ is_test_or_doc_file() {
     if [[ "$base" =~ ^(LICENSE|COPYING|AUTHORS|CHANGELOG|NOTICE|README)(\..+)?$ ]]; then
         return 0
     fi
+    # Skip build, container, and infrastructure files without standard code extensions
+    if [[ "$base" =~ ^(Dockerfile|Containerfile|Makefile|Procfile|Rakefile|Gemfile|Vagrantfile)(\..+)?$ ]]; then
+        return 0
+    fi
     # Skip non-source/doc/config/data/asset files
     if [[ "$f" =~ \.(md|markdown|ya?ml|sql|json|xml|properties|toml|ini|txt|csv|tsv|lock|lockb|svg|png|jpe?g|gif|ico|woff2?|ttf|eot)$ ]]; then
         return 0
@@ -584,7 +588,7 @@ else
         CALLERS=()
         while IFS= read -r caller; do
             [[ -n "$caller" ]] && CALLERS+=("$caller")
-        done < <(git grep -l "\b${STEM}\b" -- ":!${prod}" ":!*/${BASE_NAME}" ":!*test*" ":!*spec*" ":!*Test*" ":!*.md" 2>/dev/null | head -n 6 || true)
+        done < <(git grep -l "\b${STEM}\b" -- ":!${prod}" ":!*/${BASE_NAME}" ":!*test*" ":!*spec*" ":!*Test*" ":!*.md" ":!*.lock" ":!*.map" ":!*.min.*" ":!*.svg" 2>/dev/null | head -n 6 || true)
 
         if [[ ${#CALLERS[@]} -gt 0 ]]; then
             echo "  Callers of ${STEM}:"

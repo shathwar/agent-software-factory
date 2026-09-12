@@ -277,6 +277,15 @@ class InspectorTests(unittest.TestCase):
         self.assertNotIn("[MISSING TEST] Cargo.lock", output)
         self.assertNotIn("Callers of :", output)
 
+    def test_build_and_container_files_are_not_flagged_as_missing_tests(self):
+        self.write("Dockerfile", "FROM python:3.11-slim\nCMD [\"python3\"]\n")
+        self.write("Makefile", "all:\n\techo build\n")
+        self.write("Containerfile", "FROM alpine:latest\n")
+        output = self.inspect("--no-diff")
+        self.assertNotIn("[MISSING TEST] Dockerfile", output)
+        self.assertNotIn("[MISSING TEST] Makefile", output)
+        self.assertNotIn("[MISSING TEST] Containerfile", output)
+
 
 if __name__ == "__main__":
     unittest.main()

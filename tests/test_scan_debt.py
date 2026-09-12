@@ -133,6 +133,31 @@ class TestScanDebt(unittest.TestCase):
             markers = scan_debt.scan_paths([tmppath])
             self.assertEqual(len(markers), 0)
 
+    def test_non_comment_strings_and_code_are_ignored(self):
+        non_comments = [
+            'if "ponytail:" in line.lower():',
+            'MARKER_PATTERN = re.compile(r"ponytail:\s*(.+)$", re.IGNORECASE)',
+            '│   • Code Refactorer: Simplifies under green; adds ponytail: debt markers    │',
+            'Scan codebases for ponytail: technical debt markers',
+            'const markerName = "ponytail: custom";',
+        ]
+        for line in non_comments:
+            with self.subTest(line=line):
+                res = scan_debt.parse_debt_marker(line, "app.py", 1)
+                self.assertEqual(res, {})
+
+    def test_markdown_headings_and_asset_extensions_are_skipped(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            md_file = tmppath / "README.md"
+            md_file.write_text("# ponytail: Lazy Senior Developer Engine\n")
+
+            pdf_file = tmppath / "doc.pdf"
+            pdf_file.write_text("ponytail: text in pdf")
+
+            markers = scan_debt.scan_paths([tmppath])
+            self.assertEqual(len(markers), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

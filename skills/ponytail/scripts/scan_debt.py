@@ -31,8 +31,16 @@ DEFAULT_EXCLUDES = {
     "dist",
 }
 
-# Regex to find ponytail: marker line
-MARKER_PATTERN = re.compile(r"ponytail:\s*(.+)$", re.IGNORECASE)
+IGNORE_EXTENSIONS = {
+    ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".pdf",
+    ".zip", ".tar", ".gz", ".lock", ".lockb", ".woff", ".woff2", ".ttf", ".eot",
+}
+
+# Regex to find ponytail: marker comment line
+MARKER_PATTERN = re.compile(
+    r"(?:^\s*(?://|#|/\*|\*|--|<!--|;|%)?|(?<=[\s;])(?://|#|/\*|\*|--|<!--|;|%))\s*ponytail:\s*(.+)$",
+    re.IGNORECASE,
+)
 
 # Field extractors: stop at next delimiter token or end of line
 CEILING_PATTERN = re.compile(
@@ -116,6 +124,9 @@ def parse_debt_marker(raw_text: str, file_path: str, line_number: int) -> Dict[s
 
 def scan_file(file_path: Path, base_dir: Path) -> List[Dict[str, Any]]:
     """Scan a single text file for debt markers."""
+    if file_path.suffix.lower() in IGNORE_EXTENSIONS:
+        return []
+
     try:
         # Fast binary file detection
         with file_path.open("rb") as f:
@@ -134,8 +145,12 @@ def scan_file(file_path: Path, base_dir: Path) -> List[Dict[str, Any]]:
     except ValueError:
         rel_path = str(file_path.relative_to(base_dir))
     markers = []
+    is_markdown = file_path.suffix.lower() in {".md", ".markdown"}
     for idx, line in enumerate(content.splitlines(), start=1):
         if "ponytail:" in line.lower():
+            # In markdown files, ATX headings (# ...) are not code comments
+            if is_markdown and re.match(r"^\s*#{1,6}\s+", line):
+                continue
             parsed = parse_debt_marker(line, rel_path, idx)
             if parsed:
                 markers.append(parsed)

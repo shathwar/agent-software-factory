@@ -46,6 +46,23 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(len(res["adrs"]), 1)
             self.assertEqual(res["adrs"][0]["status"], "ACCEPTED")
 
+    def test_gate1_adr_proposed_state(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            adr_dir = tmppath / "docs" / "adr"
+            adr_dir.mkdir(parents=True)
+            (adr_dir / "ADR-0001-events.md").write_text("# ADR\n**Status**: PROPOSED\n")
+
+            res = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertEqual(res["gate"], "GATE 1: SPECIFICATION & DESIGN")
+            self.assertEqual(res["state_key"], "ADR_PROPOSED")
+            self.assertIn("seek user acceptance", res["next_action"])
+
+    def test_normalize_req_title_strips_brackets_and_formatting(self):
+        self.assertEqual(inspect_lifecycle.normalize_req_title("[User Authentication]"), "user authentication")
+        self.assertEqual(inspect_lifecycle.normalize_req_title("**User Authentication**"), "user authentication")
+        self.assertEqual(inspect_lifecycle.normalize_req_title("User Authentication (STATUS: REMOVED)"), "user authentication")
+
     def test_gate2_tdd_active_with_pending_tasks(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)

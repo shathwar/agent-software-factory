@@ -375,8 +375,9 @@ REMOVAL_BODY_MARKER = re.compile(
 
 
 def normalize_req_title(raw_title: str) -> str:
-    """Normalize requirement title for matching, removing only explicit removal markers."""
+    """Normalize requirement title for matching, removing explicit removal markers, brackets, and markdown formatting."""
     cleaned = REMOVAL_TITLE_MARKER.sub("", raw_title).strip()
+    cleaned = cleaned.strip("[]*`\"' ").strip()
     return cleaned.lower()
 
 
@@ -999,10 +1000,17 @@ def determine_lifecycle_state(
             )
 
     # Only ADRs exist
+    has_accepted = any(a.get("status") in {"ACCEPTED", "APPROVED"} for a in adrs)
+    if has_accepted:
+        return (
+            "GATE 1: SPECIFICATION & DESIGN",
+            "ADR_ACCEPTED",
+            "ADR accepted. Compile OpenSpec change package (specs/ and tasks.md) or confirm with user to begin TDD.",
+        )
     return (
         "GATE 1: SPECIFICATION & DESIGN",
-        "ADR_ACCEPTED",
-        "ADR exists. Compile OpenSpec change package (specs/ and tasks.md) or confirm with user to begin TDD.",
+        "ADR_PROPOSED",
+        "ADR proposed. Grill design frontier and seek user acceptance before compiling OpenSpec or beginning TDD.",
     )
 
 
