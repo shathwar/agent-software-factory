@@ -286,6 +286,26 @@ class InspectorTests(unittest.TestCase):
         self.assertNotIn("[MISSING TEST] Makefile", output)
         self.assertNotIn("[MISSING TEST] Containerfile", output)
 
+    def test_shell_script_and_c_matching_tests_are_discovered(self):
+        self.write("scripts/deploy.sh", "#!/usr/bin/env bash\necho deploy\n")
+        self.write("tests/test_deploy.py", "def test_deploy(): pass\n")
+        self.write("src/core.c", "int run() { return 0; }\n")
+        self.write("tests/core_test.cpp", "TEST(Core, Run) {}\n")
+        self.commit()
+
+        # Modify deploy.sh and core.c
+        self.write("scripts/deploy.sh", "#!/usr/bin/env bash\necho deploy v2\n")
+        self.write("src/core.c", "int run() { return 1; }\n")
+        output = self.inspect("--no-diff")
+
+        self.assertIn("[UNTOUCHED]    scripts/deploy.sh", output)
+        self.assertIn("-> tests/test_deploy.py", output)
+        self.assertNotIn("[MISSING TEST] scripts/deploy.sh", output)
+
+        self.assertIn("[UNTOUCHED]    src/core.c", output)
+        self.assertIn("-> tests/core_test.cpp", output)
+        self.assertNotIn("[MISSING TEST] src/core.c", output)
+
 
 if __name__ == "__main__":
     unittest.main()

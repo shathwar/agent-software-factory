@@ -101,12 +101,20 @@ def parse_debt_marker(raw_text: str, file_path: str, line_number: int) -> Dict[s
 
     if not shortcut or shortcut.lower() in {"todo", "fixme", "clean this up", "optimize", "temp"}:
         errors.append(f"Vague or missing shortcut description: '{shortcut}'")
+    elif (shortcut.startswith("<") and shortcut.endswith(">")) or shortcut.strip("<>").lower() in {"shortcut", "desc", "description"}:
+        errors.append(f"Unreplaced template placeholder in shortcut description: '{shortcut}'")
 
-    if ceiling and ceiling.lower() in {"none", "n/a", "tbd", "todo", "fixme"}:
-        errors.append(f"Vague or placeholder 'Ceiling:' threshold: '{ceiling}'")
+    if ceiling:
+        if ceiling.lower() in {"none", "n/a", "tbd", "todo", "fixme"}:
+            errors.append(f"Vague or placeholder 'Ceiling:' threshold: '{ceiling}'")
+        elif (ceiling.startswith("<") and ceiling.endswith(">")) or ceiling.strip("<>").lower() in {"threshold/limit", "threshold", "limit", "ceiling"}:
+            errors.append(f"Unreplaced template placeholder in 'Ceiling:' threshold: '{ceiling}'")
 
-    if upgrade and upgrade.lower() in {"none", "n/a", "tbd", "todo", "fixme"}:
-        errors.append(f"Vague or placeholder 'Upgrade:' path: '{upgrade}'")
+    if upgrade:
+        if upgrade.lower() in {"none", "n/a", "tbd", "todo", "fixme"}:
+            errors.append(f"Vague or placeholder 'Upgrade:' path: '{upgrade}'")
+        elif (upgrade.startswith("<") and upgrade.endswith(">")) or upgrade.strip("<>").lower() in {"next architecture", "architecture", "upgrade", "action"}:
+            errors.append(f"Unreplaced template placeholder in 'Upgrade:' path: '{upgrade}'")
 
     is_valid = len(errors) == 0
 

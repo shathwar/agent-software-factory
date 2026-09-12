@@ -1153,6 +1153,77 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertIn("Judge report in delivery envelope is malformed", res["next_action"])
             self.assertIn("Envelope is missing required 'judge_report' object", res["next_action"])
 
+    def test_normalize_req_title_handles_bracketed_and_prefixed_ids(self):
+        """normalize_req_title strips bracketed requirement tags and colon prefixes."""
+        self.assertEqual(inspect_lifecycle.normalize_req_title("[REQ-001] User Authentication"), "user authentication")
+        self.assertEqual(inspect_lifecycle.normalize_req_title("REQ-002: User Authentication"), "user authentication")
+        self.assertEqual(inspect_lifecycle.normalize_req_title("**[REQ-003] User Authentication**"), "user authentication")
+
+    def test_pre_commit_repo_requires_working_tree_fingerprint(self):
+        """In a repo before first commit, an audit report must provide matching snapshot fingerprint and not a fake commit SHA."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
+
+            pkg_dir = tmppath / "openspec" / "changes" / "feature"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text("- [x] 1. Done\n")
+
+            scratch_dir = tmppath / ".scratch"
+            scratch_dir.mkdir()
+
+            # 1. Report without snapshot_fingerprint
+            (scratch_dir / "delivery_evidence.json").write_text(json.dumps({
+                "topic": "feature",
+                "verdict": "PASS",
+                "test_evidence": True,
+                "snapshot_sha": "deadbeef1234567",
+                "judge_report": {
+                    "reviewer": "judge",
+                    "status": "complete",
+                    "findings": [],
+                    "coverage": ["Clean"],
+                    "questions": [],
+                    "routing_notes": [],
+                },
+            }))
+
+            res = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertEqual(res["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
+            self.assertTrue(
+                "lacks working-tree fingerprint" in res["next_action"]
+                or "does not exist (repository has no commits yet)" in res["next_action"]
+            )
+
+            with self.assertRaises(RuntimeError) as ctx:
+                inspect_lifecycle.apply_and_archive_openspec(tmppath, "feature")
+            self.assertTrue(
+                "lacks working-tree fingerprint" in str(ctx.exception)
+                or "does not exist (repository has no commits yet)" in str(ctx.exception)
+            )
+
+            # 2. Report with valid snapshot_fingerprint clears delivery
+            current_fp = inspect_lifecycle.compute_working_tree_fingerprint(tmppath)
+            (scratch_dir / "delivery_evidence.json").write_text(json.dumps({
+                "topic": "feature",
+                "verdict": "PASS",
+                "test_evidence": True,
+                "working_tree_fingerprint": current_fp,
+                "judge_report": {
+                    "reviewer": "judge",
+                    "status": "complete",
+                    "findings": [],
+                    "coverage": ["Clean"],
+                    "questions": [],
+                    "routing_notes": [],
+                },
+            }))
+
+            res2 = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertEqual(res2["gate"], "GATE 4: READY TO SHIP")
+            self.assertEqual(res2["state_key"], "DELIVERY_READY")
+
 
 if __name__ == "__main__":
     unittest.main()

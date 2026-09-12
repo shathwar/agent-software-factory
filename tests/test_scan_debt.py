@@ -158,6 +158,15 @@ class TestScanDebt(unittest.TestCase):
             markers = scan_debt.scan_paths([tmppath])
             self.assertEqual(len(markers), 0)
 
+    def test_template_syntax_placeholders_are_rejected(self):
+        """Syntax example templates like <Shortcut>, <Threshold/Limit>, <Next Architecture> must fail validation."""
+        template_line = "// ponytail: <Shortcut>. Ceiling: <Threshold/Limit>. Upgrade: <Next Architecture>."
+        res = scan_debt.parse_debt_marker(template_line, "syntax.ts", 5)
+        self.assertFalse(res["is_valid"])
+        self.assertTrue(any("placeholder in shortcut description" in e for e in res["errors"]))
+        self.assertTrue(any("placeholder in 'Ceiling:'" in e for e in res["errors"]))
+        self.assertTrue(any("placeholder in 'Upgrade:'" in e for e in res["errors"]))
+
 
 if __name__ == "__main__":
     unittest.main()

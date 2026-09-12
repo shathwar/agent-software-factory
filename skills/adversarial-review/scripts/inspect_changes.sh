@@ -511,7 +511,7 @@ else
             while IFS= read -r -d '' t; do
                 [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
             done < <(git ls-files -z "*${STEM}Tests.cs" "*${STEM}Test.cs" 2>/dev/null || true)
-        elif [[ "$EXT" =~ ^(cpp|cc|cxx)$ ]]; then
+        elif [[ "$EXT" =~ ^(cpp|cc|cxx|c|h|hpp|hxx)$ ]]; then
             while IFS= read -r -d '' t; do
                 [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
             done < <(git ls-files -z "*${STEM}_test.*" "*${STEM}Test.*" "*test_${STEM}.*" 2>/dev/null || true)
@@ -519,6 +519,14 @@ else
             while IFS= read -r -d '' t; do
                 [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
             done < <(git ls-files -z "*${STEM}_spec.rb" "*${STEM}_test.rb" "*test_${STEM}.rb" 2>/dev/null || true)
+        elif [[ "$EXT" =~ ^(sh|bash|zsh)$ ]]; then
+            while IFS= read -r -d '' t; do
+                [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
+            done < <(git ls-files -z "*test_${STEM}*" "*${STEM}_test*" "*${STEM}Test*" "*${STEM}Tests*" "*${STEM}.test.*" "*${STEM}.spec.*" 2>/dev/null || true)
+        else
+            while IFS= read -r -d '' t; do
+                [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
+            done < <(git ls-files -z "*test_${STEM}*" "*${STEM}_test*" "*${STEM}Test*" "*${STEM}Tests*" "*${STEM}.test.*" "*${STEM}.spec.*" 2>/dev/null || true)
         fi
 
         # 2. Also check untracked added files on disk

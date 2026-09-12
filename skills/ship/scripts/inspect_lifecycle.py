@@ -392,8 +392,12 @@ REMOVAL_BODY_MARKER = re.compile(
 def normalize_req_title(raw_title: str) -> str:
     """Normalize requirement title for matching, removing explicit removal markers, brackets, and markdown formatting."""
     cleaned = REMOVAL_TITLE_MARKER.sub("", raw_title).strip()
-    cleaned = cleaned.strip("[]*`\"' ").strip()
-    return cleaned.lower()
+    cleaned = cleaned.strip("*`\"' ")
+    if cleaned.startswith("[") and cleaned.endswith("]"):
+        cleaned = cleaned[1:-1].strip()
+    cleaned = re.sub(r"^\[[A-Za-z0-9_-]+\]\s*", "", cleaned)
+    cleaned = re.sub(r"^[A-Za-z0-9_-]+:\s*", "", cleaned)
+    return cleaned.strip("*`\"' ").strip().lower()
 
 
 def parse_requirements_doc(content: str) -> Tuple[str, List[Dict[str, Any]]]:
@@ -849,7 +853,9 @@ def parse_audit_report_file(p: Path, repo_root: Path) -> Dict[str, Any]:
         raw_test_evidence = judge_data.get("test_evidence")
     test_evidence_passed = is_test_evidence_passing(raw_test_evidence)
 
-    snapshot_sha = snapshot_info.get("commit") or data.get("commit") or data.get("snapshot") or data.get("head_sha")
+    raw_snapshot = data.get("snapshot")
+    legacy_snapshot_str = raw_snapshot if isinstance(raw_snapshot, str) else None
+    snapshot_sha = snapshot_info.get("commit") or data.get("commit") or legacy_snapshot_str or data.get("head_sha")
     snapshot_tree = snapshot_info.get("tree_hash") or data.get("tree_hash")
     snapshot_fingerprint = snapshot_info.get("working_tree_fingerprint") or data.get("working_tree_fingerprint")
 
@@ -1049,28 +1055,43 @@ def determine_lifecycle_state(
             current_commit = git_info.get("commit")
             current_fingerprint = git_info.get("working_tree_fingerprint")
 
-            if current_commit:
-                if not snapshot_sha and not snapshot_fingerprint:
-                    return (
-                        "GATE 3: ADVERSARIAL AUDIT",
-                        "AUDIT_ACTIVE",
-                        "Audit report lacks commit snapshot SHA or tree fingerprint. Audit must be bound to reviewed snapshot.",
-                    )
-                if snapshot_sha:
-                    is_hex_sha = bool(re.match(r"^[0-9a-f]{7,40}$", snapshot_sha, re.IGNORECASE))
-                    if not is_hex_sha:
-                        # Symbolic ref like 'HEAD' requires a matching working-tree fingerprint
-                        if not snapshot_fingerprint or (current_fingerprint and snapshot_fingerprint != current_fingerprint):
-                            return (
-                                "GATE 3: ADVERSARIAL AUDIT",
-                                "AUDIT_ACTIVE",
-                                f"Audit snapshot commit '{snapshot_sha}' is symbolic or unresolved. Must be a resolved, immutable commit SHA or accompanied by a matching working-tree fingerprint.",
-                            )
-                    elif not current_commit.startswith(snapshot_sha) and not snapshot_sha.startswith(current_commit):
+            if git_info.get("is_git"):
+                if current_commit:
+                    if not snapshot_sha and not snapshot_fingerprint:
                         return (
                             "GATE 3: ADVERSARIAL AUDIT",
                             "AUDIT_ACTIVE",
-                            f"Audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'. Re-run audit on current code.",
+                            "Audit report lacks commit snapshot SHA or tree fingerprint. Audit must be bound to reviewed snapshot.",
+                        )
+                    if snapshot_sha:
+                        is_hex_sha = bool(re.match(r"^[0-9a-f]{7,40}$", snapshot_sha, re.IGNORECASE))
+                        if not is_hex_sha:
+                            # Symbolic ref like 'HEAD' requires a matching working-tree fingerprint
+                            if not snapshot_fingerprint or (current_fingerprint and snapshot_fingerprint != current_fingerprint):
+                                return (
+                                    "GATE 3: ADVERSARIAL AUDIT",
+                                    "AUDIT_ACTIVE",
+                                    f"Audit snapshot commit '{snapshot_sha}' is symbolic or unresolved. Must be a resolved, immutable commit SHA or accompanied by a matching working-tree fingerprint.",
+                                )
+                        elif not current_commit.startswith(snapshot_sha) and not snapshot_sha.startswith(current_commit):
+                            return (
+                                "GATE 3: ADVERSARIAL AUDIT",
+                                "AUDIT_ACTIVE",
+                                f"Audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'. Re-run audit on current code.",
+                            )
+                else:
+                    # Git repository before first commit
+                    if not snapshot_fingerprint:
+                        return (
+                            "GATE 3: ADVERSARIAL AUDIT",
+                            "AUDIT_ACTIVE",
+                            "Audit report in repository before first commit lacks working-tree fingerprint. Audit must be bound to reviewed snapshot fingerprint.",
+                        )
+                    if snapshot_sha and snapshot_sha != "none":
+                        return (
+                            "GATE 3: ADVERSARIAL AUDIT",
+                            "AUDIT_ACTIVE",
+                            f"Audit report snapshot commit '{snapshot_sha}' does not exist (repository has no commits yet). Re-run audit on current code.",
                         )
 
             # 7. Working tree consistency check
@@ -1203,18 +1224,24 @@ def apply_and_archive_openspec(
         snapshot_fingerprint = audit_report.get("snapshot_fingerprint")
         current_fingerprint = git_info.get("working_tree_fingerprint")
 
-        if current_commit:
-            if not snapshot_sha and not snapshot_fingerprint:
-                raise RuntimeError(f"Cannot archive '{topic_name}': audit report lacks commit snapshot SHA or tree fingerprint.")
-            if snapshot_sha:
-                is_hex_sha = bool(re.match(r"^[0-9a-f]{7,40}$", snapshot_sha, re.IGNORECASE))
-                if not is_hex_sha:
-                    if not snapshot_fingerprint or (current_fingerprint and snapshot_fingerprint != current_fingerprint):
-                        raise RuntimeError(
-                            f"Cannot archive '{topic_name}': audit snapshot commit '{snapshot_sha}' is symbolic or unresolved. Must be an immutable commit SHA or accompanied by a matching fingerprint."
-                        )
-                elif not current_commit.startswith(snapshot_sha) and not snapshot_sha.startswith(current_commit):
-                    raise RuntimeError(f"Cannot archive '{topic_name}': audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'.")
+        if git_info.get("is_git"):
+            if current_commit:
+                if not snapshot_sha and not snapshot_fingerprint:
+                    raise RuntimeError(f"Cannot archive '{topic_name}': audit report lacks commit snapshot SHA or tree fingerprint.")
+                if snapshot_sha:
+                    is_hex_sha = bool(re.match(r"^[0-9a-f]{7,40}$", snapshot_sha, re.IGNORECASE))
+                    if not is_hex_sha:
+                        if not snapshot_fingerprint or (current_fingerprint and snapshot_fingerprint != current_fingerprint):
+                            raise RuntimeError(
+                                f"Cannot archive '{topic_name}': audit snapshot commit '{snapshot_sha}' is symbolic or unresolved. Must be an immutable commit SHA or accompanied by a matching fingerprint."
+                            )
+                    elif not current_commit.startswith(snapshot_sha) and not snapshot_sha.startswith(current_commit):
+                        raise RuntimeError(f"Cannot archive '{topic_name}': audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'.")
+            else:
+                if not snapshot_fingerprint:
+                    raise RuntimeError(f"Cannot archive '{topic_name}': audit report in repository before first commit lacks working-tree fingerprint.")
+                if snapshot_sha and snapshot_sha != "none":
+                    raise RuntimeError(f"Cannot archive '{topic_name}': audit report snapshot commit '{snapshot_sha}' does not exist (repository has no commits yet).")
 
         source_specs_dir = topic_dir / "specs"
         package_spec_names = {s.name for s in source_specs_dir.glob("*.md")} if source_specs_dir.exists() else set()
