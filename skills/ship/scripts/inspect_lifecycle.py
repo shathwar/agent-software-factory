@@ -50,16 +50,31 @@ def compute_working_tree_fingerprint(repo_root: Path) -> str:
     try:
         if head_sha != "none":
             diff_cmd = ["git", "diff", "--no-ext-diff", "--no-textconv", "--no-color", "HEAD", "--"]
+            diff_res = subprocess.run(
+                diff_cmd,
+                cwd=repo_root,
+                capture_output=True,
+            )
+            if diff_res.returncode == 0:
+                hasher.update(b"DIFF:\n")
+                hasher.update(diff_res.stdout)
         else:
-            diff_cmd = ["git", "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--cached", "--"]
-        diff_res = subprocess.run(
-            diff_cmd,
-            cwd=repo_root,
-            capture_output=True,
-        )
-        if diff_res.returncode == 0:
-            hasher.update(b"DIFF:\n")
-            hasher.update(diff_res.stdout)
+            diff_staged = subprocess.run(
+                ["git", "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--cached", "--"],
+                cwd=repo_root,
+                capture_output=True,
+            )
+            diff_unstaged = subprocess.run(
+                ["git", "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--"],
+                cwd=repo_root,
+                capture_output=True,
+            )
+            if diff_staged.returncode == 0:
+                hasher.update(b"DIFF_STAGED:\n")
+                hasher.update(diff_staged.stdout)
+            if diff_unstaged.returncode == 0:
+                hasher.update(b"DIFF_UNSTAGED:\n")
+                hasher.update(diff_unstaged.stdout)
     except Exception:
         pass
 
@@ -621,7 +636,7 @@ def inspect_spikes(repo_root: Path) -> List[str]:
     return spikes
 
 
-def validate_judge_report_contract(report: Any) -> List[str]:
+def validate_judge_report_contract(report: Any, allow_delivery_keys: bool = False) -> List[str]:
     """Validate a Judge report dict against the canonical 6-field report contract."""
     if not isinstance(report, dict):
         return ["Judge report must be a JSON object"]
@@ -631,7 +646,14 @@ def validate_judge_report_contract(report: Any) -> List[str]:
     if missing:
         return [f"Judge report missing required field: {k}" for k in sorted(missing)]
 
-    extra = report.keys() - top_required
+    allowed_keys = set(top_required)
+    if allow_delivery_keys:
+        allowed_keys |= {
+            "topic", "verdict", "test_evidence", "tests_passed",
+            "commit", "head_sha", "snapshot", "tree_hash", "working_tree_fingerprint"
+        }
+
+    extra = report.keys() - allowed_keys
     if extra:
         return [f"Judge report has unexpected property: {k}" for k in sorted(extra)]
 
@@ -728,87 +750,157 @@ def validate_judge_report_contract(report: Any) -> List[str]:
     return errors
 
 
+def parse_audit_report_file(p: Path, repo_root: Path) -> Dict[str, Any]:
+    """Parse and validate an audit report file or delivery evidence envelope."""
+    try:
+        content = p.read_text(encoding="utf-8")
+    except Exception as e:
+        return {
+            "path": str(p.relative_to(repo_root)),
+            "is_envelope": False,
+            "reviewer": "unknown",
+            "status": "fail",
+            "verdict": "FAIL",
+            "findings_count": 0,
+            "critical_or_high_count": 0,
+            "is_judge": False,
+            "raw_test_evidence": None,
+            "test_evidence_passed": False,
+            "snapshot_sha": None,
+            "snapshot_tree": None,
+            "snapshot_fingerprint": None,
+            "topic": None,
+            "judge_report_valid": False,
+            "judge_report_errors": [f"Could not read report file: {e}"],
+        }
+
+    try:
+        data = json.loads(content)
+        if not isinstance(data, dict):
+            return {
+                "path": str(p.relative_to(repo_root)),
+                "is_envelope": False,
+                "reviewer": "unknown",
+                "status": "fail",
+                "verdict": "FAIL",
+                "findings_count": 0,
+                "critical_or_high_count": 0,
+                "is_judge": False,
+                "raw_test_evidence": None,
+                "test_evidence_passed": False,
+                "snapshot_sha": None,
+                "snapshot_tree": None,
+                "snapshot_fingerprint": None,
+                "topic": None,
+                "judge_report_valid": False,
+                "judge_report_errors": ["Report file is not a JSON object"],
+            }
+    except Exception as e:
+        return {
+            "path": str(p.relative_to(repo_root)),
+            "is_envelope": False,
+            "reviewer": "unknown",
+            "status": "fail",
+            "verdict": "FAIL",
+            "findings_count": 0,
+            "critical_or_high_count": 0,
+            "is_judge": False,
+            "raw_test_evidence": None,
+            "test_evidence_passed": False,
+            "snapshot_sha": None,
+            "snapshot_tree": None,
+            "snapshot_fingerprint": None,
+            "topic": None,
+            "judge_report_valid": False,
+            "judge_report_errors": [f"Invalid JSON in report file: {e}"],
+        }
+
+    # Support Delivery Evidence Envelope format
+    is_envelope = "judge_report" in data or "snapshot" in data
+    raw_judge_report = data.get("judge_report") if is_envelope else data
+    judge_data = raw_judge_report if isinstance(raw_judge_report, dict) else {}
+    snapshot_info = data.get("snapshot") if is_envelope and isinstance(data.get("snapshot"), dict) else {}
+
+    judge_report_errors: List[str] = []
+    if is_envelope:
+        if raw_judge_report is None:
+            judge_report_errors = ["Envelope is missing required 'judge_report' object"]
+        elif not isinstance(raw_judge_report, dict):
+            judge_report_errors = ["Envelope 'judge_report' must be a JSON object"]
+        else:
+            judge_report_errors = validate_judge_report_contract(raw_judge_report, allow_delivery_keys=False)
+    else:
+        judge_report_errors = validate_judge_report_contract(data, allow_delivery_keys=True)
+
+    judge_report_valid = (len(judge_report_errors) == 0)
+
+    findings = judge_data.get("findings", []) if isinstance(judge_data.get("findings"), list) else []
+    critical_or_high = [
+        f for f in findings
+        if isinstance(f, dict) and f.get("severity") in {"CRITICAL", "HIGH"}
+    ]
+    reviewer = str(judge_data.get("reviewer", data.get("reviewer", "unknown"))).lower()
+    status = str(judge_data.get("status", data.get("status", "unknown"))).lower()
+
+    # Verdict and test evidence can be in envelope or top-level
+    verdict = str(data.get("verdict", judge_data.get("verdict", ""))).strip().upper()
+    raw_test_evidence = data.get("test_evidence") if "test_evidence" in data else data.get("tests_passed")
+    if raw_test_evidence is None:
+        raw_test_evidence = judge_data.get("test_evidence")
+    test_evidence_passed = is_test_evidence_passing(raw_test_evidence)
+
+    snapshot_sha = snapshot_info.get("commit") or data.get("commit") or data.get("snapshot") or data.get("head_sha")
+    snapshot_tree = snapshot_info.get("tree_hash") or data.get("tree_hash")
+    snapshot_fingerprint = snapshot_info.get("working_tree_fingerprint") or data.get("working_tree_fingerprint")
+
+    topic = data.get("topic") or snapshot_info.get("topic") or judge_data.get("topic")
+
+    return {
+        "path": str(p.relative_to(repo_root)),
+        "is_envelope": is_envelope,
+        "reviewer": reviewer,
+        "status": status,
+        "verdict": verdict,
+        "findings_count": len(findings),
+        "critical_or_high_count": len(critical_or_high),
+        "is_judge": reviewer in {"judge", "review_judge"},
+        "raw_test_evidence": raw_test_evidence,
+        "test_evidence_passed": test_evidence_passed,
+        "snapshot_sha": str(snapshot_sha) if snapshot_sha else None,
+        "snapshot_tree": str(snapshot_tree) if snapshot_tree else None,
+        "snapshot_fingerprint": str(snapshot_fingerprint) if snapshot_fingerprint else None,
+        "topic": str(topic).strip() if topic else None,
+        "judge_report_valid": judge_report_valid,
+        "judge_report_errors": judge_report_errors,
+    }
+
+
 def inspect_audit_reports(repo_root: Path, topic: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Look for audit reports or delivery evidence envelopes in .scratch or workspace."""
-    search_paths = []
     if topic:
-        search_paths.extend([
+        topic_paths = [
             repo_root / ".scratch" / topic / "delivery_evidence.json",
             repo_root / "scratch" / topic / "delivery_evidence.json",
             repo_root / ".scratch" / f"delivery_evidence_{topic}.json",
             repo_root / "scratch" / f"delivery_evidence_{topic}.json",
             repo_root / ".scratch" / topic / "review_report.json",
             repo_root / "scratch" / topic / "review_report.json",
-        ])
-    search_paths.extend([
+        ]
+        for p in topic_paths:
+            if p.exists():
+                return parse_audit_report_file(p, repo_root)
+
+    fallback_paths = [
         repo_root / ".scratch" / "delivery_evidence.json",
         repo_root / "scratch" / "delivery_evidence.json",
         repo_root / ".scratch" / "review_report.json",
         repo_root / "scratch" / "review_report.json",
         repo_root / "report.json",
-    ])
-    for p in search_paths:
+    ]
+    for p in fallback_paths:
         if p.exists():
-            try:
-                data = json.loads(p.read_text(encoding="utf-8"))
-                if not isinstance(data, dict):
-                    continue
+            return parse_audit_report_file(p, repo_root)
 
-                # Support Delivery Evidence Envelope format
-                is_envelope = "judge_report" in data or "snapshot" in data
-                judge_data = data.get("judge_report", data) if is_envelope else data
-                snapshot_info = data.get("snapshot") if is_envelope and isinstance(data.get("snapshot"), dict) else {}
-
-                judge_report_errors: List[str] = []
-                if is_envelope:
-                    raw_judge_report = data.get("judge_report")
-                    if raw_judge_report is None:
-                        judge_report_errors = ["Envelope is missing required 'judge_report' object"]
-                    else:
-                        judge_report_errors = validate_judge_report_contract(raw_judge_report)
-                judge_report_valid = (len(judge_report_errors) == 0)
-
-                findings = judge_data.get("findings", []) if isinstance(judge_data, dict) and isinstance(judge_data.get("findings"), list) else []
-                critical_or_high = [
-                    f for f in findings
-                    if isinstance(f, dict) and f.get("severity") in {"CRITICAL", "HIGH"}
-                ]
-                reviewer = str(judge_data.get("reviewer", data.get("reviewer", "unknown")) if isinstance(judge_data, dict) else "unknown").lower()
-                status = str(judge_data.get("status", data.get("status", "unknown")) if isinstance(judge_data, dict) else "unknown").lower()
-
-                # Verdict and test evidence can be in envelope or top-level
-                verdict = str(data.get("verdict", judge_data.get("verdict", ""))).strip().upper()
-                raw_test_evidence = data.get("test_evidence") if "test_evidence" in data else data.get("tests_passed")
-                if raw_test_evidence is None and "test_evidence" in judge_data:
-                    raw_test_evidence = judge_data.get("test_evidence")
-                test_evidence_passed = is_test_evidence_passing(raw_test_evidence)
-
-                snapshot_sha = snapshot_info.get("commit") or data.get("commit") or data.get("snapshot") or data.get("head_sha")
-                snapshot_tree = snapshot_info.get("tree_hash") or data.get("tree_hash")
-                snapshot_fingerprint = snapshot_info.get("working_tree_fingerprint") or data.get("working_tree_fingerprint")
-
-                topic = data.get("topic") or snapshot_info.get("topic") or judge_data.get("topic")
-
-                return {
-                    "path": str(p.relative_to(repo_root)),
-                    "is_envelope": is_envelope,
-                    "reviewer": reviewer,
-                    "status": status,
-                    "verdict": verdict,
-                    "findings_count": len(findings),
-                    "critical_or_high_count": len(critical_or_high),
-                    "is_judge": reviewer in {"judge", "review_judge"},
-                    "raw_test_evidence": raw_test_evidence,
-                    "test_evidence_passed": test_evidence_passed,
-                    "snapshot_sha": str(snapshot_sha) if snapshot_sha else None,
-                    "snapshot_tree": str(snapshot_tree) if snapshot_tree else None,
-                    "snapshot_fingerprint": str(snapshot_fingerprint) if snapshot_fingerprint else None,
-                    "topic": str(topic).strip() if topic else None,
-                    "judge_report_valid": judge_report_valid,
-                    "judge_report_errors": judge_report_errors,
-                }
-            except Exception:
-                pass
     return None
 
 
@@ -864,22 +956,7 @@ def determine_lifecycle_state(
                     "All implementation tasks marked complete. Run 'adversarial-review' in review-loop mode against base branch.",
                 )
 
-            # 1. Package / Topic exact match check
-            report_topic = audit_report.get("topic")
-            if audit_report.get("is_envelope") and not report_topic:
-                return (
-                    "GATE 3: ADVERSARIAL AUDIT",
-                    "AUDIT_ACTIVE",
-                    f"Delivery evidence envelope lacks 'topic'. Requires exact match with active package '{active_pkg['topic']}' before shipping.",
-                )
-            if report_topic and report_topic != active_pkg["topic"]:
-                return (
-                    "GATE 3: ADVERSARIAL AUDIT",
-                    "AUDIT_ACTIVE",
-                    f"Audit approval is for topic '{report_topic}', but active package is '{active_pkg['topic']}'. Requires audit approval for '{active_pkg['topic']}' before shipping.",
-                )
-
-            # 2. Judge report contract check (for envelopes)
+            # 1. Judge report contract check for envelopes
             if audit_report.get("is_envelope") and not audit_report.get("judge_report_valid"):
                 err_msg = "; ".join(audit_report.get("judge_report_errors", ["Malformed Judge report structure"]))
                 return (
@@ -888,7 +965,7 @@ def determine_lifecycle_state(
                     f"Judge report in delivery envelope is malformed: {err_msg}. Re-run review to produce a valid Judge report.",
                 )
 
-            # 3. Reviewer must be Judge (not an unadjudicated specialist)
+            # 2. Reviewer must be Judge (not an unadjudicated specialist)
             if not audit_report.get("is_judge"):
                 reviewer_name = audit_report.get("reviewer", "unknown")
                 return (
@@ -897,7 +974,7 @@ def determine_lifecycle_state(
                     f"Audit report is from '{reviewer_name}', not Judge. Requires explicit Judge adjudication before shipping.",
                 )
 
-            # 4. Must not contain unresolved CRITICAL or HIGH findings
+            # 2. Must not contain unresolved CRITICAL or HIGH findings
             crit_count = audit_report.get("critical_or_high_count", 0)
             if crit_count > 0:
                 return (
@@ -906,7 +983,7 @@ def determine_lifecycle_state(
                     f"Audit has {crit_count} unresolved CRITICAL/HIGH finding(s). Must remediate defects before shipping.",
                 )
 
-            # 5. Must have explicit passing verdict and clean findings
+            # 3. Must have explicit passing verdict and clean findings
             verdict = audit_report.get("verdict", "")
             status = audit_report.get("status", "")
             findings_count = audit_report.get("findings_count", 0)
@@ -933,12 +1010,37 @@ def determine_lifecycle_state(
                     f"Audit verdict '{verdict or status}' is not PASS. Remediate findings or re-run review.",
                 )
 
-            # 6. Require explicit verified passing test evidence
+            # 4. Require explicit verified passing test evidence
             if not audit_report.get("test_evidence_passed"):
                 return (
                     "GATE 3: ADVERSARIAL AUDIT",
                     "AUDIT_ACTIVE",
                     "Audit report lacks verified test evidence. Run test suite and record passing test results.",
+                )
+
+            # 5. Package / Topic exact match check (enforced on all reports)
+            report_topic = audit_report.get("topic")
+            if not report_topic:
+                return (
+                    "GATE 3: ADVERSARIAL AUDIT",
+                    "AUDIT_ACTIVE",
+                    f"Audit approval lacks 'topic'. Requires exact match with active package '{active_pkg['topic']}' before shipping.",
+                )
+            if report_topic != active_pkg["topic"]:
+                return (
+                    "GATE 3: ADVERSARIAL AUDIT",
+                    "AUDIT_ACTIVE",
+                    f"Audit approval is for topic '{report_topic}', but active package is '{active_pkg['topic']}'. Requires audit approval for '{active_pkg['topic']}' before shipping.",
+                )
+
+            # 6. Judge report contract check (enforced on all reports)
+            if not audit_report.get("judge_report_valid"):
+                err_msg = "; ".join(audit_report.get("judge_report_errors", ["Malformed Judge report structure"]))
+                env_text = " in delivery envelope" if audit_report.get("is_envelope") else ""
+                return (
+                    "GATE 3: ADVERSARIAL AUDIT",
+                    "AUDIT_ACTIVE",
+                    f"Judge report{env_text} is malformed: {err_msg}. Re-run review to produce a valid Judge report.",
                 )
 
             # 7. Snapshot binding check: commit match
@@ -1062,16 +1164,6 @@ def apply_and_archive_openspec(
         if not audit_report:
             raise RuntimeError(f"Cannot archive '{topic_name}': no passing audit report found (or delivery evidence in .scratch/).")
 
-        report_topic = audit_report.get("topic")
-        if audit_report.get("is_envelope") and not report_topic:
-            raise RuntimeError(
-                f"Cannot archive '{topic_name}': delivery evidence envelope lacks 'topic' field to authorise package."
-            )
-        if report_topic and report_topic != topic_name:
-            raise RuntimeError(
-                f"Cannot archive '{topic_name}': audit approval is for topic '{report_topic}', not '{topic_name}'."
-            )
-
         if audit_report.get("is_envelope") and not audit_report.get("judge_report_valid"):
             err_msg = "; ".join(audit_report.get("judge_report_errors", ["Malformed Judge report structure"]))
             raise RuntimeError(f"Cannot archive '{topic_name}': Judge report in delivery envelope is malformed ({err_msg}).")
@@ -1089,6 +1181,21 @@ def apply_and_archive_openspec(
             raise RuntimeError(f"Cannot archive '{topic_name}': audit verdict is '{verdict or status}', not PASS.")
         if not audit_report.get("test_evidence_passed"):
             raise RuntimeError(f"Cannot archive '{topic_name}': audit report lacks verified passing test evidence.")
+
+        report_topic = audit_report.get("topic")
+        if not report_topic:
+            raise RuntimeError(
+                f"Cannot archive '{topic_name}': audit report lacks 'topic' field to authorise package."
+            )
+        if report_topic != topic_name:
+            raise RuntimeError(
+                f"Cannot archive '{topic_name}': audit approval is for topic '{report_topic}', not '{topic_name}'."
+            )
+
+        if not audit_report.get("judge_report_valid"):
+            err_msg = "; ".join(audit_report.get("judge_report_errors", ["Malformed Judge report structure"]))
+            env_text = " in delivery envelope" if audit_report.get("is_envelope") else ""
+            raise RuntimeError(f"Cannot archive '{topic_name}': Judge report{env_text} is malformed ({err_msg}).")
 
         git_info = get_git_info(repo_root)
         current_commit = git_info.get("commit")

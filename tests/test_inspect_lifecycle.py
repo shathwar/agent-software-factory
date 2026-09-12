@@ -111,10 +111,14 @@ class TestInspectLifecycle(unittest.TestCase):
             scratch_dir.mkdir()
             (scratch_dir / "review_report.json").write_text(
                 json.dumps({
+                    "topic": "webhooks",
                     "reviewer": "judge",
                     "status": "complete",
                     "verdict": "PASS",
                     "findings": [],
+                    "coverage": ["Reviewed webhooks."],
+                    "questions": [],
+                    "routing_notes": [],
                     "test_evidence": True,
                 })
             )
@@ -1060,6 +1064,94 @@ class TestInspectLifecycle(unittest.TestCase):
 
             spikes = inspect_lifecycle.inspect_spikes(tmppath)
             self.assertEqual(len(spikes), 0)
+
+    def test_fingerprint_detects_unstaged_changes_before_first_commit(self):
+        """In a repo before first commit, modifying a staged file without staging must change fingerprint."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
+
+            pkg_dir = tmppath / "openspec" / "changes" / "feature"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text("- [x] 1. Complete\n")
+            (tmppath / "service.py").write_text("v1_clean = True\n")
+            subprocess.run(["git", "add", "openspec", "service.py"], cwd=tmppath, check=True)
+
+            fp_staged = inspect_lifecycle.compute_working_tree_fingerprint(tmppath)
+
+            # Introduce unstaged modification
+            (tmppath / "service.py").write_text("v1_clean = False # regression\n")
+
+            fp_unstaged = inspect_lifecycle.compute_working_tree_fingerprint(tmppath)
+            self.assertNotEqual(fp_staged, fp_unstaged)
+
+    def test_legacy_flat_report_without_topic_or_contract_blocks_delivery(self):
+        """A flat report lacking topic or standard contract fields (status, findings, coverage) must block delivery."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            pkg_dir = tmppath / "openspec" / "changes" / "feature"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text("- [x] 1. Done\n")
+
+            scratch_dir = tmppath / ".scratch"
+            scratch_dir.mkdir()
+            # Flat legacy report missing topic and required contract fields
+            (scratch_dir / "review_report.json").write_text(json.dumps({
+                "reviewer": "judge",
+                "verdict": "PASS",
+                "commit": "abc1234",
+                "test_evidence": True,
+            }))
+
+            res = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertEqual(res["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
+            self.assertTrue(
+                "Audit approval lacks 'topic'" in res["next_action"]
+                or "Judge report is malformed" in res["next_action"]
+            )
+
+    def test_malformed_topic_evidence_blocks_delivery_without_fallback(self):
+        """Malformed topic evidence (judge_report: null) must block delivery and not fall back to global approval."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            pkg_dir = tmppath / "openspec" / "changes" / "feature"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text("- [x] 1. Done\n")
+
+            scratch_dir = tmppath / ".scratch"
+            scratch_dir.mkdir()
+
+            # Global passing report (older approval)
+            (scratch_dir / "delivery_evidence.json").write_text(json.dumps({
+                "topic": "feature",
+                "verdict": "PASS",
+                "test_evidence": True,
+                "judge_report": {
+                    "reviewer": "judge",
+                    "status": "complete",
+                    "findings": [],
+                    "coverage": ["All files clean."],
+                    "questions": [],
+                    "routing_notes": [],
+                },
+            }))
+
+            # Topic-specific envelope with judge_report: null
+            topic_scratch = scratch_dir / "feature"
+            topic_scratch.mkdir()
+            (topic_scratch / "delivery_evidence.json").write_text(json.dumps({
+                "topic": "feature",
+                "verdict": "PASS",
+                "judge_report": None,
+                "test_evidence": True,
+            }))
+
+            res = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertEqual(res["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
+            self.assertIn("Judge report in delivery envelope is malformed", res["next_action"])
+            self.assertIn("Envelope is missing required 'judge_report' object", res["next_action"])
 
 
 if __name__ == "__main__":
