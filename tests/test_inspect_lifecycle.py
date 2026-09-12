@@ -1265,7 +1265,208 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(len(res_after["active_spikes"]), 0)
             self.assertEqual(res_after["gate"], "GATE 1: SPECIFICATION & DESIGN")
 
+    def test_skipped_judge_review_blocks_delivery_and_archive(self):
+        """A report with status: skipped must block delivery and archiving even if verdict is PASS."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init", "-b", "main"], cwd=tmppath, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+
+            pkg_dir = tmppath / "openspec" / "changes" / "feature"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text("- [x] 1. Done\n")
+
+            src_file = tmppath / "service.py"
+            src_file.write_text("def run(): return 42\n")
+
+            subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
+            subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmppath, check=True)
+            head_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmppath, capture_output=True, text=True).stdout.strip()
+
+            scratch_dir = tmppath / ".scratch"
+            scratch_dir.mkdir()
+            envelope = {
+                "schema_version": "1.0",
+                "topic": "feature",
+                "verdict": "PASS",
+                "snapshot": {"commit": head_commit},
+                "test_evidence": {"exit_code": 0, "passed": True, "tests_run": 5},
+                "judge_report": {
+                    "reviewer": "judge",
+                    "status": "skipped",
+                    "findings": [],
+                    "coverage": [],
+                    "questions": [],
+                    "routing_notes": [],
+                },
+            }
+            (scratch_dir / "delivery_evidence.json").write_text(json.dumps(envelope))
+
+            # Delivery evaluation must reject skipped status
+            res = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertEqual(res["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
+            self.assertIn("not complete", res["next_action"])
+
+            # Archive must also reject skipped status
+            with self.assertRaises(RuntimeError) as ctx:
+                inspect_lifecycle.apply_and_archive_openspec(tmppath, topic="feature")
+            self.assertIn("requires 'complete'", str(ctx.exception))
+
+    def test_ship_json_config_loading(self):
+        """Verify .ship.json config loading and overriding in inspect_lifecycle."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            config_data = {
+                "project": {"name": "billing", "scope": "services/billing"},
+                "gates": {
+                    "gate2_tdd": {"test_command": "pnpm test"},
+                    "gate3_audit": {"max_fix_iterations": 5, "debt_threshold": 2},
+                },
+            }
+            (tmppath / ".ship.json").write_text(json.dumps(config_data))
+
+            cfg = inspect_lifecycle.load_ship_config(tmppath)
+            self.assertEqual(cfg["config_source"], ".ship.json")
+            self.assertEqual(cfg["project"]["name"], "billing")
+            self.assertEqual(cfg["project"]["scope"], "services/billing")
+            self.assertEqual(cfg["gates"]["gate2_tdd"]["test_command"], "pnpm test")
+            self.assertEqual(cfg["gates"]["gate3_audit"]["max_fix_iterations"], 5)
+
+            # Check format_summary displays config
+            eval_data = inspect_lifecycle.evaluate_repository(tmppath)
+            summary = inspect_lifecycle.format_summary(eval_data)
+            self.assertIn(".ship.json", summary)
+            self.assertIn("pnpm test", summary)
+
+    def test_ship_yaml_config_loading(self):
+        """Verify zero-dependency .ship.yaml parsing and loading."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            yaml_content = """# Ship lifecycle configuration
+project:
+  name: "auth-service"
+gates:
+  gate2_tdd:
+    test_command: "pytest -q"
+  gate3_audit:
+    max_fix_iterations: 4
+"""
+            (tmppath / ".ship.yaml").write_text(yaml_content)
+
+            cfg = inspect_lifecycle.load_ship_config(tmppath)
+            self.assertEqual(cfg["config_source"], ".ship.yaml")
+            self.assertEqual(cfg["project"]["name"], "auth-service")
+            self.assertEqual(cfg["gates"]["gate2_tdd"]["test_command"], "pytest -q")
+            self.assertEqual(cfg["gates"]["gate3_audit"]["max_fix_iterations"], 4)
+
+    def test_create_checkpoint_and_rollback(self):
+        """Verify checkpoint creation and safe rollback with backup."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+
+            # Setup openspec package
+            pkg_dir = tmppath / "openspec" / "changes" / "payment"
+            pkg_dir.mkdir(parents=True)
+            tasks_file = pkg_dir / "tasks.md"
+            tasks_file.write_text("- [x] Task 1: Setup stripe\n- [ ] Task 2: Webhooks\n")
+
+            service_file = tmppath / "service.py"
+            service_file.write_text("def pay(): pass\n")
+            subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
+            subprocess.run(["git", "commit", "-m", "Initial spec commit"], cwd=tmppath, check=True)
+
+            # Create checkpoint for gate-1
+            chk = inspect_lifecycle.create_checkpoint(tmppath, "gate-1-spec", topic="payment")
+            self.assertEqual(chk["gate"], "gate-1-spec")
+            self.assertEqual(chk["topic"], "payment")
+            self.assertTrue(chk["ref_created"])
+            chk_file = tmppath / ".scratch" / "checkpoints" / "payment_gate-1-spec.json"
+            self.assertTrue(chk_file.exists())
+
+            # Now simulate partial dirty edits in gate 2
+            service_file.write_text("def pay(): return 'broken'\n")
+            tasks_file.write_text("- [x] Task 1: Setup stripe\n- [x] Task 2: Webhooks\n")
+
+            # Perform rollback to gate-1-spec
+            rb = inspect_lifecycle.perform_rollback(tmppath, "gate-1-spec", topic="payment")
+            self.assertEqual(rb["status"], "success")
+            self.assertEqual(rb["target_gate"], "gate-1-spec")
+            self.assertEqual(rb["reset_tasks_count"], 2)
+
+            # Verify tasks.md tasks were reset to unchecked
+            reset_tasks = tasks_file.read_text()
+            self.assertIn("- [ ] Task 1: Setup stripe", reset_tasks)
+            self.assertIn("- [ ] Task 2: Webhooks", reset_tasks)
+
+            # Verify backup directory was created for dirty changes
+            self.assertIsNotNone(rb["backup_directory"])
+            backup_path = tmppath / rb["backup_directory"]
+            self.assertTrue(backup_path.exists())
+            self.assertTrue((backup_path / "service.py").exists())
+
+    def test_ship_yaml_multiline_lists_and_comments(self):
+        """Verify YAML parser handles multiline bullet lists and unquoted inline comments."""
+        yaml_text = """
+project:
+  name: "billing" # Project name comment
+gates:
+  gate2_tdd:
+    test_command: "pytest -q" # quiet mode
+  gate3_audit:
+    max_fix_iterations: 3
+    critical_paths:
+      - services/billing/core
+      - services/billing/api
+"""
+        parsed = inspect_lifecycle.parse_simple_yaml(yaml_text)
+        self.assertEqual(parsed["project"]["name"], "billing")
+        self.assertEqual(parsed["gates"]["gate2_tdd"]["test_command"], "pytest -q")
+        self.assertEqual(parsed["gates"]["gate3_audit"]["max_fix_iterations"], 3)
+        self.assertEqual(
+            parsed["gates"]["gate3_audit"]["critical_paths"],
+            ["services/billing/core", "services/billing/api"],
+        )
+
+    def test_checkpoint_in_precommit_repo(self):
+        """Verify checkpoint gracefully handles repository before first commit."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=tmppath, check=True)
+            chk = inspect_lifecycle.create_checkpoint(tmppath, "gate-1-spec", topic="new-feature")
+            self.assertEqual(chk["gate"], "gate-1-spec")
+            self.assertEqual(chk["commit"], "none")
+            self.assertFalse(chk["ref_created"])
+            self.assertTrue((tmppath / ".scratch" / "checkpoints" / "new-feature_gate-1-spec.json").exists())
+
+    def test_status_check_exit_codes(self):
+        """Verify --status-check exit code returns: 0 for ready, 1 for in-progress, 2 for audit rejection."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            # Empty repo -> Gate 1 -> status_check exit code 1 (in-progress)
+            code = inspect_lifecycle.main(["--path", str(tmppath), "--status-check"])
+            self.assertEqual(code, 1)
+
+            # Add failing audit report -> status_check exit code 2 (remediation/rollback)
+            scratch_dir = tmppath / ".scratch"
+            scratch_dir.mkdir()
+            report_data = {
+                "reviewer": "judge",
+                "status": "fail",
+                "verdict": "FAIL",
+                "critical_or_high_count": 1,
+            }
+            (scratch_dir / "audit_report.json").write_text(json.dumps(report_data))
+            code = inspect_lifecycle.main(["--path", str(tmppath), "--status-check"])
+            self.assertEqual(code, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
+
+
 

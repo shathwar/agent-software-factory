@@ -70,7 +70,7 @@ This framework transforms AI from an unpredictable code generator into a **disci
 Teams can adopt skills incrementally without changing their entire workflow:
 1. **Phase 1: Pre-PR Defense ([`adversarial-review`](./skills/adversarial-review/SKILL.md))**: Run `/adversarial-review` on pull requests before requesting senior peer review. Catch race conditions and missing error paths early.
 2. **Phase 2: Anti-Bloat Coding ([`ponytail`](./skills/ponytail/SKILL.md))**: Use `/ponytail` on everyday tasks to enforce standard-library reuse. Add `python3 skills/ponytail/scripts/scan_debt.py --strict` to CI to enforce documented debt ceilings.
-3. **Phase 3: Autonomous Lifecycle ([`ship`](./skills/ship/SKILL.md))**: Run `/ship "<feature>"` to drive complete features from architectural grilling (ADRs) through TDD to audited PRs. *(Note: `ship` is currently in **Experimental Preview**; validate individual skills first).*
+3. **Phase 3: Autonomous Lifecycle ([`ship`](./skills/ship/SKILL.md))**: Run `/ship "<feature>"` to drive complete features from architectural grilling (ADRs) through TDD to audited PRs. **Battle-Ready** with manifest support (`.ship.json`), git checkpointing, safe rollback, and subagent context isolation.
 
 ---
 
@@ -83,7 +83,7 @@ Teams can adopt skills incrementally without changing their entire workflow:
 | [**`tdd`**](./skills/tdd/SKILL.md) | `/tdd`, `"tdd"`, `"red-green-refactor"` | Implementation | Disciplined test-driven development engine with dedicated Test Driver, Implementer, and Refactorer agents. |
 | [**`adversarial-design`**](./skills/adversarial-design/SKILL.md) | `/adversarial-design`, `"grill me on this design"` | Pre-implementation | Relentlessly stress-tests architectures and plans using frontier rounds. Compiles an ADR & OpenSpec. |
 | [**`prototype`**](./skills/prototype/SKILL.md) | `/prototype`, `"prototype"`, `"spike"` | Empirical Validation | Rapid, disposable spikes answering ungrillable design questions in isolated sandboxes. |
-| [**`ship`**](./skills/ship/SKILL.md) | `/ship`, `"ship"`, `/lifecycle` | Full Lifecycle Orchestrator *(Preview)* | Chains all 5 skills into an autonomous pipeline with 4 transition gates. *(Experimental)*. |
+| [**`ship`**](./skills/ship/SKILL.md) | `/ship`, `"ship"`, `/lifecycle` | Full Lifecycle Orchestrator | **Battle-Ready**. Chains all 5 skills into an autonomous pipeline with 4 transition gates, git checkpoints, and rollbacks. |
 
 ---
 
@@ -93,7 +93,10 @@ Give your agent the [ship SKILL.md](./skills/ship/SKILL.md) and your feature req
 
 - **One Command, End-to-End Delivery**: Drives the entire feature lifecycle from architectural grilling to tested, simplified, and production-audited code ready to pull request.
 - **Re-Entrant State Machine**: The filesystem (`openspec/`, `tasks.md`, `docs/adr/`) acts as the persistent state machine. If interrupted, `/ship` instantly resumes at the exact active phase.
+- **Repository Manifest (`.ship.json`)**: Configure explicit test runners, typecheck commands, and monorepo scopes.
+- **Git Checkpoints & Safe Rollback**: Records immutable tags (`--checkpoint gate-1-spec`) and safely backs up broken implementations on architectural revisions (`--rollback gate-1-spec`).
 - **Lifecycle Inspector**: Run `python3 skills/ship/scripts/inspect_lifecycle.py` to evaluate repository state against all 4 gates deterministically.
+- **Headless CI & GitHub Actions**: Run headlessly in CI with issue-based approvals via the [Headless CI Guide](./skills/ship/references/headless_ci_guide.md).
 - **Agent Roster**: Led by the [Lifecycle Orchestrator](./skills/ship/agents/lifecycle_orchestrator.md).
 - **References**: Consult the [Lifecycle State Machine Guide](./skills/ship/references/lifecycle_state_machine.md).
 

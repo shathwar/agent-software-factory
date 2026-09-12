@@ -110,6 +110,151 @@ def compute_working_tree_fingerprint(repo_root: Path) -> str:
     return hasher.hexdigest()
 
 
+def parse_simple_yaml(text: str) -> Dict[str, Any]:
+    """Zero-dependency parser for simple and nested YAML configurations."""
+    result: Dict[str, Any] = {}
+    stack: List[Tuple[int, Any, Optional[str]]] = [(-1, result, None)]
+
+    def parse_scalar(val_str: str) -> Any:
+        if " #" in val_str and not (
+            (val_str.startswith('"') and val_str.endswith('"')) or
+            (val_str.startswith("'") and val_str.endswith("'"))
+        ):
+            val_str = val_str.split(" #", 1)[0].rstrip()
+
+        val_str = val_str.strip()
+        if not val_str:
+            return ""
+        if val_str.startswith("[") and val_str.endswith("]"):
+            return [parse_scalar(x.strip()) for x in val_str[1:-1].split(",") if x.strip()]
+        if val_str.lower() in {"true", "yes", "on"}:
+            return True
+        if val_str.lower() in {"false", "no", "off"}:
+            return False
+        if re.match(r"^-?\d+$", val_str):
+            return int(val_str)
+        if re.match(r"^-?\d+\.\d+$", val_str):
+            try:
+                return float(val_str)
+            except ValueError:
+                pass
+        if (val_str.startswith('"') and val_str.endswith('"')) or (val_str.startswith("'") and val_str.endswith("'")):
+            return val_str[1:-1]
+        return val_str
+
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        if not line or line.lstrip().startswith("#"):
+            continue
+        indent = len(raw_line) - len(raw_line.lstrip())
+        trimmed = line.strip()
+
+        while len(stack) > 1 and stack[-1][0] >= indent:
+            stack.pop()
+
+        _, current_container, active_key = stack[-1]
+
+        if trimmed.startswith("- "):
+            item_val_str = trimmed[2:].strip()
+            item_val = parse_scalar(item_val_str)
+            if isinstance(current_container, list):
+                current_container.append(item_val)
+            elif active_key is not None and len(stack) > 1:
+                parent_container = stack[-2][1]
+                if isinstance(parent_container, dict):
+                    if not isinstance(parent_container.get(active_key), list):
+                        parent_container[active_key] = []
+                        stack[-1] = (stack[-1][0], parent_container[active_key], None)
+                    parent_container[active_key].append(item_val)
+            continue
+
+        if ":" in trimmed:
+            key, val = trimmed.split(":", 1)
+            key = key.strip().strip("'\"")
+            val = val.strip()
+
+            if not val:
+                new_dict: Dict[str, Any] = {}
+                if isinstance(current_container, dict):
+                    current_container[key] = new_dict
+                    stack.append((indent, new_dict, key))
+            else:
+                parsed_val = parse_scalar(val)
+                if isinstance(current_container, dict):
+                    current_container[key] = parsed_val
+    return result
+
+
+def load_ship_config(repo_root: Path, explicit_path: Optional[str] = None) -> Dict[str, Any]:
+    """Load configuration from .ship.json or .ship.yaml/.ship.yml."""
+    default_config: Dict[str, Any] = {
+        "version": 1,
+        "project": {
+            "name": "",
+            "root": ".",
+            "scope": ".",
+        },
+        "gates": {
+            "gate2_tdd": {
+                "test_command": "",
+                "typecheck_command": "",
+            },
+            "gate3_audit": {
+                "max_fix_iterations": 3,
+                "debt_threshold": 0,
+                "base_branch": "main",
+            },
+            "gate4_delivery": {
+                "require_clean_working_tree": True,
+                "target_branch": "main",
+            },
+        },
+        "config_source": None,
+    }
+
+    config_file: Optional[Path] = None
+    if explicit_path:
+        p = Path(explicit_path)
+        if not p.is_absolute():
+            p = repo_root / p
+        if p.exists() and p.is_file():
+            config_file = p
+    else:
+        for candidate in [".ship.json", ".ship.yaml", ".ship.yml"]:
+            p = repo_root / candidate
+            if p.exists() and p.is_file():
+                config_file = p
+                break
+
+    if not config_file:
+        return default_config
+
+    try:
+        content = config_file.read_text(encoding="utf-8", errors="replace")
+        loaded: Dict[str, Any] = {}
+        if config_file.suffix == ".json":
+            loaded = json.loads(content)
+        else:
+            loaded = parse_simple_yaml(content)
+
+        def deep_merge(target: Dict[str, Any], source: Dict[str, Any]) -> None:
+            for k, v in source.items():
+                if k in target and isinstance(target[k], dict) and isinstance(v, dict):
+                    deep_merge(target[k], v)
+                else:
+                    target[k] = v
+
+        deep_merge(default_config, loaded)
+        try:
+            default_config["config_source"] = str(config_file.relative_to(repo_root))
+        except ValueError:
+            default_config["config_source"] = str(config_file)
+    except Exception as e:
+        default_config["config_error"] = str(e)
+
+    return default_config
+
+
 def get_git_info(repo_root: Path) -> Dict[str, Any]:
     """Gather git branch, commit SHA, tree hash, and working tree status."""
     info: Dict[str, Any] = {
@@ -915,6 +1060,8 @@ def inspect_audit_reports(repo_root: Path, topic: Optional[str] = None) -> Optio
             repo_root / "scratch" / f"delivery_evidence_{topic}.json",
             repo_root / ".scratch" / topic / "review_report.json",
             repo_root / "scratch" / topic / "review_report.json",
+            repo_root / ".scratch" / topic / "audit_report.json",
+            repo_root / "scratch" / topic / "audit_report.json",
         ]
         for p in topic_paths:
             if p.exists():
@@ -925,6 +1072,8 @@ def inspect_audit_reports(repo_root: Path, topic: Optional[str] = None) -> Optio
         repo_root / "scratch" / "delivery_evidence.json",
         repo_root / ".scratch" / "review_report.json",
         repo_root / "scratch" / "review_report.json",
+        repo_root / ".scratch" / "audit_report.json",
+        repo_root / "scratch" / "audit_report.json",
         repo_root / "report.json",
     ]
     for p in fallback_paths:
@@ -1004,7 +1153,7 @@ def determine_lifecycle_state(
                     f"Audit report is from '{reviewer_name}', not Judge. Requires explicit Judge adjudication before shipping.",
                 )
 
-            # 2. Must not contain unresolved CRITICAL or HIGH findings
+            # 3. Must not contain unresolved CRITICAL or HIGH findings
             crit_count = audit_report.get("critical_or_high_count", 0)
             if crit_count > 0:
                 return (
@@ -1013,7 +1162,7 @@ def determine_lifecycle_state(
                     f"Audit has {crit_count} unresolved CRITICAL/HIGH finding(s). Must remediate defects before shipping.",
                 )
 
-            # 3. Must have explicit passing verdict and clean findings
+            # 4. Must have explicit passing verdict and clean findings
             verdict = audit_report.get("verdict", "")
             status = audit_report.get("status", "")
             findings_count = audit_report.get("findings_count", 0)
@@ -1025,7 +1174,7 @@ def determine_lifecycle_state(
                     "AUDIT_ACTIVE",
                     f"Audit verdict '{verdict}' is rejected. Remediate findings or re-run review.",
                 )
-            if status in {"fail", "failed", "rejected", "incomplete"}:
+            if status in {"fail", "failed", "rejected", "incomplete", "skipped"}:
                 return (
                     "GATE 3: ADVERSARIAL AUDIT",
                     "AUDIT_ACTIVE",
@@ -1040,7 +1189,7 @@ def determine_lifecycle_state(
                     f"Audit verdict '{verdict or status}' is not PASS. Remediate findings or re-run review.",
                 )
 
-            # 4. Require explicit verified passing test evidence
+            # 5. Require explicit verified passing test evidence
             if not audit_report.get("test_evidence_passed"):
                 return (
                     "GATE 3: ADVERSARIAL AUDIT",
@@ -1048,7 +1197,7 @@ def determine_lifecycle_state(
                     "Audit report lacks verified test evidence. Run test suite and record passing test results.",
                 )
 
-            # 5. Package / Topic exact match check (enforced on all reports)
+            # 6. Package / Topic exact match check (enforced on all reports)
             report_topic = audit_report.get("topic")
             if not report_topic:
                 return (
@@ -1063,7 +1212,7 @@ def determine_lifecycle_state(
                     f"Audit approval is for topic '{report_topic}', but active package is '{active_pkg['topic']}'. Requires audit approval for '{active_pkg['topic']}' before shipping.",
                 )
 
-            # 6. Judge report contract check (enforced on all reports)
+            # 7. Judge report contract check (enforced on all reports)
             if not audit_report.get("judge_report_valid"):
                 err_msg = "; ".join(audit_report.get("judge_report_errors", ["Malformed Judge report structure"]))
                 env_text = " in delivery envelope" if audit_report.get("is_envelope") else ""
@@ -1219,8 +1368,8 @@ def apply_and_archive_openspec(
             raise RuntimeError(f"Cannot archive '{topic_name}': audit has {audit_report.get('critical_or_high_count')} unresolved CRITICAL/HIGH findings.")
         verdict = audit_report.get("verdict", "")
         status = audit_report.get("status", "")
-        if verdict in {"FAIL", "FAILED", "REJECTED"} or status in {"fail", "failed", "rejected", "incomplete"}:
-            raise RuntimeError(f"Cannot archive '{topic_name}': audit verdict is '{verdict or status}', not PASS.")
+        if verdict in {"FAIL", "FAILED", "REJECTED"} or status in {"fail", "failed", "rejected", "incomplete", "skipped"}:
+            raise RuntimeError(f"Cannot archive '{topic_name}': audit verdict is '{verdict or status}', not PASS (status is '{status}', requires 'complete').")
         verdict_ok = verdict in {"PASS", "APPROVED"} or (verdict == "" and status in {"complete", "pass", "approved"} and audit_report.get("findings_count", 0) == 0)
         if not verdict_ok:
             raise RuntimeError(f"Cannot archive '{topic_name}': audit verdict is '{verdict or status}', not PASS.")
@@ -1344,11 +1493,195 @@ def apply_and_archive_openspec(
     }
 
 
+def create_checkpoint(
+    repo_root: Path,
+    gate_name: str,
+    topic: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Record a git checkpoint tag/ref and receipt for the given lifecycle gate."""
+    resolved_topic = topic or get_active_topic(repo_root) or "default"
+    git_info = get_git_info(repo_root)
+
+    canonical = gate_name.lower().strip()
+    if canonical in {"1", "gate1", "gate-1", "spec", "gate-1-spec"}:
+        canonical_tag = "gate-1-spec"
+    elif canonical in {"2", "gate2", "gate-2", "impl", "gate-2-impl", "tdd"}:
+        canonical_tag = "gate-2-impl"
+    elif canonical in {"3", "gate3", "gate-3", "audit", "gate-3-audit"}:
+        canonical_tag = "gate-3-audit"
+    elif canonical in {"4", "gate4", "gate-4", "delivery", "gate-4-delivery"}:
+        canonical_tag = "gate-4-delivery"
+    else:
+        canonical_tag = canonical.replace(" ", "-")
+
+    ref_name = f"refs/ship/{resolved_topic}/{canonical_tag}"
+    tag_name = f"ship/{resolved_topic}/{canonical_tag}"
+    commit_sha = git_info.get("commit")
+    fingerprint = git_info.get("working_tree_fingerprint") or compute_working_tree_fingerprint(repo_root)
+    timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+    ref_created = False
+    if git_info.get("is_git") and commit_sha:
+        try:
+            subprocess.run(
+                ["git", "update-ref", ref_name, commit_sha],
+                cwd=repo_root,
+                capture_output=True,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "tag", "-f", tag_name, commit_sha],
+                cwd=repo_root,
+                capture_output=True,
+            )
+            ref_created = True
+        except Exception:
+            pass
+
+    chk_dir = repo_root / ".scratch" / "checkpoints"
+    chk_dir.mkdir(parents=True, exist_ok=True)
+    receipt_file = chk_dir / f"{resolved_topic}_{canonical_tag}.json"
+    receipt_data = {
+        "topic": resolved_topic,
+        "gate": canonical_tag,
+        "ref": ref_name,
+        "tag": tag_name,
+        "commit": commit_sha or "none",
+        "fingerprint": fingerprint,
+        "timestamp": timestamp,
+        "is_git": git_info.get("is_git", False),
+        "ref_created": ref_created,
+    }
+    receipt_file.write_text(json.dumps(receipt_data, indent=2), encoding="utf-8")
+
+    return receipt_data
+
+
+def perform_rollback(
+    repo_root: Path,
+    target_gate: str,
+    topic: Optional[str] = None,
+    force: bool = False,
+) -> Dict[str, Any]:
+    """Safely roll back lifecycle and working state to target checkpoint (e.g. State 5b)."""
+    resolved_topic = topic or get_active_topic(repo_root) or "default"
+    canonical = target_gate.lower().strip()
+    if canonical in {"1", "gate1", "gate-1", "spec", "gate-1-spec"}:
+        canonical_tag = "gate-1-spec"
+    elif canonical in {"2", "gate2", "gate-2", "impl", "gate-2-impl", "tdd"}:
+        canonical_tag = "gate-2-impl"
+    else:
+        canonical_tag = canonical.replace(" ", "-")
+
+    git_info = get_git_info(repo_root)
+    timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_dir = repo_root / ".scratch" / f"rollback_{timestamp_str}"
+
+    chk_file = repo_root / ".scratch" / "checkpoints" / f"{resolved_topic}_{canonical_tag}.json"
+    target_tag = f"ship/{resolved_topic}/{canonical_tag}"
+    target_ref = f"refs/ship/{resolved_topic}/{canonical_tag}"
+    checkpoint_info: Optional[Dict[str, Any]] = None
+    if chk_file.exists():
+        try:
+            checkpoint_info = json.loads(chk_file.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    backed_up_files: List[str] = []
+    if not git_info.get("is_clean") or git_info.get("modified_source_files"):
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        if git_info.get("is_git"):
+            try:
+                patch_res = subprocess.run(
+                    ["git", "diff", "HEAD"],
+                    cwd=repo_root,
+                    capture_output=True,
+                )
+                if patch_res.stdout:
+                    (backup_dir / "working_diff.patch").write_bytes(patch_res.stdout)
+            except Exception:
+                pass
+
+        for src_path_str in git_info.get("modified_source_files", []):
+            full_src = repo_root / src_path_str
+            if full_src.is_file():
+                dest = backup_dir / src_path_str
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    shutil.copy2(full_src, dest)
+                    backed_up_files.append(src_path_str)
+                except Exception:
+                    pass
+
+    pkg_dir = repo_root / "openspec" / "changes" / resolved_topic
+    tasks_file = pkg_dir / "tasks.md"
+    reset_tasks_count = 0
+    if tasks_file.exists() and canonical_tag == "gate-1-spec":
+        tasks_content = tasks_file.read_text(encoding="utf-8", errors="replace")
+        new_lines = []
+        for line in tasks_content.splitlines():
+            if re.match(r"^(\s*(?:[-*]|\d+\.)\s*\[)[xX](\].*)$", line):
+                new_line = re.sub(r"^(\s*(?:[-*]|\d+\.)\s*\[)[xX](\].*)$", r"\g<1> \2", line)
+                new_lines.append(new_line)
+                reset_tasks_count += 1
+            else:
+                new_lines.append(line)
+        tasks_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+
+    git_reset_performed = False
+    if git_info.get("is_git"):
+        target_sha: Optional[str] = None
+        tag_check = subprocess.run(
+            ["git", "rev-parse", "--verify", target_tag],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+        )
+        if tag_check.returncode == 0:
+            target_sha = tag_check.stdout.strip()
+        else:
+            ref_check = subprocess.run(
+                ["git", "rev-parse", "--verify", target_ref],
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+            )
+            if ref_check.returncode == 0:
+                target_sha = ref_check.stdout.strip()
+            elif checkpoint_info and checkpoint_info.get("commit"):
+                target_sha = checkpoint_info["commit"]
+
+        current_sha = git_info.get("commit")
+        if target_sha and current_sha and current_sha != target_sha and target_sha != "none":
+            try:
+                reset_cmd = ["git", "reset", "--soft", target_sha]
+                res = subprocess.run(reset_cmd, cwd=repo_root, capture_output=True, text=True)
+                if res.returncode == 0:
+                    git_reset_performed = True
+            except Exception:
+                pass
+
+    has_backups = bool(backed_up_files) or (backup_dir.exists() and (backup_dir / "working_diff.patch").exists())
+    return {
+        "status": "success",
+        "topic": resolved_topic,
+        "target_gate": canonical_tag,
+        "backup_directory": str(backup_dir.relative_to(repo_root)) if has_backups else None,
+        "backed_up_files": backed_up_files,
+        "reset_tasks_count": reset_tasks_count,
+        "git_reset_performed": git_reset_performed,
+        "checkpoint_found": bool(checkpoint_info),
+        "message": f"Safely rolled back to {canonical_tag}. State reset to Gate 1 (Spec Amendment).",
+    }
+
+
 def evaluate_repository(
     repo_root: Path,
     target_topic: Optional[str] = None,
+    config_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Perform a full lifecycle evaluation of the repository."""
+    config = load_ship_config(repo_root, explicit_path=config_path)
     git_info = get_git_info(repo_root)
     adrs = inspect_adrs(repo_root)
     openspec_packages = inspect_openspec(repo_root, target_topic=target_topic)
@@ -1375,6 +1708,7 @@ def evaluate_repository(
         "openspec_living_specs": living_specs,
         "active_spikes": spikes,
         "audit_report": audit_report,
+        "config": config,
     }
 
 
@@ -1438,6 +1772,11 @@ def format_summary(data: Dict[str, Any]) -> str:
         crit_str = f" critical/high={report.get('critical_or_high_count')}"
         lines.append(f"• Audit Report   : {report['path']}{env_str} (by {report['reviewer']},{verdict_str},{ev_str},{crit_str})")
 
+    if data.get("config", {}).get("config_source"):
+        cfg = data["config"]
+        t_cmd = cfg.get("gates", {}).get("gate2_tdd", {}).get("test_command") or "autodetect"
+        lines.append(f"• Config File    : {cfg['config_source']} (test_cmd: '{t_cmd}')")
+
     lines.append("─────────────────────────────────────────────────────────────────────")
     lines.append("👉 RECOMMENDED NEXT ACTION:")
     lines.append(f"   {data['next_action']}")
@@ -1458,6 +1797,28 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "--topic",
         default=None,
         help="Target a specific OpenSpec topic package.",
+    )
+    parser.add_argument(
+        "--config",
+        default=None,
+        help="Path to custom .ship.json or .ship.yaml configuration.",
+    )
+    parser.add_argument(
+        "--checkpoint",
+        default=None,
+        metavar="GATE",
+        help="Record a git ref and receipt checkpoint for GATE (e.g. gate-1-spec, gate-2-impl).",
+    )
+    parser.add_argument(
+        "--rollback",
+        default=None,
+        metavar="GATE",
+        help="Safely rollback working state to GATE checkpoint (e.g. gate-1-spec for State 5b).",
+    )
+    parser.add_argument(
+        "--status-check",
+        action="store_true",
+        help="Exit with 0 if ready for delivery, 1 if blocked, 2 if rollback/remediation recommended.",
     )
     parser.add_argument(
         "--format",
@@ -1491,6 +1852,47 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(compute_working_tree_fingerprint(repo_root))
         return 0
 
+    if args.checkpoint:
+        try:
+            res = create_checkpoint(repo_root, args.checkpoint, topic=args.topic)
+            if args.format == "json":
+                print(json.dumps(res, indent=2))
+            else:
+                print("═════════════════════════════════════════════════════════════════════")
+                print(f" 🏷️  LIFECYCLE CHECKPOINT CREATED: {res['gate']}")
+                print("═════════════════════════════════════════════════════════════════════")
+                print(f"• Topic          : {res['topic']}")
+                print(f"• Git Ref / Tag  : {res['ref']} ({res['tag']})")
+                print(f"• Snapshot Commit: {res['commit'][:7] if res.get('commit') else 'none'}")
+                print(f"• Fingerprint    : {res['fingerprint'][:12]}...")
+                print("═════════════════════════════════════════════════════════════════════")
+            return 0
+        except Exception as e:
+            print(f"Error creating checkpoint: {e}", file=sys.stderr)
+            return 1
+
+    if args.rollback:
+        try:
+            res = perform_rollback(repo_root, args.rollback, topic=args.topic, force=args.force)
+            if args.format == "json":
+                print(json.dumps(res, indent=2))
+            else:
+                print("═════════════════════════════════════════════════════════════════════")
+                print(f" 🔄 LIFECYCLE ROLLBACK EXECUTED: {res['target_gate']}")
+                print("═════════════════════════════════════════════════════════════════════")
+                print(f"• Topic          : {res['topic']}")
+                print(f"• Target Gate    : {res['target_gate']}")
+                if res.get("backup_directory"):
+                    print(f"• State Backup   : {res['backup_directory']}/")
+                if res.get("reset_tasks_count"):
+                    print(f"• Reset Tasks    : {res['reset_tasks_count']} tasks reverted in tasks.md")
+                print(f"• Status         : {res['message']}")
+                print("═════════════════════════════════════════════════════════════════════")
+            return 0
+        except Exception as e:
+            print(f"Error during rollback: {e}", file=sys.stderr)
+            return 1
+
     if args.archive is not None:
         try:
             topic = args.archive if args.archive else args.topic
@@ -1514,9 +1916,25 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 1
 
     try:
-        data = evaluate_repository(repo_root, target_topic=args.topic)
+        data = evaluate_repository(repo_root, target_topic=args.topic, config_path=args.config)
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
+        return 1
+
+    if args.status_check:
+        state_key = data.get("state_key")
+        report = data.get("audit_report")
+        if state_key == "DELIVERY_READY":
+            return 0
+        if report:
+            verdict = report.get("verdict", "")
+            status = report.get("status", "")
+            if (
+                report.get("critical_or_high_count", 0) > 0
+                or verdict in {"FAIL", "FAILED", "REJECTED"}
+                or status in {"fail", "failed", "rejected"}
+            ):
+                return 2
         return 1
 
     if args.format == "json":

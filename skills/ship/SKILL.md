@@ -12,9 +12,11 @@ description: Complete autonomous engineering lifecycle orchestrator. Chains adve
 
 <hard_constraints>
 - Re-Entrant State: Inspect filesystem state (`inspect_lifecycle.py`) first. Resume cleanly; never re-run finished gates.
-- Gate 1 Checkpoint: NEVER proceed to Gate 2 without explicit user confirmation of the ADR/OpenSpec package.
-- Test-First Law: In Gate 2, every task MUST follow strict Red-Green-Refactor with failing behavioral tests before code.
+- Context Boundary Isolation: To prevent token accumulation and instruction drift, orchestrate each gate via an isolated subagent. Never mix Gate 1 architecture Q&A, Gate 2 implementation loops, and Gate 3 reviews in a single prompt context.
+- Gate 1 Checkpoint: Record `inspect_lifecycle.py --checkpoint gate-1-spec`. NEVER proceed to Gate 2 without explicit user confirmation of the ADR/OpenSpec package.
+- Test-First Law: In Gate 2, every task MUST follow strict Red-Green-Refactor with failing behavioral tests before code. Enforce `.ship.json` test commands when present.
 - Terminal Receipts: Gate transitions (Gate 2 ➔ 3 and Gate 3 ➔ 4) REQUIRE pasting the raw terminal test runner output (exit code, test count, duration). Unsubstantiated claims of "tests pass" are rejected.
+- Rollback Guard: If Stage 0 or Judge in Gate 3 detects a broken architectural invariant, execute `inspect_lifecycle.py --rollback gate-1-spec` and return to Gate 1.
 - Audit Clearance: Gate 4 delivery REQUIRES an explicit PASS report from the adversarial-review Judge, zero open CRITICAL/HIGH defects, and verified test evidence bound to current code.
 </hard_constraints>
 
@@ -74,14 +76,16 @@ The filesystem is the persistent state machine. Orient with `python3 skills/ship
 2. Present Frontier Rounds: `❓ Q[N]` with `➡️ Recommended Stance`.
 3. If empirical uncertainty arises, spike in `.scratch/` using [`prototype`](../prototype/SKILL.md).
 4. Compile `docs/adr/ADR-<NNNN>-<topic>.md` and `openspec/changes/<topic>/`.
-5. Pause at Confirmation Gate: *"Design settled. Proceed to autonomous implementation?"*
+5. Checkpoint specification: `python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint gate-1-spec`.
+6. Pause at Confirmation Gate: *"Design settled. Proceed to autonomous implementation?"*
 
 ### Gate 2: Test-First Implementation
 Iterate sequentially through `openspec/changes/<topic>/tasks.md`:
 1. **Red**: [Test Driver](../tdd/agents/test_driver.md) writes failing behavioral test; prove assertion failure.
-2. **Green**: [Ponytail Implementer](../tdd/agents/ponytail_implementer.md) writes minimal code using [Laziness Ladder](../ponytail/SKILL.md).
+2. **Green**: [Ponytail Implementer](../tdd/agents/ponytail_implementer.md) writes minimal code using [Laziness Ladder](../ponytail/SKILL.md) and custom test commands defined in `.ship.json`.
 3. **Refactor**: [Code Refactorer](../tdd/agents/code_refactorer.md) cleans code; adds [debt markers](../ponytail/references/debt_tracking.md) with ceilings.
 4. Mark task completed `- [x]` and repeat.
+5. Checkpoint implementation: `python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint gate-2-impl`.
 
 ### Gate 3: Adversarial Code Audit
 1. Inspect implementation changes across the working tree (staged, unstaged, and untracked) against the base branch:
@@ -90,12 +94,13 @@ Iterate sequentially through `openspec/changes/<topic>/tasks.md`:
 2. Launch [`adversarial-review`](../adversarial-review/SKILL.md) in `review-loop` mode.
 3. Stage 0 verifies code against OpenSpec/ADR; Stages 1–9 audit concurrency, chaos, correctness.
 4. Auto-fix defects under green test protection until Judge issues an explicit `PASS` report. Package `.scratch/delivery_evidence.json` (Delivery Evidence Envelope) bundling the Judge report, verified test runner evidence, and reviewed commit/tree snapshot.
-5. **Rollback Guard**: If ADR invariant is fundamentally broken, halt and re-open Frontier Round in Gate 1.
+5. **Rollback Guard**: If ADR invariant is fundamentally broken, execute `python3 skills/ship/scripts/inspect_lifecycle.py --rollback gate-1-spec` and re-open Frontier Round in Gate 1.
 
 ### Gate 4: Delivery & Sign-Off
-1. Run full test suite.
-2. Deliver Walkthrough: changes summary, ADR links, audit scorecard, `scan_debt.py` ledger.
-3. Apply & Archive OpenSpec: Sync delta specs to `openspec/specs/` and move completed package to `openspec/archive/<YYYY-MM-DD>-<topic>/` via `python3 ${SKILLS_DIR:-$HOME/.gemini/config/skills}/ship/scripts/inspect_lifecycle.py --archive [topic]`.
+1. Verify gate status: `python3 skills/ship/scripts/inspect_lifecycle.py --status-check`.
+2. Run full test suite.
+3. Deliver Walkthrough: changes summary, ADR links, audit scorecard, `scan_debt.py` ledger.
+4. Apply & Archive OpenSpec: Sync delta specs to `openspec/specs/` and move completed package to `openspec/archive/<YYYY-MM-DD>-<topic>/` via `python3 ${SKILLS_DIR:-$HOME/.gemini/config/skills}/ship/scripts/inspect_lifecycle.py --archive [topic]`.
 
 ---
 
@@ -109,6 +114,7 @@ Iterate sequentially through `openspec/changes/<topic>/tasks.md`:
 ## 5. Engineering References (Loaded On-Demand)
 
 - [Lifecycle State Machine & Transition Rules (`lifecycle_state_machine.md`)](./references/lifecycle_state_machine.md): Deep-dive into transitions and rollback gates.
+- [Headless CI & Multi-Team Orchestration Guide (`headless_ci_guide.md`)](./references/headless_ci_guide.md): GitHub Actions automation and asynchronous approval flows.
 - [Adversarial Design Engine (`adversarial-design`)](../adversarial-design/SKILL.md): Architecture grilling and specification contracts.
 - [Empirical Prototype Engine (`prototype`)](../prototype/SKILL.md): Throwaway spike methodology.
 - [TDD Engine (`tdd`)](../tdd/SKILL.md): Red-Green-Refactor implementation.
