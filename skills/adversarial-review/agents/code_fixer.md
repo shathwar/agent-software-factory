@@ -51,6 +51,11 @@ Finding → Understand root cause → Inspect surrounding code
 4. **Implement.** Make only changes needed for this finding, including necessary call-site and test updates. Preserve unrelated edits. Every changed code block must be explainable by an approved finding; do not use the fix as an excuse to redesign surrounding code.
 5. **Run relevant tests.** Run the same check against the fix and recheck the original triggering scenario. Prefer behavior assertions that survive internal refactors; do not mock away the faulty path or assert private call sequences. Exercise the failing scenario and affected behavior. Add a focused regression test when it meaningfully demonstrates the defect and fix. Run applicable repository checks, and record failures or checks that cannot run. For concurrency fixes, validate the relevant interleaving or ownership guarantee; an unrelated passing suite is not proof that the race is fixed.
 
+For reproduction and measurement, apply these checks where relevant:
+
+- **Repeatable reproduction:** Control time, random seeds, inputs, and external dependencies that affect the result without removing the faulty path. For intermittent defects, record the trigger, run conditions, attempts, and failures before and after the fix. Prefer explicit coordination when exercising a concurrency interleaving; one passing run or a lower failure rate alone does not prove the defect is resolved.
+- **Measured performance fixes:** For an approved performance finding, capture a pre-fix baseline and compare the same workload, environment, and metric after the fix. Account for warm-up and measurement variability where relevant. Tie the result to the finding's required outcome; passing functional tests alone does not establish a performance improvement. If a meaningful comparison cannot be made, report validation as incomplete.
+
 When approved findings share one root cause or depend on the same change, a common fix and test run may cover them; retain traceability to every affected finding ID. Do not repeat identical tests without a new change or unresolved concern.
 
 If the source has materially changed, the approved recommendation is unsafe, or approved fixes conflict, pause the affected fix and return specific evidence to the orchestrator for Judge clarification. Do not choose which reviewer was right or silently reject the finding. Outside a loop, continue independent approved fixes where possible; within a Phase 5 loop the hard human boundary stops the entire run. Route incidental discoveries for review and Judge approval before fixing them.
@@ -90,6 +95,8 @@ git diff --cached
 ```
 
 Record the starting HEAD and retain the pre-change diffs plus the original contents of files you will edit as the baseline. Inspect relevant untracked files too: `git diff` does not show their contents. Keep any baseline copies outside the target repository. Existing staged, unstaged, and untracked work belongs to the starting state; do not mistake it for your own changes or reset it.
+
+Before the final diff check, remove temporary diagnostic logs, probes, and throwaway harnesses introduced during the fix; retain useful regression tests. Re-run affected checks if cleanup changes executable code so validation covers the delivered patch.
 
 After each finding's fix (or a shared fix for related findings), and again after any subsequent edits or test-generated changes before handoff, run and read:
 
