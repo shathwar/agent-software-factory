@@ -3,25 +3,27 @@
 A repository of production-grade engineering skills for AI agents, covering the complete lifecycle from architectural design to post-implementation code review:
 
 ```text
+                     USER REQUEST: /ship "<Feature Idea>"
+                                       │
+                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                 PRE-IMPLEMENTATION: adversarial-design                      │
+│                 GATE 1: SPECIFICATION & DESIGN (adversarial-design)         │
 │   • Persona: Senior Principal Systems Architect                             │
 │   • Model: Design Tree & Frontier Algorithm (Round-based batching)          │
-│   • Inquiry: State, Concurrency, Failure, Schema, Blast Radius              │
-│   • Output: Architecture Decision Record (ADR) & OpenSpec Package           │
+│   • Output: Architecture Decision Record (ADR) & OpenSpec Change Package    │
 └──────────────────────┬───────────────────────────────┬──────────────────────┘
                        │                               │
                        ▼ (Ungrillable Question?)       │
         ┌─────────────────────────────┐                │
-        │      SPIKE: prototype       │                │
+        │    SPIKE: prototype         │                │
         │   • Isolated scratch sandbox│                │
         │   • Measures empirical SLIs │                │
         │   • Settles design frontier │                │
         └──────────────┬──────────────┘                │
                        │ (Verdict returned)            │
-                       ▼                               ▼
+                       ▼                               ▼ (User Approves Spec)
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│          IMPLEMENTATION FLOW: tdd (Red-Green-Refactor) + ponytail           │
+│          GATE 2: IMPLEMENTATION (tdd + ponytail)                            │
 │   • Test Driver: Writes failing behavioral test (Red Phase)                 │
 │   • Ponytail Implementer: Climbs Laziness Ladder, stdlib-first (Green)      │
 │   • Code Refactorer: Simplifies under green; adds ponytail: debt markers    │
@@ -31,10 +33,17 @@ A repository of production-grade engineering skills for AI agents, covering the 
                                        │
                                        ▼ (Code & Tests Complete)
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                 POST-IMPLEMENTATION: adversarial-review                     │
+│          GATE 3: AUDIT & AUTO-FIX (adversarial-review)                      │
 │   • Stage 0: Spec Alignment (Verifies code directly against ADR/Spec)       │
 │   • Stages 1–9: Correctness, Concurrency, Failure, Craftsmanship, SOLID     │
-│   • Actions: review, review-pr, review-loop                                 │
+│   • Review Loop: Auto-fixes critical findings & proves zero regressions     │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │
+                                       ▼ (Judge Issues PASS)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                 GATE 4: DELIVERY & PR SIGN-OFF                              │
+│   • Final test suite verification run                                       │
+│   • Delivery Walkthrough Report & PR summary ready for review               │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -42,6 +51,7 @@ A repository of production-grade engineering skills for AI agents, covering the 
 
 | Skill Name | Command / Trigger | Lifecycle Stage | Description |
 |---|---|---|---|
+| [**`ship`**](./skills/ship/SKILL.md) | `/ship`, `"ship"`, `/lifecycle` | **Full Lifecycle Orchestrator** | **Chains all 5 skills into an autonomous pipeline with 4 transition gates.** |
 | [**`adversarial-design`**](./skills/adversarial-design/SKILL.md) | `/adversarial-design`, `"grill me on this design"` | Pre-implementation | Relentlessly stress-tests architectures and plans using frontier rounds. Compiles an ADR & OpenSpec. |
 | [**`prototype`**](./skills/prototype/SKILL.md) | `/prototype`, `"prototype"`, `"spike"` | Empirical Validation | Rapid, disposable spikes answering ungrillable design questions in isolated sandboxes. |
 | [**`tdd`**](./skills/tdd/SKILL.md) | `/tdd`, `"tdd"`, `"red-green-refactor"` | Implementation | Disciplined test-driven development engine with dedicated Test Driver, Implementer, and Refactorer agents. |
@@ -50,7 +60,18 @@ A repository of production-grade engineering skills for AI agents, covering the 
 
 ---
 
-## 1. `adversarial-design` (Pre-Implementation)
+## 1. `ship` (The Unified Engineering Orchestrator)
+
+Give your agent the [ship SKILL.md](./skills/ship/SKILL.md) and your feature request: `/ship "Add Webhook Event Streaming"`.
+
+- **One Command, End-to-End Delivery**: Drives the entire feature lifecycle from architectural grilling to tested, simplified, and production-audited code ready to pull request.
+- **Re-Entrant State Machine**: The filesystem (`openspec/`, `tasks.md`, `docs/adr/`) acts as the persistent state machine. If interrupted, `/ship` instantly resumes at the exact active phase.
+- **Explicit Transition Gates**: Pauses only at genuine human alignment checkpoints (Frontier Rounds & Design Confirmation Gate); executes TDD, simplification, and audit fix loops autonomously.
+- **References**: Consult the [Lifecycle State Machine Guide](./skills/ship/references/lifecycle_state_machine.md).
+
+---
+
+## 2. `adversarial-design` (Pre-Implementation)
 
 Give your agent the [adversarial-design SKILL.md](./skills/adversarial-design/SKILL.md) and your proposal or idea.
 
@@ -61,7 +82,7 @@ Give your agent the [adversarial-design SKILL.md](./skills/adversarial-design/SK
 
 ---
 
-## 2. `prototype` (Empirical Validation & Spikes)
+## 3. `prototype` (Empirical Validation & Spikes)
 
 Give your agent the [prototype SKILL.md](./skills/prototype/SKILL.md) and the empirical question or hypothesis.
 
@@ -73,7 +94,7 @@ Give your agent the [prototype SKILL.md](./skills/prototype/SKILL.md) and the em
 
 ---
 
-## 3. `tdd` (Implementation Flow & Reusable Agents)
+## 4. `tdd` (Implementation Flow & Reusable Agents)
 
 Give your agent the [tdd SKILL.md](./skills/tdd/SKILL.md) and the task or OpenSpec package to implement.
 
@@ -87,7 +108,7 @@ Give your agent the [tdd SKILL.md](./skills/tdd/SKILL.md) and the task or OpenSp
 
 ---
 
-## 4. `ponytail` (Lazy Senior Dev / Anti-Bloat)
+## 5. `ponytail` (Lazy Senior Dev / Anti-Bloat)
 
 Give your agent the [ponytail SKILL.md](./skills/ponytail/SKILL.md) when implementing features, refactoring, or choosing libraries.
 
@@ -98,7 +119,7 @@ Give your agent the [ponytail SKILL.md](./skills/ponytail/SKILL.md) when impleme
 
 ---
 
-## 5. `adversarial-review` (Post-Implementation)
+## 6. `adversarial-review` (Post-Implementation)
 
 Give your coding agent the [SKILL.md](./skills/adversarial-review/SKILL.md) file and the change to review. Include the issue or spec if you have one.
 
@@ -205,6 +226,10 @@ Each finding follows the same [12-field schema](./skills/adversarial-review/refe
 
 ```text
 skills/
+├── ship/
+│   ├── SKILL.md
+│   └── references/
+│       └── lifecycle_state_machine.md
 ├── adversarial-design/
 │   ├── SKILL.md
 │   └── references/
