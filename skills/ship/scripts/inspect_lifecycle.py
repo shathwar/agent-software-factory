@@ -598,6 +598,106 @@ def inspect_spikes(repo_root: Path) -> List[str]:
     return spikes
 
 
+def validate_judge_report_contract(report: Any) -> List[str]:
+    """Validate a Judge report dict against the canonical 6-field report contract."""
+    if not isinstance(report, dict):
+        return ["Judge report must be a JSON object"]
+
+    top_required = {"reviewer", "status", "findings", "coverage", "questions", "routing_notes"}
+    missing = top_required - report.keys()
+    if missing:
+        return [f"Judge report missing required field: {k}" for k in sorted(missing)]
+
+    extra = report.keys() - top_required
+    if extra:
+        return [f"Judge report has unexpected property: {k}" for k in sorted(extra)]
+
+    errors = []
+    if report.get("reviewer") != "judge":
+        errors.append(f"Judge report reviewer must be 'judge', got '{report.get('reviewer')}'")
+    if report.get("status") not in {"complete", "incomplete", "skipped"}:
+        errors.append(f"Judge report status must be one of complete/incomplete/skipped, got '{report.get('status')}'")
+
+    for list_field in ("coverage", "questions", "routing_notes"):
+        val = report.get(list_field)
+        if not isinstance(val, list):
+            errors.append(f"Judge report field '{list_field}' must be an array")
+        elif any(not isinstance(item, str) for item in val):
+            errors.append(f"Judge report field '{list_field}' all items must be strings")
+
+    findings = report.get("findings")
+    if not isinstance(findings, list):
+        errors.append("Judge report field 'findings' must be an array")
+        return errors
+
+    finding_required = {
+        "id", "severity", "category", "file", "line", "title",
+        "problem", "evidence", "impact", "recommendation", "confidence", "fixability"
+    }
+    severities = {"CRITICAL", "HIGH", "MEDIUM", "LOW"}
+    categories = {
+        "SpecAlignment", "Correctness", "Concurrency", "Failure/Resilience",
+        "Simplicity", "Maintainability", "Reuse", "Performance", "SOLID",
+        "Patterns", "ProductionRisk"
+    }
+    fixabilities = {"autonomous", "requires-human"}
+    id_regex = re.compile(r"^FINDING-[0-9]{3,}$")
+    line_regex = re.compile(r"^L[1-9][0-9]*(-L[1-9][0-9]*)?$")
+
+    seen_ids = set()
+    for idx, finding in enumerate(findings):
+        prefix = f"findings[{idx}]"
+        if not isinstance(finding, dict):
+            errors.append(f"{prefix}: must be an object")
+            continue
+
+        f_missing = finding_required - finding.keys()
+        if f_missing:
+            for k in sorted(f_missing):
+                errors.append(f"{prefix}.{k}: field is required")
+        f_extra = finding.keys() - finding_required
+        if f_extra:
+            for k in sorted(f_extra):
+                errors.append(f"{prefix}.{k}: unexpected property")
+
+        if f_missing:
+            continue
+
+        fid = finding["id"]
+        if not isinstance(fid, str) or not id_regex.match(fid):
+            errors.append(f"{prefix}.id: must match pattern ^FINDING-[0-9]{{3,}}$")
+        else:
+            if fid in seen_ids:
+                errors.append(f"Duplicate finding ID: {fid}")
+            seen_ids.add(fid)
+
+        if not isinstance(finding["severity"], str) or finding["severity"] not in severities:
+            errors.append(f"{prefix}.severity: must be one of {sorted(severities)}")
+        if not isinstance(finding["category"], str) or finding["category"] not in categories:
+            errors.append(f"{prefix}.category: must be one of {sorted(categories)}")
+        if not isinstance(finding["fixability"], str) or finding["fixability"] not in fixabilities:
+            errors.append(f"{prefix}.fixability: must be one of {sorted(fixabilities)}")
+
+        for str_field in ("title", "problem", "evidence", "impact", "recommendation"):
+            val = finding.get(str_field)
+            if not isinstance(val, str) or len(val.strip()) < 1:
+                errors.append(f"{prefix}.{str_field}: must be a non-empty string")
+
+        conf = finding.get("confidence")
+        if isinstance(conf, bool) or not isinstance(conf, (int, float)) or conf < 0.0 or conf > 1.0:
+            errors.append(f"{prefix}.confidence: must be a finite number between 0.0 and 1.0")
+
+        path = finding.get("file")
+        if not isinstance(path, str) or len(path.strip()) < 1:
+            errors.append(f"{prefix}.file: must be a non-empty string")
+
+        fline = finding.get("line")
+        if not isinstance(fline, str) or not line_regex.match(fline):
+            errors.append(f"{prefix}.line: must match pattern ^L[1-9][0-9]*(-L[1-9][0-9]*)?$")
+
+    return errors
+
+
 def inspect_audit_reports(repo_root: Path) -> Optional[Dict[str, Any]]:
     """Look for audit reports or delivery evidence envelopes in .scratch or workspace."""
     search_paths = [
@@ -619,13 +719,22 @@ def inspect_audit_reports(repo_root: Path) -> Optional[Dict[str, Any]]:
                 judge_data = data.get("judge_report", data) if is_envelope else data
                 snapshot_info = data.get("snapshot") if is_envelope and isinstance(data.get("snapshot"), dict) else {}
 
-                findings = judge_data.get("findings", [])
+                judge_report_errors: List[str] = []
+                if is_envelope:
+                    raw_judge_report = data.get("judge_report")
+                    if raw_judge_report is None:
+                        judge_report_errors = ["Envelope is missing required 'judge_report' object"]
+                    else:
+                        judge_report_errors = validate_judge_report_contract(raw_judge_report)
+                judge_report_valid = (len(judge_report_errors) == 0)
+
+                findings = judge_data.get("findings", []) if isinstance(judge_data, dict) and isinstance(judge_data.get("findings"), list) else []
                 critical_or_high = [
                     f for f in findings
                     if isinstance(f, dict) and f.get("severity") in {"CRITICAL", "HIGH"}
                 ]
-                reviewer = str(judge_data.get("reviewer", data.get("reviewer", "unknown"))).lower()
-                status = str(judge_data.get("status", data.get("status", "unknown"))).lower()
+                reviewer = str(judge_data.get("reviewer", data.get("reviewer", "unknown")) if isinstance(judge_data, dict) else "unknown").lower()
+                status = str(judge_data.get("status", data.get("status", "unknown")) if isinstance(judge_data, dict) else "unknown").lower()
 
                 # Verdict and test evidence can be in envelope or top-level
                 verdict = str(data.get("verdict", judge_data.get("verdict", ""))).strip().upper()
@@ -655,6 +764,8 @@ def inspect_audit_reports(repo_root: Path) -> Optional[Dict[str, Any]]:
                     "snapshot_tree": str(snapshot_tree) if snapshot_tree else None,
                     "snapshot_fingerprint": str(snapshot_fingerprint) if snapshot_fingerprint else None,
                     "topic": str(topic).strip() if topic else None,
+                    "judge_report_valid": judge_report_valid,
+                    "judge_report_errors": judge_report_errors,
                 }
             except Exception:
                 pass
@@ -728,7 +839,16 @@ def determine_lifecycle_state(
                     f"Audit approval is for topic '{report_topic}', but active package is '{active_pkg['topic']}'. Requires audit approval for '{active_pkg['topic']}' before shipping.",
                 )
 
-            # 2. Reviewer must be Judge (not an unadjudicated specialist)
+            # 2. Judge report contract check (for envelopes)
+            if audit_report.get("is_envelope") and not audit_report.get("judge_report_valid"):
+                err_msg = "; ".join(audit_report.get("judge_report_errors", ["Malformed Judge report structure"]))
+                return (
+                    "GATE 3: ADVERSARIAL AUDIT",
+                    "AUDIT_ACTIVE",
+                    f"Judge report in delivery envelope is malformed: {err_msg}. Re-run review to produce a valid Judge report.",
+                )
+
+            # 3. Reviewer must be Judge (not an unadjudicated specialist)
             if not audit_report.get("is_judge"):
                 reviewer_name = audit_report.get("reviewer", "unknown")
                 return (
@@ -737,7 +857,7 @@ def determine_lifecycle_state(
                     f"Audit report is from '{reviewer_name}', not Judge. Requires explicit Judge adjudication before shipping.",
                 )
 
-            # 3. Must not contain unresolved CRITICAL or HIGH findings
+            # 4. Must not contain unresolved CRITICAL or HIGH findings
             crit_count = audit_report.get("critical_or_high_count", 0)
             if crit_count > 0:
                 return (
@@ -746,7 +866,7 @@ def determine_lifecycle_state(
                     f"Audit has {crit_count} unresolved CRITICAL/HIGH finding(s). Must remediate defects before shipping.",
                 )
 
-            # 4. Must have explicit passing verdict and clean findings
+            # 5. Must have explicit passing verdict and clean findings
             verdict = audit_report.get("verdict", "")
             status = audit_report.get("status", "")
             findings_count = audit_report.get("findings_count", 0)
@@ -773,7 +893,7 @@ def determine_lifecycle_state(
                     f"Audit verdict '{verdict or status}' is not PASS. Remediate findings or re-run review.",
                 )
 
-            # 5. Require explicit verified passing test evidence
+            # 6. Require explicit verified passing test evidence
             if not audit_report.get("test_evidence_passed"):
                 return (
                     "GATE 3: ADVERSARIAL AUDIT",
@@ -781,7 +901,7 @@ def determine_lifecycle_state(
                     "Audit report lacks verified test evidence. Run test suite and record passing test results.",
                 )
 
-            # 6. Snapshot binding check: commit match
+            # 7. Snapshot binding check: commit match
             snapshot_sha = audit_report.get("snapshot_sha")
             snapshot_fingerprint = audit_report.get("snapshot_fingerprint")
             current_commit = git_info.get("commit")
@@ -794,12 +914,22 @@ def determine_lifecycle_state(
                         "AUDIT_ACTIVE",
                         "Audit report lacks commit snapshot SHA or tree fingerprint. Audit must be bound to reviewed snapshot.",
                     )
-                if snapshot_sha and snapshot_sha != "HEAD" and not current_commit.startswith(snapshot_sha) and not snapshot_sha.startswith(current_commit):
-                    return (
-                        "GATE 3: ADVERSARIAL AUDIT",
-                        "AUDIT_ACTIVE",
-                        f"Audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'. Re-run audit on current code.",
-                    )
+                if snapshot_sha:
+                    is_hex_sha = bool(re.match(r"^[0-9a-f]{7,40}$", snapshot_sha, re.IGNORECASE))
+                    if not is_hex_sha:
+                        # Symbolic ref like 'HEAD' requires a matching working-tree fingerprint
+                        if not snapshot_fingerprint or (current_fingerprint and snapshot_fingerprint != current_fingerprint):
+                            return (
+                                "GATE 3: ADVERSARIAL AUDIT",
+                                "AUDIT_ACTIVE",
+                                f"Audit snapshot commit '{snapshot_sha}' is symbolic or unresolved. Must be a resolved, immutable commit SHA or accompanied by a matching working-tree fingerprint.",
+                            )
+                    elif not current_commit.startswith(snapshot_sha) and not snapshot_sha.startswith(current_commit):
+                        return (
+                            "GATE 3: ADVERSARIAL AUDIT",
+                            "AUDIT_ACTIVE",
+                            f"Audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'. Re-run audit on current code.",
+                        )
 
             # 7. Working tree consistency check
             if snapshot_fingerprint:
@@ -895,6 +1025,10 @@ def apply_and_archive_openspec(
                 f"Cannot archive '{topic_name}': audit approval is for topic '{report_topic}', not '{topic_name}'."
             )
 
+        if audit_report.get("is_envelope") and not audit_report.get("judge_report_valid"):
+            err_msg = "; ".join(audit_report.get("judge_report_errors", ["Malformed Judge report structure"]))
+            raise RuntimeError(f"Cannot archive '{topic_name}': Judge report in delivery envelope is malformed ({err_msg}).")
+
         if not audit_report.get("is_judge"):
             raise RuntimeError(f"Cannot archive '{topic_name}': audit reviewer is '{audit_report.get('reviewer')}', requires Judge approval.")
         if audit_report.get("critical_or_high_count", 0) > 0:
@@ -918,36 +1052,51 @@ def apply_and_archive_openspec(
         if current_commit:
             if not snapshot_sha and not snapshot_fingerprint:
                 raise RuntimeError(f"Cannot archive '{topic_name}': audit report lacks commit snapshot SHA or tree fingerprint.")
-            if snapshot_sha and snapshot_sha != "HEAD" and not current_commit.startswith(snapshot_sha) and not snapshot_sha.startswith(current_commit):
-                raise RuntimeError(f"Cannot archive '{topic_name}': audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'.")
+            if snapshot_sha:
+                is_hex_sha = bool(re.match(r"^[0-9a-f]{7,40}$", snapshot_sha, re.IGNORECASE))
+                if not is_hex_sha:
+                    if not snapshot_fingerprint or (current_fingerprint and snapshot_fingerprint != current_fingerprint):
+                        raise RuntimeError(
+                            f"Cannot archive '{topic_name}': audit snapshot commit '{snapshot_sha}' is symbolic or unresolved. Must be an immutable commit SHA or accompanied by a matching fingerprint."
+                        )
+                elif not current_commit.startswith(snapshot_sha) and not snapshot_sha.startswith(current_commit):
+                    raise RuntimeError(f"Cannot archive '{topic_name}': audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'.")
+
+        source_specs_dir = topic_dir / "specs"
+        package_spec_names = {s.name for s in source_specs_dir.glob("*.md")} if source_specs_dir.exists() else set()
 
         if snapshot_fingerprint:
             if not current_fingerprint or snapshot_fingerprint != current_fingerprint:
                 raise RuntimeError(f"Cannot archive '{topic_name}': working tree has been modified since review (fingerprint mismatch).")
         else:
             modified_sources = git_info.get("modified_source_files", [])
-            if modified_sources:
-                raise RuntimeError(f"Cannot archive '{topic_name}': working tree has unreviewed source modifications ({', '.join(modified_sources[:3])}).")
+            # Resumable recovery: ignore living specs belonging to this package if they were partially modified in an earlier interrupted attempt
+            unreviewed = [
+                f for f in modified_sources
+                if not (f.startswith("openspec/specs/") and Path(f).name in package_spec_names)
+            ]
+            if unreviewed:
+                raise RuntimeError(f"Cannot archive '{topic_name}': working tree has unreviewed source modifications ({', '.join(unreviewed[:3])}).")
 
     synced_specs = []
-
-    # 1. Sync delta specs to living specs directory (openspec/specs/)
-    source_specs = topic_dir / "specs"
     living_specs_dir = repo_root / "openspec" / "specs"
-    if source_specs.exists() and source_specs.is_dir():
-        living_specs_dir.mkdir(parents=True, exist_ok=True)
-        for spec_file in sorted(source_specs.glob("*.md")):
+    source_specs_dir = topic_dir / "specs"
+
+    # Step 1: Prepare all spec updates in-memory first
+    # Map: dest_spec -> (original_content_or_None, merged_text)
+    prepared_updates: Dict[Path, Tuple[Optional[str], str]] = {}
+    if source_specs_dir.exists() and source_specs_dir.is_dir():
+        for spec_file in sorted(source_specs_dir.glob("*.md")):
             dest_spec = living_specs_dir / spec_file.name
+            delta_text = spec_file.read_text(encoding="utf-8", errors="replace")
             if dest_spec.exists():
                 living_text = dest_spec.read_text(encoding="utf-8", errors="replace")
-                delta_text = spec_file.read_text(encoding="utf-8", errors="replace")
                 merged_text = merge_spec_requirements(living_text, delta_text)
-                dest_spec.write_text(merged_text, encoding="utf-8")
+                prepared_updates[dest_spec] = (living_text, merged_text)
             else:
-                shutil.copy2(spec_file, dest_spec)
-            synced_specs.append(spec_file.name)
+                prepared_updates[dest_spec] = (None, delta_text)
 
-    # 2. Archive completed change package to openspec/archive/<date>-<topic>
+    # Step 2: Apply updates with rollback protection
     date_str = datetime.date.today().strftime("%Y-%m-%d")
     archive_dir = repo_root / "openspec" / "archive"
     archive_dir.mkdir(parents=True, exist_ok=True)
@@ -956,8 +1105,30 @@ def apply_and_archive_openspec(
     if dest_archive.exists():
         dest_archive = archive_dir / f"{date_str}-{topic_name}-{int(time.time())}"
 
-    shutil.move(str(topic_dir), str(dest_archive))
-    clear_active_topic(repo_root, topic_name)
+    # Track applied mutations for rollback on any failure
+    applied_mutations: Dict[Path, Optional[str]] = {}
+    try:
+        living_specs_dir.mkdir(parents=True, exist_ok=True)
+        for dest_spec, (original_text, new_text) in prepared_updates.items():
+            applied_mutations[dest_spec] = original_text
+            dest_spec.write_text(new_text, encoding="utf-8")
+            synced_specs.append(dest_spec.name)
+
+        # Move package to archive
+        shutil.move(str(topic_dir), str(dest_archive))
+        clear_active_topic(repo_root, topic_name)
+
+    except Exception as err:
+        # ROLLBACK all living spec mutations!
+        for dest_spec, original_text in applied_mutations.items():
+            try:
+                if original_text is None:
+                    dest_spec.unlink(missing_ok=True)
+                else:
+                    dest_spec.write_text(original_text, encoding="utf-8")
+            except Exception:
+                pass
+        raise RuntimeError(f"Archive failed during execution; rolled back living spec updates: {err}") from err
 
     return {
         "topic": topic_name,

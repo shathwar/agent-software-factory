@@ -406,6 +406,9 @@ class TestInspectLifecycle(unittest.TestCase):
                     "reviewer": "judge",
                     "status": "complete",
                     "findings": [],
+                    "coverage": ["Reviewed service.py."],
+                    "questions": [],
+                    "routing_notes": [],
                 },
             }))
 
@@ -719,6 +722,192 @@ class TestInspectLifecycle(unittest.TestCase):
         merged_deleted = inspect_lifecycle.merge_spec_requirements(living, delta_delete)
         self.assertNotIn("Restore deleted accounts", merged_deleted)
         self.assertIn("Requirement: OtherFeature", merged_deleted)
+
+    def test_symbolic_head_snapshot_blocks_stale_approval_across_commits(self):
+        """Reproduction for Issue 1: symbolic/non-hex snapshot commit (like 'HEAD') without fingerprint blocks delivery."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=tmppath, capture_output=True, check=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+
+            pkg_dir = tmppath / "openspec" / "changes" / "feature"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text("- [x] 1. Done\n")
+
+            src_file = tmppath / "service.py"
+            src_file.write_text("def run(): return 42\n")
+
+            subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
+            subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmppath, check=True)
+
+            scratch_dir = tmppath / ".scratch"
+            scratch_dir.mkdir()
+            # Envelope saved with symbolic HEAD commit and NO working_tree_fingerprint
+            envelope = {
+                "schema_version": "1.0",
+                "topic": "feature",
+                "verdict": "PASS",
+                "snapshot": {"commit": "HEAD"},
+                "test_evidence": {"exit_code": 0, "passed": True, "tests_run": 5},
+                "judge_report": {
+                    "reviewer": "judge",
+                    "status": "complete",
+                    "findings": [],
+                    "coverage": ["Reviewed service.py."],
+                    "questions": [],
+                    "routing_notes": [],
+                },
+            }
+            (scratch_dir / "delivery_evidence.json").write_text(json.dumps(envelope))
+
+            # Symbolic HEAD without fingerprint MUST NOT produce DELIVERY_READY
+            res = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertEqual(res["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
+            self.assertIn("symbolic or unresolved", res["next_action"])
+
+            # Archive must also reject symbolic commit
+            with self.assertRaises(RuntimeError) as ctx:
+                inspect_lifecycle.apply_and_archive_openspec(tmppath, topic="feature")
+            self.assertIn("symbolic or unresolved", str(ctx.exception))
+
+            # Resolving to immutable commit SHA clears delivery
+            head_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmppath, capture_output=True, text=True).stdout.strip()
+            envelope["snapshot"]["commit"] = head_commit
+            (scratch_dir / "delivery_evidence.json").write_text(json.dumps(envelope))
+            res_resolved = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertEqual(res_resolved["gate"], "GATE 4: READY TO SHIP")
+            self.assertEqual(res_resolved["state_key"], "DELIVERY_READY")
+
+            # Subsequent commit (regression) invalidates the immutable SHA approval
+            src_file.write_text("def run(): raise RuntimeError('broken')\n")
+            subprocess.run(["git", "add", "service.py"], cwd=tmppath, check=True)
+            subprocess.run(["git", "commit", "-m", "Regression"], cwd=tmppath, check=True)
+
+            res_regression = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertEqual(res_regression["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res_regression["state_key"], "AUDIT_ACTIVE")
+            self.assertIn("does not match current commit", res_regression["next_action"])
+
+    def test_malformed_nested_judge_report_blocks_delivery(self):
+        """Reproduction for Issue 2: delivery gate strictly validates nested Judge report contract."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=tmppath, capture_output=True, check=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+
+            pkg_dir = tmppath / "openspec" / "changes" / "feature"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text("- [x] 1. Done\n")
+
+            subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
+            subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmppath, check=True)
+            head_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmppath, capture_output=True, text=True).stdout.strip()
+
+            scratch_dir = tmppath / ".scratch"
+            scratch_dir.mkdir()
+
+            # Malformed envelope: only {"reviewer": "judge"}, missing required 5 fields
+            malformed_envelope = {
+                "schema_version": "1.0",
+                "topic": "feature",
+                "verdict": "PASS",
+                "snapshot": {"commit": head_commit},
+                "test_evidence": {"exit_code": 0, "passed": True, "tests_run": 5},
+                "judge_report": {"reviewer": "judge"},
+            }
+            (scratch_dir / "delivery_evidence.json").write_text(json.dumps(malformed_envelope))
+
+            res = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertEqual(res["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
+            self.assertIn("Judge report in delivery envelope is malformed", res["next_action"])
+
+            # Archive must also reject malformed judge report
+            with self.assertRaises(RuntimeError) as ctx:
+                inspect_lifecycle.apply_and_archive_openspec(tmppath, topic="feature")
+            self.assertIn("Judge report in delivery envelope is malformed", str(ctx.exception))
+
+            # Canonical 6-field report passes validation
+            malformed_envelope["judge_report"] = {
+                "reviewer": "judge",
+                "status": "complete",
+                "findings": [],
+                "coverage": ["Reviewed feature."],
+                "questions": [],
+                "routing_notes": [],
+            }
+            (scratch_dir / "delivery_evidence.json").write_text(json.dumps(malformed_envelope))
+            res_valid = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertEqual(res_valid["gate"], "GATE 4: READY TO SHIP")
+            self.assertEqual(res_valid["state_key"], "DELIVERY_READY")
+
+    def test_archive_failure_rolls_back_specs_and_allows_resumable_recovery(self):
+        """Reproduction for Issue 3: archive failure rolls back spec changes, and retry recovers without blocking."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=tmppath, capture_output=True, check=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+
+            # Living spec: openspec/specs/auth.md
+            living_dir = tmppath / "openspec" / "specs"
+            living_dir.mkdir(parents=True)
+            living_spec = living_dir / "auth.md"
+            living_content = "# Auth\n\n### Requirement: Login\nUser logs in.\n"
+            living_spec.write_text(living_content)
+
+            # Change package: openspec/changes/auth/specs/auth.md
+            pkg_dir = tmppath / "openspec" / "changes" / "auth"
+            delta_dir = pkg_dir / "specs"
+            delta_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text("- [x] 1. Auth done\n")
+            (delta_dir / "auth.md").write_text("# Auth\n\n### Requirement: Logout\nUser logs out.\n")
+
+            # Commit living spec and change package
+            subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
+            subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=tmppath, check=True)
+            head_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmppath, capture_output=True, text=True).stdout.strip()
+
+            scratch_dir = tmppath / ".scratch"
+            scratch_dir.mkdir()
+            envelope = {
+                "schema_version": "1.0",
+                "topic": "auth",
+                "verdict": "PASS",
+                "snapshot": {"commit": head_commit},
+                "test_evidence": {"exit_code": 0, "passed": True, "tests_run": 5},
+                "judge_report": {
+                    "reviewer": "judge",
+                    "status": "complete",
+                    "findings": [],
+                    "coverage": ["All auth tests pass."],
+                    "questions": [],
+                    "routing_notes": [],
+                },
+            }
+            (scratch_dir / "delivery_evidence.json").write_text(json.dumps(envelope))
+
+            # Simulate failure during directory move
+            import unittest.mock as mock
+            with mock.patch("shutil.move", side_effect=OSError("Simulated move failure")):
+                with self.assertRaises(RuntimeError) as ctx:
+                    inspect_lifecycle.apply_and_archive_openspec(tmppath, topic="auth")
+                self.assertIn("Simulated move failure", str(ctx.exception))
+
+            # Spec modification must be rolled back!
+            self.assertEqual(living_spec.read_text(), living_content)
+            self.assertTrue(pkg_dir.exists())
+
+            # Now retry with normal shutil.move - archive must succeed cleanly
+            inspect_lifecycle.apply_and_archive_openspec(tmppath, topic="auth")
+            # Living spec should now contain both Login and Logout
+            merged_text = living_spec.read_text()
+            self.assertIn("Requirement: Login", merged_text)
+            self.assertIn("Requirement: Logout", merged_text)
+            self.assertFalse(pkg_dir.exists())
 
 
 if __name__ == "__main__":
