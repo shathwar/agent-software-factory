@@ -190,6 +190,132 @@ class TestVerifyTDD(unittest.TestCase):
         categories = [f["category"] for f in data["findings"]]
         self.assertIn("git_discovery", categories)
 
+    def test_get_changed_files_in_pre_commit_repository(self):
+        """Pre-commit repository must discover staged and untracked files without failing on HEAD."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init", "-b", "main"], cwd=tmppath, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+
+            src_file = tmppath / "service.py"
+            src_file.write_text("def run(): pass\n")
+            test_file = tmppath / "test_service.py"
+            test_file.write_text("def test_run(): assert True\n")
+            subprocess.run(["git", "add", "service.py", "test_service.py"], cwd=tmppath, check=True)
+
+            untracked_file = tmppath / "untracked.py"
+            untracked_file.write_text("x = 1\n")
+
+            files = verify_tdd.get_changed_files(repo_root=tmppath)
+            self.assertIn("service.py", files)
+            self.assertIn("test_service.py", files)
+            self.assertIn("untracked.py", files)
+
+            res = verify_tdd.audit_tdd(files, repo_root=tmppath, strict=True)
+            self.assertTrue(res.passed)
+
+    def test_anti_pattern_dunder_attributes_not_flagged(self):
+        """Dunder attributes like __class__ or __name__ should not trigger whitebox_spy warnings."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            test_file = Path(tmpdir) / "test_dunder.py"
+            test_file.write_text(
+                "def test_dunder():\n"
+                "    handler = AuthHandler()\n"
+                "    assert handler.__class__.__name__ == 'AuthHandler'\n"
+                "    assert handler.process.__name__ == 'process'\n"
+            )
+            findings = verify_tdd.check_anti_patterns(test_file)
+            whitebox = [f for f in findings if f.category == "whitebox_spy"]
+            self.assertEqual(whitebox, [])
+
+    def test_js_modifiers_and_rust_test_definitions(self):
+        """Modifiers like test.skip, it.only and Rust fn test_... must be recognized as valid tests."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # JS/TS with modifiers
+            js_test = Path(tmpdir) / "service.spec.ts"
+            js_test.write_text(
+                "test.skip('skips gracefully', () => {\n"
+                "    expect(1).toBe(1);\n"
+                "});\n"
+                "it.only('runs exclusively', () => {\n"
+                "    expect(2).toBe(2);\n"
+                "});\n"
+            )
+            js_findings = verify_tdd.check_anti_patterns(js_test)
+            assertless_js = [f for f in js_findings if f.category == "assertless_test"]
+            self.assertEqual(assertless_js, [])
+
+            # Rust test
+            rs_test = Path(tmpdir) / "engine_test.rs"
+            rs_test.write_text(
+                "#[test]\n"
+                "fn test_engine_init() {\n"
+                "    assert!(true);\n"
+                "}\n"
+            )
+            rs_findings = verify_tdd.check_anti_patterns(rs_test)
+            assertless_rs = [f for f in rs_findings if f.category == "assertless_test"]
+            self.assertEqual(assertless_rs, [])
+
+    def test_expanded_code_extensions(self):
+        """C/C++ headers and modern language extensions must be recognized as production code."""
+        self.assertTrue(verify_tdd.is_production_code("src/engine.hpp"))
+        self.assertTrue(verify_tdd.is_production_code("include/api.h"))
+        self.assertTrue(verify_tdd.is_production_code("ios/App.swift"))
+        self.assertTrue(verify_tdd.is_production_code("backend/Server.scala"))
+        self.assertTrue(verify_tdd.is_production_code("lib/widget.dart"))
+
+    def test_async_tests_and_template_literals(self):
+        """Async test functions and JS template literals must be audited for assertions."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # 1. Assertless async python test
+            py_file = Path(tmpdir) / "test_async.py"
+            py_file.write_text(
+                "async def test_async_worker():\n"
+                "    await worker.run()\n"
+            )
+            py_findings = verify_tdd.check_anti_patterns(py_file)
+            assertless = [f for f in py_findings if f.category == "assertless_test"]
+            self.assertEqual(len(assertless), 1)
+            self.assertEqual(assertless[0].line, 1)
+
+            # 2. Assertless JS test using template literal backticks
+            js_file = Path(tmpdir) / "test_template.js"
+            js_file.write_text(
+                "it(`processes template transactions`, async () => {\n"
+                "    const res = await process();\n"
+                "});\n"
+            )
+            js_findings = verify_tdd.check_anti_patterns(js_file)
+            assertless_js = [f for f in js_findings if f.category == "assertless_test"]
+            self.assertEqual(len(assertless_js), 1)
+
+            # 3. Valid async python test with pytest.warns
+            py_valid = Path(tmpdir) / "test_valid_async.py"
+            py_valid.write_text(
+                "async def test_async_valid():\n"
+                "    with pytest.warns(UserWarning):\n"
+                "        await worker.warn()\n"
+            )
+            valid_findings = verify_tdd.check_anti_patterns(py_valid)
+            self.assertEqual([f for f in valid_findings if f.category == "assertless_test"], [])
+
+    def test_trim_test_receipt_word_boundary_isolation(self):
+        """Log messages containing 'fail' as a substring must not be falsely captured as failure traces."""
+        raw_log = (
+            "Building wheel for package...\n"
+            "Downloading failure-analyzer-1.0.tar.gz (500KB)\n"
+            "Unpacking files...\n"
+            + "\n".join(f"info line {i}" for i in range(50))
+            + "\n"
+            "Ran 15 tests in 0.05s\n\nOK\n"
+        )
+        trimmed = verify_tdd.trim_test_receipt(raw_log)
+        self.assertNotIn("🔴 Failure Trace:", trimmed)
+        self.assertIn("Test Suite Summary:", trimmed)
+
 
 if __name__ == "__main__":
     unittest.main()
+

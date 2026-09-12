@@ -178,6 +178,27 @@ class TestRunSpike(unittest.TestCase):
             time.sleep(0.5)
             self.assertFalse(marker.exists(), "Child process survived timeout and wrote marker file!")
 
+    def test_calculate_percentile_clamping(self):
+        """Negative percentiles or percentiles above 100 must be clamped to 0.0 and 100.0."""
+        data = [10.0, 20.0, 30.0, 40.0, 50.0]
+        # Negative percentile must clamp to 0 (min)
+        self.assertEqual(run_spike.calculate_percentile(data, -50), 10.0)
+        # Percentile above 100 must clamp to 100 (max)
+        self.assertEqual(run_spike.calculate_percentile(data, 150), 50.0)
+
+    def test_benchmark_concurrency_and_negative_input_clamping(self):
+        """Negative iterations, negative warmup, and zero workers must be clamped safely without crashing."""
+        metrics = run_spike.run_benchmark(
+            cmd="python3 -c 'exit(0)'",
+            iterations=-5,
+            warmup=-2,
+            concurrency=0,
+            timeout_sec=5.0
+        )
+        self.assertEqual(metrics.total_runs, 0)
+        self.assertEqual(metrics.error_rate_pct, 100.0)
+
 
 if __name__ == "__main__":
     unittest.main()
+

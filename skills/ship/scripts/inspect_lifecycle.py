@@ -338,6 +338,8 @@ def get_git_info(repo_root: Path) -> Dict[str, Any]:
             filename = l[3:].strip()
             if " -> " in filename:
                 filename = filename.split(" -> ", 1)[1].strip()
+            if filename.startswith('"') and filename.endswith('"'):
+                filename = filename[1:-1]
             if any(filename.startswith(p) for p in ignored_prefixes):
                 continue
             if filename in {"report.json", ".gitignore", "openspec/.active"}:
@@ -766,15 +768,26 @@ def is_spike_completed(spike_dir: Path) -> bool:
 
 NON_SPIKE_SCRATCH_DIRS = {
     "archive", "coverage", "logs", "cache", "tmp", "temp", "dist",
-    "build", "node_modules", "venv", ".venv", "__pycache__"
+    "build", "node_modules", "venv", ".venv", "__pycache__", "checkpoints",
 }
 
 
 def is_evidence_dir(dir_path: Path) -> bool:
     """Distinguish audit and delivery evidence directories from empirical spikes independently of package location."""
-    for evidence_name in ("delivery_evidence.json", "review_report.json"):
+    for evidence_name in ("delivery_evidence.json", "review_report.json", "audit_report.json"):
         if (dir_path / evidence_name).exists():
             return True
+    report_file = dir_path / "report.json"
+    if report_file.exists():
+        try:
+            data = json.loads(report_file.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and (
+                data.get("reviewer") in {"judge", "review_judge", "correctness", "concurrency", "design"}
+                or "judge_report" in data
+            ):
+                return True
+        except Exception:
+            pass
     return False
 
 
@@ -802,7 +815,9 @@ def inspect_spikes(repo_root: Path) -> List[str]:
         if base.exists() and base.is_dir():
             for child in base.iterdir():
                 if child.is_dir() and not child.name.startswith("."):
-                    if child.name in NON_SPIKE_SCRATCH_DIRS or child.name in known_packages:
+                    if (child.name in NON_SPIKE_SCRATCH_DIRS
+                            or child.name.startswith("rollback_")
+                            or child.name in known_packages):
                         continue
                     if is_evidence_dir(child):
                         continue
@@ -1062,8 +1077,12 @@ def inspect_audit_reports(repo_root: Path, topic: Optional[str] = None) -> Optio
             repo_root / "scratch" / f"delivery_evidence_{topic}.json",
             repo_root / ".scratch" / topic / "review_report.json",
             repo_root / "scratch" / topic / "review_report.json",
+            repo_root / ".scratch" / f"review_report_{topic}.json",
+            repo_root / "scratch" / f"review_report_{topic}.json",
             repo_root / ".scratch" / topic / "audit_report.json",
             repo_root / "scratch" / topic / "audit_report.json",
+            repo_root / ".scratch" / f"audit_report_{topic}.json",
+            repo_root / "scratch" / f"audit_report_{topic}.json",
         ]
         for p in topic_paths:
             if p.exists():
@@ -1464,6 +1483,7 @@ def apply_and_archive_openspec(
 
     # Track applied mutations for rollback on any failure
     applied_mutations: Dict[Path, Optional[str]] = {}
+    package_moved = False
     try:
         living_specs_dir.mkdir(parents=True, exist_ok=True)
         for dest_spec, (original_text, new_text) in prepared_updates.items():
@@ -1473,6 +1493,7 @@ def apply_and_archive_openspec(
 
         # Move package to archive
         shutil.move(str(topic_dir), str(dest_archive))
+        package_moved = True
         clear_active_topic(repo_root, topic_name)
 
     except Exception as err:
@@ -1483,6 +1504,11 @@ def apply_and_archive_openspec(
                     dest_spec.unlink(missing_ok=True)
                 else:
                     dest_spec.write_text(original_text, encoding="utf-8")
+            except Exception:
+                pass
+        if package_moved and dest_archive.exists() and not topic_dir.exists():
+            try:
+                shutil.move(str(dest_archive), str(topic_dir))
             except Exception:
                 pass
         raise RuntimeError(f"Archive failed during execution; rolled back living spec updates: {err}") from err
@@ -1748,7 +1774,10 @@ def perform_rollback(
                     else:
                         # File was newly created since target_sha: remove it from worktree & index
                         subprocess.run(["git", "rm", "-f", "--cached", rel_path], cwd=repo_root, capture_output=True)
-                        full_path.unlink(missing_ok=True)
+                        if full_path.is_file():
+                            full_path.unlink(missing_ok=True)
+                        elif full_path.is_dir():
+                            shutil.rmtree(full_path, ignore_errors=True)
                         removed_files.append(rel_path)
 
                 # Reset git history and index to base commit or target_sha

@@ -21,7 +21,8 @@ import sys
 
 # Production file extensions that require test coverage
 CODE_EXTENSIONS = {
-    ".py", ".ts", ".js", ".tsx", ".jsx", ".go", ".rs", ".java", ".kt", ".rb", ".cs", ".cpp", ".c"
+    ".py", ".ts", ".js", ".tsx", ".jsx", ".go", ".rs", ".java", ".kt", ".rb", ".cs",
+    ".cpp", ".c", ".cc", ".cxx", ".h", ".hpp", ".hxx", ".swift", ".scala", ".dart", ".php", ".mjs", ".cjs"
 }
 
 # Patterns identifying test files
@@ -82,15 +83,36 @@ def is_production_code(path: str) -> bool:
 def get_changed_files(ref_range: str | None = None, repo_root: Path | None = None) -> list[str]:
     """Retrieve changed files from git."""
     root = repo_root or Path.cwd()
-    cmd = ["git", "diff", "--name-only"]
-    if ref_range:
-        cmd.append(ref_range)
-    else:
-        cmd.append("HEAD")
-
     try:
-        result = subprocess.run(cmd, cwd=root, capture_output=True, text=True, check=True)
-        files = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        files: list[str] = []
+        if ref_range:
+            cmd = ["git", "diff", "--name-only", ref_range]
+            result = subprocess.run(cmd, cwd=root, capture_output=True, text=True, check=True)
+            files = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        else:
+            has_head = subprocess.run(
+                ["git", "rev-parse", "--verify", "HEAD"],
+                cwd=root, capture_output=True, text=True
+            ).returncode == 0
+
+            if has_head:
+                cmd = ["git", "diff", "--name-only", "HEAD"]
+                result = subprocess.run(cmd, cwd=root, capture_output=True, text=True, check=True)
+                files = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+            else:
+                staged = subprocess.run(
+                    ["git", "diff", "--name-only", "--cached"],
+                    cwd=root, capture_output=True, text=True, check=True
+                )
+                unstaged = subprocess.run(
+                    ["git", "diff", "--name-only"],
+                    cwd=root, capture_output=True, text=True, check=True
+                )
+                for line in staged.stdout.splitlines() + unstaged.stdout.splitlines():
+                    p = line.strip()
+                    if p and p not in files:
+                        files.append(p)
+
         untracked = subprocess.run(
             ["git", "ls-files", "--others", "--exclude-standard"],
             cwd=root, capture_output=True, text=True, check=True
@@ -126,10 +148,10 @@ def check_anti_patterns(file_path: Path) -> list[Finding]:
     mock_count = 0
 
     assertion_pattern = re.compile(
-        r"(?:\bassert(?:_|\b)|\.assert|self\.assert|expect\(|\.toBe|\.toEqual|\.toThrow|\.toHave|pytest\.raises|t\.Error|t\.Fatal|require\.)"
+        r"(?:\bassert(?:_|\b)|\.assert|self\.assert|expect\s*\(|\.toBe|\.toEqual|\.toThrow|\.toHave|pytest\.(?:raises|warns)|t\.Error|t\.Fatal|require\.)"
     )
     test_def_pattern = re.compile(
-        r"^\s*(?:def\s+(test_[a-zA-Z0-9_]+)|func\s+(Test[a-zA-Z0-9_]+)|(?:it|test)\s*\(\s*['\"]([^'\"]+)['\"])"
+        r"^\s*(?:(?:async\s+)?def\s+(test_[a-zA-Z0-9_]+)|func\s+(Test[a-zA-Z0-9_]+)|(?:async\s+)?fn\s+(test_[a-zA-Z0-9_]+)|(?:it|test)(?:\.[a-zA-Z0-9_]+)?\s*\(\s*[`'\"]([^`'\"]+)[`'\"])"
     )
     private_access_pattern = re.compile(r"\b[a-zA-Z0-9_]+\._[a-zA-Z0-9][a-zA-Z0-9_]*\b")
     mock_pattern = re.compile(
@@ -143,7 +165,10 @@ def check_anti_patterns(file_path: Path) -> list[Finding]:
             continue
 
         if private_matches := private_access_pattern.findall(line):
-            legit = [m for m in private_matches if not m.startswith("self._")]
+            legit = [
+                m for m in private_matches
+                if not m.startswith("self._") and not (m.endswith("__") and ".__" in m)
+            ]
             if legit:
                 findings.append(Finding(
                     category="whitebox_spy",
@@ -248,14 +273,18 @@ def trim_test_receipt(raw_output: str, max_lines: int = 40) -> str:
     summary_lines: list[str] = []
     capture_failure = False
 
-    failure_markers = re.compile(r"(?:FAIL|FAILED|ERROR|AssertionError|panic:|Exception:)", re.IGNORECASE)
+    failure_markers = re.compile(r"(?:\b(?:FAIL|FAILED|ERROR|AssertionError|panic)\b|\bException:)", re.IGNORECASE)
     summary_markers = re.compile(r"(?:passed|failed|skipped|total|Ran \d+ tests|Tests:|ok\b)", re.IGNORECASE)
 
     for line in lines:
-        if failure_markers.search(line):
-            capture_failure = True
         if summary_markers.search(line):
             summary_lines.append(line)
+            capture_failure = False
+        elif failure_markers.search(line):
+            capture_failure = True
+            failure_lines.append(line)
+            if len(failure_lines) >= 25:
+                capture_failure = False
         elif capture_failure:
             failure_lines.append(line)
             if len(failure_lines) >= 25:

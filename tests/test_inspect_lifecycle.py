@@ -1590,9 +1590,108 @@ gates:
             self.assertNotIn("tracked.cfg", rb["removed_files"])
             self.assertEqual(service_file.read_text(), "def pay(): pass\n")
 
+    def test_checkpoint_and_rollback_directories_not_flagged_as_active_spikes(self):
+        """Checkpoints and rollback backup directories must not be treated as active empirical spikes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            pkg_dir = tmppath / "openspec" / "changes" / "feature"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text("- [ ] 1. Do something\n")
+
+            scratch_dir = tmppath / ".scratch"
+            scratch_dir.mkdir()
+
+            # Create a checkpoint file under .scratch/checkpoints
+            chk_dir = scratch_dir / "checkpoints"
+            chk_dir.mkdir()
+            (chk_dir / "feature_gate-1-spec.json").write_text(json.dumps({"topic": "feature", "gate": "gate-1-spec"}))
+
+            # Create a rollback backup directory
+            rollback_dir = scratch_dir / "rollback_20260912_120000"
+            rollback_dir.mkdir()
+            (rollback_dir / "dummy.py").write_text("dummy = 1\n")
+
+            # Create an audit evidence dir with audit_report.json
+            evidence_dir = scratch_dir / "old-evidence"
+            evidence_dir.mkdir()
+            (evidence_dir / "audit_report.json").write_text(json.dumps({"status": "complete"}))
+
+            spikes = inspect_lifecycle.inspect_spikes(tmppath)
+            self.assertEqual(spikes, [])
+
+            res = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertNotEqual(res["state_key"], "SPIKE_ACTIVE")
+            self.assertEqual(res["gate"], "GATE 2: IMPLEMENTATION (TDD + SIMPLIFY)")
+
+    def test_audit_report_json_recognized_as_evidence_dir(self):
+        """Directory with report.json containing reviewer or judge_report must not be treated as a spike."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            scratch_dir = tmppath / ".scratch"
+            scratch_dir.mkdir()
+
+            review_dir = scratch_dir / "adjudication"
+            review_dir.mkdir()
+            (review_dir / "report.json").write_text(json.dumps({
+                "reviewer": "judge",
+                "status": "complete",
+                "findings": [],
+                "coverage": [],
+                "questions": [],
+                "routing_notes": []
+            }))
+
+            self.assertTrue(inspect_lifecycle.is_evidence_dir(review_dir))
+            spikes = inspect_lifecycle.inspect_spikes(tmppath)
+            self.assertEqual(spikes, [])
+
+    def test_topic_suffixed_audit_and_review_reports_discovered(self):
+        """inspect_audit_reports must discover .scratch/review_report_<topic>.json and audit_report_<topic>.json."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            scratch_dir = tmppath / ".scratch"
+            scratch_dir.mkdir()
+
+            rev_file = scratch_dir / "review_report_billing.json"
+            rev_file.write_text(json.dumps({
+                "reviewer": "judge",
+                "status": "complete",
+                "verdict": "PASS",
+                "topic": "billing",
+                "findings": [],
+                "coverage": ["billing.py"],
+                "questions": [],
+                "routing_notes": [],
+                "tests_passed": True,
+            }))
+
+            rep = inspect_lifecycle.inspect_audit_reports(tmppath, topic="billing")
+            self.assertIsNotNone(rep)
+            self.assertEqual(rep["topic"], "billing")
+            self.assertTrue(rep["test_evidence_passed"])
+
+    def test_porcelain_quoted_filenames_stripped(self):
+        """Filenames enclosed in double quotes by git status porcelain must have quotes stripped."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init", "-b", "main"], cwd=tmppath, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+
+            spaced_file = tmppath / "spaced file.py"
+            spaced_file.write_text("x = 1\n")
+            subprocess.run(["git", "add", "spaced file.py"], cwd=tmppath, check=True)
+            subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=tmppath, check=True, capture_output=True)
+
+            spaced_file.write_text("x = 2\n")
+            git_info = inspect_lifecycle.get_git_info(tmppath)
+            self.assertIn("spaced file.py", git_info["modified_source_files"])
+            self.assertNotIn('"spaced file.py"', git_info["modified_source_files"])
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 

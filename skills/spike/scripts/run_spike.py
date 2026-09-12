@@ -96,7 +96,8 @@ def calculate_percentile(sorted_data: list[float], percentile: float) -> float:
         return 0.0
     if len(sorted_data) == 1:
         return sorted_data[0]
-    idx = (len(sorted_data) - 1) * (percentile / 100.0)
+    clamped_percentile = max(0.0, min(100.0, float(percentile)))
+    idx = (len(sorted_data) - 1) * (clamped_percentile / 100.0)
     low = int(idx)
     high = min(low + 1, len(sorted_data) - 1)
     weight = idx - low
@@ -113,6 +114,10 @@ def run_benchmark(
     timeout_sec: float | None = 60.0
 ) -> BenchmarkMetrics:
     """Run warmup and full benchmark suite."""
+    concurrency = max(1, concurrency)
+    iterations = max(0, iterations)
+    warmup = max(0, warmup)
+
     # 1. Warmup Phase
     if warmup > 0:
         if concurrency > 1:
