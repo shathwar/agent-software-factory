@@ -44,6 +44,11 @@ Investigation prompts for Correctness, Concurrency, and Failure Resilience. Veri
   - Background tasks: require explicit exception handlers; unhandled task exceptions fail silently.
   - Blocking calls: synchronous broker SDKs or file I/O must use `asyncio.to_thread` or `run_in_threadpool`.
   - Task cancellation: state must remain consistent if cancelled during critical sections.
+- **Distributed State & Data Invariants (Kleppmann / DDIA)**:
+  - Fencing Tokens: Distributed locks MUST issue a monotonic fencing token passed to storage; storage rejects stale tokens to prevent split-brain writes during GC pauses or network partitions.
+  - Dual-Write Hazard: Uncoordinated dual writes (e.g. database write + Kafka publish) without Transactional Outbox or CDC risk permanent silent inconsistency.
+  - Replication Lag: Immediate read-after-write flows must route to the primary or enforce causal consistency; reading from asynchronous replicas immediately after write serves stale data.
+  - Idempotent Event Consumers: Webhook and queue consumers must enforce idempotency keys or deduplication tokens to handle at-least-once message delivery duplicates safely.
 
 ---
 
@@ -60,3 +65,7 @@ Investigation prompts for Correctness, Concurrency, and Failure Resilience. Veri
   - Avoid retrying non-idempotent operations or amplifying system overload.
 - **Poison-Pill Defense**:
   - Corrupted stream/queue messages: log at ERROR, route to DLQ / ack to prevent consumer crash loops.
+- **Stability Patterns (Nygard / Release It!)**:
+  - Bulkheads: Separate thread pools, connection pools, and memory limits across critical vs background workloads so slow secondary dependencies cannot starve ingress.
+  - Circuit Breakers: Remote integrations must fast-fail during downstream outages and probe recovery via half-open states rather than endlessly exhausting request threads.
+  - Steady-State Hygiene: Ensure bounded disk usage (log rotation), socket descriptor closure in `finally` blocks, and connection pool eviction to prevent slow production degradation.

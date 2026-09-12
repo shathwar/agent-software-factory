@@ -332,3 +332,92 @@ When the ungrillable question is ergonomic or visual (e.g. *"How snappy does sea
 </body>
 </html>
 ```
+
+---
+
+## 6. Automated Statistical Benchmarking with `run_spike.py`
+
+Use `skills/prototype/scripts/run_spike.py` for automated statistical warmup, concurrent worker dispatch, and percentile SLI evaluation without writing custom timing boilerplate.
+
+### Example: Benchmarking API / Command Throughput & p99 Latency
+```bash
+# Benchmark local worker script with 20 concurrent threads and 1,000 requests
+python3 skills/prototype/scripts/run_spike.py \
+  --cmd "curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/healthz" \
+  --iterations 1000 \
+  --warmup 100 \
+  --concurrency 20 \
+  --expected-p99 15.0 \
+  --expected-rps 1000 \
+  --expected-err 0.1
+```
+
+### Output JSON for Automated ADR & OpenSpec Bridge
+```bash
+python3 skills/prototype/scripts/run_spike.py \
+  --cmd "python3 .scratch/test_db_query.py" \
+  --iterations 500 \
+  --json > .scratch/spike_results.json
+```
+
+---
+
+## 7. Ephemeral Docker Compose Sandboxes for Backend Services
+
+When benchmarking database query plans, lock contention, or caching throughput, always isolate external dependencies inside `.scratch/<spike-name>/docker-compose.yml` with ephemeral port bindings.
+
+### Ephemeral Postgres & Redis Stack (`.scratch/<spike-name>/docker-compose.yml`)
+
+```yaml
+version: '3.8'
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: spike_user
+      POSTGRES_PASSWORD: spike_password
+      POSTGRES_DB: spike_test
+    ports:
+      - "127.0.0.1::5432" # Dynamic host port assignment prevents port collision
+    tmpfs:
+      - /var/lib/postgresql/data # In-memory storage for maximum spike speed
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1::6379"
+    command: ["redis-server", "--save", ""]
+```
+
+### Lifecycle Helper (`.scratch/<spike-name>/run_harness.sh`)
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+SPIKE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SPIKE_DIR"
+
+echo "Starting isolated ephemeral containers..."
+docker compose up -d
+
+# Discover dynamic host ports
+PG_PORT=$(docker compose port postgres 5432 | cut -d: -f2)
+REDIS_PORT=$(docker compose port redis 6379 | cut -d: -f2)
+
+export DATABASE_URL="postgres://spike_user:spike_password@127.0.0.1:${PG_PORT}/spike_test"
+export REDIS_URL="redis://127.0.0.1:${REDIS_PORT}"
+
+echo "Database ready on port ${PG_PORT}, Redis ready on port ${REDIS_PORT}"
+
+# Execute benchmark via run_spike.py
+python3 "$SPIKE_DIR/../../skills/prototype/scripts/run_spike.py" \
+  --cmd "python3 $SPIKE_DIR/experiment.py" \
+  --iterations 500 \
+  --warmup 50 \
+  --concurrency 10
+
+echo "Tearing down ephemeral containers..."
+docker compose down -v
+echo "Cleanup complete."
+```

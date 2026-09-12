@@ -44,6 +44,8 @@ Stop at the first rung that holds:
 - **Deletion Over Addition**: Deleting 50 lines while fixing a bug beats adding 150 lines.
 - **Cohesive Files**: Do not split 30 lines across 4 files (`types.ts`, `interface.ts`, `service.ts`, `factory.ts`). Keep code together.
 - **Root-Cause Fixes**: Fix shared root functions, not defensive `if (x == null)` guards at every callsite.
+- **Deep Modules Over Shallow Wrappers (Ousterhout)**: Write deep modules: powerful functionality behind a narrow, simple interface. Reject shallow classes or functions that merely forward arguments to another layer without adding domain value.
+- **Define Errors Out of Existence (Ousterhout)**: Eliminate exception handling boilerplate by designing operations so boundary states (e.g., deleting an absent record, unsubscribing twice, empty input slices) are natural valid no-ops.
 
 ---
 

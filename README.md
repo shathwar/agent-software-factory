@@ -80,9 +80,9 @@ Teams can adopt skills incrementally without changing their entire workflow:
 |---|---|---|---|
 | [**`adversarial-review`**](./skills/adversarial-review/SKILL.md) | `/adversarial-review`, `"adversarial review"` | Post-implementation | **Recommended Pilot**. 10-stage systems audit across correctness, concurrency, failure modes, and production risk. |
 | [**`ponytail`**](./skills/ponytail/SKILL.md) | `/ponytail`, `"ponytail"`, `"lazy senior dev"` | Simplicity & Anti-Bloat | Forces the simplest working solution: YAGNI, standard library first, zero unrequested abstractions. |
-| [**`tdd`**](./skills/tdd/SKILL.md) | `/tdd`, `"tdd"`, `"red-green-refactor"` | Implementation | Disciplined test-driven development engine with dedicated Test Driver, Implementer, and Refactorer agents. |
+| [**`tdd`**](./skills/tdd/SKILL.md) | `/tdd`, `"tdd"`, `"red-green-refactor"` | Implementation | Dual-speed TDD engine (fast fakes & ephemeral DBs), legacy characterization wrapping, and `verify_tdd.py` CI auditor. |
 | [**`adversarial-design`**](./skills/adversarial-design/SKILL.md) | `/adversarial-design`, `"grill me on this design"` | Pre-implementation | Relentlessly stress-tests architectures and plans using frontier rounds. Compiles an ADR & OpenSpec. |
-| [**`prototype`**](./skills/prototype/SKILL.md) | `/prototype`, `"prototype"`, `"spike"` | Empirical Validation | Rapid, disposable spikes answering ungrillable design questions in isolated sandboxes. |
+| [**`prototype`**](./skills/prototype/SKILL.md) | `/prototype`, `"prototype"`, `"spike"` | Empirical Validation | Rapid disposable spikes with automated statistical benchmarking (`run_spike.py`), ephemeral Docker sandboxes, and ADR bridge. |
 | [**`ship`**](./skills/ship/SKILL.md) | `/ship`, `"ship"`, `/lifecycle` | Full Lifecycle Orchestrator | **Battle-Ready**. Chains all 5 skills into an autonomous pipeline with 4 transition gates, git checkpoints, and rollbacks. |
 
 ---
@@ -119,9 +119,9 @@ Give your agent the [adversarial-design SKILL.md](./skills/adversarial-design/SK
 Give your agent the [prototype SKILL.md](./skills/prototype/SKILL.md) and the empirical question or hypothesis.
 
 - **Throwaway Mindset**: Strict isolation to `.scratch/<spike-name>/`. Zero pollution of production source trees.
-- **Minimal Viable Harness**: Hack, don't architect. Bypass layers and mock services to measure the single variable under test.
-- **Measurement Hygiene**: Warm-up passes, percentile distributions (p50/p95/p99/max), and realistic concurrency.
-- **Decision Settlement**: Concludes with a structured report that settles the design frontier and feeds empirical rationale directly into the ADR.
+- **Ephemeral Infrastructure Sandboxing**: Isolated `docker-compose.yml` for real backend dependencies (Postgres, Redis, Kafka) on dynamic ports.
+- **Automated Benchmark Runner (`run_spike.py`)**: Warmup passes, concurrent worker load, and statistical percentile distributions (p50/p90/p95/p99/max, RPS, RSS memory delta).
+- **Automated ADR & OpenSpec Bridge**: Immediately exports evidenced verdicts and verified configuration snippets to `docs/adr/`.
 - **Agent Roster**: Implemented by the [Spike Prototyper](./skills/prototype/agents/spike_prototyper.md).
 - **References**: Consult [Spike Guidelines](./skills/prototype/references/spike_guidelines.md) and ready-to-use [Experiment Templates](./skills/prototype/references/experiment_templates.md).
 
@@ -131,6 +131,10 @@ Give your agent the [prototype SKILL.md](./skills/prototype/SKILL.md) and the em
 
 Give your agent the [tdd SKILL.md](./skills/tdd/SKILL.md) and the task or OpenSpec package to implement.
 
+- **Dual-Speed Testing**: Fast in-memory unit tests (`< 50ms`) for domain rules; ephemeral databases (SQLite, Testcontainers) for real SQL queries and migrations. No mocking of DB engines.
+- **Brownfield Characterization (Golden Master)**: Safely onboards legacy untested code by snapshotting existing behavior before applying incremental TDD.
+- **Single-Context Micro-Cycles**: Fast inline Red-Green-Refactor for tasks < 150 lines, reserving multi-agent handoffs for major architectural features.
+- **Deterministic Verification Tooling (`verify_tdd.py`)**: Checks git diffs for test-to-code parity, detects anti-patterns (assertless tests, whitebox spies), and trims runner logs into token-efficient receipts.
 - **The Multi-Agent Implementation Roster**:
   - [**Test Driver**](./skills/tdd/agents/test_driver.md): Red Phase. Translates specs into failing behavioral tests using AAA.
   - [**Ponytail Implementer**](./skills/tdd/agents/ponytail_implementer.md): Green Phase. Climbs the Laziness Ladder to write the minimum passing code.
@@ -258,6 +262,15 @@ Each finding follows the same [12-field schema](./skills/adversarial-review/refe
 ## Files
 
 ```text
+nano/                           # High-density, ultra-compact (<50 lines) rules for Cursor/Claude Code
+├── AGENTS.md                   # Universal drop-in rule file (<100 lines) combining all 6 skills
+├── adversarial-design.nano.md
+├── adversarial-review.nano.md
+├── ponytail.nano.md
+├── prototype.nano.md
+├── ship.nano.md
+└── tdd.nano.md
+
 scripts/
 ├── install.sh                  # Portable skill installer (symlink/copy to ~/.gemini/config/skills/)
 └── run_tests.sh                # Complete CI test runner (zero external dependencies)
@@ -284,6 +297,8 @@ skills/
 │   ├── SKILL.md
 │   ├── agents/
 │   │   └── spike_prototyper.md
+│   ├── scripts/
+│   │   └── run_spike.py
 │   └── references/
 │       ├── spike_guidelines.md
 │       └── experiment_templates.md
@@ -293,6 +308,8 @@ skills/
 │   │   ├── test_driver.md
 │   │   ├── ponytail_implementer.md
 │   │   └── code_refactorer.md
+│   ├── scripts/
+│   │   └── verify_tdd.py
 │   └── references/
 │       ├── tdd_patterns.md
 │       └── anti_patterns.md
@@ -349,6 +366,13 @@ The installer defaults to preserving existing non-symlink directories to avoid o
 ./scripts/install.sh --dry-run --target /path/to/custom/skills
 ```
 
+### Portable Rules for Cursor, Claude Code, and Windsurf (`nano/`)
+
+For teams operating across multiple AI coding tools with tight context budgets:
+- **Universal Root Rules ([`nano/AGENTS.md`](./nano/AGENTS.md))**: A complete, high-density distillation of all 6 skills (< 100 lines) ready to copy to `AGENTS.md`, `.cursorrules`, or `CLAUDE.md`.
+- **Scoped Nano Rules**: Standalone files under [`nano/`](./nano/) (`adversarial-review.nano.md`, `ponytail.nano.md`, `tdd.nano.md`, etc.) under 50 lines each for targeted task injection.
+
+
 ---
 
 ## Supported Environments & Maintenance
@@ -383,8 +407,21 @@ Audit codebase debt markers with:
 python3 skills/ponytail/scripts/scan_debt.py --strict
 ```
 
+Audit TDD test-to-code parity and anti-patterns with:
+
+```bash
+python3 skills/tdd/scripts/verify_tdd.py --strict
+```
+
+Benchmark an empirical prototype spike with:
+
+```bash
+python3 skills/prototype/scripts/run_spike.py --cmd "python3 -c 'pass'" --iterations 100
+```
+
 Evaluate active engineering lifecycle state with:
 
 ```bash
 python3 skills/ship/scripts/inspect_lifecycle.py
 ```
+

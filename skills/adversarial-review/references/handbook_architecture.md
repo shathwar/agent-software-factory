@@ -18,6 +18,11 @@ Require demonstrated maintenance/testability costs before recommending structura
   - Are callers forced to depend on methods they never invoke? Split interfaces only when it decouples concrete dependencies.
 - **Dependency Inversion (DIP)**:
   - Does direct instantiation block needed test isolation or runtime configuration? Pass concrete instances before inventing new interfaces.
+- **Deep Modules vs Shallow Wrappers (Ousterhout)**:
+  - The best modules are *deep*: a simple interface hiding substantial internal machinery and complexity.
+  - Reject *shallow modules*: flag abstractions where interface complexity is nearly equal to implementation logic (e.g. 5-line pass-through services or single-method wrappers that merely forward calls).
+- **Define Errors Out of Existence (Ousterhout)**:
+  - APIs should be designed so that boundary situations (e.g., deleting a non-existent entity, trimming an empty string, or cancelling an already cancelled task) are normal valid outcomes (idempotent no-ops) rather than exceptional failure paths requiring defensive try/catch blocks.
 
 ---
 

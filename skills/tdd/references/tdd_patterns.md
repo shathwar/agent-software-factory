@@ -125,3 +125,44 @@ To keep the Red-Green-Refactor cycle rapid and responsive:
   - *Go*: `go test -run TestSpecificName ./pkg/feature`
   - *Cargo*: `cargo test test_specific_name`
 - **Run Full Suite Before Completion**: Once all incremental TDD cycles for a task are green, run the full test suite once to verify no regressions were introduced.
+
+---
+
+## 6. Dual-Speed Testing: In-Memory Fakes vs. Ephemeral Persistence
+
+Backend applications must balance test execution velocity against production fidelity.
+
+### Tier 1: Fast Domain TDD (In-Memory Fakes)
+Use for domain calculations, validation, state machines, and business policies:
+- Replace external interfaces with stateful in-memory fakes (e.g. `InMemoryAccountRepository` backed by a `dict` or `sync.Map`).
+- Assert on observable entity state and return values.
+- Runtime target: `< 10ms` per test.
+
+### Tier 2: Persistence & Wire TDD (Ephemeral Real Instances)
+Use for ORM queries, complex joins, migrations, transactions, and foreign key cascades:
+- **Never mock database query builders or SQL clients**. A mock cannot verify whether a `JOIN`, unique constraint, or lock acquisition actually works.
+- **Ephemeral SQLite / Embedded Engine**: For standard SQL, configure SQLite in `:memory:` mode or local embedded instances.
+- **Testcontainers / Ephemeral Docker**: For Postgres/MySQL-specific extensions (e.g., `JSONB`, `citext`, `pgvector`, window functions), bind tests to an ephemeral local container on a dynamic port.
+- **Transaction Rollback Pattern**: Wrap each test case in a database transaction that rolls back on test teardown, keeping the database pristine without expensive table drop/re-create cycles.
+
+---
+
+## 7. Brownfield Characterization (Golden Master) Pattern
+
+When called upon to fix or enhance untested legacy backend systems, never attempt a blind rewrite or immediate unit testing of tangled classes.
+
+### The Characterization Workflow:
+1. **Black-Box Capture**: Feed the existing legacy endpoint or service function a representative set of inputs (boundary values, nulls, special characters).
+2. **Snapshot Outcome**: Record the exact output, including headers, status codes, and database state mutations (the "Golden Master").
+3. **Commit Safety Net**: Commit the characterization test. The test passes as long as legacy behavior is preserved.
+4. **Targeted TDD**: Write a failing test for the specific new behavior or bugfix. Make it pass.
+5. **Safe Refactor**: Refactor under the joint protection of the characterization snapshot and the new behavioral test.
+
+---
+
+## 8. Database Transactions & Concurrency in TDD
+
+Testing concurrent database operations (e.g. distributed locks, optimistic concurrency tokens, `SELECT FOR UPDATE`):
+1. **Parallel Worker Harness**: Use thread pools or worker goroutines to launch simultaneous requests against an ephemeral database.
+2. **Verify Invariants, Not Order**: Assert that exactly one worker succeeds and all others fail with an expected conflict error (e.g. `409 Conflict` or optimistic lock exception).
+3. **Never Use Sleep for Synchronization**: Synchronize concurrent test threads using countdown latches, barriers, or condition variables rather than arbitrary `time.sleep()`.

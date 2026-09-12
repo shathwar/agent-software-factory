@@ -118,3 +118,19 @@ When a bug report arrives with a stack trace:
 4. **Fix at the shared root**:
    - Normalize the input at the entrance of the shared function.
    - One guard in one shared function protects all current and future callers with the minimal possible git diff.
+
+---
+
+## 5. Ousterhout's Complexity Reducers (A Philosophy of Software Design)
+
+### 1. Deep Modules vs. Shallow Wrappers
+- **Deep Module**: A simple, narrow interface that hides substantial implementation complexity (e.g. Unix file I/O: `open`, `read`, `write`, `close` hiding block allocators, caching, drivers).
+- **Shallow Module**: An interface that is relatively large compared to the functionality it provides. A 5-line wrapper class that merely maps DTO fields or passes calls to a service without transformation adds indirection without reducing cognitive load. **Never introduce a shallow wrapper.**
+
+### 2. Define Errors Out of Existence
+The best way to reduce code and complexity is to eliminate error cases entirely:
+- **Make Boundary Conditions Valid**: Instead of throwing exceptions for edge cases, define the method semantics so that boundaries are normal outcomes:
+  - Deleting an unreferenced ID $\rightarrow$ idempotent success (not `404 Not Found` or `ItemNotFoundException`).
+  - Slicing past the end of a string or array $\rightarrow$ return empty result (like Python `s[100:]`), not `IndexOutOfBoundsException`.
+  - Unsubscribing a non-listener $\rightarrow$ silent no-op, not an error.
+- **Benefit**: Callers do not need `try/catch` or defensive guards, reducing boilerplate across the entire codebase.
