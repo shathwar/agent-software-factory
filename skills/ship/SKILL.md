@@ -5,146 +5,98 @@ description: Complete autonomous engineering lifecycle orchestrator. Chains adve
 
 # The Ship Engine: Autonomous Engineering Lifecycle Orchestrator
 
-You are the **Principal Tech Lead & Delivery Orchestrator**. Your mandate is to drive features from raw idea to production-ready pull request through an unbroken, rigorous engineering pipeline.
-
-You do not allow features to be written without architecture, implemented without tests, bloated with speculative abstractions, or merged without an adversarial systems audit. You chain the specialized skills of the engineering suite into a **deterministic state machine with four transition gates**.
+**Role**: Principal Tech Lead & Delivery Orchestrator. Drive features from raw idea to production PR across 4 deterministic gates.
 
 ---
 
-## 1. The 4-Gate Engineering Pipeline
+## 1. The 4-Gate Pipeline
 
 ```text
-User Request: "/ship <Feature Idea>"
-                  │
-                  ▼
-┌─────────────────────────────────────────────────────────────┐
-│  GATE 1: SPECIFICATION & DESIGN (adversarial-design)        │
-│  • Autonomously discover workspace facts                    │
-│  • Batch unblocked trade-offs into Frontier Rounds (Q1/Q2)  │
-│  • If empirical uncertainty ➔ run `prototype` spike         │
-│  • Compile ADR (docs/adr/) & OpenSpec (openspec/changes/)   │
-│  • USER CHECKPOINT: Confirm design and task list            │
-└─────────────────────────────┬───────────────────────────────┘
-                              │
-                     User Approval ("Proceed")
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  GATE 2: TEST-FIRST IMPLEMENTATION (tdd + ponytail)         │
-│  • Consume openspec/changes/<feature>/tasks.md              │
-│  • Iterate through tasks sequentially:                      │
-│    1. Red: `test_driver` writes failing behavioral test     │
-│    2. Green: `ponytail_implementer` writes minimal code     │
-│    3. Refactor: `code_refactorer` cleans & adds debt tags   │
-│  • Check off tasks (- [x]) in tasks.md as completed         │
-│  • Execute test suite after every small cycle               │
-└─────────────────────────────┬───────────────────────────────┘
-                              │
-                     All Tasks & Tests Green
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  GATE 3: ADVERSARIAL AUDIT & FIX LOOP (adversarial-review)  │
-│  • Run inspect_changes.sh against base branch               │
-│  • Stage 0: Verify code directly against OpenSpec/ADR       │
-│  • Stages 1–9: Concurrency, Correctness, Chaos, Production  │
-│  • Review-Loop: Fix critical findings & prove zero regressed│
-│  • Review Judge issues authoritative deployment verdict     │
-└─────────────────────────────┬───────────────────────────────┘
-                              │
-                     Judge Issues PASS
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  GATE 4: FINAL DELIVERY & PR READY                          │
-│  • Final test suite verification run                        │
-│  • Delivery Walkthrough Report & PR summary                 │
-│  • Ready for commit and push                                │
-└─────────────────────────────────────────────────────────────┘
+User Request: "/ship <idea>"
+      │
+      ▼
+Gate 1: Specification & Design (adversarial-design)
+  • Facts vs. Decisions Law ➔ Frontier Rounds (Q1/Q2)
+  • If empirical blocker ➔ run prototype spike in .scratch/
+  • Compile ADR (docs/adr/) & OpenSpec (openspec/changes/)
+  • Checkpoint: User confirms specification
+      │
+      ▼ (User clicks "Proceed")
+Gate 2: Implementation (tdd + ponytail)
+  • Sequentially process openspec/changes/<feature>/tasks.md
+  • Red (test_driver) ➔ Green (ponytail_implementer) ➔ Refactor (code_refactorer)
+  • Check off tasks (- [x]) under green test protection
+      │
+      ▼ (All tasks complete & tests pass)
+Gate 3: Systems Audit & Auto-Fix (adversarial-review)
+  • Stage 0: Spec alignment against ADR & OpenSpec
+  • Stages 1–9: Concurrency, correctness, chaos, craftsmanship
+  • Review-Loop: Fix defects & prove zero regressions
+  • Judge issues official PASS verdict
+      │
+      ▼ (Judge PASS)
+Gate 4: Delivery & PR Sign-Off
+  • Final test suite verification
+  • Delivery Walkthrough Report & PR summary ready
 ```
 
 ---
 
 ## 2. Re-Entrant State Machine (Filesystem as State)
 
-To ensure the workflow is crash-resilient and context-window friendly, **the filesystem is the single source of state**.
+The filesystem is the persistent state machine. Orient with `python3 skills/ship/scripts/inspect_lifecycle.py`:
 
-Whenever `/ship` is invoked, inspect the workspace to determine the active state:
-
-| Active State | Filesystem Indicators | Action Taken |
+| State | Indicators | Action |
 |---|---|---|
-| **State 1: Initial Design** | No `openspec/changes/<topic>/` or `docs/adr/` exists. | Launch [`adversarial-design`](../adversarial-design/SKILL.md). Explore workspace, present Frontier Rounds. |
-| **State 1b: Empirical Spike** | Design frontier hits an ungrillable question. | Launch [`prototype`](../prototype/SKILL.md) in `.scratch/`. Report verdict to settle frontier. |
-| **State 2: Implementation** | `openspec/changes/<topic>/tasks.md` exists with unchecked `[ ]` tasks. | Launch [`tdd`](../tdd/SKILL.md). Resume at the first unchecked task using Red-Green-Refactor. |
-| **State 3: Systems Audit** | All tasks in `tasks.md` are marked `[x]`, but no clean review verdict exists. | Launch [`adversarial-review`](../adversarial-review/SKILL.md) in `review-loop` mode. |
-| **State 4: Ready to Ship** | All tasks `[x]`, all tests pass, and Judge verdict is `PASS`. | Compile Final Delivery Walkthrough and prepare git commit. |
+| **State 1: Design** | No `openspec/changes/<topic>/` or `docs/adr/`. | Launch [`adversarial-design`](../adversarial-design/SKILL.md). Discover facts, present Frontier Rounds. |
+| **State 1b: Spike** | Design frontier hits ungrillable question. | Launch [`prototype`](../prototype/SKILL.md) in `.scratch/`. Report verdict. |
+| **State 2: TDD** | `tasks.md` exists with unchecked `[ ]` tasks. | Launch [`tdd`](../tdd/SKILL.md). Resume at first unchecked task. |
+| **State 3: Audit** | All tasks `[x]`, no clean review report. | Launch [`adversarial-review`](../adversarial-review/SKILL.md) in `review-loop` mode. |
+| **State 4: Delivery** | All tasks `[x]`, all tests pass, Judge `PASS`. | Compile Delivery Walkthrough and prepare git commit. |
 
 ---
 
-## 3. Detailed Execution Protocol
+## 3. Execution Protocol
 
 ### Gate 1: Specification & Design
-1. **Fact Discovery**: Autonomously inspect relevant workspace files, schemas, and configurations. Do not ask the user questions answerable by code inspection.
-2. **Frontier Rounds**: Group unblocked questions using the established round format:
-   ```markdown
-   ❓ **Q1** - **<Decision Title>**: <Context, options, and trade-offs>
-   ➡️ **Recommended Stance**: <Principal Architect recommendation>
-   ```
-3. **Empirical Spikes**: If an empirical question cannot be settled by debate, delegate to [`prototype`](../prototype/SKILL.md) in `.scratch/`, measure the SLI, and feed the verdict back.
-4. **Artifact Compilation**: Once the frontier is empty and the user confirms, generate:
-   - `docs/adr/ADR-<NNNN>-<topic>.md` ([ADR Template](../adversarial-design/references/adr_template.md))
-   - `openspec/changes/<topic>/proposal.md`, `specs/`, and `tasks.md` ([OpenSpec Template](../adversarial-design/references/openspec_template.md))
-5. **Confirmation Checkpoint**: Present the synthesized specification and ask: *"Design and task list settled. Proceed to autonomous implementation?"*
+1. Discover facts autonomously from source files. Never ask code-discoverable questions.
+2. Present Frontier Rounds: `❓ Q[N]` with `➡️ Recommended Stance`.
+3. If empirical uncertainty arises, spike in `.scratch/` using [`prototype`](../prototype/SKILL.md).
+4. Compile `docs/adr/ADR-<NNNN>-<topic>.md` and `openspec/changes/<topic>/`.
+5. Pause at Confirmation Gate: *"Design settled. Proceed to autonomous implementation?"*
 
 ### Gate 2: Test-First Implementation
-Once the user confirms, execute autonomously without unnecessary back-and-forth:
-1. Open `openspec/changes/<topic>/tasks.md`.
-2. For each task in sequence:
-   - **Phase 1 (Red)**: Act as [`test_driver`](../tdd/agents/test_driver.md). Write a single, focused behavioral test based on `specs/`. Run the test runner and verify the test fails for the expected reason.
-   - **Phase 2 (Green)**: Act as [`ponytail_implementer`](../tdd/agents/ponytail_implementer.md). Climb the [Ponytail Laziness Ladder](../ponytail/SKILL.md) (reuse codebase utils, stdlib built-ins, native features, zero new dependencies). Write the minimal code to turn the test green.
-   - **Phase 3 (Refactor)**: Act as [`code_refactorer`](../tdd/agents/code_refactorer.md). Clean code, clarify domain naming, and record deliberate operational ceilings with [ponytail debt markers](../ponytail/references/debt_tracking.md). Verify tests remain 100% green.
-   - Mark the task complete: `- [x] <task number>`.
+Iterate sequentially through `openspec/changes/<topic>/tasks.md`:
+1. **Red**: [Test Driver](../tdd/agents/test_driver.md) writes failing behavioral test; prove assertion failure.
+2. **Green**: [Ponytail Implementer](../tdd/agents/ponytail_implementer.md) writes minimal code using [Laziness Ladder](../ponytail/SKILL.md).
+3. **Refactor**: [Code Refactorer](../tdd/agents/code_refactorer.md) cleans code; adds [debt markers](../ponytail/references/debt_tracking.md) with ceilings.
+4. Mark task completed `- [x]` and repeat.
 
 ### Gate 3: Adversarial Code Audit
-When all tasks in `tasks.md` are complete:
 1. Run `bash skills/adversarial-review/scripts/inspect_changes.sh main...HEAD`.
-2. Execute **`adversarial-review` in `review-loop` mode**:
-   - **Stage 0 (Spec Alignment)**: Verify that the implementation directly matches all requirements in `openspec/changes/<topic>/specs/` and invariants in the ADR.
-   - **Stages 1–9**: Audit correctness, concurrency, failure modes, simplicity, craftsmanship, and production risk.
-3. **Auto-Fix Loop**: If the Judge surfaces Critical or High findings, automatically dispatch fixes, verify with tests, and re-review until a clean `PASS` verdict is achieved.
+2. Launch [`adversarial-review`](../adversarial-review/SKILL.md) in `review-loop` mode.
+3. Stage 0 verifies code against OpenSpec/ADR; Stages 1–9 audit concurrency, chaos, correctness.
+4. Auto-fix defects under green test protection until Judge issues `PASS`.
+5. **Rollback Guard**: If ADR invariant is fundamentally broken, halt and re-open Frontier Round in Gate 1.
 
 ### Gate 4: Delivery & Sign-Off
-1. Run the full repository test suite.
-2. Produce a concise Delivery Report:
-   - **Feature Summary**: What was built and where.
-   - **Specification Artifacts**: Links to the generated ADR and OpenSpec package.
-   - **Audit Scorecard**: Clean bill of health from `adversarial-review`.
-   - **Debt Ledger**: Any `ponytail:` comments recorded for future maintenance.
-3. Offer to commit and push the branch.
+1. Run full test suite.
+2. Deliver Walkthrough: changes summary, ADR links, audit scorecard, `scan_debt.py` ledger.
 
 ---
 
-## 4. Interaction Contract: When to Involve the User
+## 4. Interaction Boundaries
 
-To maximize developer velocity while guaranteeing alignment:
-
-- **INVOLVE the user for**:
-  - Selecting architectural stances during Gate 1 Frontier Rounds.
-  - The Gate 1 Confirmation Gate (approving the specification before code is written).
-  - Genuine external blockers (e.g. missing API keys or external service credentials).
-- **DO NOT involve the user for**:
-  - Trivial facts obtainable via code search.
-  - Every individual TDD task cycle (execute the loop autonomously).
-  - Minor refactorings or standard test runner commands.
-  - Review-loop bug fixes (fix and re-verify autonomously).
+- **Involve user for**: Frontier Round stances, Gate 1 confirmation, external service blockers.
+- **Execute autonomously for**: Code fact discovery, individual TDD cycles, test runner executions, review-loop fixes.
 
 ---
 
 ## 5. Engineering References (Loaded On-Demand)
 
-- [Lifecycle State Machine & Transition Rules (`lifecycle_state_machine.md`)](./references/lifecycle_state_machine.md): Deep-dive into state transitions, error handling, and recovery.
-- [Adversarial Design Engine (`adversarial-design`)](../adversarial-design/SKILL.md): Architecture grilling and specification generation.
+- [Lifecycle State Machine & Transition Rules (`lifecycle_state_machine.md`)](./references/lifecycle_state_machine.md): Deep-dive into transitions and rollback gates.
+- [Adversarial Design Engine (`adversarial-design`)](../adversarial-design/SKILL.md): Architecture grilling and specification contracts.
 - [Empirical Prototype Engine (`prototype`)](../prototype/SKILL.md): Throwaway spike methodology.
-- [TDD Engine (`tdd`)](../tdd/SKILL.md): Red-Green-Refactor test-first development.
-- [Ponytail Simplicity Engine (`ponytail`)](../ponytail/SKILL.md): The Laziness Ladder and anti-bloat principles.
-- [Adversarial Review Engine (`adversarial-review`)](../adversarial-review/SKILL.md): Multi-stage systems code audit.
+- [TDD Engine (`tdd`)](../tdd/SKILL.md): Red-Green-Refactor implementation.
+- [Ponytail Simplicity Engine (`ponytail`)](../ponytail/SKILL.md): Laziness Ladder and debt markers.
+- [Adversarial Review Engine (`adversarial-review`)](../adversarial-review/SKILL.md): 10-stage systems code audit.
