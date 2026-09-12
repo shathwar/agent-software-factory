@@ -14,7 +14,7 @@ Every finding must include exactly the following 12 fields without exception. Th
 | **`severity`** | Enum | The critical level and urgency of the finding. | `CRITICAL` (P0), `HIGH` (P1), `MEDIUM` (P2), `LOW` (P3) |
 | **`category`** | Enum | The specific stage of the 10-stage engineering hierarchy. | `SpecAlignment`, `Correctness`, `Concurrency`, `Failure/Resilience`, `Simplicity`, `Maintainability`, `Reuse`, `Performance`, `SOLID`, `Patterns`, `ProductionRisk` |
 | **`file`** | String | Repository-relative path to the inspected file; plain text in JSON, linked in final Markdown. | `src/main/java/.../Service.java` |
-| **`line`** | String | Exact line number or range containing the issue. | `L120` or `L120-L135` |
+| **`line`** | String | Exact line number or range containing the issue. Use `L1` when the finding applies to the file as a whole. | `L120` or `L120-L135` |
 | **`title`** | String | Crisp, one-line summary of the defect. | 5–12 words, domain-specific |
 | **`problem`** | String | Root cause technical explanation of the flaw. | Exact breakdown of the buggy logic or architectural defect |
 | **`evidence`** | String | Verbatim source excerpt supporting the defect; do not insert explanatory comments into the excerpt. | JSON string; rendered as a code block in Markdown |
@@ -65,7 +65,7 @@ When rendering findings in the final review report, reviewers must adhere strict
 ````markdown
 ### [FINDING-001] [MEDIUM] Empty input crashes instead of returning zero
 - **Category**: Correctness
-- **Location**: [average.py:L2](/absolute/path/to/average.py:2)
+- **Location**: [average.py:L2](file:///absolute/path/to/average.py#L2)
 - **Confidence**: CERTAIN (1.0)
 - **Fixability**: autonomous
 - **Problem**: The documented contract returns zero for an empty input, but this expression divides by zero.
@@ -139,6 +139,14 @@ The following is an example of one object inside `findings`:
 ---
 
 ## 6. Multi-Agent Protocol: Role of the Principal Judge
+
+For a mechanical check before adjudication, use [validate_report.py](../scripts/validate_report.py) with standard Python 3.10+ (zero external dependencies):
+
+```bash
+python3 /path/to/skills/adversarial-review/scripts/validate_report.py report.json
+```
+
+The [JSON Schema](./agent_report.schema.json) checks fields, types, enums, and bounds. The script also rejects duplicate IDs/JSON keys, non-finite confidence, reversed line ranges, and non-relative paths. It accepts raw JSON or one enclosing JSON code fence; use `-` to read stdin. Exit 0 means the structure is valid, not that the evidence is true, the coverage is complete, or repairs are authorised. If this optional helper is unavailable, perform the same contract checks directly and preserve malformed/incomplete coverage.
 
 In multi-agent execution, the [specialist protocol](./review_modes.md#3-multi-agent-review-protocol) assigns Correctness, Concurrency, and Design reviewers their active scopes. Each returns the JSON envelope in Section 5 with candidates using this same 12-field contract. The Judge checks required keys, types, enums, confidence bounds, locations, and local ID uniqueness before adjudication. Request a corrected response for malformed output; do not silently drop it or treat it as a clean review. If correction is unavailable, record incomplete coverage. Candidate IDs are local to each specialist report; the [Judge](../agents/review_judge.md) independently inspects relevant source before accepting any candidate, reconciles overlaps, filters confidence below 0.70, and assigns session-wide IDs. The Judge adjudicates submitted candidates only, returning the same envelope with `reviewer: "judge"` and the unchanged 12-field findings. The orchestrator renders the final report without adding unadjudicated findings.
 

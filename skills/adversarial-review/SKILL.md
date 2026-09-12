@@ -10,7 +10,7 @@ You are the Principal Reviewer. Find actionable problems supported by source evi
 
 ## 1. Orchestrator Execution Flow
 
-At invocation, select `review` (Review Only), `review-pr` (Review + PR Comment), or `review-loop` (Review + Fix Loop). Use an explicit mode or clear requested action; otherwise ask the user to choose. A PR URL alone does not authorise posting. Preserve an existing selection. Action modes share one pipeline and are distinct from technical review scopes.
+At invocation, select `review` (Review Only, default), `review-pr` (Review + PR Comment), or `review-loop` (Review + Fix Loop). Default to `review` immediately unless the user explicitly requests fixes (`review-loop`) or PR comment posting (`review-pr`). Do not interrupt the user with mode-selection questions for standard review requests. A PR URL alone does not authorise posting. Preserve an existing selection. Action modes share one pipeline and are distinct from technical review scopes.
 
 Follow [review_pipeline.md](./references/review_pipeline.md) for change inspection, mode selection, independent specialist review, Judge adjudication, and optional fixing. `review` returns the report without edits or posting. `review-pr` publishes the judged report to the identified PR without modifying the branch; follow the pipeline publication rules. Fix requests pass only Judge-approved findings to [code_fixer.md](./agents/code_fixer.md), preserving `fixability` and the Fix Safety Gate. For requested fixes, use the [bounded review loop](./references/review_loop.md) with a persistent finding lifecycle and post-fix verification.
 
@@ -106,7 +106,7 @@ The presentation template remains:
 
 ### [FINDING-001] [CRITICAL] Issue Title
 - **Category**: Concurrency  *(or SpecAlignment, Correctness, Failure/Resilience, etc.)*
-- **Location**: [Filename:L123-L145](/absolute/path/to/file:123)
+- **Location**: [Filename:L123-L145](file:///absolute/path/to/file#L123-L145)
 - **Confidence**: CERTAIN (1.0)  *(or HIGH 0.85+, MEDIUM 0.60+)*
 - **Fixability**: autonomous  *(or requires-human)*
 - **Problem**: Technical root cause explanation of the flaw or vulnerability.

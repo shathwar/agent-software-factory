@@ -2,7 +2,7 @@
 
 ## Invocation mode
 
-Select one action mode before discovery. Use an explicit mode name or clear requested action: review only selects `review`, an explicit request to post a PR comment selects `review-pr`, and review with fixes selects `review-loop`. Preserve an existing selection in this conversation. A PR URL or “review this PR” alone does not authorise posting. When the requested action is absent or ambiguous, ask the user to choose from these three options and wait before starting the pipeline:
+Select one action mode before discovery. Default to `review` (Review Only). Select `review-pr` when the user explicitly requests posting a PR comment, and select `review-loop` when the user explicitly requests reviewing and fixing code. Do not block or ask conversational questionnaire questions when the user simply asks for a review. Preserve an existing selection in this conversation. A PR URL or “review this PR” alone does not authorise posting.
 
 | Mode | Action | Termination |
 |---|---|---|
@@ -28,7 +28,7 @@ Select action → Inspect changes → Route checks → Review → Judge
                    → Return loop report
 ```
 
-1. **Change & Context Discovery**: Run the [inspector](../scripts/inspect_changes.sh) by its resolved path from the target repository. Treat its output as hints, not authoritative coverage. Pin the base and reviewed snapshot first; verify the chosen Git refs resolve and inspect the actual diff. A failed diff command is an error, not an empty review. For working changes, include staged, unstaged, and relevant untracked files. If there is no change in the requested scope, report that rather than launching reviewers. Local reviews do not need a remote or PR. Identify:
+1. **Change & Context Discovery**: First distinguish a change review from a repository audit. For a change review, run the [inspector](../scripts/inspect_changes.sh) by its resolved path from the target repository. Treat its output as hints, not authoritative coverage. Pin the base and reviewed snapshot first; verify the chosen Git refs resolve and inspect the actual diff. A failed diff command is an error, not an empty review. For working changes, include staged, unstaged, and relevant untracked files. If a change review has no change in its requested scope, report that rather than launching reviewers. For a repository audit, inventory the requested tree (for example, `git ls-files` plus relevant untracked files), record the snapshot and scope, and inspect existing implementations and callers even when the working diff is empty. The inspector describes changes, not audit coverage. Local reviews do not need a remote or PR. Identify:
    - **Spec Sources**: Linked issue numbers from commits (`#123`, `PROJ-456`), PRD/spec files under `docs/`, `specs/`, `.scratch/`, or user-supplied specs.
    - **Standards Sources**: Applicable root and path-scoped instructions (`AGENTS.md`, `CLAUDE.md`), conventions (`CODING_STANDARDS.md`, `CONTRIBUTING.md`, linter configs), and existing domain docs or ADRs. Read only documents relevant to the changed area. The repo's documented standards always override baseline heuristics; linters enforce syntax, the reviewer enforces logic and clean-code smells.
    - **Scope & Triggers**: Modified files, diff stats, test mappings, and review mode triggers.

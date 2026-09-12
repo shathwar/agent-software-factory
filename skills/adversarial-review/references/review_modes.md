@@ -94,7 +94,7 @@ The orchestrator retains spec alignment, general performance (including migratio
 
 ## 3. Multi-Agent Review Protocol
 
-For diffs exceeding 400 lines or an explicit parallel-review request, use the environment's available subagent tool to dispatch the specialists selected by the mode-to-agent routing table concurrently. Inherit the orchestrator's model settings. These Markdown files are role prompts to load into subagent tasks, not automatically registered agents.
+For diffs exceeding 400 lines or an explicit parallel-review request, use the environment's available subagent tool to dispatch the specialists selected by the mode-to-agent routing table concurrently. Inherit the orchestrator's model settings. These Markdown files are role prompts to load into subagent tasks, not automatically registered agents (in Antigravity / Gemini CLI, invoke via `invoke_subagent` with `TypeName: "self"` embedding the role markdown in `Prompt`, or declare them with `define_subagent`).
 
 ```text
 Principal Orchestrator → inspect_changes.sh → review_modes.md

@@ -13,3 +13,8 @@
 # Temporary & logs
 *.log
 scratch/
+
+# Python validation tools
+__pycache__/
+*.pyc
+.venv/

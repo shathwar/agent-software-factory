@@ -2,7 +2,7 @@
 
 One skill lives here: [adversarial-review](./skills/adversarial-review/SKILL.md).
 
-It gives a coding agent instructions for reviewing code. The repo contains Markdown prompts, reference guides, and a Bash script. The agent runs the review. The script gathers context.
+It gives a coding agent instructions for reviewing code. The repo contains Markdown prompts, reference guides, a Bash context inspector, and a Python report validator. The agent runs the review.
 
 ## Use it
 
@@ -16,7 +16,7 @@ Choose one action:
 | `review-pr` | Review + PR Comment. Post the report without changing the branch. | “Use adversarial-review in review-pr mode for PR #123.” |
 | `review-loop` | Review + Fix Loop. Make scoped fixes, test, and re-review. | “Use adversarial-review in review-loop mode against main.” |
 
-The agent uses your explicit mode or clear requested action. Otherwise, it asks you to choose. A PR link alone does not authorise commenting; choosing `review-pr` does. Choosing `review-loop` permits fixes but does not commit or push them.
+The agent defaults to `review` (Review Only) immediately. Asking to fix code selects `review-loop`, and asking to comment on a PR selects `review-pr`. A PR link alone does not authorise commenting; choosing `review-pr` does. Choosing `review-loop` permits fixes but does not commit or push them.
 
 All three use one pipeline. The mode changes what happens after the Judge:
 
@@ -36,6 +36,10 @@ bash /path/to/skills/skills/adversarial-review/scripts/inspect_changes.sh --no-d
 ```
 
 The script lists changed files, diff stats, possible specs, review hints, matching test filenames, and possible callers. These are text and filename searches. It does not run tests or prove the code is correct. Remove `--no-diff` to print the diff too.
+
+The inspector requires Bash 3.2+ and Git. It includes individual untracked files and their diffs without staging them, preserves rename paths, and returns a nonzero status for invalid comparisons. Automatic scope selection uses the available local or remote-tracking `main`/`master` ref; a root commit is compared with the empty tree. Test and caller searches are hints from the current checkout, even when reviewing a historical range. Keep the checkout stable while it captures context.
+
+For a whole-repository audit, ask “Review this repository adversarially.” The agent inventories the requested tree and reviews existing code even when there are no uncommitted changes. The change inspector alone is not a repository audit.
 
 ## How the review works
 
@@ -115,10 +119,12 @@ skills/adversarial-review/
 │   ├── review_judge.md
 │   └── code_fixer.md
 ├── scripts/
-│   └── inspect_changes.sh
+│   ├── inspect_changes.sh
+│   └── validate_report.py
 └── references/
     ├── review_modes.md
     ├── finding_schema.md
+    ├── agent_report.schema.json
     ├── handbook_foundations.md
     ├── handbook_craftsmanship.md
     ├── handbook_architecture.md
@@ -129,3 +135,21 @@ skills/adversarial-review/
 
 
 These are adapted principles, not installed dependencies.
+
+## Validation
+
+Run all checks from the repository root (Python 3.10+ standard library, zero pip dependencies required):
+
+```bash
+./scripts/run_tests.sh
+```
+
+The tests use disposable Git repositories and check inspector behavior, report validation, schema examples, and local Markdown link targets. CI runs them on Linux and macOS. Neither the inspector nor the report validator requires external Python packages.
+
+Validate a saved reviewer/Judge report with:
+
+```bash
+python3 skills/adversarial-review/scripts/validate_report.py report.json
+```
+
+Validation checks the [report contract](./skills/adversarial-review/references/finding_schema.md), not the truth of findings or review completeness. [Behavioral evaluation cases](./tests/skill_evaluations.md) cover audit routing, authorisation, malformed reports, and repair-loop state. Run them separately with an agent; passing unit tests does not establish those behaviors.
