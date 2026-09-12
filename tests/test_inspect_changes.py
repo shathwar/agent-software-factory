@@ -235,6 +235,39 @@ class InspectorTests(unittest.TestCase):
         output = self.inspect("--no-diff")
         self.assertIn("mypy.ini", output)
 
+    def test_base_option_inspects_base_plus_working_tree(self):
+        """Reproduction for Issue 3: inspect_changes.sh --base <branch> must succeed and inspect uncommitted edits."""
+        self.git("checkout", "-b", "feature")
+        self.write("committed_on_feature.py", "step = 1\n")
+        self.commit()
+        # Uncommitted staged and unstaged edits
+        self.write("worker.py", "value = 99\n")
+        # Untracked file
+        self.write("untracked_feature.py", "untracked = True\n")
+
+        output = self.inspect("--base", "main")
+        self.assertIn("Scope:  refs/heads/main (BASE_WORKING_TREE)", output)
+        self.assertIn("committed_on_feature.py", output)
+        self.assertIn("worker.py", output)
+        self.assertIn("untracked_feature.py", output)
+        self.assertIn("+value = 99", output)
+        self.assertIn("+untracked = True", output)
+
+    def test_base_option_equals_syntax_and_validation(self):
+        self.git("checkout", "-b", "feature2")
+        self.write("worker.py", "value = 100\n")
+        output = self.inspect("--base=main")
+        self.assertIn("BASE_WORKING_TREE", output)
+        self.assertIn("+value = 100", output)
+
+        # Missing arg
+        self.inspect("--base", success=False)
+        # Non-existent base ref
+        self.inspect("--base", "nonexistent-branch", success=False)
+        # Both base and explicit target
+        self.inspect("--base", "main", "HEAD~1..HEAD", success=False)
+
 
 if __name__ == "__main__":
     unittest.main()
+

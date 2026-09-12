@@ -25,9 +25,20 @@ cd "$REPO_ROOT"
 # --- 1. Parse Arguments ---
 PRINT_DIFF=true
 TARGET_DIFF=""
+EXPLICIT_BASE=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --base)
+            [[ $# -lt 2 ]] && { echo "Error: --base requires a branch argument." >&2; exit 2; }
+            EXPLICIT_BASE="$2"
+            shift 2
+            ;;
+        --base=*)
+            EXPLICIT_BASE="${1#*=}"
+            [[ -z "$EXPLICIT_BASE" ]] && { echo "Error: --base requires a branch argument." >&2; exit 2; }
+            shift
+            ;;
         --no-diff)
             PRINT_DIFF=false
             shift
@@ -44,6 +55,7 @@ while [[ $# -gt 0 ]]; do
             echo "               Default: Auto-detects uncommitted changes or branch diff vs main"
             echo ""
             echo "Options:"
+            echo "  --base <ref> Base branch or ref to diff working tree against (e.g. 'main')"
             echo "  --no-diff    Omit the full unified diff output"
             echo "  --full-diff  Print the full unified diff output (default)"
             echo "  -h, --help   Show this help message"
@@ -64,21 +76,41 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if [[ -n "$TARGET_DIFF" && -n "$EXPLICIT_BASE" ]]; then
+    echo "Error: Cannot supply both --base and an explicit comparison target." >&2
+    exit 2
+fi
+
 # --- 2. Resolve Branch, Base & Target Scope ---
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "HEAD")
 
 # Preserve the exact ref: origin/main does not imply a local main branch.
 BASE_BRANCH=""
 BASE_REF=""
-for candidate in main master trunk develop; do
-    for ref in "refs/heads/$candidate" "refs/remotes/origin/$candidate"; do
+
+if [[ -n "$EXPLICIT_BASE" ]]; then
+    for ref in "refs/heads/$EXPLICIT_BASE" "refs/remotes/origin/$EXPLICIT_BASE" "$EXPLICIT_BASE"; do
         if git rev-parse --verify "$ref^{commit}" >/dev/null 2>&1; then
-            BASE_BRANCH="$candidate"
+            BASE_BRANCH="$EXPLICIT_BASE"
             BASE_REF="$ref"
-            break 2
+            break
         fi
     done
-done
+    if [[ -z "$BASE_REF" ]]; then
+        echo "Error: Base ref not found: $EXPLICIT_BASE" >&2
+        exit 2
+    fi
+else
+    for candidate in main master trunk develop; do
+        for ref in "refs/heads/$candidate" "refs/remotes/origin/$candidate"; do
+            if git rev-parse --verify "$ref^{commit}" >/dev/null 2>&1; then
+                BASE_BRANCH="$candidate"
+                BASE_REF="$ref"
+                break 2
+            fi
+        done
+    done
+fi
 
 INSPECT_TMP=$(mktemp -d "${TMPDIR:-/tmp}/adversarial-review.XXXXXX")
 trap 'rm -rf "$INSPECT_TMP"' EXIT
@@ -91,6 +123,9 @@ EMPTY_TREE=$(git hash-object -t tree /dev/null)
 if [[ -n "$TARGET_DIFF" ]]; then
     MODE="EXPLICIT_TARGET"
     DIFF_SPEC="$TARGET_DIFF"
+elif [[ -n "$EXPLICIT_BASE" ]]; then
+    MODE="BASE_WORKING_TREE"
+    DIFF_SPEC="$BASE_REF"
 elif [[ -s "$INSPECT_TMP/status" ]]; then
     MODE="WORKING_TREE"
     if git rev-parse --verify HEAD >/dev/null 2>&1; then
@@ -154,7 +189,7 @@ while IFS= read -r -d '' status; do
     esac
 done < "$INSPECT_TMP/paths"
 
-if [[ "$MODE" == "WORKING_TREE" ]]; then
+if [[ "$MODE" == "WORKING_TREE" || "$MODE" == "BASE_WORKING_TREE" ]]; then
     git ls-files --others --exclude-standard -z > "$INSPECT_TMP/untracked"
     while IFS= read -r -d '' f; do
         UNTRACKED_FILES+=("$f")
@@ -195,6 +230,8 @@ if [[ "$MODE" == "ROOT_COMMIT" ]]; then
     COMMITS_TO_CHECK=$(git log -n 1 --oneline HEAD)
 elif [[ "$MODE" == "WORKING_TREE" ]]; then
     COMMITS_TO_CHECK=$(git log -n 5 --oneline 2>/dev/null || true)
+elif [[ "$MODE" == "BASE_WORKING_TREE" ]]; then
+    COMMITS_TO_CHECK=$(git log "$BASE_REF..HEAD" --oneline 2>/dev/null || true)
 else
     COMMITS_TO_CHECK=$(git log "$DIFF_SPEC" --oneline 2>/dev/null || true)
 fi

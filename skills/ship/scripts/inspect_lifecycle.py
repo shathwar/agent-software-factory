@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 from collections import OrderedDict
 import datetime
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -23,6 +24,74 @@ import subprocess
 import sys
 import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
+
+
+def compute_working_tree_fingerprint(repo_root: Path) -> str:
+    """Compute a deterministic SHA-256 fingerprint of HEAD commit, working tree diff, and untracked files."""
+    hasher = hashlib.sha256()
+
+    # 1. Commit SHA of HEAD if git repo
+    head_sha = "none"
+    try:
+        head_res = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+        )
+        if head_res.returncode == 0:
+            head_sha = head_res.stdout.strip()
+    except Exception:
+        pass
+    hasher.update(f"HEAD:{head_sha}\n".encode("utf-8"))
+
+    # 2. Diff of tracked files (both staged and unstaged)
+    try:
+        if head_sha != "none":
+            diff_cmd = ["git", "diff", "--no-ext-diff", "--no-textconv", "--no-color", "HEAD", "--"]
+        else:
+            diff_cmd = ["git", "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--cached", "--"]
+        diff_res = subprocess.run(
+            diff_cmd,
+            cwd=repo_root,
+            capture_output=True,
+        )
+        if diff_res.returncode == 0:
+            hasher.update(b"DIFF:\n")
+            hasher.update(diff_res.stdout)
+    except Exception:
+        pass
+
+    # 3. Untracked files (excluding scratch, archive, etc.)
+    ignored_prefixes = (".scratch/", "scratch/", "openspec/archive/", ".gemini/", ".git/")
+    try:
+        untracked_res = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard", "-z"],
+            cwd=repo_root,
+            capture_output=True,
+        )
+        if untracked_res.returncode == 0:
+            raw_entries = [p for p in untracked_res.stdout.split(b"\0") if p]
+            for raw_path in sorted(raw_entries):
+                try:
+                    rel_str = raw_path.decode("utf-8", errors="replace")
+                except Exception:
+                    continue
+                if any(rel_str.startswith(p) for p in ignored_prefixes):
+                    continue
+                if rel_str in {"report.json"}:
+                    continue
+                full_path = repo_root / rel_str
+                if full_path.is_file():
+                    hasher.update(f"UNTRACKED:{rel_str}\n".encode("utf-8"))
+                    try:
+                        hasher.update(full_path.read_bytes())
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+    return hasher.hexdigest()
 
 
 def get_git_info(repo_root: Path) -> Dict[str, Any]:
@@ -36,17 +105,38 @@ def get_git_info(repo_root: Path) -> Dict[str, Any]:
         "modified_count": 0,
         "untracked_count": 0,
         "modified_source_files": [],
+        "working_tree_fingerprint": None,
     }
     try:
-        branch_res = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        git_check = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
             cwd=repo_root,
             capture_output=True,
             text=True,
-            check=True,
         )
-        info["branch"] = branch_res.stdout.strip()
-        info["is_git"] = True
+        if git_check.returncode == 0 and git_check.stdout.strip() == "true":
+            info["is_git"] = True
+
+        if not info["is_git"]:
+            return info
+
+        branch_res = subprocess.run(
+            ["git", "branch", "--show-current"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+        )
+        if branch_res.returncode == 0 and branch_res.stdout.strip():
+            info["branch"] = branch_res.stdout.strip()
+        else:
+            rev_abbrev = subprocess.run(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+            )
+            if rev_abbrev.returncode == 0:
+                info["branch"] = rev_abbrev.stdout.strip()
 
         commit_res = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -89,6 +179,7 @@ def get_git_info(repo_root: Path) -> Dict[str, Any]:
                 continue
             modified_sources.append(filename)
         info["modified_source_files"] = modified_sources
+        info["working_tree_fingerprint"] = compute_working_tree_fingerprint(repo_root)
 
     except Exception:
         pass
@@ -269,9 +360,20 @@ def inspect_living_specs(repo_root: Path) -> List[Dict[str, Any]]:
     return specs
 
 
+REMOVAL_TITLE_MARKER = re.compile(
+    r"(?:\s*[\[\(]\s*(?:STATUS:\s*)?(?:REMOVED|DELETED)\s*[\]\)]|\s*--\s*(?:STATUS:\s*)?(?:REMOVED|DELETED)\b|\s*\bSTATUS:\s*(?:REMOVED|DELETED)\b)",
+    re.IGNORECASE,
+)
+
+REMOVAL_BODY_MARKER = re.compile(
+    r"^\s*(?:[\[\(]\s*(?:STATUS:\s*)?(?:REMOVED|DELETED)\s*[\]\)]|--\s*(?:STATUS:\s*)?(?:REMOVED|DELETED)\b|\bSTATUS:\s*(?:REMOVED|DELETED)\b)",
+    re.IGNORECASE,
+)
+
+
 def normalize_req_title(raw_title: str) -> str:
-    """Normalize requirement title for matching."""
-    cleaned = re.sub(r"\s*[\[\(](?:REMOVED|DELETED)[\]\)]|\b(?:REMOVED|DELETED)\b", "", raw_title, flags=re.IGNORECASE).strip()
+    """Normalize requirement title for matching, removing only explicit removal markers."""
+    cleaned = REMOVAL_TITLE_MARKER.sub("", raw_title).strip()
     return cleaned.lower()
 
 
@@ -284,11 +386,6 @@ def parse_requirements_doc(content: str) -> Tuple[str, List[Dict[str, Any]]]:
     requirements: List[Dict[str, Any]] = []
     current_req: Optional[Dict[str, Any]] = None
 
-    removal_pattern = re.compile(
-        r"^\s*(?:[\[\(](?:REMOVED|DELETED)[\]\)]|(?:STATUS:\s*)?(?:REMOVED|DELETED)\b)",
-        re.IGNORECASE,
-    )
-
     for line in lines:
         match = req_header_regex.match(line.rstrip("\r\n"))
         if match:
@@ -296,7 +393,7 @@ def parse_requirements_doc(content: str) -> Tuple[str, List[Dict[str, Any]]]:
                 requirements.append(current_req)
             level = match.group(1)
             raw_title = match.group(2).strip()
-            is_removal = bool(re.search(r"(?:[\[\(](?:REMOVED|DELETED)[\]\)]|\b(?:REMOVED|DELETED)\b)", raw_title, re.IGNORECASE))
+            is_removal = bool(REMOVAL_TITLE_MARKER.search(raw_title))
             norm_key = normalize_req_title(raw_title)
             current_req = {
                 "header": line.rstrip("\r\n"),
@@ -320,7 +417,7 @@ def parse_requirements_doc(content: str) -> Tuple[str, List[Dict[str, Any]]]:
         if not req["is_removal"]:
             for bline in req["body_lines"][:3]:
                 stripped = bline.strip()
-                if stripped and removal_pattern.match(stripped):
+                if stripped and REMOVAL_BODY_MARKER.match(stripped):
                     req["is_removal"] = True
                     break
 
@@ -365,7 +462,7 @@ def merge_spec_requirements(living_content: str, delta_content: str) -> str:
         result.append(preamble.rstrip())
 
     for req in living_dict.values():
-        clean_header = re.sub(r"\s*[\[\(](?:REMOVED|DELETED)[\]\)]|\b(?:REMOVED|DELETED)\b", "", req["header"], flags=re.IGNORECASE).rstrip()
+        clean_header = REMOVAL_TITLE_MARKER.sub("", req["header"]).rstrip()
         body = "".join(req["body_lines"]).strip()
         if body:
             result.append(f"{clean_header}\n{body}")
@@ -539,6 +636,9 @@ def inspect_audit_reports(repo_root: Path) -> Optional[Dict[str, Any]]:
 
                 snapshot_sha = snapshot_info.get("commit") or data.get("commit") or data.get("snapshot") or data.get("head_sha")
                 snapshot_tree = snapshot_info.get("tree_hash") or data.get("tree_hash")
+                snapshot_fingerprint = snapshot_info.get("working_tree_fingerprint") or data.get("working_tree_fingerprint")
+
+                topic = data.get("topic") or snapshot_info.get("topic") or judge_data.get("topic")
 
                 return {
                     "path": str(p.relative_to(repo_root)),
@@ -553,6 +653,8 @@ def inspect_audit_reports(repo_root: Path) -> Optional[Dict[str, Any]]:
                     "test_evidence_passed": test_evidence_passed,
                     "snapshot_sha": str(snapshot_sha) if snapshot_sha else None,
                     "snapshot_tree": str(snapshot_tree) if snapshot_tree else None,
+                    "snapshot_fingerprint": str(snapshot_fingerprint) if snapshot_fingerprint else None,
+                    "topic": str(topic).strip() if topic else None,
                 }
             except Exception:
                 pass
@@ -611,7 +713,22 @@ def determine_lifecycle_state(
                     "All implementation tasks marked complete. Run 'adversarial-review' in review-loop mode against base branch.",
                 )
 
-            # 1. Reviewer must be Judge (not an unadjudicated specialist)
+            # 1. Package / Topic exact match check
+            report_topic = audit_report.get("topic")
+            if audit_report.get("is_envelope") and not report_topic:
+                return (
+                    "GATE 3: ADVERSARIAL AUDIT",
+                    "AUDIT_ACTIVE",
+                    f"Delivery evidence envelope lacks 'topic'. Requires exact match with active package '{active_pkg['topic']}' before shipping.",
+                )
+            if report_topic and report_topic != active_pkg["topic"]:
+                return (
+                    "GATE 3: ADVERSARIAL AUDIT",
+                    "AUDIT_ACTIVE",
+                    f"Audit approval is for topic '{report_topic}', but active package is '{active_pkg['topic']}'. Requires audit approval for '{active_pkg['topic']}' before shipping.",
+                )
+
+            # 2. Reviewer must be Judge (not an unadjudicated specialist)
             if not audit_report.get("is_judge"):
                 reviewer_name = audit_report.get("reviewer", "unknown")
                 return (
@@ -620,7 +737,7 @@ def determine_lifecycle_state(
                     f"Audit report is from '{reviewer_name}', not Judge. Requires explicit Judge adjudication before shipping.",
                 )
 
-            # 2. Must not contain unresolved CRITICAL or HIGH findings
+            # 3. Must not contain unresolved CRITICAL or HIGH findings
             crit_count = audit_report.get("critical_or_high_count", 0)
             if crit_count > 0:
                 return (
@@ -629,7 +746,7 @@ def determine_lifecycle_state(
                     f"Audit has {crit_count} unresolved CRITICAL/HIGH finding(s). Must remediate defects before shipping.",
                 )
 
-            # 3. Must have explicit passing verdict and clean findings
+            # 4. Must have explicit passing verdict and clean findings
             verdict = audit_report.get("verdict", "")
             status = audit_report.get("status", "")
             findings_count = audit_report.get("findings_count", 0)
@@ -656,7 +773,7 @@ def determine_lifecycle_state(
                     f"Audit verdict '{verdict or status}' is not PASS. Remediate findings or re-run review.",
                 )
 
-            # 4. Require explicit verified passing test evidence
+            # 5. Require explicit verified passing test evidence
             if not audit_report.get("test_evidence_passed"):
                 return (
                     "GATE 3: ADVERSARIAL AUDIT",
@@ -664,34 +781,46 @@ def determine_lifecycle_state(
                     "Audit report lacks verified test evidence. Run test suite and record passing test results.",
                 )
 
-            # 5. Snapshot binding check: commit match
+            # 6. Snapshot binding check: commit match
             snapshot_sha = audit_report.get("snapshot_sha")
+            snapshot_fingerprint = audit_report.get("snapshot_fingerprint")
             current_commit = git_info.get("commit")
+            current_fingerprint = git_info.get("working_tree_fingerprint")
+
             if current_commit:
-                if not snapshot_sha:
+                if not snapshot_sha and not snapshot_fingerprint:
                     return (
                         "GATE 3: ADVERSARIAL AUDIT",
                         "AUDIT_ACTIVE",
-                        "Audit report lacks commit snapshot SHA. Audit must be bound to the reviewed commit.",
+                        "Audit report lacks commit snapshot SHA or tree fingerprint. Audit must be bound to reviewed snapshot.",
                     )
-                if not current_commit.startswith(snapshot_sha) and not snapshot_sha.startswith(current_commit):
+                if snapshot_sha and snapshot_sha != "HEAD" and not current_commit.startswith(snapshot_sha) and not snapshot_sha.startswith(current_commit):
                     return (
                         "GATE 3: ADVERSARIAL AUDIT",
                         "AUDIT_ACTIVE",
                         f"Audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'. Re-run audit on current code.",
                     )
 
-            # 6. Unreviewed source changes check: working tree must not have unreviewed modifications
-            modified_sources = git_info.get("modified_source_files", [])
-            if modified_sources:
-                mod_str = ", ".join(modified_sources[:3])
-                if len(modified_sources) > 3:
-                    mod_str += f" (+{len(modified_sources)-3} more)"
-                return (
-                    "GATE 3: ADVERSARIAL AUDIT",
-                    "AUDIT_ACTIVE",
-                    f"Working tree has unreviewed source modifications ({mod_str}). Re-run adversarial audit on current code before shipping.",
-                )
+            # 7. Working tree consistency check
+            if snapshot_fingerprint:
+                if not current_fingerprint or snapshot_fingerprint != current_fingerprint:
+                    return (
+                        "GATE 3: ADVERSARIAL AUDIT",
+                        "AUDIT_ACTIVE",
+                        "Working tree has been modified since review (fingerprint mismatch). Re-run adversarial audit on current code before shipping.",
+                    )
+            else:
+                # If no fingerprint provided in envelope, require clean working tree
+                modified_sources = git_info.get("modified_source_files", [])
+                if modified_sources:
+                    mod_str = ", ".join(modified_sources[:3])
+                    if len(modified_sources) > 3:
+                        mod_str += f" (+{len(modified_sources)-3} more)"
+                    return (
+                        "GATE 3: ADVERSARIAL AUDIT",
+                        "AUDIT_ACTIVE",
+                        f"Working tree has unreviewed source modifications ({mod_str}). Re-run adversarial audit on current code before shipping.",
+                    )
 
             # All checks pass
             return (
@@ -755,6 +884,17 @@ def apply_and_archive_openspec(
         audit_report = inspect_audit_reports(repo_root)
         if not audit_report:
             raise RuntimeError(f"Cannot archive '{topic_name}': no passing audit report found (or delivery evidence in .scratch/).")
+
+        report_topic = audit_report.get("topic")
+        if audit_report.get("is_envelope") and not report_topic:
+            raise RuntimeError(
+                f"Cannot archive '{topic_name}': delivery evidence envelope lacks 'topic' field to authorise package."
+            )
+        if report_topic and report_topic != topic_name:
+            raise RuntimeError(
+                f"Cannot archive '{topic_name}': audit approval is for topic '{report_topic}', not '{topic_name}'."
+            )
+
         if not audit_report.get("is_judge"):
             raise RuntimeError(f"Cannot archive '{topic_name}': audit reviewer is '{audit_report.get('reviewer')}', requires Judge approval.")
         if audit_report.get("critical_or_high_count", 0) > 0:
@@ -772,15 +912,22 @@ def apply_and_archive_openspec(
         git_info = get_git_info(repo_root)
         current_commit = git_info.get("commit")
         snapshot_sha = audit_report.get("snapshot_sha")
+        snapshot_fingerprint = audit_report.get("snapshot_fingerprint")
+        current_fingerprint = git_info.get("working_tree_fingerprint")
+
         if current_commit:
-            if not snapshot_sha:
-                raise RuntimeError(f"Cannot archive '{topic_name}': audit report lacks commit snapshot SHA.")
-            if not current_commit.startswith(snapshot_sha) and not snapshot_sha.startswith(current_commit):
+            if not snapshot_sha and not snapshot_fingerprint:
+                raise RuntimeError(f"Cannot archive '{topic_name}': audit report lacks commit snapshot SHA or tree fingerprint.")
+            if snapshot_sha and snapshot_sha != "HEAD" and not current_commit.startswith(snapshot_sha) and not snapshot_sha.startswith(current_commit):
                 raise RuntimeError(f"Cannot archive '{topic_name}': audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'.")
 
-        modified_sources = git_info.get("modified_source_files", [])
-        if modified_sources:
-            raise RuntimeError(f"Cannot archive '{topic_name}': working tree has unreviewed source modifications ({', '.join(modified_sources[:3])}).")
+        if snapshot_fingerprint:
+            if not current_fingerprint or snapshot_fingerprint != current_fingerprint:
+                raise RuntimeError(f"Cannot archive '{topic_name}': working tree has been modified since review (fingerprint mismatch).")
+        else:
+            modified_sources = git_info.get("modified_source_files", [])
+            if modified_sources:
+                raise RuntimeError(f"Cannot archive '{topic_name}': working tree has unreviewed source modifications ({', '.join(modified_sources[:3])}).")
 
     synced_specs = []
 
@@ -953,9 +1100,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         action="store_true",
         help="Force archive even if audit report or task completion checks fail.",
     )
+    parser.add_argument(
+        "--fingerprint",
+        action="store_true",
+        help="Print deterministic working tree fingerprint SHA-256 and exit.",
+    )
 
     args = parser.parse_args(argv)
     repo_root = Path(args.path).resolve()
+
+    if args.fingerprint:
+        print(compute_working_tree_fingerprint(repo_root))
+        return 0
 
     if args.archive is not None:
         try:

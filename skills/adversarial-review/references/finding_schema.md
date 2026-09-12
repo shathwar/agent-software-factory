@@ -157,7 +157,8 @@ To prevent contaminating the specialist and Judge report contract with lifecycle
   "snapshot": {
     "commit": "a1b2c3d4e5f6...",
     "tree_hash": "f6e5d4c3b2a1...",
-    "working_tree_clean": true
+    "working_tree_fingerprint": "8f3b2c1a4e5d6f...",
+    "working_tree_clean": false
   },
   "test_evidence": {
     "exit_code": 0,
@@ -179,7 +180,7 @@ To prevent contaminating the specialist and Judge report contract with lifecycle
 
 ### Envelope Contract Guarantees
 1. **Separation of Concerns**: The Judge produces an unadulterated 6-field report compliant with `validate_report.py`.
-2. **Snapshot Binding**: The `snapshot` object binds the verdict to the reviewed Git commit and tree hash, ensuring unreviewed working-tree modifications cannot reuse historical approval.
+2. **Snapshot Binding**: The `snapshot` object binds the verdict to the reviewed Git commit, tree hash, and deterministic `working_tree_fingerprint` (SHA-256 of HEAD commit, working tree diff, and untracked files). This allows uncommitted implementation edits reviewed during Gate 3 to clear delivery while ensuring subsequent unreviewed modifications invalidate approval.
 3. **Structured Test Evidence**: Test results must include verifiable execution metrics (`exit_code: 0`, `tests_run > 0`, `failures: 0`).
 
 ---

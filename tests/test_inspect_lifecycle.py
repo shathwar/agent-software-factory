@@ -398,6 +398,7 @@ class TestInspectLifecycle(unittest.TestCase):
             scratch_dir = tmppath / ".scratch"
             scratch_dir.mkdir()
             (scratch_dir / "delivery_evidence.json").write_text(json.dumps({
+                "topic": "feature",
                 "verdict": "PASS",
                 "snapshot": {"commit": head_commit},
                 "test_evidence": {"exit_code": 0, "passed": True, "tests_run": 5},
@@ -577,6 +578,149 @@ class TestInspectLifecycle(unittest.TestCase):
         self.assertNotIn("HeaderBracket", merged)
         self.assertNotIn("HeaderParen", merged)
 
+    def test_envelope_topic_mismatch_blocks_delivery_and_archive(self):
+        """Reproduction for Issue 1: approval envelope for topic 'auth' cannot authorise package 'billing'."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            pkg_dir = tmppath / "openspec" / "changes" / "billing"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text("- [x] 1. Billing implemented\n")
+
+            scratch_dir = tmppath / ".scratch"
+            scratch_dir.mkdir()
+
+            # Envelope approves topic 'auth'
+            envelope = {
+                "schema_version": "1.0",
+                "topic": "auth",
+                "verdict": "PASS",
+                "snapshot": {"commit": "HEAD"},
+                "test_evidence": {"exit_code": 0, "passed": True, "tests_run": 5},
+                "judge_report": {
+                    "reviewer": "judge",
+                    "status": "complete",
+                    "findings": [],
+                    "coverage": ["Inspected auth."],
+                    "questions": [],
+                    "routing_notes": [],
+                },
+            }
+            (scratch_dir / "delivery_evidence.json").write_text(json.dumps(envelope))
+
+            # Delivery check must reject because envelope topic is 'auth', but active package is 'billing'
+            res = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertEqual(res["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
+            self.assertIn("Audit approval is for topic 'auth'", res["next_action"])
+            self.assertIn("billing", res["next_action"])
+
+            # Archive must raise RuntimeError
+            with self.assertRaises(RuntimeError) as ctx:
+                inspect_lifecycle.apply_and_archive_openspec(tmppath, topic="billing")
+            self.assertIn("audit approval is for topic 'auth'", str(ctx.exception))
+
+            # Matching topic 'billing' clears gate
+            envelope["topic"] = "billing"
+            (scratch_dir / "delivery_evidence.json").write_text(json.dumps(envelope))
+            res_ok = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertEqual(res_ok["gate"], "GATE 4: READY TO SHIP")
+            self.assertEqual(res_ok["state_key"], "DELIVERY_READY")
+
+    def test_reviewed_working_tree_fingerprint_clears_delivery_and_detects_subsequent_changes(self):
+        """Reproduction for Issue 2: reviewed working tree modifications clear delivery via fingerprint; post-review edits are blocked."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=tmppath, capture_output=True, check=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+
+            pkg_dir = tmppath / "openspec" / "changes" / "feature"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text("- [x] 1. Feature done\n")
+
+            # Working tree implementation file (uncommitted / dirty)
+            service_file = tmppath / "service.py"
+            service_file.write_text("def run(): return 42\n")
+
+            # Compute fingerprint of this exact uncommitted working tree
+            fingerprint = inspect_lifecycle.compute_working_tree_fingerprint(tmppath)
+            self.assertTrue(fingerprint and len(fingerprint) == 64)
+
+            scratch_dir = tmppath / ".scratch"
+            scratch_dir.mkdir()
+            envelope = {
+                "schema_version": "1.0",
+                "topic": "feature",
+                "verdict": "PASS",
+                "snapshot": {
+                    "working_tree_fingerprint": fingerprint,
+                },
+                "test_evidence": {"exit_code": 0, "passed": True, "tests_run": 8},
+                "judge_report": {
+                    "reviewer": "judge",
+                    "status": "complete",
+                    "findings": [],
+                    "coverage": ["Reviewed uncommitted working tree changes."],
+                    "questions": [],
+                    "routing_notes": [],
+                },
+            }
+            (scratch_dir / "delivery_evidence.json").write_text(json.dumps(envelope))
+
+            # The reviewed working tree changes must clear delivery!
+            res = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertEqual(res["gate"], "GATE 4: READY TO SHIP")
+            self.assertEqual(res["state_key"], "DELIVERY_READY")
+
+            # Post-review modification: change service.py
+            service_file.write_text("def run(): return 999\n")
+
+            # Fingerprint mismatch must revoke DELIVERY_READY
+            res_modified = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertEqual(res_modified["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res_modified["state_key"], "AUDIT_ACTIVE")
+            self.assertIn("fingerprint mismatch", res_modified["next_action"])
+
+            # Archive must also be blocked by fingerprint mismatch
+            with self.assertRaises(RuntimeError) as ctx:
+                inspect_lifecycle.apply_and_archive_openspec(tmppath, topic="feature")
+            self.assertIn("fingerprint mismatch", str(ctx.exception))
+
+    def test_ordinary_requirement_title_with_word_deleted_is_preserved_not_removed(self):
+        """Reproduction for Issue 4: updating 'Restore deleted accounts' must preserve and update the requirement."""
+        living = (
+            "# Living Spec\n\n"
+            "### Requirement: Restore deleted accounts\n"
+            "Original logic for restoring deleted user accounts.\n\n"
+            "### Requirement: OtherFeature\n"
+            "Keep untouched.\n"
+        )
+
+        # Delta spec updating 'Restore deleted accounts'
+        delta = (
+            "# Delta Spec\n\n"
+            "### Requirement: Restore deleted accounts\n"
+            "Updated logic with 30-day grace period for restored accounts.\n"
+        )
+
+        merged = inspect_lifecycle.merge_spec_requirements(living, delta)
+
+        # The requirement MUST NOT be deleted
+        self.assertIn("Requirement: Restore deleted accounts", merged)
+        self.assertIn("Updated logic with 30-day grace period for restored accounts.", merged)
+        self.assertIn("Requirement: OtherFeature", merged)
+        self.assertNotIn("Original logic for restoring deleted user accounts.", merged)
+
+        # Now test an explicit deletion marker on that same requirement
+        delta_delete = (
+            "# Delta Spec\n\n"
+            "### Requirement: Restore deleted accounts [DELETED]\n"
+        )
+        merged_deleted = inspect_lifecycle.merge_spec_requirements(living, delta_delete)
+        self.assertNotIn("Restore deleted accounts", merged_deleted)
+        self.assertIn("Requirement: OtherFeature", merged_deleted)
+
 
 if __name__ == "__main__":
     unittest.main()
+
