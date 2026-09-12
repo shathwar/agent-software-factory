@@ -1,6 +1,6 @@
 # Review and Fix Loop
 
-The orchestrator runs this protocol using the host's agent tools; no shell script can dispatch reviewers portably. Load it for user-requested fixes. A review-only request uses discovery and adjudication once, updates the ledger, and reports without entering the repair loop.
+The orchestrator runs this protocol using the host's agent tools; no shell script can dispatch reviewers portably. Load it for `review-loop`, selected through [the shared pipeline](./review_pipeline.md#invocation-mode). `review` and `review-pr` terminate after adjudication and reporting/publication without repairs. A review-only request uses discovery and adjudication once, updates the ledger, and reports without entering the repair loop.
 
 ## State
 

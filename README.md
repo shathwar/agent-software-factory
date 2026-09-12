@@ -8,9 +8,26 @@ It gives a coding agent instructions for reviewing code. The repo contains Markd
 
 Give your coding agent the [SKILL.md](./skills/adversarial-review/SKILL.md) file and the change to review. Include the issue or spec if you have one.
 
-Example request:
+Choose one action:
 
-> Use this skill to review my changes against main. Check the code and its callers. Report problems with evidence.
+| Mode | What it does | Example request |
+|---|---|---|
+| `review` | Review Only. Return a report. | “Use adversarial-review in review mode against main.” |
+| `review-pr` | Review + PR Comment. Post the report without changing the branch. | “Use adversarial-review in review-pr mode for PR #123.” |
+| `review-loop` | Review + Fix Loop. Make scoped fixes, test, and re-review. | “Use adversarial-review in review-loop mode against main.” |
+
+The agent uses your explicit mode or clear requested action. Otherwise, it asks you to choose. A PR link alone does not authorise commenting; choosing `review-pr` does. Choosing `review-loop` permits fixes but does not commit or push them.
+
+All three use one pipeline. The mode changes what happens after the Judge:
+
+```text
+Inspect → Pick checks → Review → Judge
+                                 ├─ review      → Report
+                                 ├─ review-pr   → PR comment
+                                 └─ review-loop → Fix → Test → Re-review → Report
+```
+
+These are agent instructions, not installed shell commands. PR commenting needs authenticated provider access; if posting fails, the agent returns the prepared report and the blocker.
 
 To run just the change inspector, run this from the Git repo you want to review. Replace `/path/to/skills` with this repo's location:
 
@@ -47,6 +64,8 @@ Requested fixes use a [bounded loop](./skills/adversarial-review/references/revi
 
 ## Which reviewers run?
 
+Action mode controls edits and publication. Change type controls which technical checks run.
+
 | Change | Reviewers |
 |---|---|
 | Standard code | Correctness, Design |
@@ -77,6 +96,8 @@ The checklist has ten stages. Only relevant stages apply.
 Fowler's code smells help the Design review. They are not another stage or automatic proof of a problem.
 
 ## What you get
+
+All feedback uses plain, human language, including PR comments: what breaks, why it matters, and what to do next. Short and clear, with the evidence kept intact.
 
 One report: summary, stage scorecard, prioritised findings, simplification opportunities, test gaps, and a verification checklist. Missing checks stay visible. Agent handoffs stay internal.
 
