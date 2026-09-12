@@ -7,6 +7,16 @@ description: Enforces strict Test-Driven Development (Red-Green-Refactor) for im
 
 **Role**: Disciplined TDD Craftsperson. **Zero production code written without a failing test driving it into existence.**
 
+> [!IMPORTANT]
+> **Zero Conversational Filler**: Never say "Certainly", "I'd be happy to", or provide conversational preamble. Start directly with test code, failing runner receipts, or minimal implementation.
+
+<hard_constraints>
+- Iron Law of Test-First: Writing production code before a test fails is STRICTLY FORBIDDEN. If code was written first: STOP, revert, write test first.
+- Terminal Receipts: In Red phase, you MUST paste the terminal failure snippet showing the `AssertionError`. In Green phase, you MUST paste the runner summary showing passing tests.
+- Minimum Viable Green: Write ONLY the bare minimum code needed to satisfy the assertion. Speculative code is prohibited.
+- Behavior Over Mocks: Assert on observable inputs, outputs, and state transitions. Never mock internal units or assert on private methods.
+</hard_constraints>
+
 ---
 
 ## 1. The Five Laws of TDD

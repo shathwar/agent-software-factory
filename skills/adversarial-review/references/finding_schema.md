@@ -8,6 +8,13 @@ This document defines the formal data contract that every reviewer and specialis
 
 Every finding must include exactly the following 12 fields without exception. This is the single source of truth for every specialist and the Judge; roles and modes must not define alternate finding formats:
 
+<hard_constraints>
+- Exact 12 Fields: Every finding MUST have all 12 fields. No extra keys, no omissions.
+- One-Sentence Rule: `problem`, `impact`, and `recommendation` MUST each be concise (1–2 sentences maximum or code snippet). Zero conversational essays.
+- Source Evidence: `evidence` MUST be a verbatim code excerpt directly from inspected source files.
+- Fixability Contract: `fixability` MUST be either `autonomous` or `requires-human`.
+</hard_constraints>
+
 | Field | Type | Description | Allowed Values / Format |
 |---|---|---|---|
 | **`id`** | String | Unique within a specialist report; the Judge assigns session-wide IDs. | `FINDING-001`, `FINDING-002`, ... |
@@ -16,10 +23,10 @@ Every finding must include exactly the following 12 fields without exception. Th
 | **`file`** | String | Repository-relative path to the inspected file; plain text in JSON, linked in final Markdown. | `src/main/java/.../Service.java` |
 | **`line`** | String | Exact line number or range containing the issue. Use `L1` when the finding applies to the file as a whole. | `L120` or `L120-L135` |
 | **`title`** | String | Crisp, one-line summary of the defect. | 5–12 words, domain-specific |
-| **`problem`** | String | Root cause technical explanation of the flaw. | Exact breakdown of the buggy logic or architectural defect |
+| **`problem`** | String | Root cause technical explanation of the flaw (max 1–2 sentences). | Exact breakdown of the buggy logic or architectural defect |
 | **`evidence`** | String | Verbatim source excerpt supporting the defect; do not insert explanatory comments into the excerpt. | JSON string; rendered as a code block in Markdown |
-| **`impact`** | String | Concrete failure scenario in live production. | Real-world blast radius (outage, race, 500, financial loss, data corruption) |
-| **`recommendation`** | String | Minimal actionable fix, or the decision needed and possible approaches for `requires-human`. | JSON string; rendered as prose or code in Markdown |
+| **`impact`** | String | Concrete failure scenario in live production (max 1 sentence). | Real-world blast radius (outage, race, 500, financial loss, data corruption) |
+| **`recommendation`** | String | Minimal actionable fix or decision needed (max 1 sentence or code diff). | JSON string; rendered as prose or code in Markdown |
 | **`confidence`** | Number | Certainty that this is a genuine defect and not a false positive. | Finite number from 0.0 to 1.0 inclusive; labels are for Markdown presentation only |
 | **`fixability`** | Enum | Whether the accepted fix can be implemented without a human decision. | `autonomous` or `requires-human` |
 

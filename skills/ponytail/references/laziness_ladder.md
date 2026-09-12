@@ -16,6 +16,41 @@ A practical handbook on avoiding dependencies, eliminating speculative abstracti
 7. Minimum Code That Works (Surgical diff)
 ```
 
+### Contrast Pairs (Bad vs Good)
+
+```typescript
+// ❌ BAD: Speculative abstraction with single implementation (Rung 1 violation)
+interface IUserRepository { findById(id: string): Promise<User>; }
+class UserRepositoryFactory { static create(): IUserRepository { return new SqlUserRepository(); } }
+const repo = UserRepositoryFactory.create();
+
+// ✅ GOOD: Direct concrete class; introduce interface ONLY when 2nd impl arrives
+class UserRepository { async findById(id: string): Promise<User> { ... } }
+```
+
+```typescript
+// ❌ BAD: Installing external dependency for built-in feature (Rung 3 violation)
+import cloneDeep from 'lodash.clonedeep';
+import { v4 as uuidv4 } from 'uuid';
+const copy = cloneDeep(data);
+const id = uuidv4();
+
+// ✅ GOOD: Native platform stdlib primitives
+const copy = structuredClone(data);
+const id = crypto.randomUUID();
+```
+
+```python
+# ❌ BAD: Patching multiple callsites defensively with null checks (Rung 7 violation)
+# caller1.py: if user and user.email: send(user.email)
+# caller2.py: if user and user.email: notify(user.email)
+
+# ✅ GOOD: Fix once at the root function entrypoint
+def send(email: str | None) -> None:
+    if not email: return
+    ...
+```
+
 ---
 
 ## 2. Stdlib & Platform Replacements by Ecosystem

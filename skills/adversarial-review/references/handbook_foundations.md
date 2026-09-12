@@ -1,62 +1,62 @@
 # Engineering Handbook: Foundations (Stages 1–3)
 
-Consult relevant sections for Correctness, Concurrency, and Failure Resilience. These are investigation prompts: verify the actual runtime, contracts, and execution path before reporting a defect.
+Investigation prompts for Correctness, Concurrency, and Failure Resilience. Verify runtime behavior, contracts, and execution paths before reporting.
 
 ---
 
 ## Stage 1: Correctness
 
 - **Logic & Edge Cases**:
-  - Off-by-one errors in loops, ranges, slicing, or time windows (`<=` vs `<`, `>=` vs `>`).
-  - Check half-open intervals `[start, end)` vs closed intervals `[start, end]`.
-  - Null / None / empty collections handling. Does `.getFirst()`, `list[0]`, or `map.get()` throw `NoSuchElementException` or `NullPointerException`?
-  - Optional unwrapping: check `.orElseThrow()` or `.get()` on empty optionals.
-  - Boundary values: min/max integer limits, 0, negative values, empty strings.
+  - Off-by-one errors: loop bounds, ranges, slices, time windows (`<=` vs `<`, `>=` vs `>`).
+  - Intervals: half-open `[start, end)` vs closed `[start, end]`.
+  - Empty collections & nulls: check `.getFirst()`, `list[0]`, `map.get()`. Guard `NoSuchElementException` / `NullPointerException`.
+  - Optionals: unwrapping without checks (`.orElseThrow()`, `.get()`).
+  - Boundaries: min/max limits, 0, negative values, empty strings.
 - **Mathematical & Financial Accuracy**:
-  - Division by zero guards (`val / total` where total can be 0).
-  - Floating-point vs decimal precision (`BigDecimal` / `Decimal` vs binary float rounding). Check whether exact equality or a domain-specific tolerance is intended.
-  - Rounding direction (floor vs ceil vs half-up) and integer division truncation (`a / b` vs `a // b`).
+  - Zero division guards (`val / total`).
+  - Float vs decimal: `BigDecimal` / `Decimal` vs binary float rounding. Exact equality vs domain tolerance.
+  - Rounding direction: floor vs ceil vs half-up. Integer division truncation (`a / b` vs `a // b`).
 - **Domain vs Presentation Invariant**:
-  - Presentation logic (e.g. lot size multiplication, UI currency formatting) must **never** mutate domain or execution engine state (`trail_order.qty`, `tsl`).
+  - Presentation logic (lot size scaling, UI currency formatting) must **never** mutate domain/engine state (`trail_order.qty`, `tsl`).
 - **Type Invariants**:
-  - For changed models, identify the required relationships between fields and legal states. Trace construction, deserialization, mutation, and exposed mutable references: can a supported caller bypass enforcement?
-  - Report a reachable invalid state and its consequence. A plain data object or runtime check is not inherently defective; choose guarantees that fit the language and current contract.
+  - Verify legal states across construction, deserialization, mutation, and exposed mutable refs. Can callers bypass constraints?
+  - Report reachable invalid states and consequences. Match language idiomatic guarantees.
 - **Sentinel Objects**:
-  - If a sentinel value (e.g. `EMPTY_SENTINEL`, `None`, `-1`) represents non-existence, verify downstream logic does not treat it as valid.
+  - If sentinel represents non-existence (`EMPTY_SENTINEL`, `None`, `-1`), ensure downstream logic does not treat as valid data.
 
 ---
 
 ## Stage 2: Concurrency & Safety
 
 - **Mutexes & Keyed Locks**:
-  - Lock ordering to prevent deadlocks across multi-resource acquisitions.
-  - Double release: ensure `finally` blocks do not release an unacquired lock or release twice.
-  - Reentrancy: check if coroutines/threads call methods that attempt to re-acquire the same non-reentrant lock.
-  - Check whether blocking I/O under a lock can stall other work or deadlock. Establish the protected invariant before moving I/O outside the lock.
-  - Memory cleanup in keyed locks: avoid leaks under high symbol churn.
-- **Atomicity & State Mutations**:
-  - TOCTOU (Time-of-Check to Time-of-Use) / check-then-act race windows.
-  - For concurrent maps, verify whether compound operations share a lock or need an atomic primitive; a thread-safe collection alone does not protect a multi-step invariant.
+  - Lock ordering: prevent deadlocks across multi-resource acquisitions.
+  - Double release: `finally` blocks must not release unacquired or twice.
+  - Reentrancy: detect coroutines/threads re-acquiring non-reentrant locks.
+  - Blocking I/O inside lock: stalls workers and causes deadlocks. Establish invariant before moving I/O out.
+  - Keyed lock memory: evict unused keys under high symbol/ID churn.
+- **Atomicity & Mutations**:
+  - TOCTOU (check-then-act) race windows.
+  - Concurrent maps: compound operations require atomic primitives (`computeIfAbsent`, `compareAndSet`) or shared locks; thread-safe collections do not protect multi-step invariants.
 - **Virtual Threads (Java)**:
-  - Verify the JDK version and blocking operation before claiming carrier pinning. [JDK 24 changed monitor-related pinning](https://docs.oracle.com/en/java/javase/24/migrate/significant-changes-jdk-24.html) (JEP 491); do not recommend a lock replacement from syntax alone.
-  - Check whether long-running work stalls ingress and whether any proposed offload preserves ordering, bounds concurrency, and owns task failures.
+  - Check JDK version and blocking calls before claiming carrier pinning. [JDK 24 changed monitor pinning](https://docs.oracle.com/en/java/javase/24/migrate/significant-changes-jdk-24.html) (JEP 491); do not flag `synchronized` without runtime verification.
+  - Long tasks stalling ingress: verify offload preserves ordering, bounds concurrency, and handles failures.
 - **Asyncio / Coroutines (Python)**:
-  - Background task exceptions: ensure background tasks have explicit exception handlers; unhandled exceptions in background tasks are silent killers.
-  - Synchronous blocking broker SDKs or file I/O must use `run_in_threadpool` or `asyncio.to_thread`.
-  - Cancellation handling: ensure state remains consistent if a task is cancelled during critical section.
+  - Background tasks: require explicit exception handlers; unhandled task exceptions fail silently.
+  - Blocking calls: synchronous broker SDKs or file I/O must use `asyncio.to_thread` or `run_in_threadpool`.
+  - Task cancellation: state must remain consistent if cancelled during critical sections.
 
 ---
 
 ## Stage 3: Failure & Resilience
 
 - **Error Propagation & Leaks**:
-  - Are exceptions caught at the right boundaries or leaking as unhandled 500s?
-  - For each changed handler, trace expected and unexpectedly caught errors, cleanup, and the result observed by its caller. Include default values and recovery callbacks, not just empty catch blocks.
-  - Check whether a fallback turns failed work into apparent success or hides exhausted retries. Verify the intended recovery contract and available diagnostics; logging alone does not establish successful recovery. Do not require duplicate logging or exposing internal errors to end users.
+  - Catch at proper boundaries; prevent unhandled 500s.
+  - Trace error paths: check cleanup and caller-observed results. Beware empty catch blocks or defaults hiding failures.
+  - Fallbacks: ensure fallback does not mask fatal failure or exhausted retries. Verify caller diagnostics. Never expose internal errors to users.
 - **Timeouts & Deadlines**:
-  - Trace effective deadlines through clients and callers, including inherited defaults; report missing or ineffective bounds on paths that require them.
+  - Trace end-to-end deadlines through clients; flag missing bounds on I/O.
 - **Retry Storms & Backoff**:
-  - Are retries bounded with exponential backoff and jitter?
-  - Can retries duplicate side effects or amplify overload? Recommend backpressure or a circuit breaker only for a demonstrated failure mechanism.
+  - Bounded retries with exponential backoff and jitter.
+  - Avoid retrying non-idempotent operations or amplifying system overload.
 - **Poison-Pill Defense**:
-  - If a corrupted message arrives on a stream/queue, is it logged at ERROR and acknowledged/dead-lettered to prevent consumer crash loops?
+  - Corrupted stream/queue messages: log at ERROR, route to DLQ / ack to prevent consumer crash loops.
