@@ -7,7 +7,7 @@ Measures:
 - Latency percentiles: p50, p90, p95, p99, Min, Max, Mean, StdDev
 - Throughput: Requests / operations per second (RPS)
 - Reliability: Error count and error percentage
-- Output: Official Markdown table matching prototype/SKILL.md contract or JSON
+- Output: Official Markdown table matching spike/SKILL.md contract or JSON
 """
 
 from __future__ import annotations

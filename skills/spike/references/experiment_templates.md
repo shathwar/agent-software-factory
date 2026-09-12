@@ -337,12 +337,12 @@ When the ungrillable question is ergonomic or visual (e.g. *"How snappy does sea
 
 ## 6. Automated Statistical Benchmarking with `run_spike.py`
 
-Use `skills/prototype/scripts/run_spike.py` for automated statistical warmup, concurrent worker dispatch, and percentile SLI evaluation without writing custom timing boilerplate.
+Use `skills/spike/scripts/run_spike.py` for automated statistical warmup, concurrent worker dispatch, and percentile SLI evaluation without writing custom timing boilerplate.
 
 ### Example: Benchmarking API / Command Throughput & p99 Latency
 ```bash
 # Benchmark local worker script with 20 concurrent threads and 1,000 requests
-python3 skills/prototype/scripts/run_spike.py \
+python3 skills/spike/scripts/run_spike.py \
   --cmd "curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/healthz" \
   --iterations 1000 \
   --warmup 100 \
@@ -354,7 +354,7 @@ python3 skills/prototype/scripts/run_spike.py \
 
 ### Output JSON for Automated ADR & OpenSpec Bridge
 ```bash
-python3 skills/prototype/scripts/run_spike.py \
+python3 skills/spike/scripts/run_spike.py \
   --cmd "python3 .scratch/test_db_query.py" \
   --iterations 500 \
   --json > .scratch/spike_results.json
@@ -411,7 +411,7 @@ export REDIS_URL="redis://127.0.0.1:${REDIS_PORT}"
 echo "Database ready on port ${PG_PORT}, Redis ready on port ${REDIS_PORT}"
 
 # Execute benchmark via run_spike.py
-python3 "$SPIKE_DIR/../../skills/prototype/scripts/run_spike.py" \
+python3 "$SPIKE_DIR/../../skills/spike/scripts/run_spike.py" \
   --cmd "python3 $SPIKE_DIR/experiment.py" \
   --iterations 500 \
   --warmup 50 \

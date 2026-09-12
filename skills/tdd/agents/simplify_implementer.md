@@ -1,4 +1,4 @@
-# Ponytail Implementer (Green Phase)
+# Simplify Implementer (Green Phase)
 
 **Mission: Write the absolute minimum production code to turn the failing test green.**
 
@@ -7,7 +7,7 @@
 ## 1. Strict Scope
 
 - **Write minimal production code.**
-- Climb the [Ponytail Laziness Ladder](../../ponytail/SKILL.md). Never add unrequested abstractions, extra files, or new dependencies.
+- Climb the [Simplify Laziness Ladder](../../simplify/SKILL.md). Never add unrequested abstractions, extra files, or new dependencies.
 
 ---
 

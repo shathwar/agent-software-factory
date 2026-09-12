@@ -4,9 +4,9 @@
 Zero-dependency script (Python 3.10+ standard library).
 
 Evaluates filesystem indicators to determine active gate:
-- GATE 1: SPECIFICATION & DESIGN (adversarial-design / prototype)
-- GATE 2: IMPLEMENTATION (tdd + ponytail)
-- GATE 3: ADVERSARIAL AUDIT (adversarial-review loop)
+- GATE 1: SPECIFICATION & DESIGN (design / spike)
+- GATE 2: IMPLEMENTATION (tdd + simplify)
+- GATE 3: ADVERSARIAL AUDIT (audit loop)
 - GATE 4: READY TO SHIP (delivery & PR sign-off)
 """
 
@@ -1097,7 +1097,7 @@ def determine_lifecycle_state(
         return (
             "GATE 1b: EMPIRICAL SPIKE ACTIVE",
             "SPIKE_ACTIVE",
-            f"Complete empirical prototype in '{spike_name}'. Deliver verdict to settle design frontier.",
+            f"Complete empirical spike in '{spike_name}'. Deliver verdict to settle design frontier.",
         )
 
     # If no OpenSpec packages and no ADRs, we are at Gate 1
@@ -1105,7 +1105,7 @@ def determine_lifecycle_state(
         return (
             "GATE 1: SPECIFICATION & DESIGN",
             "INITIAL_PROPOSAL",
-            "Run '/adversarial-design' or '/ship <topic>'. Explore workspace facts and present Frontier Rounds.",
+            "Run '/design' or '/ship <topic>'. Explore workspace facts and present Frontier Rounds.",
         )
 
     # If OpenSpec package exists, check tasks
@@ -1121,7 +1121,7 @@ def determine_lifecycle_state(
         if active_pkg["pending_tasks"] > 0:
             next_task_str = f" Next: '{active_pkg['next_task']}'." if active_pkg["next_task"] else ""
             return (
-                "GATE 2: IMPLEMENTATION (TDD + PONYTAIL)",
+                "GATE 2: IMPLEMENTATION (TDD + SIMPLIFY)",
                 "TDD_ACTIVE",
                 f"Implement pending tasks ({active_pkg['completed_tasks']}/{active_pkg['total_tasks']} tasks complete).{next_task_str} Run Red-Green-Refactor.",
             )
@@ -1132,7 +1132,7 @@ def determine_lifecycle_state(
                 return (
                     "GATE 3: ADVERSARIAL AUDIT",
                     "AUDIT_ACTIVE",
-                    "All implementation tasks marked complete. Run 'adversarial-review' in review-loop mode against base branch.",
+                    "All implementation tasks marked complete. Run 'audit' in review-loop mode against base branch.",
                 )
 
             # 1. Judge report contract check for envelopes

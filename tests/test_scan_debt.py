@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-SCAN_DEBT = ROOT / "skills" / "ponytail" / "scripts" / "scan_debt.py"
+SCAN_DEBT = ROOT / "skills" / "simplify" / "scripts" / "scan_debt.py"
 
 sys.path.insert(0, str(SCAN_DEBT.parent))
 import scan_debt
@@ -17,6 +17,17 @@ import scan_debt
 class TestScanDebt(unittest.TestCase):
     def test_parse_valid_marker(self):
         line = "// ponytail: In-memory cache. Ceiling: 1,000 items. Upgrade: Redis."
+        res = scan_debt.parse_debt_marker(line, "src/cache.ts", 42)
+        self.assertTrue(res["is_valid"])
+        self.assertEqual(res["shortcut"], "In-memory cache")
+        self.assertEqual(res["ceiling"], "1,000 items")
+        self.assertEqual(res["upgrade"], "Redis")
+        self.assertEqual(res["file"], "src/cache.ts")
+        self.assertEqual(res["line"], 42)
+        self.assertEqual(len(res["errors"]), 0)
+
+    def test_parse_valid_simplify_marker(self):
+        line = "// simplify: In-memory cache. Ceiling: 1,000 items. Upgrade: Redis."
         res = scan_debt.parse_debt_marker(line, "src/cache.ts", 42)
         self.assertTrue(res["is_valid"])
         self.assertEqual(res["shortcut"], "In-memory cache")

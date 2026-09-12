@@ -4,12 +4,12 @@ Universal high-density engineering instructions for AI coding agents. Grounded i
 
 ---
 
-## 1. Anti-Bloat & Simplicity (`ponytail`)
+## 1. Anti-Bloat & Simplicity (`simplify`)
 - **Laziness Ladder**: 1. YAGNI ➔ 2. Codebase reuse ➔ 3. Standard library ➔ 4. Native platform ➔ 5. Installed deps ➔ 6. One-liner ➔ 7. Minimum code.
 - **Deep Modules (Ousterhout)**: Narrow interfaces hiding substantial complexity. Reject shallow 5-line pass-through wrappers.
 - **Define Errors Out of Existence**: Design APIs so boundary states (e.g., deleting an absent record, empty slice) are valid no-ops rather than exceptions.
 - **Zero Unrequested Abstractions**: No speculative interfaces or factories for single implementations.
-- **Debt Tracking**: Mark intentional shortcuts: `// ponytail: <desc> | Ceiling: <limit> | Upgrade: <action>`.
+- **Debt Tracking**: Mark intentional shortcuts: `// simplify: <desc> | Ceiling: <limit> | Upgrade: <action>`.
 
 ---
 
@@ -23,15 +23,15 @@ Universal high-density engineering instructions for AI coding agents. Grounded i
 
 ---
 
-## 3. Systems Architecture & Design (`adversarial-design`)
+## 3. Systems Architecture & Design (`design`)
 - **Facts vs. Decisions Law**: Inspect files, schemas, and routes autonomously. Reserve user turns strictly for architectural trade-offs.
 - **Frontier Batching**: Never drip questions one-by-one. Batch the decision frontier into numbered rounds with recommended engineering stances.
-- **Ungrillable Detection**: If a question requires empirical proof (throughput/latency), trigger an isolated prototype spike.
+- **Ungrillable Detection**: If a question requires empirical proof (throughput/latency), trigger an isolated spike.
 - **Output**: Persist decisions to `docs/adr/` and `openspec/changes/`.
 
 ---
 
-## 4. Empirical Spikes (`prototype`)
+## 4. Empirical Spikes (`spike`)
 - **Strict Sandbox**: Throwaway code lives strictly in `.scratch/<spike-name>/`. Never write prototype code to `src/`.
 - **Falsifiable SLIs**: Define explicit numerical thresholds (p99 latency, RPS) before measuring.
 - **Real Infrastructure**: Spin up ephemeral local Docker Compose instances on dynamic ports for backend I/O spikes.
@@ -39,7 +39,7 @@ Universal high-density engineering instructions for AI coding agents. Grounded i
 
 ---
 
-## 5. Adversarial Code Review (`adversarial-review`)
+## 5. Systems Code Audit (`audit`)
 - **Evidence Requirement**: Plausible bugs remain hypotheses until exact file, line, and trigger path are proven.
 - **The Judge**: Every reported finding must be adjudicated against source code. Reject hallucinations.
 - **10-Stage Hierarchy**:
@@ -57,6 +57,6 @@ Universal high-density engineering instructions for AI coding agents. Grounded i
 ---
 
 ## 6. Delivery Lifecycle (`ship`)
-- **4 Deterministic Gates**: Gate 1 (Spec & ADR) ➔ Gate 2 (TDD Implementation) ➔ Gate 3 (Adversarial Audit) ➔ Gate 4 (Delivery).
+- **4 Deterministic Gates**: Gate 1 (Spec & ADR) ➔ Gate 2 (TDD Implementation) ➔ Gate 3 (Code Audit) ➔ Gate 4 (Delivery).
 - **Git Checkpoints & Rollback**: Automatic tagging at `gate-1-spec`. Safe rollback if architectural invariants break during audit.
 - **Context Boundary Isolation**: Orchestrate each gate in an isolated subagent turn to prevent context degradation.

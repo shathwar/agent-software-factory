@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Complete autonomous engineering lifecycle orchestrator. Chains adversarial-design, prototype, tdd, ponytail, and adversarial-review into a single, unified workflow with explicit phase transition gates. Takes an idea or feature request from initial architectural grilling to tested, simplified, and production-audited code ready to ship. Use for "/ship", "ship", "/lifecycle", "lifecycle", "full engineering lifecycle", or "build and review this feature".
+description: Complete autonomous engineering lifecycle orchestrator. Chains design, spike, tdd, simplify, and audit into a single, unified workflow with explicit phase transition gates. Takes an idea or feature request from initial architectural design to tested, simplified, and production-audited code ready to ship. Use for "/ship", "ship", "/lifecycle", "lifecycle", "full engineering lifecycle", or "build and review this feature".
 ---
 
 # The Ship Engine: Autonomous Engineering Lifecycle Orchestrator
@@ -17,7 +17,7 @@ description: Complete autonomous engineering lifecycle orchestrator. Chains adve
 - Test-First Law: In Gate 2, every task MUST follow strict Red-Green-Refactor with failing behavioral tests before code. Enforce `.ship.json` test commands when present.
 - Terminal Receipts: Gate transitions (Gate 2 ➔ 3 and Gate 3 ➔ 4) REQUIRE pasting the raw terminal test runner output (exit code, test count, duration). Unsubstantiated claims of "tests pass" are rejected.
 - Rollback Guard: If Stage 0 or Judge in Gate 3 detects a broken architectural invariant, execute `inspect_lifecycle.py --rollback gate-1-spec` and return to Gate 1.
-- Audit Clearance: Gate 4 delivery REQUIRES an explicit PASS report from the adversarial-review Judge, zero open CRITICAL/HIGH defects, and verified test evidence bound to current code.
+- Audit Clearance: Gate 4 delivery REQUIRES an explicit PASS report from the audit Judge, zero open CRITICAL/HIGH defects, and verified test evidence bound to current code.
 </hard_constraints>
 
 ---
@@ -28,20 +28,20 @@ description: Complete autonomous engineering lifecycle orchestrator. Chains adve
 User Request: "/ship <idea>"
       │
       ▼
-Gate 1: Specification & Design (adversarial-design)
+Gate 1: Specification & Design (design)
   • Facts vs. Decisions Law ➔ Frontier Rounds (Q1/Q2)
-  • If empirical blocker ➔ run prototype spike in .scratch/
+  • If empirical blocker ➔ run spike in .scratch/
   • Compile ADR (docs/adr/) & OpenSpec (openspec/changes/)
   • Checkpoint: User confirms specification
       │
       ▼ (User clicks "Proceed")
-Gate 2: Implementation (tdd + ponytail)
+Gate 2: Implementation (tdd + simplify)
   • Sequentially process openspec/changes/<feature>/tasks.md
-  • Red (test_driver) ➔ Green (ponytail_implementer) ➔ Refactor (code_refactorer)
+  • Red (test_driver) ➔ Green (simplify_implementer) ➔ Refactor (code_refactorer)
   • Check off tasks (- [x]) under green test protection
       │
       ▼ (All tasks complete & tests pass)
-Gate 3: Systems Audit & Auto-Fix (adversarial-review)
+Gate 3: Systems Audit & Auto-Fix (audit)
   • Stage 0: Spec alignment against ADR & OpenSpec
   • Stages 1–9: Concurrency, correctness, chaos, craftsmanship
   • Review-Loop: Fix defects & prove zero regressions
@@ -61,10 +61,10 @@ The filesystem is the persistent state machine. Orient with `python3 skills/ship
 
 | State | Indicators | Action |
 |---|---|---|
-| **State 1: Design** | No `openspec/changes/<topic>/` or `docs/adr/`. | Launch [`adversarial-design`](../adversarial-design/SKILL.md). Discover facts, present Frontier Rounds. |
-| **State 1b: Spike** | Design frontier hits ungrillable question. | Launch [`prototype`](../prototype/SKILL.md) in `.scratch/`. Report verdict. |
+| **State 1: Design** | No `openspec/changes/<topic>/` or `docs/adr/`. | Launch [`design`](../design/SKILL.md). Discover facts, present Frontier Rounds. |
+| **State 1b: Spike** | Design frontier hits ungrillable question. | Launch [`spike`](../spike/SKILL.md) in `.scratch/`. Report verdict. |
 | **State 2: TDD** | `tasks.md` exists with unchecked `[ ]` tasks. | Launch [`tdd`](../tdd/SKILL.md). Resume at first unchecked task. |
-| **State 3: Audit** | All tasks `[x]`, no clean review report. | Launch [`adversarial-review`](../adversarial-review/SKILL.md) in `review-loop` mode. |
+| **State 3: Audit** | All tasks `[x]`, no clean review report. | Launch [`audit`](../audit/SKILL.md) in `review-loop` mode. |
 | **State 4: Delivery** | All tasks `[x]`, all tests pass, Judge `PASS`. | Compile Delivery Walkthrough and prepare git commit. |
 
 ---
@@ -74,7 +74,7 @@ The filesystem is the persistent state machine. Orient with `python3 skills/ship
 ### Gate 1: Specification & Design
 1. Discover facts autonomously from source files. Never ask code-discoverable questions.
 2. Present Frontier Rounds: `❓ Q[N]` with `➡️ Recommended Stance`.
-3. If empirical uncertainty arises, spike in `.scratch/` using [`prototype`](../prototype/SKILL.md).
+3. If empirical uncertainty arises, spike in `.scratch/` using [`spike`](../spike/SKILL.md).
 4. Compile `docs/adr/ADR-<NNNN>-<topic>.md` and `openspec/changes/<topic>/`.
 5. Checkpoint specification: `python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint gate-1-spec`.
 6. Pause at Confirmation Gate: *"Design settled. Proceed to autonomous implementation?"*
@@ -82,16 +82,16 @@ The filesystem is the persistent state machine. Orient with `python3 skills/ship
 ### Gate 2: Test-First Implementation
 Iterate sequentially through `openspec/changes/<topic>/tasks.md`:
 1. **Red**: [Test Driver](../tdd/agents/test_driver.md) writes failing behavioral test; prove assertion failure.
-2. **Green**: [Ponytail Implementer](../tdd/agents/ponytail_implementer.md) writes minimal code using [Laziness Ladder](../ponytail/SKILL.md) and custom test commands defined in `.ship.json`.
-3. **Refactor**: [Code Refactorer](../tdd/agents/code_refactorer.md) cleans code; adds [debt markers](../ponytail/references/debt_tracking.md) with ceilings.
+2. **Green**: [Simplify Implementer](../tdd/agents/simplify_implementer.md) writes minimal code using [Laziness Ladder](../simplify/SKILL.md) and custom test commands defined in `.ship.json`.
+3. **Refactor**: [Code Refactorer](../tdd/agents/code_refactorer.md) cleans code; adds [debt markers](../simplify/references/debt_tracking.md) with ceilings.
 4. Mark task completed `- [x]` and repeat.
 5. Checkpoint implementation: `python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint gate-2-impl`.
 
-### Gate 3: Adversarial Code Audit
+### Gate 3: Code Audit
 1. Inspect implementation changes across the working tree (staged, unstaged, and untracked) against the base branch:
-   - Resolve `inspect_changes.sh` from the installed skill directory (`${SKILLS_DIR:-$HOME/.gemini/config/skills}/adversarial-review/scripts/inspect_changes.sh`) or local workspace path.
+   - Resolve `inspect_changes.sh` from the installed skill directory (`${SKILLS_DIR:-$HOME/.gemini/config/skills}/audit/scripts/inspect_changes.sh`) or local workspace path.
    - Execute `bash <resolved_path>/inspect_changes.sh --base <base-branch>` (default: `main`). Never restrict to `main...HEAD` as that omits uncommitted working-tree implementation edits.
-2. Launch [`adversarial-review`](../adversarial-review/SKILL.md) in `review-loop` mode.
+2. Launch [`audit`](../audit/SKILL.md) in `review-loop` mode.
 3. Stage 0 verifies code against OpenSpec/ADR; Stages 1–9 audit concurrency, chaos, correctness.
 4. Auto-fix defects under green test protection until Judge issues an explicit `PASS` report. Package `.scratch/delivery_evidence.json` (Delivery Evidence Envelope) bundling the Judge report, verified test runner evidence, and reviewed commit/tree snapshot.
 5. **Rollback Guard**: If ADR invariant is fundamentally broken, execute `python3 skills/ship/scripts/inspect_lifecycle.py --rollback gate-1-spec` and re-open Frontier Round in Gate 1.
@@ -115,8 +115,8 @@ Iterate sequentially through `openspec/changes/<topic>/tasks.md`:
 
 - [Lifecycle State Machine & Transition Rules (`lifecycle_state_machine.md`)](./references/lifecycle_state_machine.md): Deep-dive into transitions and rollback gates.
 - [Headless CI & Multi-Team Orchestration Guide (`headless_ci_guide.md`)](./references/headless_ci_guide.md): GitHub Actions automation and asynchronous approval flows.
-- [Adversarial Design Engine (`adversarial-design`)](../adversarial-design/SKILL.md): Architecture grilling and specification contracts.
-- [Empirical Prototype Engine (`prototype`)](../prototype/SKILL.md): Throwaway spike methodology.
+- [Design Engine (`design`)](../design/SKILL.md): Architecture grilling and specification contracts.
+- [Spike Engine (`spike`)](../spike/SKILL.md): Throwaway spike methodology.
 - [TDD Engine (`tdd`)](../tdd/SKILL.md): Red-Green-Refactor implementation.
-- [Ponytail Simplicity Engine (`ponytail`)](../ponytail/SKILL.md): Laziness Ladder and debt markers.
-- [Adversarial Review Engine (`adversarial-review`)](../adversarial-review/SKILL.md): 10-stage systems code audit.
+- [Simplify Engine (`simplify`)](../simplify/SKILL.md): Laziness Ladder and debt markers.
+- [Audit Engine (`audit`)](../audit/SKILL.md): 10-stage systems code audit.

@@ -10,13 +10,13 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
 echo "=== 1. Checking Bash & Python Syntax ==="
-bash -n skills/adversarial-review/scripts/inspect_changes.sh
+bash -n skills/audit/scripts/inspect_changes.sh
 bash -n scripts/install.sh
-python3 -m py_compile skills/adversarial-review/scripts/validate_report.py
-python3 -m py_compile skills/ponytail/scripts/scan_debt.py
+python3 -m py_compile skills/audit/scripts/validate_report.py
+python3 -m py_compile skills/simplify/scripts/scan_debt.py
 python3 -m py_compile skills/ship/scripts/inspect_lifecycle.py
 python3 -m py_compile skills/tdd/scripts/verify_tdd.py
-python3 -m py_compile skills/prototype/scripts/run_spike.py
+python3 -m py_compile skills/spike/scripts/run_spike.py
 echo "✓ Script syntax OK"
 echo ""
 

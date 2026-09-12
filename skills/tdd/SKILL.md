@@ -66,14 +66,14 @@ To prevent token exhaustion and turn latency, choose the appropriate execution m
 - **Multi-Agent Roster** *(For major architectural features or complex isolation)*:
 
 ```text
-Specification ➔ 🔴 RED (test_driver) ➔ 🟢 GREEN (ponytail_implementer) ➔ 🔵 REFACTOR (code_refactorer)
+Specification ➔ 🔴 RED (test_driver) ➔ 🟢 GREEN (simplify_implementer) ➔ 🔵 REFACTOR (code_refactorer)
 ```
 
 | Agent Role | File | Responsibility |
 |---|---|---|
 | [**Test Driver**](./agents/test_driver.md) | `agents/test_driver.md` | Red Phase. Writes isolated behavioral test using AAA. Proves expected test failure. |
-| [**Ponytail Implementer**](./agents/ponytail_implementer.md) | `agents/ponytail_implementer.md` | Green Phase. Climbs [Laziness Ladder](../ponytail/SKILL.md) to write minimum code to turn green. |
-| [**Code Refactorer**](./agents/code_refactorer.md) | `agents/code_refactorer.md` | Refactor Phase. Cleans structure under green tests; records [debt markers](../ponytail/references/debt_tracking.md). |
+| [**Simplify Implementer**](./agents/simplify_implementer.md) | `agents/simplify_implementer.md` | Green Phase. Climbs [Laziness Ladder](../simplify/SKILL.md) to write minimum code to turn green. |
+| [**Code Refactorer**](./agents/code_refactorer.md) | `agents/code_refactorer.md` | Refactor Phase. Cleans structure under green tests; records [debt markers](../simplify/references/debt_tracking.md). |
 
 ---
 

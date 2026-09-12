@@ -32,7 +32,7 @@ class DocumentTests(unittest.TestCase):
                     self.assertTrue((path.parent / relative).exists())
 
     def test_schema_document_examples(self):
-        path = ROOT / "skills/adversarial-review/references/finding_schema.md"
+        path = ROOT / "skills/audit/references/finding_schema.md"
         examples = re.findall(r"```json\n(.*?)\n```", path.read_text(), re.DOTALL)
         self.assertTrue(examples)
         for example in examples:

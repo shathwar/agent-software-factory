@@ -94,12 +94,12 @@ Inaccurate measurements lead to disastrous architectural choices. Follow these m
 
 The purpose of the spike is to feed facts directly into the design process:
 
-1. **Return to `adversarial-design`**:
+1. **Return to `design`**:
    - Provide the concrete measurement table.
    - Declare the open question settled.
    - Example: *"Question 3 on Redis locking is settled: with 64 workers, redlock overhead is 1.8ms p99, well within our 10ms budget. We can proceed with distributed locks."*
 2. **Document in ADR**:
-   - Record the spike findings under the *Decision Rationale* or *Consequences* section of the [ADR](../../adversarial-design/references/adr_template.md).
+   - Record the spike findings under the *Decision Rationale* or *Consequences* section of the [ADR](../../design/references/adr_template.md).
    - Cite the sandbox benchmark script and date.
 
 ---

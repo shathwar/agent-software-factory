@@ -1,4 +1,4 @@
-# Prototype (Nano)
+# Spike (Nano)
 
 **Role**: Empirical Spike Engine. Settle ungrillable design questions by measuring reality.
 
@@ -13,5 +13,5 @@
 
 ## CLI Runner
 ```bash
-python3 skills/prototype/scripts/run_spike.py --cmd "python3 worker.py" --iterations 1000 --warmup 100 --concurrency 20
+python3 skills/spike/scripts/run_spike.py --cmd "python3 worker.py" --iterations 1000 --warmup 100 --concurrency 20
 ```

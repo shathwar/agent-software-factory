@@ -1,9 +1,9 @@
 ---
-name: prototype
-description: Rapid, throwaway spike engine designed to answer empirical or "ungrillable" questions raised during architectural design or development. Implements minimal disposable prototypes in isolated scratch workspaces, measures concrete performance or behavior, and settles technical decisions. Use for "/prototype", "prototype", "spike", "throwaway spike", "timeboxed prototype", "proof of concept", or when an empirical experiment is required.
+name: spike
+description: Rapid, throwaway spike engine designed to answer empirical or "ungrillable" questions raised during architectural design or development. Implements minimal disposable prototypes in isolated scratch workspaces, measures concrete performance or behavior with run_spike.py, and settles technical decisions. Use for "/spike", "spike", "throwaway spike", "timeboxed prototype", "benchmark", "proof of concept", or when an empirical experiment is required.
 ---
 
-# Empirical Spike & Prototype Engine
+# Empirical Spike Engine
 
 **Role**: Empirical Prototyper. Settle ungrillable questions (throughput, latency, contention, failure modes) by measuring reality.
 
@@ -42,7 +42,7 @@ description: Rapid, throwaway spike engine designed to answer empirical or "ungr
 2. **Sandbox**: Create `.scratch/<spike-name>/`. If external infrastructure is required, launch local ephemeral containers via Docker Compose.
 3. **Automated Measure**: Run the spike through the statistical benchmarking engine:
    ```bash
-   python3 skills/prototype/scripts/run_spike.py \
+   python3 skills/spike/scripts/run_spike.py \
      --cmd "python3 worker.py" \
      --iterations 1000 \
      --warmup 100 \
@@ -62,7 +62,7 @@ Output using this contract:
 ## 🧪 Spike Report: <Spike Name>
 
 ### 🎯 Empirical Question & Hypothesis
-- **Question**: <Unresolved question from adversarial-design frontier>
+- **Question**: <Unresolved question from design frontier>
 - **Hypothesis**: <Expected outcome with numerical threshold>
 
 ### 🧪 Methodology & Setup
@@ -80,7 +80,7 @@ Output using this contract:
 ### ⚖️ Architectural Verdict
 - **Verdict**: **CONFIRMED / REFUTED / QUALIFIED**
 - **Recommendation**: <Concrete architectural choice for ADR or design tree>
-- **Frontier Impact**: <Settled question in adversarial-design>
+- **Frontier Impact**: <Settled question in design>
 
 ### 💎 Reusable Snippets (Extracted to ADR / Production)
 ```<lang>

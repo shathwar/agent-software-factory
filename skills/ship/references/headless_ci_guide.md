@@ -100,7 +100,7 @@ jobs:
         run: |
           TOPIC=$(echo "${{ github.event.issue.title }}" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
           echo "Running Gate 1 for topic: $TOPIC"
-          # Run agent with adversarial-design
+          # Run agent with design
           python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint gate-1-spec --topic "$TOPIC"
 
       - name: Post Spec Comment
@@ -133,11 +133,11 @@ jobs:
         run: |
           python3 skills/ship/scripts/inspect_lifecycle.py --format json
 
-      - name: Run Gate 2 (Implementation) & Gate 3 (Adversarial Audit)
+      - name: Run Gate 2 (Implementation) & Gate 3 (Code Audit)
         run: |
-          # Dispatch isolated subagents for TDD and Adversarial Review
+          # Dispatch isolated subagents for TDD and Audit
           python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint gate-2-impl
-          # Run adversarial-review loop until Judge PASS
+          # Run audit loop until Judge PASS
           python3 skills/ship/scripts/inspect_lifecycle.py --status-check
 
       - name: Open Pull Request

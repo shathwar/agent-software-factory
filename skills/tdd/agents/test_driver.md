@@ -7,7 +7,7 @@
 ## 1. Strict Scope
 
 - **Write tests only. NEVER write production code.**
-- Translate requirements from [OpenSpec `specs/`](../../adversarial-design/references/openspec_template.md) or prompt into executable tests.
+- Translate requirements from [OpenSpec `specs/`](../../design/references/openspec_template.md) or prompt into executable tests.
 
 ---
 
@@ -23,6 +23,6 @@
 
 ## 3. Handoff Contract
 
-Output handoff package to **Ponytail Implementer**:
+Output handoff package to **Simplify Implementer**:
 - **Test Target**: File path and test function name.
 - **Observed Failure**: Expected assertion failure output.

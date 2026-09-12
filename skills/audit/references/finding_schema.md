@@ -190,7 +190,7 @@ To prevent contaminating the specialist and Judge report contract with lifecycle
 For a mechanical check before adjudication, use [validate_report.py](../scripts/validate_report.py) with standard Python 3.10+ (zero external dependencies):
 
 ```bash
-python3 /path/to/skills/adversarial-review/scripts/validate_report.py report.json
+python3 /path/to/skills/audit/scripts/validate_report.py report.json
 ```
 
 The [JSON Schema](./agent_report.schema.json) checks fields, types, enums, and bounds. The script also rejects duplicate IDs/JSON keys, non-finite confidence, reversed line ranges, and non-relative paths. It accepts raw JSON or one enclosing JSON code fence; use `-` to read stdin. Exit 0 means the structure is valid, not that the evidence is true, the coverage is complete, or repairs are authorised. If this optional helper is unavailable, perform the same contract checks directly and preserve malformed/incomplete coverage.

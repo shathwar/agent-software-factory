@@ -9,9 +9,9 @@ import sys
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-RUN_SPIKE = ROOT / "skills/prototype/scripts/run_spike.py"
+RUN_SPIKE = ROOT / "skills/spike/scripts/run_spike.py"
 
-sys.path.insert(0, str(ROOT / "skills/prototype/scripts"))
+sys.path.insert(0, str(ROOT / "skills/spike/scripts"))
 import run_spike
 
 

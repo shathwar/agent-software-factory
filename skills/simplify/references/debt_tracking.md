@@ -1,14 +1,14 @@
-# Ponytail Debt Tracking & Ledger Protocol
+# Simplify Technical Debt Tracking & Ledger Protocol
 
 A guide to tracking deliberate shortcuts, defining operational ceilings, and preventing pragmatism from decaying into unmanaged technical debt.
 
 ---
 
-## 1. The Purpose of the `ponytail:` Marker
+## 1. The Purpose of the Debt Marker
 
 In high-velocity engineering, building the ultimate distributed, infinitely-scalable solution on day one is premature optimization. However, taking a quick shortcut without documentation is reckless.
 
-The `ponytail:` comment strikes the balance:
+The `simplify:` comment strikes the balance (legacy `ponytail:` markers are also supported):
 - **It documents the shortcut explicitly**.
 - **It specifies the operational ceiling** (when this shortcut will break or saturate).
 - **It specifies the concrete upgrade path** (what to do when the ceiling is reached).
@@ -17,7 +17,7 @@ The `ponytail:` comment strikes the balance:
 
 ## 2. Syntax & Required Fields
 
-Every `ponytail:` comment must include three components:
+Every `simplify:` comment must include three components:
 1. **The Shortcut**: What pragmatic simplification was chosen over a heavier architecture.
 2. **The Ceiling**: The numeric or architectural boundary where this solution becomes inadequate.
 3. **The Upgrade**: The specific pattern or technology to replace it with.
@@ -25,14 +25,16 @@ Every `ponytail:` comment must include three components:
 ### Standard Format
 
 ```text
-// ponytail: <Shortcut>. Ceiling: <Threshold/Limit>. Upgrade: <Next Architecture>.
+// simplify: <Shortcut>. Ceiling: <Threshold/Limit>. Upgrade: <Next Architecture>.
 ```
+
+*(Note: `// ponytail: ...` is also recognized by the scanner for backward compatibility).*
 
 ### Examples by Domain
 
 #### Concurrency & Locking
 ```go
-// ponytail: Coarse sync.Mutex around entire cache. Ceiling: 5,000 ops/sec. Upgrade: Sharded RWMutex or sync.Map if lock contention shows in p99.
+// simplify: Coarse sync.Mutex around entire cache. Ceiling: 5,000 ops/sec. Upgrade: Sharded RWMutex or sync.Map if lock contention shows in p99.
 type Cache struct {
     mu    sync.Mutex
     items map[string]Item
@@ -41,13 +43,13 @@ type Cache struct {
 
 #### Persistence & Storage
 ```python
-# ponytail: SQLite in-process store. Ceiling: 1 node / 2,000 writes/sec. Upgrade: Postgres RDS with connection pooling if horizontally scaled.
+# simplify: SQLite in-process store. Ceiling: 1 node / 2,000 writes/sec. Upgrade: Postgres RDS with connection pooling if horizontally scaled.
 DATABASE_URL = "sqlite:///./app.db"
 ```
 
 #### Algorithms & Filtering
 ```typescript
-// ponytail: O(N) array search on active users. Ceiling: 1,000 active users in memory. Upgrade: Binary search or secondary Map index on userId.
+// simplify: O(N) array search on active users. Ceiling: 1,000 active users in memory. Upgrade: Binary search or secondary Map index on userId.
 const active = users.filter(u => u.isActive);
 ```
 
@@ -55,22 +57,22 @@ const active = users.filter(u => u.isActive);
 
 ## 3. The Automated Debt Ledger
 
-To automatically scan, validate syntax, and compile a Markdown debt ledger across the repository, run the **Ponytail Debt Scanner**:
+To automatically scan, validate syntax, and compile a Markdown debt ledger across the repository, run the **Debt Scanner**:
 
 ```bash
-python3 skills/ponytail/scripts/scan_debt.py
+python3 skills/simplify/scripts/scan_debt.py
 ```
 
 Use `--strict` in CI pipelines or pre-commit hooks to fail if any marker is missing a ceiling or upgrade path:
 
 ```bash
-python3 skills/ponytail/scripts/scan_debt.py --strict
+python3 skills/simplify/scripts/scan_debt.py --strict
 ```
 
 Or perform a manual text search:
 
 ```bash
-git grep -n "ponytail:"
+git grep -n -E "(simplify|ponytail):"
 ```
 
 ### Organizing the Ledger Report
@@ -87,5 +89,5 @@ When auditing codebase debt (e.g. prior to a major release or scaling phase), su
 ## 4. Ground Rules for Shortcuts
 
 1. **Shortcuts must be correct within their ceiling**: A shortcut is never an excuse for broken invariants, data corruption, or security flaws. It is an algorithmic or architectural trade-off that is 100% correct within its defined envelope.
-2. **No open-ended deferrals**: Comments like `// ponytail: clean this up later` or `// ponytail: optimize` are strictly forbidden. Always name the ceiling and upgrade path.
+2. **No open-ended deferrals**: Comments like `// simplify: clean this up later` or `// simplify: optimize` are strictly forbidden. Always name the ceiling and upgrade path.
 3. **Upgrade when telemetry alerts**: When metrics show traffic approaching 70% of the documented ceiling, trigger a planned refactoring task following the designated upgrade path.

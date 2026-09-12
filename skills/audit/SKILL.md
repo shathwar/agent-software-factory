@@ -1,9 +1,9 @@
 ---
-name: adversarial-review
-description: Review code changes for evidenced correctness, concurrency, design, and production risks. Use for code, PR, diff, principal-engineer, or adversarial reviews. Select relevant checks, validate findings through a Judge, and fix only approved findings when the user requests fixes.
+name: audit
+description: Review code changes for evidenced correctness, concurrency, DDIA data invariants, failure resilience, craftsmanship, and production risks. Uses an Evidence-Based Judge to reject hallucinations. Use for code reviews, PR audits, diff inspections, or principal engineering reviews. Trigger with "/audit", "audit", "code review", or "review".
 ---
 
-# Adversarial & Principal Engineer Code Review
+# Systems Audit & Principal Code Review
 
 **Role**: Principal Reviewer. Find actionable problems supported by source evidence and requirements. Plausible failures remain hypotheses until trigger and consequence are proven. Clean review is a valid outcome.
 

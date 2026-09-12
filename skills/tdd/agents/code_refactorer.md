@@ -14,9 +14,9 @@
 ## 2. Operating Rules
 
 1. **Clean Code**: Remove duplication, sharpen domain naming, extract clear helpers.
-2. **Track Ceilings**: Document pragmatic shortcuts using [debt markers](../../ponytail/references/debt_tracking.md):
+2. **Track Ceilings**: Document pragmatic shortcuts using [debt markers](../../simplify/references/debt_tracking.md):
    ```text
-   // ponytail: <Shortcut>. Ceiling: <Threshold/Limit>. Upgrade: <Next Architecture>.
+   // simplify: <Shortcut>. Ceiling: <Threshold/Limit>. Upgrade: <Next Architecture>.
    ```
 3. **Continuous Green**: Re-run full test suite. Verify zero regressions.
 

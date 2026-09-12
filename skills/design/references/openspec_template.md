@@ -1,8 +1,8 @@
 # OpenSpec Change Package Template
 
-This document defines the OpenSpec specification format supported by `/adversarial-design`. When selected at the confirmation gate, the skill generates an executable OpenSpec change package under `openspec/changes/<change-name>/`.
+This document defines the OpenSpec specification format supported by `/design`. When selected at the confirmation gate, the skill generates an executable OpenSpec change package under `openspec/changes/<change-name>/`.
 
-This package complements the Architecture Decision Record (ADR) by providing **formal behavioral requirements (RFC 2119 `SHALL`)**, **executable Gherkin scenarios (`WHEN/THEN`)**, and a **decomposed task list (`tasks.md`)** for implementation agents and [`adversarial-review`](../../adversarial-review/SKILL.md) Stage 0 verification.
+This package complements the Architecture Decision Record (ADR) by providing **formal behavioral requirements (RFC 2119 `SHALL`)**, **executable Gherkin scenarios (`WHEN/THEN`)**, and a **decomposed task list (`tasks.md`)** for implementation agents and [`audit`](../../audit/SKILL.md) Stage 0 verification.
 
 ---
 
@@ -108,9 +108,9 @@ The system SHALL [formal statement of requirement using RFC 2119 keyword SHALL /
 
 ---
 
-## 3. Integration with `adversarial-review`
+## 3. Integration with `audit`
 
-When the feature implementation is complete, [`adversarial-review`](../../adversarial-review/SKILL.md) automatically inspects `openspec/changes/<change-name>/specs/`:
+When the feature implementation is complete, [`audit`](../../audit/SKILL.md) automatically inspects `openspec/changes/<change-name>/specs/`:
 1. **Missing Requirements**: If any `SHALL` statement or `Scenario` in `specs/` is not implemented in code, it is flagged as a **`[HIGH] SpecAlignment` defect**.
 2. **Scope Creep**: If code introduces capabilities or APIs not specified in `proposal.md`, it is flagged as **`[MEDIUM] SpecAlignment (Scope Creep)`**.
 3. **Behavioral Divergence**: If code behaves differently than the `WHEN/THEN` outcome, it is flagged as a **`[CRITICAL] Correctness / SpecAlignment` defect**.
@@ -126,7 +126,7 @@ OpenSpec distinguishes between **in-flight change packages** (`openspec/changes/
    openspec/changes/<feature>/ (proposal.md, specs/*.md, tasks.md)
         │
         ▼ 2. Implement & Audit (Gates 2 & 3)
-   Execute tasks.md (- [x]) ➔ Adversarial Review (Judge PASS)
+   Execute tasks.md (- [x]) ➔ Code Audit (Judge PASS)
         │
         ▼ 3. Apply & Archive (Gate 4 Delivery)
    Sync specs:    openspec/changes/<feature>/specs/*.md ➔ openspec/specs/

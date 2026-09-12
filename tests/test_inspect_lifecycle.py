@@ -20,7 +20,7 @@ class TestInspectLifecycle(unittest.TestCase):
             res = inspect_lifecycle.evaluate_repository(Path(tmpdir))
             self.assertEqual(res["gate"], "GATE 1: SPECIFICATION & DESIGN")
             self.assertEqual(res["state_key"], "INITIAL_PROPOSAL")
-            self.assertIn("Run '/adversarial-design'", res["next_action"])
+            self.assertIn("Run '/design'", res["next_action"])
 
     def test_gate1b_active_spike(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -77,7 +77,7 @@ class TestInspectLifecycle(unittest.TestCase):
             )
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 2: IMPLEMENTATION (TDD + PONYTAIL)")
+            self.assertEqual(res["gate"], "GATE 2: IMPLEMENTATION (TDD + SIMPLIFY)")
             self.assertEqual(res["state_key"], "TDD_ACTIVE")
             self.assertIn("1/3 tasks complete", res["next_action"])
             self.assertIn("2. Handle retries with jitter", res["next_action"])
@@ -376,7 +376,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # evaluate_repository must select 'z-current' in TDD_ACTIVE, NOT 'a-old' in AUDIT_ACTIVE
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 2: IMPLEMENTATION (TDD + PONYTAIL)")
+            self.assertEqual(res["gate"], "GATE 2: IMPLEMENTATION (TDD + SIMPLIFY)")
             self.assertEqual(res["state_key"], "TDD_ACTIVE")
             self.assertEqual(res["openspec_packages"][0]["topic"], "z-current")
 
@@ -468,7 +468,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 "routing_notes": [],
             }
             # Verify validate_report.py accepts this report
-            validate_script = ROOT / "skills" / "adversarial-review" / "scripts" / "validate_report.py"
+            validate_script = ROOT / "skills" / "audit" / "scripts" / "validate_report.py"
             val_proc = subprocess.run(
                 [sys.executable, str(validate_script), "-"],
                 input=json.dumps(canonical_judge_report),

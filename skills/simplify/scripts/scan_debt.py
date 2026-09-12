@@ -37,9 +37,9 @@ IGNORE_EXTENSIONS = {
     ".zip", ".tar", ".gz", ".lock", ".lockb", ".woff", ".woff2", ".ttf", ".eot",
 }
 
-# Regex to find ponytail: marker comment line
+# Regex to find simplify: or ponytail: marker comment line
 MARKER_PATTERN = re.compile(
-    r"(?:^\s*(?://|#|/\*|\*|--|<!--|;|%)?|(?<=[\s;])(?://|#|/\*|\*|--|<!--|;|%))\s*ponytail:\s*(.+)$",
+    r"(?:^\s*(?://|#|/\*|\*|--|<!--|;|%)?|(?<=[\s;])(?://|#|/\*|\*|--|<!--|;|%))\s*(?:simplify|ponytail):\s*(.+)$",
     re.IGNORECASE,
 )
 

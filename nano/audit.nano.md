@@ -1,4 +1,4 @@
-# Adversarial Review (Nano)
+# Audit (Nano)
 
 **Role**: Principal Reviewer. Find evidenced defects before PR sign-off.
 **Law**: Plausible failures remain hypotheses until concrete code trigger and impact are proven. Clean review is a valid outcome.

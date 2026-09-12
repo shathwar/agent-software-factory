@@ -34,12 +34,12 @@ class TestInstallScript(unittest.TestCase):
     def test_list_skills(self):
         res = self.run_installer("--list")
         self.assertIn("Available skills", res.stdout)
-        self.assertIn("adversarial-review", res.stdout)
+        self.assertIn("audit", res.stdout)
         self.assertIn("ship", res.stdout)
-        self.assertIn("ponytail", res.stdout)
-        self.assertIn("prototype", res.stdout)
+        self.assertIn("simplify", res.stdout)
+        self.assertIn("spike", res.stdout)
         self.assertIn("tdd", res.stdout)
-        self.assertIn("adversarial-design", res.stdout)
+        self.assertIn("design", res.stdout)
 
     def test_dry_run_makes_no_changes(self):
         dest_dir = self.target_dir / "skills_test"
@@ -54,7 +54,7 @@ class TestInstallScript(unittest.TestCase):
         self.assertTrue(dest_dir.is_dir())
 
         # Verify symlinks
-        installed = [p for p in dest_dir.iterdir() if p.name in {"ship", "adversarial-review"}]
+        installed = [p for p in dest_dir.iterdir() if p.name in {"ship", "audit"}]
         self.assertTrue(len(installed) >= 2)
         for p in installed:
             self.assertTrue(p.is_symlink())
@@ -67,7 +67,7 @@ class TestInstallScript(unittest.TestCase):
         self.assertTrue(dest_dir.is_dir())
 
         # Verify copied directories are real directories, not symlinks
-        installed = [p for p in dest_dir.iterdir() if p.name in {"ship", "adversarial-review"}]
+        installed = [p for p in dest_dir.iterdir() if p.name in {"ship", "audit"}]
         self.assertTrue(len(installed) >= 2)
         for p in installed:
             self.assertFalse(p.is_symlink())

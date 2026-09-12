@@ -70,7 +70,7 @@ An ungrillable question is one where **dialogue cannot replace empirical evidenc
 ### What to do when an Ungrillable Question is detected:
 1. Explicitly label the question as `[UNGRILLABLE - EMPIRICAL SPIKE REQUIRED]`.
 2. Do not let the user guess or talk through it endlessly.
-3. Define the exact, timeboxed spike needed using [`prototype`](../../prototype/SKILL.md):
+3. Define the exact, timeboxed spike needed using [`spike`](../../spike/SKILL.md):
    > *"We cannot settle Q3 through discussion alone. Recommendation: Build a 30-minute throwaway prototype to benchmark XYZ, inspect the latency, and return to resume grilling."*
 4. Freeze that specific branch and continue grilling the remaining independent branches.
 

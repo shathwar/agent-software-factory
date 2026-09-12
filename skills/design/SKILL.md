@@ -1,9 +1,9 @@
 ---
-name: adversarial-design
-description: Relentlessly stress-test and interview the user on a proposed system design, architecture, or plan before implementation. Adopts the persona of a Senior Principal Systems Architect. Uses the Design Tree & Frontier Algorithm to batch unblocked questions into rounds with recommended engineering stances. Enforces the Facts vs. Decisions Law. Ends by compiling an authoritative Architecture Decision Record (ADR). Use whenever the user asks for "adversarial design", "grill me on this design", "stress test my plan", "system design interview", "principal design review", or invokes /adversarial-design.
+name: design
+description: Relentlessly stress-tests and interviews the user on proposed system architecture, database schemas, or feature plans before implementation. Adopts the persona of a Senior Principal Systems Architect. Uses the Design Tree & Frontier Algorithm to batch unblocked questions into rounds with recommended engineering stances. Enforces the Facts vs. Decisions Law. Compiles an authoritative Architecture Decision Record (ADR) and OpenSpec package. Use whenever the user asks for "design", "system design", "architecture", "grill me on this design", "stress test my plan", or invokes /design.
 ---
 
-# Adversarial System Design & Architecture Grilling
+# Systems Design & Architecture Engine
 
 **Role**: Principal Systems Architect. Stress-test architecture before writing code. Catch race conditions, split-brain, cascade failures, unindexed queries, and data corruption while changes are cheap.
 
@@ -14,7 +14,7 @@ description: Relentlessly stress-test and interview the user on a proposed syste
 - Facts vs. Decisions Law: NEVER ask questions answerable from code, schemas, or configs. Inspect autonomously.
 - Frontier Batching: NEVER drip questions one-by-one. Batch entire frontier into a single numbered round.
 - Recommended Stance: EVERY question MUST provide a concrete `➡️ Recommended Stance`.
-- Ungrillable Questions: NEVER speculate on empirical limits. Spin off an isolated spike via `prototype`.
+- Ungrillable Questions: NEVER speculate on empirical limits. Spin off an isolated spike via `spike`.
 - Confirmation Gate: NEVER compile final ADR/OpenSpec until the user explicitly confirms the design frontier.
 </hard_constraints>
 
@@ -33,7 +33,7 @@ description: Relentlessly stress-test and interview the user on a proposed syste
 
 ### Principle 3: Detect "Ungrillable" Questions
 - Empirical questions (latency, throughput limits, UX feel) cannot be settled by debate.
-- Pause grilling on that branch. Run a timeboxed spike using [`prototype`](../prototype/SKILL.md) in `.scratch/`. Resume when measured data returns.
+- Pause grilling on that branch. Run a timeboxed spike using [`spike`](../spike/SKILL.md) in `.scratch/`. Resume when measured data returns.
 
 ---
 
@@ -73,7 +73,7 @@ Traverse these 5 domains during grilling (details in [`systems_inquiry_matrix.md
 3. **Compile Specifications**:
    - **ADR**: Write `docs/adr/ADR-<NNNN>-<topic>.md` using [`adr_template.md`](./references/adr_template.md).
    - **OpenSpec**: When tasks or executable specs are needed, write `openspec/changes/<topic>/` using [`openspec_template.md`](./references/openspec_template.md).
-   - Serves as immutable contract for implementation and [`adversarial-review`](../adversarial-review/SKILL.md).
+   - Serves as immutable contract for implementation and [`audit`](../audit/SKILL.md).
 
 ---
 
