@@ -67,7 +67,7 @@ User Request: "/ship <Feature Idea>"
 
 ## 2. Re-Entrant State Machine (Filesystem as State)
 
-To ensure the workflow is crash-resilient and context-window friendly, **the filesystem is the single source of state**. 
+To ensure the workflow is crash-resilient and context-window friendly, **the filesystem is the single source of state**.
 
 Whenever `/ship` is invoked, inspect the workspace to determine the active state:
 

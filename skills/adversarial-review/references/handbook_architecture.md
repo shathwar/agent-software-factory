@@ -14,7 +14,6 @@ Use these questions to locate costs in the current change. A label alone is not 
 - **Interface segregation:** Must callers learn or depend on operations they do not need? Split only when doing so reduces a demonstrated dependency or maintenance burden.
 - **Dependency inversion:** Does direct construction of an external dependency prevent needed configuration or behavior tests? Reuse the existing boundary or pass a concrete dependency before proposing a new interface.
 
-
 ---
 
 ## Stage 9: Design Patterns & Anti-Patterns

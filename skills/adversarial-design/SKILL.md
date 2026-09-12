@@ -24,7 +24,7 @@ Model the proposed architecture as a **dependency tree of decisions**:
 3. **Rounds**: Group the entire current frontier into a structured **Round**. Do not drip questions one-by-one; ask the whole frontier at once so the user can review and answer them together.
 
 ### Principle 3: Detect "Ungrillable" Questions
-Some questions cannot be settled by talking (e.g. *"How does this UI interaction feel?"*, *"Does library X actually sustain 20,000 req/sec?"*). 
+Some questions cannot be settled by talking (e.g. *"How does this UI interaction feel?"*, *"Does library X actually sustain 20,000 req/sec?"*).
 When you hit an ungrillable question, explicitly flag it, pause grilling on that branch, and recommend a timeboxed throwaway **spike / prototype** using [`prototype`](../prototype/SKILL.md). Resume grilling once the prototype settles the empirical question.
 
 ---
@@ -79,7 +79,7 @@ During the interview, systematically traverse these 5 critical systems domains (
 ## 4. Session Lifecycle & Confirmation Gate
 
 1. **Continue Rounds**: As the user answers each round, update the design tree, recompute the frontier, and present the next round.
-2. **The Confirmation Gate**: The interview is finished **only when the frontier is completely empty** (every branch explored, zero unstated assumptions). 
+2. **The Confirmation Gate**: The interview is finished **only when the frontier is completely empty** (every branch explored, zero unstated assumptions).
    - Before writing the ADR, present a concise executive synthesis of all agreed-upon decisions.
    - Ask the user to confirm: *"Does this capture our shared architectural understanding?"*
 3. **Compile the Specification Artifacts**:

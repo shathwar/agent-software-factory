@@ -1,6 +1,6 @@
 # Targeted Review Modes & Intelligent Orchestration
 
-To maintain low cognitive load and avoid wasting tokens analyzing irrelevant dimensions, the Principal Reviewer uses **Targeted Review Modes** and adaptive execution strategies. 
+To maintain low cognitive load and avoid wasting tokens analyzing irrelevant dimensions, the Principal Reviewer uses **Targeted Review Modes** and adaptive execution strategies.
 
 Instead of evaluating all 10 stages blindly on every diff, the orchestrator inspects the signals from `scripts/inspect_changes.sh` (or the user's explicit prompt) and activates **only the relevant review stages**.
 

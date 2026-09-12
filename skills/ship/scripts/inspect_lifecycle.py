@@ -259,7 +259,7 @@ def format_summary(data: Dict[str, Any]) -> str:
     lines.append(f"═════════════════════════════════════════════════════════════════════")
     lines.append(f"• Internal State : {data['state_key']}")
     lines.append(f"• Git Branch     : {data['git']['branch']} ({'Clean' if data['git']['is_clean'] else 'Dirty - ' + str(data['git']['modified_count']) + ' modified, ' + str(data['git']['untracked_count']) + ' untracked'})")
-    
+
     if data["adrs"]:
         adr_str = ", ".join(f"{a['name']} [{a['status']}]" for a in data["adrs"])
         lines.append(f"• ADRs Found     : {adr_str}")

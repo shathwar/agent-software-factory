@@ -46,7 +46,7 @@ def parse_debt_marker(raw_text: str, file_path: str, line_number: int) -> Dict[s
         return {}
 
     body = match.group(1).strip()
-    
+
     # Strip any trailing comment closing tokens (*/, -->, etc.)
     body = re.sub(r"(\*/|-->|\?>)$", "", body).strip()
 
