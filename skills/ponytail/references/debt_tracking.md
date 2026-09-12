@@ -53,9 +53,21 @@ const active = users.filter(u => u.isActive);
 
 ---
 
-## 3. The Debt Ledger
+## 3. The Automated Debt Ledger
 
-To review all deliberate shortcuts across the repository, run a text search:
+To automatically scan, validate syntax, and compile a Markdown debt ledger across the repository, run the **Ponytail Debt Scanner**:
+
+```bash
+python3 skills/ponytail/scripts/scan_debt.py
+```
+
+Use `--strict` in CI pipelines or pre-commit hooks to fail if any marker is missing a ceiling or upgrade path:
+
+```bash
+python3 skills/ponytail/scripts/scan_debt.py --strict
+```
+
+Or perform a manual text search:
 
 ```bash
 git grep -n "ponytail:"

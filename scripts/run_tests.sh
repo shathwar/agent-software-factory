@@ -11,7 +11,10 @@ cd "$REPO_ROOT"
 
 echo "=== 1. Checking Bash & Python Syntax ==="
 bash -n skills/adversarial-review/scripts/inspect_changes.sh
+bash -n scripts/install.sh
 python3 -m py_compile skills/adversarial-review/scripts/validate_report.py
+python3 -m py_compile skills/ponytail/scripts/scan_debt.py
+python3 -m py_compile skills/ship/scripts/inspect_lifecycle.py
 echo "✓ Script syntax OK"
 echo ""
 

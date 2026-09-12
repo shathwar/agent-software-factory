@@ -32,14 +32,16 @@ A formal specification of the 4-gate engineering lifecycle state machine, its tr
 │      ┌───────────────────────┐
 │      │     AUDIT_ACTIVE      │
 │      │ (adversarial-review)  │
-│      └───────────┬───────────┘
-│                  │
-│   (Critical Bug) │ (Judge PASS)
-└─── Fix Loop ◄────┴───────────┐
-                               ▼
-                   ┌───────────────────────┐
-                   │    DELIVERY_READY     │
-                   └───────────────────────┘
+│      └───────┬───────┬───────┘
+│              │       │
+│  (Code Bug)  │       │ (Architectural Flaw)
+└─── Fix Loop ─┘       └───────────────────────┐
+               │                               │
+               ▼ (Judge PASS)                  ▼
+                   ┌───────────────────────┐       ┌───────────────────────┐
+                   │    DELIVERY_READY     │       │    FRONTIER_ROUNDS    │
+                   └───────────────────────┘       │   (Spec Amendment)    │
+                                                   └───────────────────────┘
 ```
 
 ---
@@ -76,6 +78,10 @@ A formal specification of the 4-gate engineering lifecycle state machine, its tr
 - **Guard**: All checkboxes in `tasks.md` are marked `[x]`, and the entire test suite passes cleanly.
 - **Action**: Invoke [adversarial-review](../../adversarial-review/SKILL.md) in `review-loop` mode.
 
+### State 5b: `AUDIT_ACTIVE` ➔ `FRONTIER_ROUNDS` (Spec Amendment & Rollback Gate)
+- **Guard**: Stage 0 (Spec Alignment) or the Judge discovers that an ADR invariant is fundamentally broken, impossible to satisfy within existing constraints, or requires an architectural trade-off that cannot be resolved with local code fixes.
+- **Action**: Halt implementation. Roll back or feature-flag the affected code path. Formulate a new Frontier Round in [adversarial-design](../../adversarial-design/SKILL.md) to settle the revised architecture with the user. Update the ADR and OpenSpec package before resuming implementation.
+
 ### State 6: `AUDIT_ACTIVE` ➔ `DELIVERY_READY`
 - **Guard**:
   - Stage 0 confirms 100% compliance with `openspec/` and ADR invariants.
@@ -85,8 +91,17 @@ A formal specification of the 4-gate engineering lifecycle state machine, its tr
 
 ---
 
-## 3. Crash Recovery & Resume Protocol
+## 3. Automated State Evaluation & Crash Recovery
 
+To deterministically evaluate the lifecycle state without manual guesswork, run the **Lifecycle Inspector**:
+
+```bash
+python3 skills/ship/scripts/inspect_lifecycle.py
+```
+
+The tool inspects `openspec/`, `tasks.md`, `docs/adr/`, Git status, and `.scratch/` audit reports, outputting the exact active Gate and recommended next action.
+
+### Manual Resume Protocol (If running without tooling)
 If an agent run is aborted, timed out, or restarted in a new session:
 
 1. **Step 1: Check OpenSpec directory**:

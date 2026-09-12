@@ -66,7 +66,8 @@ Give your agent the [ship SKILL.md](./skills/ship/SKILL.md) and your feature req
 
 - **One Command, End-to-End Delivery**: Drives the entire feature lifecycle from architectural grilling to tested, simplified, and production-audited code ready to pull request.
 - **Re-Entrant State Machine**: The filesystem (`openspec/`, `tasks.md`, `docs/adr/`) acts as the persistent state machine. If interrupted, `/ship` instantly resumes at the exact active phase.
-- **Explicit Transition Gates**: Pauses only at genuine human alignment checkpoints (Frontier Rounds & Design Confirmation Gate); executes TDD, simplification, and audit fix loops autonomously.
+- **Lifecycle Inspector**: Run `python3 skills/ship/scripts/inspect_lifecycle.py` to evaluate repository state against all 4 gates deterministically.
+- **Agent Roster**: Led by the [Lifecycle Orchestrator](./skills/ship/agents/lifecycle_orchestrator.md).
 - **References**: Consult the [Lifecycle State Machine Guide](./skills/ship/references/lifecycle_state_machine.md).
 
 ---
@@ -78,6 +79,7 @@ Give your agent the [adversarial-design SKILL.md](./skills/adversarial-design/SK
 - **The Facts vs. Decisions Law**: The agent autonomously inspects the codebase for facts. User turns are reserved strictly for architectural trade-offs.
 - **Frontier Rounds**: Batches unblocked questions with concrete recommended stances (`❓ Q1` + `➡️ Recommended Stance`) so you can answer rapidly by number.
 - **Ungrillable Detection**: Recognizes when questions cannot be settled by talk and prompts a timeboxed spike/prototype using [prototype](./skills/prototype/SKILL.md).
+- **Agent Roster**: Led by the [Principal Systems Architect](./skills/adversarial-design/agents/principal_architect.md).
 - **Output**: Generates a standard [Architecture Decision Record (ADR)](./skills/adversarial-design/references/adr_template.md) under `docs/adr/` and/or an executable [OpenSpec Change Package](./skills/adversarial-design/references/openspec_template.md) under `openspec/changes/`, which become the input contracts for `adversarial-review`.
 
 ---
@@ -90,6 +92,7 @@ Give your agent the [prototype SKILL.md](./skills/prototype/SKILL.md) and the em
 - **Minimal Viable Harness**: Hack, don't architect. Bypass layers and mock services to measure the single variable under test.
 - **Measurement Hygiene**: Warm-up passes, percentile distributions (p50/p95/p99/max), and realistic concurrency.
 - **Decision Settlement**: Concludes with a structured report that settles the design frontier and feeds empirical rationale directly into the ADR.
+- **Agent Roster**: Implemented by the [Spike Prototyper](./skills/prototype/agents/spike_prototyper.md).
 - **References**: Consult [Spike Guidelines](./skills/prototype/references/spike_guidelines.md) and ready-to-use [Experiment Templates](./skills/prototype/references/experiment_templates.md).
 
 ---
@@ -114,7 +117,7 @@ Give your agent the [ponytail SKILL.md](./skills/ponytail/SKILL.md) when impleme
 
 - **The Laziness Ladder**: 1. YAGNI ➔ 2. Codebase reuse ➔ 3. Standard library ➔ 4. Platform native ➔ 5. Installed deps ➔ 6. One-liner ➔ 7. Minimum code.
 - **Root-Cause Fixes**: Grep all callers and fix at the shared root, not symptom guards per caller.
-- **Debt Tracking**: Mark deliberate pragmatic shortcuts with `// ponytail: <shortcut>. Ceiling: <limit>. Upgrade: <next step>.`
+- **Debt Tracking & Scanner**: Mark deliberate pragmatic shortcuts with `// ponytail: <shortcut>. Ceiling: <limit>. Upgrade: <next step>.`. Audit with `python3 skills/ponytail/scripts/scan_debt.py` or `scan_debt.py --strict` in CI.
 - **References**: Consult the [Laziness Ladder Guide](./skills/ponytail/references/laziness_ladder.md) and [Debt Tracking Protocol](./skills/ponytail/references/debt_tracking.md).
 
 ---
@@ -225,13 +228,23 @@ Each finding follows the same [12-field schema](./skills/adversarial-review/refe
 ## Files
 
 ```text
+scripts/
+├── install.sh                  # Portable skill installer (symlink/copy to ~/.gemini/config/skills/)
+└── run_tests.sh                # Complete CI test runner (zero external dependencies)
+
 skills/
 ├── ship/
 │   ├── SKILL.md
+│   ├── agents/
+│   │   └── lifecycle_orchestrator.md
+│   ├── scripts/
+│   │   └── inspect_lifecycle.py
 │   └── references/
 │       └── lifecycle_state_machine.md
 ├── adversarial-design/
 │   ├── SKILL.md
+│   ├── agents/
+│   │   └── principal_architect.md
 │   └── references/
 │       ├── interview_protocol.md
 │       ├── systems_inquiry_matrix.md
@@ -239,6 +252,8 @@ skills/
 │       └── openspec_template.md
 ├── prototype/
 │   ├── SKILL.md
+│   ├── agents/
+│   │   └── spike_prototyper.md
 │   └── references/
 │       ├── spike_guidelines.md
 │       └── experiment_templates.md
@@ -253,6 +268,8 @@ skills/
 │       └── anti_patterns.md
 ├── ponytail/
 │   ├── SKILL.md
+│   ├── scripts/
+│   │   └── scan_debt.py
 │   └── references/
 │       ├── laziness_ladder.md
 │       └── debt_tracking.md
@@ -279,8 +296,20 @@ skills/
         └── production_risk_matrix.md
 ```
 
+## Installation
 
-These are adapted principles, not installed dependencies.
+To install all skills into your environment's skill directory (defaults to `~/.gemini/config/skills/`):
+
+```bash
+./scripts/install.sh
+```
+
+Or test with a dry run or custom target:
+
+```bash
+./scripts/install.sh --dry-run
+./scripts/install.sh --target /path/to/custom/skills --mode symlink
+```
 
 ## Validation
 
@@ -290,7 +319,7 @@ Run all checks from the repository root (Python 3.10+ standard library, zero pip
 ./scripts/run_tests.sh
 ```
 
-The tests use disposable Git repositories and check inspector behavior, report validation, schema examples, and local Markdown link targets. CI runs them on Linux and macOS. Neither the inspector nor the report validator requires external Python packages.
+The tests check bash/python syntax across all scripts, inspector behavior, report validation, ponytail debt scanning, lifecycle state transitions, and local Markdown link targets. CI runs them on Linux and macOS.
 
 Validate a saved reviewer/Judge report with:
 
@@ -298,4 +327,14 @@ Validate a saved reviewer/Judge report with:
 python3 skills/adversarial-review/scripts/validate_report.py report.json
 ```
 
-Validation checks the [report contract](./skills/adversarial-review/references/finding_schema.md), not the truth of findings or review completeness. [Behavioral evaluation cases](./tests/skill_evaluations.md) cover audit routing, authorisation, malformed reports, and repair-loop state. Run them separately with an agent; passing unit tests does not establish those behaviors.
+Audit codebase debt markers with:
+
+```bash
+python3 skills/ponytail/scripts/scan_debt.py --strict
+```
+
+Evaluate active engineering lifecycle state with:
+
+```bash
+python3 skills/ship/scripts/inspect_lifecycle.py
+```
