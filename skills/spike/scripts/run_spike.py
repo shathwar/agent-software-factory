@@ -16,7 +16,9 @@ import argparse
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, as_completed, wait
 from dataclasses import asdict, dataclass
 import json
+import os
 from pathlib import Path
+import signal
 import statistics
 import subprocess
 import sys
@@ -42,23 +44,48 @@ class BenchmarkMetrics:
 
 
 def run_single_iteration(cmd: str, cwd: Path | None = None, timeout_sec: float | None = 60.0) -> tuple[float, bool]:
-    """Execute a single run of the command and measure elapsed time in milliseconds."""
+    """Execute a single run of the command in an isolated process group and measure elapsed time in milliseconds."""
     start = time.perf_counter()
+    proc = None
     try:
-        res = subprocess.run(
+        proc = subprocess.Popen(
             cmd,
             shell=True,
             cwd=cwd,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout_sec
+            start_new_session=True,
         )
+        proc.communicate(timeout=timeout_sec)
         elapsed_ms = (time.perf_counter() - start) * 1000.0
-        return elapsed_ms, res.returncode == 0
+        return elapsed_ms, proc.returncode == 0
     except subprocess.TimeoutExpired:
+        if proc is not None:
+            if hasattr(os, "killpg"):
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                except Exception:
+                    pass
+            else:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+            try:
+                proc.communicate(timeout=0.5)
+            except Exception:
+                pass
         elapsed_ms = (time.perf_counter() - start) * 1000.0
         return elapsed_ms, False
     except Exception:
+        if proc is not None:
+            try:
+                proc.kill()
+            except Exception:
+                pass
         elapsed_ms = (time.perf_counter() - start) * 1000.0
         return elapsed_ms, False
 

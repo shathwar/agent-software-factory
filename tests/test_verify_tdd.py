@@ -166,6 +166,30 @@ class TestVerifyTDD(unittest.TestCase):
             hollow_mocks = [f for f in findings if f.category == "hollow_mock"]
             self.assertEqual(hollow_mocks, [])
 
+    def test_invalid_ref_range_raises_discovery_error(self):
+        """Invalid git ref range raises GitDiscoveryError with diagnostic details."""
+        with self.assertRaises(verify_tdd.GitDiscoveryError) as ctx:
+            verify_tdd.get_changed_files("definitely-missing-ref")
+        self.assertIn("Could not inspect changes", str(ctx.exception))
+
+    def test_cli_invalid_ref_range_fails_strict_and_json(self):
+        """CLI with invalid ref-range fails with exit code 1 and emits passed=false in JSON."""
+        cmd = [
+            sys.executable,
+            str(VERIFY_TDD),
+            "--ref-range", "definitely-missing-ref",
+            "--strict",
+            "--json",
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        self.assertEqual(res.returncode, 1)
+        data = json.loads(res.stdout)
+        self.assertFalse(data["passed"])
+        self.assertIsNotNone(data["error"])
+        self.assertIn("Could not inspect changes", data["error"])
+        categories = [f["category"] for f in data["findings"]]
+        self.assertIn("git_discovery", categories)
+
 
 if __name__ == "__main__":
     unittest.main()

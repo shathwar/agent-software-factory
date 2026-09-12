@@ -1513,6 +1513,47 @@ gates:
             code = inspect_lifecycle.main(["--path", str(tmppath), "--status-check"])
             self.assertEqual(code, 2)
 
+    def test_rollback_preserves_precheckpoint_uncommitted_edits(self):
+        """Verify rollback restores checkpoint state without reverting uncommitted edits made prior to checkpoint."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+
+            # 1. Initial committed state
+            service_file = tmppath / "service.py"
+            service_file.write_text("def pay(): pass\n")
+            unrelated_file = tmppath / "unrelated.txt"
+            unrelated_file.write_text("unrelated initial commit\n")
+            subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
+            subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=tmppath, check=True)
+
+            # 2. User edits unrelated file BEFORE creating checkpoint (uncommitted edit)
+            unrelated_file.write_text("unrelated pre-checkpoint edit\n")
+
+            # 3. Checkpoint created
+            chk = inspect_lifecycle.create_checkpoint(tmppath, "gate-1-spec", topic="payment")
+            self.assertTrue(chk["ref_created"])
+            self.assertIn("snapshot_commit", chk)
+
+            # 4. User changes implementation in gate 2 and modifies unrelated file again
+            service_file.write_text("def pay(): raise RuntimeError('broken')\n")
+            unrelated_file.write_text("unrelated post-checkpoint modification\n")
+            new_gate2_file = tmppath / "gate2_temp.py"
+            new_gate2_file.write_text("temp = 1\n")
+
+            # 5. Perform rollback to gate-1-spec
+            rb = inspect_lifecycle.perform_rollback(tmppath, "gate-1-spec", topic="payment")
+            self.assertEqual(rb["status"], "success")
+
+            # 6. Verify unrelated file reverted to CHECKPOINT content (not initial commit content!)
+            self.assertEqual(unrelated_file.read_text(), "unrelated pre-checkpoint edit\n")
+            # Verify service.py reverted to its checkpoint state
+            self.assertEqual(service_file.read_text(), "def pay(): pass\n")
+            # Verify new file created after checkpoint was removed
+            self.assertFalse(new_gate2_file.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

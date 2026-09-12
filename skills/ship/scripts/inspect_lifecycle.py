@@ -18,11 +18,13 @@ import datetime
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -1521,16 +1523,45 @@ def create_checkpoint(
     timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
     ref_created = False
+    snapshot_sha: Optional[str] = None
     if git_info.get("is_git") and commit_sha:
         try:
+            with tempfile.TemporaryDirectory() as idx_dir:
+                idx_file = Path(idx_dir) / "index"
+                env = {**os.environ, "GIT_INDEX_FILE": str(idx_file)}
+                add_cmd = ["git", "add", "-A", "--", ".", ":!.scratch", ":!scratch", ":!.gemini"]
+                subprocess.run(add_cmd, cwd=repo_root, env=env, capture_output=True, check=True)
+                tree_res = subprocess.run(
+                    ["git", "write-tree"],
+                    cwd=repo_root,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                tree_sha = tree_res.stdout.strip()
+                commit_msg = f"ship-checkpoint:{resolved_topic}:{canonical_tag}"
+                commit_res = subprocess.run(
+                    ["git", "commit-tree", tree_sha, "-p", commit_sha, "-m", commit_msg],
+                    cwd=repo_root,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                snapshot_sha = commit_res.stdout.strip()
+        except Exception:
+            snapshot_sha = None
+
+        target_ref_sha = snapshot_sha or commit_sha
+        try:
             subprocess.run(
-                ["git", "update-ref", ref_name, commit_sha],
+                ["git", "update-ref", ref_name, target_ref_sha],
                 cwd=repo_root,
                 capture_output=True,
                 check=True,
             )
             subprocess.run(
-                ["git", "tag", "-f", tag_name, commit_sha],
+                ["git", "tag", "-f", tag_name, target_ref_sha],
                 cwd=repo_root,
                 capture_output=True,
             )
@@ -1547,6 +1578,7 @@ def create_checkpoint(
         "ref": ref_name,
         "tag": tag_name,
         "commit": commit_sha or "none",
+        "snapshot_commit": snapshot_sha or commit_sha or "none",
         "fingerprint": fingerprint,
         "timestamp": timestamp,
         "is_git": git_info.get("is_git", False),
@@ -1611,8 +1643,16 @@ def perform_rollback(
             )
             if ref_check.returncode == 0:
                 target_sha = ref_check.stdout.strip()
+            elif checkpoint_info and checkpoint_info.get("snapshot_commit"):
+                target_sha = checkpoint_info["snapshot_commit"]
             elif checkpoint_info and checkpoint_info.get("commit"):
                 target_sha = checkpoint_info["commit"]
+
+        base_commit = (
+            checkpoint_info.get("commit")
+            if checkpoint_info and checkpoint_info.get("commit") and checkpoint_info.get("commit") != "none"
+            else None
+        )
 
         current_sha = git_info.get("commit")
         backup_dir.mkdir(parents=True, exist_ok=True)
@@ -1658,6 +1698,17 @@ def perform_rollback(
                 diff_proc = subprocess.run(diff_cmd, cwd=repo_root, capture_output=True, text=True)
                 changed_files = [line.strip() for line in diff_proc.stdout.splitlines() if line.strip()]
 
+                untracked_proc = subprocess.run(
+                    ["git", "ls-files", "--others", "--exclude-standard"],
+                    cwd=repo_root,
+                    capture_output=True,
+                    text=True,
+                )
+                for line in untracked_proc.stdout.splitlines():
+                    p = line.strip()
+                    if p and p not in changed_files:
+                        changed_files.append(p)
+
                 ignored_prefixes = (".scratch/", "scratch/", ".gemini/", ".git/")
                 tasks_rel = f"openspec/changes/{resolved_topic}/tasks.md"
 
@@ -1699,9 +1750,10 @@ def perform_rollback(
                         full_path.unlink(missing_ok=True)
                         removed_files.append(rel_path)
 
-                # Reset git history and index to target_sha
-                if current_sha and current_sha != target_sha:
-                    reset_cmd = ["git", "reset", target_sha]
+                # Reset git history and index to base commit or target_sha
+                reset_target = base_commit or target_sha
+                if current_sha and reset_target and current_sha != reset_target and reset_target != "none":
+                    reset_cmd = ["git", "reset", reset_target]
                     res = subprocess.run(reset_cmd, cwd=repo_root, capture_output=True, text=True)
                     if res.returncode == 0:
                         git_reset_performed = True

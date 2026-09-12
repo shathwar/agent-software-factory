@@ -38,6 +38,11 @@ EXCLUDE_PATH_PATTERNS = [
 ]
 
 
+class GitDiscoveryError(RuntimeError):
+    """Raised when git diff or file discovery fails."""
+    pass
+
+
 @dataclass
 class Finding:
     category: str
@@ -54,6 +59,7 @@ class TDDCheckResult:
     test_files: list[str]
     untested_files: list[str]
     findings: list[Finding]
+    error: str | None = None
 
 
 def is_test_file(path: str) -> bool:
@@ -93,8 +99,11 @@ def get_changed_files(ref_range: str | None = None, repo_root: Path | None = Non
             if line.strip() and line.strip() not in files:
                 files.append(line.strip())
         return files
-    except subprocess.CalledProcessError:
-        return []
+    except subprocess.CalledProcessError as e:
+        err_msg = e.stderr.strip() if e.stderr else f"git command failed with exit code {e.returncode}"
+        raise GitDiscoveryError(f"Could not inspect changes: {err_msg}") from e
+    except FileNotFoundError as e:
+        raise GitDiscoveryError("Could not inspect changes: 'git' executable not found") from e
 
 
 def check_anti_patterns(file_path: Path) -> list[Finding]:
@@ -288,8 +297,26 @@ def main() -> int:
         print(trim_test_receipt(raw))
         return 0
 
-    files_to_check = args.files if args.files else get_changed_files(args.ref_range)
-    result = audit_tdd(files_to_check, strict=args.strict)
+    try:
+        files_to_check = args.files if args.files else get_changed_files(args.ref_range)
+        result = audit_tdd(files_to_check, strict=args.strict)
+    except GitDiscoveryError as e:
+        result = TDDCheckResult(
+            passed=False,
+            production_files=[],
+            test_files=[],
+            untested_files=[],
+            findings=[
+                Finding(
+                    category="git_discovery",
+                    file="git",
+                    line=1,
+                    message=str(e),
+                    severity="ERROR",
+                )
+            ],
+            error=str(e),
+        )
 
     if args.json:
         out_dict = asdict(result)

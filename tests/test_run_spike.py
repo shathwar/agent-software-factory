@@ -149,6 +149,35 @@ class TestRunSpike(unittest.TestCase):
         self.assertEqual(data["metrics"]["failed_runs"], 2)
         self.assertEqual(data["metrics"]["error_rate_pct"], 100.0)
 
+    def test_timeout_terminates_child_process_group(self):
+        """Commands that time out have their entire process group killed, not leaving orphaned children."""
+        import tempfile
+        import time
+
+        with tempfile.TemporaryDirectory() as td:
+            marker = Path(td) / "child_finished.txt"
+            script = (
+                f"import subprocess, time\n"
+                f"subprocess.Popen(['{sys.executable}', '-c', 'import time; time.sleep(0.4); open(\"{marker}\", \"w\").write(\"done\")'])\n"
+                f"time.sleep(5)\n"
+            )
+            runner_file = Path(td) / "runner.py"
+            runner_file.write_text(script)
+
+            metrics = run_spike.run_benchmark(
+                cmd=f"{sys.executable} {runner_file}",
+                iterations=1,
+                warmup=0,
+                concurrency=1,
+                timeout_sec=0.1,
+            )
+            self.assertEqual(metrics.total_runs, 1)
+            self.assertEqual(metrics.failed_runs, 1)
+
+            # Wait to ensure background child would have finished if it had survived
+            time.sleep(0.5)
+            self.assertFalse(marker.exists(), "Child process survived timeout and wrote marker file!")
+
 
 if __name__ == "__main__":
     unittest.main()
