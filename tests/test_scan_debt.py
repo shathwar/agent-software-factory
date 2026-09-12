@@ -167,6 +167,28 @@ class TestScanDebt(unittest.TestCase):
         self.assertTrue(any("placeholder in 'Ceiling:'" in e for e in res["errors"]))
         self.assertTrue(any("placeholder in 'Upgrade:'" in e for e in res["errors"]))
 
+    def test_python_docstrings_and_markdown_text_fences_are_skipped(self):
+        """Docstring examples in Python files and text code fences in markdown files must be skipped."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            py_file = tmppath / "tool.py"
+            py_file.write_text(
+                '"""\nExample:\n    // ponytail: <Shortcut>. Ceiling: <Limit>. Upgrade: <Next>.\n"""\n'
+                '# ponytail: Real shortcut. Ceiling: 50 RPS. Upgrade: Worker pool.\ndef work(): pass\n'
+            )
+            md_file = tmppath / "guide.md"
+            md_file.write_text(
+                '# Guide\n```text\n// ponytail: <Shortcut>. Ceiling: <Limit>. Upgrade: <Next>.\n```\n'
+                '```go\n// ponytail: Go map. Ceiling: 100 users. Upgrade: Postgres.\n```\n'
+            )
+
+            markers = scan_debt.scan_paths([tmppath])
+            self.assertEqual(len(markers), 2)
+            shortcuts = {m["shortcut"] for m in markers}
+            self.assertIn("Real shortcut", shortcuts)
+            self.assertIn("Go map", shortcuts)
+            self.assertNotIn("<Shortcut>", shortcuts)
+
 
 if __name__ == "__main__":
     unittest.main()

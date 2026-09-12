@@ -154,11 +154,42 @@ def scan_file(file_path: Path, base_dir: Path) -> List[Dict[str, Any]]:
         rel_path = str(file_path.relative_to(base_dir))
     markers = []
     is_markdown = file_path.suffix.lower() in {".md", ".markdown"}
+    is_python = file_path.suffix.lower() == ".py"
+    in_text_fence = False
+    in_py_triple = False
+    py_triple_delim = ""
+
     for idx, line in enumerate(content.splitlines(), start=1):
-        if "ponytail:" in line.lower():
-            # In markdown files, ATX headings (# ...) are not code comments
-            if is_markdown and re.match(r"^\s*#{1,6}\s+", line):
+        if is_markdown:
+            stripped = line.strip()
+            if stripped.startswith("```"):
+                tag = stripped[3:].strip().lower()
+                if not in_text_fence:
+                    if tag in {"text", "txt", "plain"}:
+                        in_text_fence = True
+                else:
+                    in_text_fence = False
                 continue
+            if in_text_fence:
+                continue
+            if re.match(r"^\s*#{1,6}\s+", line):
+                continue
+
+        if is_python:
+            stripped = line.strip()
+            if not in_py_triple:
+                if '"""' in stripped and stripped.count('"""') % 2 == 1:
+                    in_py_triple = True
+                    py_triple_delim = '"""'
+                elif "'''" in stripped and stripped.count("'''") % 2 == 1:
+                    in_py_triple = True
+                    py_triple_delim = "'''"
+            else:
+                if py_triple_delim in stripped and stripped.count(py_triple_delim) % 2 == 1:
+                    in_py_triple = False
+                continue
+
+        if "ponytail:" in line.lower():
             parsed = parse_debt_marker(line, rel_path, idx)
             if parsed:
                 markers.append(parsed)
