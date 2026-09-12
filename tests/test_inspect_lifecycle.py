@@ -1554,6 +1554,42 @@ gates:
             # Verify new file created after checkpoint was removed
             self.assertFalse(new_gate2_file.exists())
 
+    def test_rollback_preserves_tracked_files_matching_gitignore(self):
+        """Verify rollback does not delete tracked files that happen to match .gitignore rules."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+
+            # 1. Commit tracked.cfg and .gitignore matching *.cfg
+            (tmppath / ".gitignore").write_text("*.cfg\n")
+            tracked_cfg = tmppath / "tracked.cfg"
+            tracked_cfg.write_text("important = true\n")
+            service_file = tmppath / "service.py"
+            service_file.write_text("def pay(): pass\n")
+            subprocess.run(["git", "add", ".gitignore"], cwd=tmppath, check=True)
+            subprocess.run(["git", "add", "-f", "tracked.cfg"], cwd=tmppath, check=True)
+            subprocess.run(["git", "add", "service.py"], cwd=tmppath, check=True)
+            subprocess.run(["git", "commit", "-m", "Initial commit with tracked.cfg"], cwd=tmppath, check=True)
+
+            # 2. Create checkpoint
+            chk = inspect_lifecycle.create_checkpoint(tmppath, "gate-1-spec", topic="payment")
+            self.assertTrue(chk["ref_created"])
+
+            # 3. User modifies service.py in gate 2
+            service_file.write_text("def pay(): raise RuntimeError('broken')\n")
+
+            # 4. Perform rollback
+            rb = inspect_lifecycle.perform_rollback(tmppath, "gate-1-spec", topic="payment")
+            self.assertEqual(rb["status"], "success")
+
+            # 5. Verify tracked.cfg is NOT deleted!
+            self.assertTrue(tracked_cfg.exists(), "tracked.cfg was mistakenly deleted by rollback!")
+            self.assertEqual(tracked_cfg.read_text(), "important = true\n")
+            self.assertNotIn("tracked.cfg", rb["removed_files"])
+            self.assertEqual(service_file.read_text(), "def pay(): pass\n")
+
 
 if __name__ == "__main__":
     unittest.main()

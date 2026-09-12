@@ -1529,6 +1529,7 @@ def create_checkpoint(
             with tempfile.TemporaryDirectory() as idx_dir:
                 idx_file = Path(idx_dir) / "index"
                 env = {**os.environ, "GIT_INDEX_FILE": str(idx_file)}
+                subprocess.run(["git", "read-tree", commit_sha], cwd=repo_root, env=env, capture_output=True, check=True)
                 add_cmd = ["git", "add", "-A", "--", ".", ":!.scratch", ":!scratch", ":!.gemini"]
                 subprocess.run(add_cmd, cwd=repo_root, env=env, capture_output=True, check=True)
                 tree_res = subprocess.run(
