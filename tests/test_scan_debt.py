@@ -94,6 +94,22 @@ class TestScanDebt(unittest.TestCase):
             self.assertTrue(data[0]["is_valid"])
             self.assertEqual(data[0]["ceiling"], "1k RPS")
 
+    def test_empty_required_fields_and_pipe_separated_format(self):
+        # 1. Empty required fields must fail validation
+        empty_line = "// ponytail: In-memory store. Ceiling: . Upgrade: ."
+        res_empty = scan_debt.parse_debt_marker(empty_line, "store.ts", 12)
+        self.assertFalse(res_empty["is_valid"])
+        self.assertIn("Empty 'Ceiling:' threshold", res_empty["errors"])
+        self.assertIn("Empty 'Upgrade:' path", res_empty["errors"])
+
+        # 2. Pipe-separated format must correctly isolate ceiling and upgrade
+        pipe_line = "// ponytail: In-memory store | Ceiling: 500 req/s | Upgrade: Redis cache"
+        res_pipe = scan_debt.parse_debt_marker(pipe_line, "store.ts", 20)
+        self.assertTrue(res_pipe["is_valid"])
+        self.assertEqual(res_pipe["shortcut"], "In-memory store")
+        self.assertEqual(res_pipe["ceiling"], "500 req/s")
+        self.assertEqual(res_pipe["upgrade"], "Redis cache")
+
 
 if __name__ == "__main__":
     unittest.main()

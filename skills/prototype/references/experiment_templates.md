@@ -129,15 +129,16 @@ import (
 )
 
 type SharedResource struct {
-	mu      sync.Mutex
-	balance int64
-	conflicts int64
+	mu        sync.Mutex
+	balance   int64
+	atomicOps int64
 }
 
 func (s *SharedResource) SafeUpdate(delta int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.balance += delta
+	atomic.AddInt64(&s.atomicOps, 1)
 }
 
 func main() {
@@ -167,6 +168,7 @@ func main() {
 	fmt.Printf("Workers:        %d\n", workers)
 	fmt.Printf("Total Ops:      %d\n", expected)
 	fmt.Printf("Final Balance:  %d (Expected: %d)\n", resource.balance, expected)
+	fmt.Printf("Atomic Ops:     %d\n", atomic.LoadInt64(&resource.atomicOps))
 	fmt.Printf("Elapsed Time:   %s\n", elapsed)
 	fmt.Printf("Throughput:     %.0f ops/sec\n", float64(expected)/elapsed.Seconds())
 }
@@ -238,23 +240,51 @@ async function* generateLines(count) {
 async function profileStream() {
   const stream = Readable.from(generateLines(100000));
   let parsedCount = 0;
-  let maxMemory = 0;
 
-  const interval = setInterval(() => {
-    const rss = process.memoryUsage().rss / 1024 / 1024;
-    if (rss > maxMemory) maxMemory = rss;
-    process.stdout.write(`\rCurrent RSS: ${rss.toFixed(1)} MB | Max RSS: ${maxMemory.toFixed(1)} MB | Processed: ${parsedCount}`);
-  }, 100);
+  const initialRss = process.memoryUsage().rss / 1024 / 1024;
+  let sampledPeakRss = initialRss;
+  let sampledPeakHeap = process.memoryUsage().heapUsed / 1024 / 1024;
+
+  const sample = () => {
+    const mem = process.memoryUsage();
+    const rss = mem.rss / 1024 / 1024;
+    const heap = mem.heapUsed / 1024 / 1024;
+    if (rss > sampledPeakRss) sampledPeakRss = rss;
+    if (heap > sampledPeakHeap) sampledPeakHeap = heap;
+  };
+
+  const interval = setInterval(sample, 50);
 
   for await (const chunk of stream) {
     parsedCount++;
-    // Simulate lightweight transform without buffering
+    // Sample inline every 5k records so fast streams are never missed before interval fires
+    if (parsedCount % 5000 === 0) {
+      sample();
+      process.stdout.write(`\rProcessed: ${parsedCount} | Sampled RSS: ${sampledPeakRss.toFixed(1)} MB | Heap: ${sampledPeakHeap.toFixed(1)} MB`);
+    }
   }
 
+  sample();
   clearInterval(interval);
+
+  // Distinguish sampled peak from OS-level process peak RSS (getrusage)
+  const resourceUsage = process.resourceUsage ? process.resourceUsage() : null;
+  let osMaxRssMb = null;
+  if (resourceUsage && resourceUsage.maxRSS) {
+    const isMac = process.platform === 'darwin';
+    osMaxRssMb = isMac
+      ? resourceUsage.maxRSS / (1024 * 1024)
+      : resourceUsage.maxRSS / 1024;
+  }
+
   console.log(`\n\n--- Stream Profile Completed ---`);
-  console.log(`Total Records: ${parsedCount}`);
-  console.log(`Peak RSS:      ${maxMemory.toFixed(2)} MB`);
+  console.log(`Total Records:    ${parsedCount}`);
+  console.log(`Initial RSS:      ${initialRss.toFixed(2)} MB`);
+  console.log(`Sampled Peak RSS: ${sampledPeakRss.toFixed(2)} MB`);
+  console.log(`Sampled Peak Heap:${sampledPeakHeap.toFixed(2)} MB`);
+  if (osMaxRssMb !== null) {
+    console.log(`OS Peak RSS:      ${osMaxRssMb.toFixed(2)} MB (process peak)`);
+  }
 }
 
 profileStream();

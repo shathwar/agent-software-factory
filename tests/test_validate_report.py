@@ -107,6 +107,33 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(finding_schema["properties"]["id"]["pattern"], validator.ID_REGEX.pattern)
         self.assertEqual(finding_schema["properties"]["line"]["pattern"], validator.LINE_REGEX.pattern)
 
+    def test_unhashable_types_do_not_crash_validator(self):
+        # Setting enum fields to unhashable types (list, dict) should return errors, not raise TypeError
+        data = report()
+        data["reviewer"] = ["judge"]
+        errors = validator.validate_report(data)
+        self.assertTrue(any("reviewer" in e for e in errors))
+
+        data = report()
+        data["status"] = {"complete": True}
+        errors = validator.validate_report(data)
+        self.assertTrue(any("status" in e for e in errors))
+
+        data = report()
+        data["findings"][0]["severity"] = ["CRITICAL"]
+        errors = validator.validate_report(data)
+        self.assertTrue(any("severity" in e for e in errors))
+
+        data = report()
+        data["findings"][0]["category"] = ["Correctness"]
+        errors = validator.validate_report(data)
+        self.assertTrue(any("category" in e for e in errors))
+
+        data = report()
+        data["findings"][0]["fixability"] = ["autonomous"]
+        errors = validator.validate_report(data)
+        self.assertTrue(any("fixability" in e for e in errors))
+
 
 if __name__ == "__main__":
     unittest.main()

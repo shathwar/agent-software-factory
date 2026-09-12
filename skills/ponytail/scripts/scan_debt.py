@@ -34,9 +34,15 @@ DEFAULT_EXCLUDES = {
 # Regex to find ponytail: marker line
 MARKER_PATTERN = re.compile(r"ponytail:\s*(.+)$", re.IGNORECASE)
 
-# Field extractors
-CEILING_PATTERN = re.compile(r"Ceiling:\s*(.+?)(?:\.\s*Upgrade:|$)", re.IGNORECASE)
-UPGRADE_PATTERN = re.compile(r"Upgrade:\s*(.+?)(?:\.|$)", re.IGNORECASE)
+# Field extractors: stop at next delimiter token or end of line
+CEILING_PATTERN = re.compile(
+    r"Ceiling:\s*(.+?)(?=(?:\s*[|;.]\s*Upgrade:|\s+Upgrade:|\s*$))",
+    re.IGNORECASE,
+)
+UPGRADE_PATTERN = re.compile(
+    r"Upgrade:\s*(.+?)(?=(?:\s*[|;.]\s*Ceiling:|\s+Ceiling:|\s*$))",
+    re.IGNORECASE,
+)
 
 
 def parse_debt_marker(raw_text: str, file_path: str, line_number: int) -> Dict[str, Any]:
@@ -59,22 +65,31 @@ def parse_debt_marker(raw_text: str, file_path: str, line_number: int) -> Dict[s
     errors: List[str] = []
 
     if ceiling_match:
-        ceiling = ceiling_match.group(1).strip().rstrip(".")
+        extracted_ceiling = ceiling_match.group(1).strip().strip(".|; ")
+        if extracted_ceiling:
+            ceiling = extracted_ceiling
+        else:
+            errors.append("Empty 'Ceiling:' threshold")
     else:
         errors.append("Missing 'Ceiling:' threshold")
 
     if upgrade_match:
-        upgrade = upgrade_match.group(1).strip().rstrip(".")
+        extracted_upgrade = upgrade_match.group(1).strip().strip(".|; ")
+        if extracted_upgrade:
+            upgrade = extracted_upgrade
+        else:
+            errors.append("Empty 'Upgrade:' path")
     else:
         errors.append("Missing 'Upgrade:' path")
 
-    # Extract shortcut (everything before Ceiling:)
+    # Extract shortcut (everything before the first field)
+    first_start = len(body)
     if ceiling_match:
-        shortcut = body[: ceiling_match.start()].strip().rstrip(".")
-    elif upgrade_match:
-        shortcut = body[: upgrade_match.start()].strip().rstrip(".")
-    else:
-        shortcut = body.strip().rstrip(".")
+        first_start = min(first_start, ceiling_match.start())
+    if upgrade_match:
+        first_start = min(first_start, upgrade_match.start())
+
+    shortcut = body[:first_start].strip().strip(".|; ")
 
     if not shortcut or shortcut.lower() in {"todo", "fixme", "clean this up", "optimize", "temp"}:
         errors.append(f"Vague or missing shortcut description: '{shortcut}'")

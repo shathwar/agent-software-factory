@@ -64,9 +64,9 @@ def validate_report(report):
     if errors:
         return errors
 
-    if report["reviewer"] not in REVIEWERS:
+    if not isinstance(report["reviewer"], str) or report["reviewer"] not in REVIEWERS:
         errors.append(f"$.reviewer: must be one of {sorted(REVIEWERS)}")
-    if report["status"] not in STATUSES:
+    if not isinstance(report["status"], str) or report["status"] not in STATUSES:
         errors.append(f"$.status: must be one of {sorted(STATUSES)}")
 
     for list_field in ("coverage", "questions", "routing_notes"):
@@ -108,11 +108,11 @@ def validate_report(report):
                 errors.append(f"Duplicate finding ID: {fid}")
             seen_ids.add(fid)
 
-        if finding["severity"] not in SEVERITIES:
+        if not isinstance(finding["severity"], str) or finding["severity"] not in SEVERITIES:
             errors.append(f"{prefix}.severity: must be one of {sorted(SEVERITIES)}")
-        if finding["category"] not in CATEGORIES:
+        if not isinstance(finding["category"], str) or finding["category"] not in CATEGORIES:
             errors.append(f"{prefix}.category: must be one of {sorted(CATEGORIES)}")
-        if finding["fixability"] not in FIXABILITIES:
+        if not isinstance(finding["fixability"], str) or finding["fixability"] not in FIXABILITIES:
             errors.append(f"{prefix}.fixability: must be one of {sorted(FIXABILITIES)}")
 
         for str_field in ("title", "problem", "evidence", "impact", "recommendation"):
