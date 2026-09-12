@@ -94,6 +94,31 @@ class TestRunSpike(unittest.TestCase):
         self.assertTrue(data["passed"])
         self.assertEqual(data["metrics"]["total_runs"], 10)
 
+    def test_duration_based_execution(self):
+        """Duration-based runs terminate within expected timeframe and remove completed futures."""
+        metrics = run_spike.run_benchmark(
+            cmd=f"{sys.executable} -c 'pass'",
+            iterations=0,
+            warmup=0,
+            concurrency=2,
+            duration_sec=0.3,
+        )
+        self.assertGreater(metrics.total_runs, 0)
+        self.assertLess(metrics.total_duration_sec, 2.0)
+        self.assertEqual(metrics.failed_runs, 0)
+
+    def test_duration_based_slow_command_does_not_timeout_or_crash(self):
+        """Slow commands whose iteration latency exceeds polling intervals do not crash with TimeoutError."""
+        metrics = run_spike.run_benchmark(
+            cmd=f"{sys.executable} -c 'import time; time.sleep(0.15)'",
+            iterations=0,
+            warmup=0,
+            concurrency=1,
+            duration_sec=0.25,
+        )
+        self.assertGreaterEqual(metrics.total_runs, 1)
+        self.assertEqual(metrics.failed_runs, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -97,8 +97,10 @@ jobs:
           python-version: "3.11"
 
       - name: Run Gate 1 (Design & Specification)
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
         run: |
-          TOPIC=$(echo "${{ github.event.issue.title }}" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+          TOPIC=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
           echo "Running Gate 1 for topic: $TOPIC"
           # Run agent with design
           python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint gate-1-spec --topic "$TOPIC"

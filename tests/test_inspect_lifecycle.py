@@ -1403,11 +1403,60 @@ gates:
             self.assertIn("- [ ] Task 1: Setup stripe", reset_tasks)
             self.assertIn("- [ ] Task 2: Webhooks", reset_tasks)
 
+            # Verify dirty implementation file was restored to checkpoint version
+            self.assertEqual(service_file.read_text(), "def pay(): pass\n")
+            self.assertIn("service.py", rb["restored_files"])
+
             # Verify backup directory was created for dirty changes
             self.assertIsNotNone(rb["backup_directory"])
             backup_path = tmppath / rb["backup_directory"]
             self.assertTrue(backup_path.exists())
             self.assertTrue((backup_path / "service.py").exists())
+
+    def test_rollback_restores_committed_broken_implementation(self):
+        """Verify rollback restores committed modifications and deletes newly created files."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+
+            # Setup checkpoint at gate-1-spec
+            pkg_dir = tmppath / "openspec" / "changes" / "payment"
+            pkg_dir.mkdir(parents=True)
+            tasks_file = pkg_dir / "tasks.md"
+            tasks_file.write_text("- [x] Task 1: Setup stripe\n")
+            service_file = tmppath / "service.py"
+            service_file.write_text("def pay(): pass\n")
+            subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
+            subprocess.run(["git", "commit", "-m", "Initial checkpoint commit"], cwd=tmppath, check=True)
+
+            inspect_lifecycle.create_checkpoint(tmppath, "gate-1-spec", topic="payment")
+
+            # Commit a broken implementation and an additional file in gate 2
+            service_file.write_text("def pay(): raise RuntimeError('broken')\n")
+            extra_file = tmppath / "extra.py"
+            extra_file.write_text("def extra(): pass\n")
+            subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
+            subprocess.run(["git", "commit", "-m", "Broken gate 2 implementation"], cwd=tmppath, check=True)
+
+            # Perform rollback to gate-1-spec
+            rb = inspect_lifecycle.perform_rollback(tmppath, "gate-1-spec", topic="payment")
+            self.assertEqual(rb["status"], "success")
+            self.assertIn("service.py", rb["restored_files"])
+            self.assertIn("extra.py", rb["removed_files"])
+
+            # Working tree verification
+            self.assertEqual(service_file.read_text(), "def pay(): pass\n")
+            self.assertFalse(extra_file.exists())
+
+            # Verify backups contain the committed broken state
+            backup_path = tmppath / rb["backup_directory"]
+            self.assertTrue(backup_path.exists())
+            self.assertTrue((backup_path / "committed_diff.patch").exists())
+            self.assertTrue((backup_path / "service.py").exists())
+            self.assertTrue((backup_path / "extra.py").exists())
+            self.assertIn("raise RuntimeError", (backup_path / "service.py").read_text())
 
     def test_ship_yaml_multiline_lists_and_comments(self):
         """Verify YAML parser handles multiline bullet lists and unquoted inline comments."""

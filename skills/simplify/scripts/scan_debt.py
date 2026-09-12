@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Scan codebases for ponytail: technical debt markers and validate syntax.
+"""Scan codebases for simplify: and ponytail: technical debt markers and validate syntax.
 
-Zero-dependency script (Python 3.10+ standard library).
+Zero external dependencies (Python 3.10+ standard library).
 
-Syntax expected:
+Valid Syntax:
+    // simplify: <Shortcut>. Ceiling: <Threshold/Limit>. Upgrade: <Next Architecture>.
     // ponytail: <Shortcut>. Ceiling: <Threshold/Limit>. Upgrade: <Next Architecture>.
 """
 
@@ -140,7 +141,7 @@ def scan_python_file(file_path: Path, rel_path: str) -> Optional[List[Dict[str, 
             for tok in tokens:
                 if tok.type == tokenize.COMMENT:
                     text = tok.string
-                    if "ponytail:" in text.lower():
+                    if any(kw in text.lower() for kw in ("simplify:", "ponytail:")):
                         parsed = parse_debt_marker(text, rel_path, tok.start[0])
                         if parsed:
                             markers.append(parsed)
@@ -164,7 +165,8 @@ def scan_file(file_path: Path, base_dir: Path) -> List[Dict[str, Any]]:
     except Exception:
         return []
 
-    if "ponytail:" not in content.lower():
+    content_lower = content.lower()
+    if not any(kw in content_lower for kw in ("simplify:", "ponytail:")):
         return []
 
     try:
@@ -197,7 +199,7 @@ def scan_file(file_path: Path, base_dir: Path) -> List[Dict[str, Any]]:
             if re.match(r"^\s*#{1,6}\s+", line):
                 continue
 
-        if "ponytail:" in line.lower():
+        if any(kw in line.lower() for kw in ("simplify:", "ponytail:")):
             parsed = parse_debt_marker(line, rel_path, idx)
             if parsed:
                 markers.append(parsed)
@@ -237,7 +239,7 @@ def scan_paths(
 def format_table(markers: List[Dict[str, Any]], markdown: bool = True) -> str:
     """Format markers as a markdown table."""
     if not markers:
-        return "No ponytail technical debt markers found. Codebase is clean."
+        return "No technical debt markers found. Codebase is clean."
 
     lines = []
     lines.append("| Location | Shortcut Taken | Operational Ceiling | Designated Upgrade Path | Status |")
@@ -255,7 +257,7 @@ def format_table(markers: List[Dict[str, Any]], markdown: bool = True) -> str:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Scan codebases for ponytail: technical debt markers and validate syntax."
+        description="Scan codebases for simplify: and ponytail: technical debt markers and validate syntax."
     )
     parser.add_argument(
         "paths",

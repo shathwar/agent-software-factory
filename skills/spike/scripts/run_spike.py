@@ -13,7 +13,7 @@ Measures:
 from __future__ import annotations
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, as_completed, wait
 from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
@@ -100,15 +100,16 @@ def run_benchmark(
         # Duration-based run
         deadline = start_total + duration_sec
         with ThreadPoolExecutor(max_workers=concurrency) as executor:
-            futures = set()
+            futures: set = set()
             while time.perf_counter() < deadline or futures:
-                # Keep worker queue saturated
+                # Keep worker queue saturated while before deadline
                 while len(futures) < concurrency and time.perf_counter() < deadline:
                     futures.add(executor.submit(run_single_iteration, cmd, cwd))
                 if not futures:
                     break
-                # Process completed
-                done, futures = as_completed(futures, timeout=0.1), futures
+                # Wait for at least one future to complete or timeout
+                done, not_done = wait(futures, timeout=0.1, return_when=FIRST_COMPLETED)
+                futures = set(not_done)
                 for f in done:
                     try:
                         elapsed_ms, ok = f.result()

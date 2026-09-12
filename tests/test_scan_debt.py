@@ -147,7 +147,7 @@ class TestScanDebt(unittest.TestCase):
     def test_non_comment_strings_and_code_are_ignored(self):
         non_comments = [
             'if "ponytail:" in line.lower():',
-            'MARKER_PATTERN = re.compile(r"ponytail:\s*(.+)$", re.IGNORECASE)',
+            r'MARKER_PATTERN = re.compile(r"ponytail:\s*(.+)$", re.IGNORECASE)',
             '│   • Code Refactorer: Simplifies under green; adds ponytail: debt markers    │',
             'Scan codebases for ponytail: technical debt markers',
             'const markerName = "ponytail: custom";',
@@ -220,6 +220,44 @@ class TestScanDebt(unittest.TestCase):
             res = subprocess.run(cmd, capture_output=True, text=True)
             self.assertEqual(res.returncode, 1)
             self.assertIn("invalid debt marker", res.stderr)
+
+    def test_scan_simplify_markers_in_python_and_typescript(self):
+        """CLI and file scanner properly discover and validate simplify: markers in Python and TypeScript."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            py_file = tmppath / "service.py"
+            py_file.write_text(
+                "# simplify: In-memory cache. Ceiling: 5k RPS. Upgrade: Redis cluster.\n"
+                "def get_user(): pass\n"
+                "# simplify: Broken shortcut without ceiling.\n"
+            )
+
+            ts_file = tmppath / "handler.ts"
+            ts_file.write_text(
+                "// simplify: O(N) filter. Ceiling: 100 items. Upgrade: Map index.\n"
+                "const filterUsers = () => [];\n"
+                "// simplify: Missing upgrade path. Ceiling: 50 users.\n"
+            )
+
+            markers = scan_debt.scan_paths([tmppath])
+            self.assertEqual(len(markers), 4)
+            valid_markers = [m for m in markers if m["is_valid"]]
+            invalid_markers = [m for m in markers if not m["is_valid"]]
+            self.assertEqual(len(valid_markers), 2)
+            self.assertEqual(len(invalid_markers), 2)
+
+            # In strict mode, CLI must fail with exit code 1
+            cmd_strict = [sys.executable, str(SCAN_DEBT), "--strict", str(tmppath)]
+            res_strict = subprocess.run(cmd_strict, capture_output=True, text=True)
+            self.assertEqual(res_strict.returncode, 1)
+            self.assertIn("Found 2 invalid debt marker(s)", res_strict.stderr)
+
+            # In normal mode, CLI must exit 0 and render table
+            cmd_normal = [sys.executable, str(SCAN_DEBT), str(tmppath)]
+            res_normal = subprocess.run(cmd_normal, capture_output=True, text=True)
+            self.assertEqual(res_normal.returncode, 0)
+            self.assertIn("In-memory cache", res_normal.stdout)
+            self.assertIn("O(N) filter", res_normal.stdout)
 
 
 if __name__ == "__main__":

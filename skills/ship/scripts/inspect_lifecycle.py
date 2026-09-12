@@ -1588,47 +1588,10 @@ def perform_rollback(
             pass
 
     backed_up_files: List[str] = []
-    if not git_info.get("is_clean") or git_info.get("modified_source_files"):
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        if git_info.get("is_git"):
-            try:
-                patch_res = subprocess.run(
-                    ["git", "diff", "HEAD"],
-                    cwd=repo_root,
-                    capture_output=True,
-                )
-                if patch_res.stdout:
-                    (backup_dir / "working_diff.patch").write_bytes(patch_res.stdout)
-            except Exception:
-                pass
-
-        for src_path_str in git_info.get("modified_source_files", []):
-            full_src = repo_root / src_path_str
-            if full_src.is_file():
-                dest = backup_dir / src_path_str
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                try:
-                    shutil.copy2(full_src, dest)
-                    backed_up_files.append(src_path_str)
-                except Exception:
-                    pass
-
-    pkg_dir = repo_root / "openspec" / "changes" / resolved_topic
-    tasks_file = pkg_dir / "tasks.md"
-    reset_tasks_count = 0
-    if tasks_file.exists() and canonical_tag == "gate-1-spec":
-        tasks_content = tasks_file.read_text(encoding="utf-8", errors="replace")
-        new_lines = []
-        for line in tasks_content.splitlines():
-            if re.match(r"^(\s*(?:[-*]|\d+\.)\s*\[)[xX](\].*)$", line):
-                new_line = re.sub(r"^(\s*(?:[-*]|\d+\.)\s*\[)[xX](\].*)$", r"\g<1> \2", line)
-                new_lines.append(new_line)
-                reset_tasks_count += 1
-            else:
-                new_lines.append(line)
-        tasks_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
-
+    restored_files: List[str] = []
+    removed_files: List[str] = []
     git_reset_performed = False
+
     if git_info.get("is_git"):
         target_sha: Optional[str] = None
         tag_check = subprocess.run(
@@ -1652,26 +1615,135 @@ def perform_rollback(
                 target_sha = checkpoint_info["commit"]
 
         current_sha = git_info.get("commit")
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            patch_res = subprocess.run(
+                ["git", "diff", "HEAD"],
+                cwd=repo_root,
+                capture_output=True,
+            )
+            if patch_res.stdout:
+                (backup_dir / "working_diff.patch").write_bytes(patch_res.stdout)
+        except Exception:
+            pass
+
         if target_sha and current_sha and current_sha != target_sha and target_sha != "none":
             try:
-                reset_cmd = ["git", "reset", "--soft", target_sha]
-                res = subprocess.run(reset_cmd, cwd=repo_root, capture_output=True, text=True)
-                if res.returncode == 0:
+                commit_diff_res = subprocess.run(
+                    ["git", "diff", target_sha, "HEAD"],
+                    cwd=repo_root,
+                    capture_output=True,
+                )
+                if commit_diff_res.stdout:
+                    (backup_dir / "committed_diff.patch").write_bytes(commit_diff_res.stdout)
+            except Exception:
+                pass
+
+        for src_path_str in git_info.get("modified_source_files", []):
+            full_src = repo_root / src_path_str
+            if full_src.is_file():
+                dest = backup_dir / src_path_str
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    shutil.copy2(full_src, dest)
+                    if src_path_str not in backed_up_files:
+                        backed_up_files.append(src_path_str)
+                except Exception:
+                    pass
+
+        # Perform scoped restoration of implementation files modified or added since target_sha
+        if target_sha and target_sha != "none":
+            try:
+                diff_cmd = ["git", "diff", "--name-only", target_sha]
+                diff_proc = subprocess.run(diff_cmd, cwd=repo_root, capture_output=True, text=True)
+                changed_files = [line.strip() for line in diff_proc.stdout.splitlines() if line.strip()]
+
+                ignored_prefixes = (".scratch/", "scratch/", ".gemini/", ".git/")
+                tasks_rel = f"openspec/changes/{resolved_topic}/tasks.md"
+
+                for rel_path in changed_files:
+                    if any(rel_path.startswith(p) for p in ignored_prefixes):
+                        continue
+                    if rel_path == tasks_rel:
+                        continue
+
+                    full_path = repo_root / rel_path
+                    if full_path.is_file() and rel_path not in backed_up_files:
+                        dest = backup_dir / rel_path
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        try:
+                            shutil.copy2(full_path, dest)
+                            backed_up_files.append(rel_path)
+                        except Exception:
+                            pass
+
+                    # Check if file existed at target_sha
+                    cat_check = subprocess.run(
+                        ["git", "cat-file", "-e", f"{target_sha}:{rel_path}"],
+                        cwd=repo_root,
+                        capture_output=True,
+                    )
+                    if cat_check.returncode == 0:
+                        # Restore file from target_sha
+                        chk_proc = subprocess.run(
+                            ["git", "checkout", target_sha, "--", rel_path],
+                            cwd=repo_root,
+                            capture_output=True,
+                            text=True,
+                        )
+                        if chk_proc.returncode == 0:
+                            restored_files.append(rel_path)
+                    else:
+                        # File was newly created since target_sha: remove it from worktree & index
+                        subprocess.run(["git", "rm", "-f", "--cached", rel_path], cwd=repo_root, capture_output=True)
+                        full_path.unlink(missing_ok=True)
+                        removed_files.append(rel_path)
+
+                # Reset git history and index to target_sha
+                if current_sha and current_sha != target_sha:
+                    reset_cmd = ["git", "reset", target_sha]
+                    res = subprocess.run(reset_cmd, cwd=repo_root, capture_output=True, text=True)
+                    if res.returncode == 0:
+                        git_reset_performed = True
+                elif restored_files or removed_files:
                     git_reset_performed = True
             except Exception:
                 pass
 
-    has_backups = bool(backed_up_files) or (backup_dir.exists() and (backup_dir / "working_diff.patch").exists())
+    # Reset tasks in tasks.md for Gate 1 spec amendment
+    pkg_dir = repo_root / "openspec" / "changes" / resolved_topic
+    tasks_file = pkg_dir / "tasks.md"
+    reset_tasks_count = 0
+    if tasks_file.exists() and canonical_tag == "gate-1-spec":
+        tasks_content = tasks_file.read_text(encoding="utf-8", errors="replace")
+        new_lines = []
+        for line in tasks_content.splitlines():
+            if re.match(r"^(\s*(?:[-*]|\d+\.)\s*\[)[xX](\].*)$", line):
+                new_line = re.sub(r"^(\s*(?:[-*]|\d+\.)\s*\[)[xX](\].*)$", r"\g<1> \2", line)
+                new_lines.append(new_line)
+                reset_tasks_count += 1
+            else:
+                new_lines.append(line)
+        tasks_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+
+    has_backups = bool(backed_up_files) or (backup_dir.exists() and (
+        (backup_dir / "working_diff.patch").exists() or (backup_dir / "committed_diff.patch").exists()
+    ))
     return {
         "status": "success",
         "topic": resolved_topic,
         "target_gate": canonical_tag,
         "backup_directory": str(backup_dir.relative_to(repo_root)) if has_backups else None,
         "backed_up_files": backed_up_files,
+        "restored_files": restored_files,
+        "removed_files": removed_files,
         "reset_tasks_count": reset_tasks_count,
         "git_reset_performed": git_reset_performed,
         "checkpoint_found": bool(checkpoint_info),
-        "message": f"Safely rolled back to {canonical_tag}. State reset to Gate 1 (Spec Amendment).",
+        "message": (
+            f"Safely rolled back to {canonical_tag}. Restored {len(restored_files)} implementation file(s), "
+            f"removed {len(removed_files)} new file(s), and reset state to Gate 1 (Spec Amendment)."
+        ),
     }
 
 
