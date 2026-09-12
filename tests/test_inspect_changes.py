@@ -183,6 +183,14 @@ class InspectorTests(unittest.TestCase):
         self.assertIn("Available Spec / PRD Documents:", output)
         self.assertIn(".scratch/feature_spec.md", output)
 
+    def test_openspec_and_adr_discovery(self):
+        self.write("openspec/changes/order-stream/specs/exit.md", "# Requirement: Exit\n")
+        self.write("docs/adr/ADR-001-trail.md", "# ADR 001\n")
+        output = self.inspect("--no-diff")
+        self.assertIn("Available Spec / PRD Documents:", output)
+        self.assertIn("openspec/changes/order-stream/specs/exit.md", output)
+        self.assertIn("docs/adr/ADR-001-trail.md", output)
+
     def test_untracked_test_matching_prefix_and_case(self):
         self.write("service.py", "class Service: pass\n")
         self.write("tests/test_service.py", "def test_service(): pass\n")

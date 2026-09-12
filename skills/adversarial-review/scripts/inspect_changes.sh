@@ -219,14 +219,14 @@ add_spec_file() {
 
 while IFS= read -r -d '' f; do
     add_spec_file "$f"
-done < <(git ls-files -z --cached --others --exclude-standard "*spec*.md" "*PRD*.md" "*RFC*.md" "docs/specs/*" "docs/rfcs/*" ".scratch/*" "specs/*" 2>/dev/null || true)
+done < <(git ls-files -z --cached --others --exclude-standard "*spec*.md" "*PRD*.md" "*RFC*.md" "docs/specs/*" "docs/rfcs/*" "docs/adr/*" ".scratch/*" "specs/*" "openspec/*" 2>/dev/null || true)
 
-# Also check untracked or ignored scratch and spec directories on disk
-for scratch_dir in .scratch scratch docs/specs specs; do
+# Also check untracked or ignored scratch, spec, adr, and openspec directories on disk
+for scratch_dir in .scratch scratch docs/specs specs docs/adr openspec; do
     if [[ -d "$scratch_dir" ]]; then
         while IFS= read -r -d '' sf; do
             add_spec_file "${sf#./}"
-        done < <(find "$scratch_dir" -maxdepth 2 -type f \( -name "*.md" -o -name "*.txt" \) -print0 2>/dev/null || true)
+        done < <(find "$scratch_dir" -maxdepth 4 -type f \( -name "*.md" -o -name "*.txt" \) -print0 2>/dev/null || true)
     fi
 done
 

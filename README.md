@@ -1,10 +1,104 @@
 # Skills
 
-One skill lives here: [adversarial-review](./skills/adversarial-review/SKILL.md).
+A repository of production-grade engineering skills for AI agents, covering the complete lifecycle from architectural design to post-implementation code review:
 
-It gives a coding agent instructions for reviewing code. The repo contains Markdown prompts, reference guides, a Bash context inspector, and a Python report validator. The agent runs the review.
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                 PRE-IMPLEMENTATION: adversarial-design                      │
+│   • Persona: Senior Principal Systems Architect                             │
+│   • Model: Design Tree & Frontier Algorithm (Round-based batching)          │
+│   • Inquiry: State, Concurrency, Failure, Schema, Blast Radius              │
+│   • Output: Architecture Decision Record (ADR) & OpenSpec Package           │
+└──────────────────────┬───────────────────────────────┬──────────────────────┘
+                       │                               │
+                       ▼ (Ungrillable Question?)       │
+        ┌─────────────────────────────┐                │
+        │      SPIKE: prototype       │                │
+        │   • Isolated scratch sandbox│                │
+        │   • Measures empirical SLIs │                │
+        │   • Settles design frontier │                │
+        └──────────────┬──────────────┘                │
+                       │ (Verdict returned)            │
+                       ▼                               ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│          IMPLEMENTATION FLOW: tdd (Red-Green-Refactor) + ponytail           │
+│   • Test Driver: Writes failing behavioral test (Red Phase)                 │
+│   • Ponytail Implementer: Climbs Laziness Ladder, stdlib-first (Green)      │
+│   • Code Refactorer: Simplifies under green; adds ponytail: debt markers    │
+│   • Inputs: OpenSpec tasks.md & specs/ acceptance criteria                  │
+│   • Output: Self-verifying, lean production implementation                  │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │
+                                       ▼ (Code & Tests Complete)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                 POST-IMPLEMENTATION: adversarial-review                     │
+│   • Stage 0: Spec Alignment (Verifies code directly against ADR/Spec)       │
+│   • Stages 1–9: Correctness, Concurrency, Failure, Craftsmanship, SOLID     │
+│   • Actions: review, review-pr, review-loop                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
-## Use it
+## Skills Catalog
+
+| Skill Name | Command / Trigger | Lifecycle Stage | Description |
+|---|---|---|---|
+| [**`adversarial-design`**](./skills/adversarial-design/SKILL.md) | `/adversarial-design`, `"grill me on this design"` | Pre-implementation | Relentlessly stress-tests architectures and plans using frontier rounds. Compiles an ADR & OpenSpec. |
+| [**`prototype`**](./skills/prototype/SKILL.md) | `/prototype`, `"prototype"`, `"spike"` | Empirical Validation | Rapid, disposable spikes answering ungrillable design questions in isolated sandboxes. |
+| [**`tdd`**](./skills/tdd/SKILL.md) | `/tdd`, `"tdd"`, `"red-green-refactor"` | Implementation | Disciplined test-driven development engine with dedicated Test Driver, Implementer, and Refactorer agents. |
+| [**`ponytail`**](./skills/ponytail/SKILL.md) | `/ponytail`, `"ponytail"`, `"lazy senior dev"` | Simplicity & Anti-Bloat | Forces the simplest working solution: YAGNI, standard library first, zero unrequested abstractions. |
+| [**`adversarial-review`**](./skills/adversarial-review/SKILL.md) | `/adversarial-review`, `"adversarial review"` | Post-implementation | 10-stage systems audit across correctness, concurrency, failure modes, and production risk. |
+
+---
+
+## 1. `adversarial-design` (Pre-Implementation)
+
+Give your agent the [adversarial-design SKILL.md](./skills/adversarial-design/SKILL.md) and your proposal or idea.
+
+- **The Facts vs. Decisions Law**: The agent autonomously inspects the codebase for facts. User turns are reserved strictly for architectural trade-offs.
+- **Frontier Rounds**: Batches unblocked questions with concrete recommended stances (`❓ Q1` + `➡️ Recommended Stance`) so you can answer rapidly by number.
+- **Ungrillable Detection**: Recognizes when questions cannot be settled by talk and prompts a timeboxed spike/prototype using [prototype](./skills/prototype/SKILL.md).
+- **Output**: Generates a standard [Architecture Decision Record (ADR)](./skills/adversarial-design/references/adr_template.md) under `docs/adr/` and/or an executable [OpenSpec Change Package](./skills/adversarial-design/references/openspec_template.md) under `openspec/changes/`, which become the input contracts for `adversarial-review`.
+
+---
+
+## 2. `prototype` (Empirical Validation & Spikes)
+
+Give your agent the [prototype SKILL.md](./skills/prototype/SKILL.md) and the empirical question or hypothesis.
+
+- **Throwaway Mindset**: Strict isolation to `.scratch/<spike-name>/`. Zero pollution of production source trees.
+- **Minimal Viable Harness**: Hack, don't architect. Bypass layers and mock services to measure the single variable under test.
+- **Measurement Hygiene**: Warm-up passes, percentile distributions (p50/p95/p99/max), and realistic concurrency.
+- **Decision Settlement**: Concludes with a structured report that settles the design frontier and feeds empirical rationale directly into the ADR.
+- **References**: Consult [Spike Guidelines](./skills/prototype/references/spike_guidelines.md) and ready-to-use [Experiment Templates](./skills/prototype/references/experiment_templates.md).
+
+---
+
+## 3. `tdd` (Implementation Flow & Reusable Agents)
+
+Give your agent the [tdd SKILL.md](./skills/tdd/SKILL.md) and the task or OpenSpec package to implement.
+
+- **The Multi-Agent Implementation Roster**:
+  - [**Test Driver**](./skills/tdd/agents/test_driver.md): Red Phase. Translates specs into failing behavioral tests using AAA.
+  - [**Ponytail Implementer**](./skills/tdd/agents/ponytail_implementer.md): Green Phase. Climbs the Laziness Ladder to write the minimum passing code.
+  - [**Code Refactorer**](./skills/tdd/agents/code_refactorer.md): Refactor Phase. Cleans code while tests remain green; adds debt markers.
+- **The Iron Law**: No production code without a failing test first.
+- **Red Verification**: Must execute the test suite and confirm the test fails for the expected reason before implementing.
+- **References**: Consult [TDD Patterns & Testability](./skills/tdd/references/tdd_patterns.md) and the [Testing Anti-Patterns Catalog](./skills/tdd/references/anti_patterns.md).
+
+---
+
+## 4. `ponytail` (Lazy Senior Dev / Anti-Bloat)
+
+Give your agent the [ponytail SKILL.md](./skills/ponytail/SKILL.md) when implementing features, refactoring, or choosing libraries.
+
+- **The Laziness Ladder**: 1. YAGNI ➔ 2. Codebase reuse ➔ 3. Standard library ➔ 4. Platform native ➔ 5. Installed deps ➔ 6. One-liner ➔ 7. Minimum code.
+- **Root-Cause Fixes**: Grep all callers and fix at the shared root, not symptom guards per caller.
+- **Debt Tracking**: Mark deliberate pragmatic shortcuts with `// ponytail: <shortcut>. Ceiling: <limit>. Upgrade: <next step>.`
+- **References**: Consult the [Laziness Ladder Guide](./skills/ponytail/references/laziness_ladder.md) and [Debt Tracking Protocol](./skills/ponytail/references/debt_tracking.md).
+
+---
+
+## 5. `adversarial-review` (Post-Implementation)
 
 Give your coding agent the [SKILL.md](./skills/adversarial-review/SKILL.md) file and the change to review. Include the issue or spec if you have one.
 
@@ -110,27 +204,54 @@ Each finding follows the same [12-field schema](./skills/adversarial-review/refe
 ## Files
 
 ```text
-skills/adversarial-review/
-├── SKILL.md
-├── agents/
-│   ├── correctness_reviewer.md
-│   ├── concurrency_reviewer.md
-│   ├── design_reviewer.md
-│   ├── review_judge.md
-│   └── code_fixer.md
-├── scripts/
-│   ├── inspect_changes.sh
-│   └── validate_report.py
-└── references/
-    ├── review_modes.md
-    ├── finding_schema.md
-    ├── agent_report.schema.json
-    ├── handbook_foundations.md
-    ├── handbook_craftsmanship.md
-    ├── handbook_architecture.md
-    ├── review_pipeline.md
-    ├── review_loop.md
-    └── production_risk_matrix.md
+skills/
+├── adversarial-design/
+│   ├── SKILL.md
+│   └── references/
+│       ├── interview_protocol.md
+│       ├── systems_inquiry_matrix.md
+│       ├── adr_template.md
+│       └── openspec_template.md
+├── prototype/
+│   ├── SKILL.md
+│   └── references/
+│       ├── spike_guidelines.md
+│       └── experiment_templates.md
+├── tdd/
+│   ├── SKILL.md
+│   ├── agents/
+│   │   ├── test_driver.md
+│   │   ├── ponytail_implementer.md
+│   │   └── code_refactorer.md
+│   └── references/
+│       ├── tdd_patterns.md
+│       └── anti_patterns.md
+├── ponytail/
+│   ├── SKILL.md
+│   └── references/
+│       ├── laziness_ladder.md
+│       └── debt_tracking.md
+└── adversarial-review/
+    ├── SKILL.md
+    ├── agents/
+    │   ├── correctness_reviewer.md
+    │   ├── concurrency_reviewer.md
+    │   ├── design_reviewer.md
+    │   ├── review_judge.md
+    │   └── code_fixer.md
+    ├── scripts/
+    │   ├── inspect_changes.sh
+    │   └── validate_report.py
+    └── references/
+        ├── review_modes.md
+        ├── finding_schema.md
+        ├── agent_report.schema.json
+        ├── handbook_foundations.md
+        ├── handbook_craftsmanship.md
+        ├── handbook_architecture.md
+        ├── review_pipeline.md
+        ├── review_loop.md
+        └── production_risk_matrix.md
 ```
 
 
