@@ -25,6 +25,7 @@ OVERWRITE=0
 BACKUP=0
 
 usage() {
+    local code="${1:-0}"
     cat <<EOF
 Usage: ./scripts/install.sh [options]
 
@@ -38,7 +39,7 @@ Options:
   --list             List available skills in this repository
   -h, --help         Show this help message
 EOF
-    exit 0
+    exit "$code"
 }
 
 list_skills() {
@@ -82,8 +83,8 @@ while [[ $# -gt 0 ]]; do
             usage
             ;;
         *)
-            echo "Unknown option: $1" >&2
-            usage
+            echo "Error: Unknown option: $1" >&2
+            usage 2
             ;;
     esac
 done

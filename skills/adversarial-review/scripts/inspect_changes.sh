@@ -437,8 +437,18 @@ PROD_FILES=()
 
 is_test_or_doc_file() {
     local f="$1"
-    # Skip non-source/doc/config/data files
-    if [[ "$f" =~ \.(md|markdown|ya?ml|sql|json|xml|properties|toml|ini|txt|csv)$ ]]; then
+    local base="${f##*/}"
+
+    # Skip dotfiles (.gitignore, .dockerignore, .env, .editorconfig, etc.)
+    if [[ "$base" =~ ^\. ]]; then
+        return 0
+    fi
+    # Skip project metadata files (LICENSE, COPYING, AUTHORS, CHANGELOG, NOTICE, README, etc.)
+    if [[ "$base" =~ ^(LICENSE|COPYING|AUTHORS|CHANGELOG|NOTICE|README)(\..+)?$ ]]; then
+        return 0
+    fi
+    # Skip non-source/doc/config/data/asset files
+    if [[ "$f" =~ \.(md|markdown|ya?ml|sql|json|xml|properties|toml|ini|txt|csv|tsv|lock|lockb|svg|png|jpe?g|gif|ico|woff2?|ttf|eot)$ ]]; then
         return 0
     fi
     # Skip test/spec directories
@@ -566,8 +576,8 @@ else
         BASE_NAME="${prod##*/}"
         STEM="${BASE_NAME%.*}"
 
-        # Skip generic stems that cause massive false-positive caller noise
-        if [[ "$STEM" =~ ^(index|main|types|utils|common|base|config|helper|helpers|constants|styles)$ ]]; then
+        # Skip empty or generic stems that cause massive false-positive caller noise
+        if [[ -z "$STEM" ]] || [[ "$STEM" =~ ^(index|main|types|utils|common|base|config|helper|helpers|constants|styles)$ ]]; then
             continue
         fi
 

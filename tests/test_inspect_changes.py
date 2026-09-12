@@ -267,6 +267,16 @@ class InspectorTests(unittest.TestCase):
         # Both base and explicit target
         self.inspect("--base", "main", "HEAD~1..HEAD", success=False)
 
+    def test_dotfiles_and_repo_metadata_are_not_flagged_as_missing_tests(self):
+        self.write(".gitignore", "*.pyc\nnode_modules/\n")
+        self.write("LICENSE", "MIT License\nCopyright 2026\n")
+        self.write("Cargo.lock", "# lockfile v3\n")
+        output = self.inspect("--no-diff")
+        self.assertNotIn("[MISSING TEST] .gitignore", output)
+        self.assertNotIn("[MISSING TEST] LICENSE", output)
+        self.assertNotIn("[MISSING TEST] Cargo.lock", output)
+        self.assertNotIn("Callers of :", output)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -17,6 +17,7 @@ from collections import OrderedDict
 import datetime
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import shutil
@@ -63,7 +64,7 @@ def compute_working_tree_fingerprint(repo_root: Path) -> str:
         pass
 
     # 3. Untracked files (excluding scratch, archive, etc.)
-    ignored_prefixes = (".scratch/", "scratch/", "openspec/archive/", ".gemini/", ".git/")
+    ignored_prefixes = (".scratch/", "scratch/", "openspec/archive/", "openspec/.", ".gemini/", ".git/")
     try:
         untracked_res = subprocess.run(
             ["git", "ls-files", "--others", "--exclude-standard", "-z"],
@@ -79,7 +80,7 @@ def compute_working_tree_fingerprint(repo_root: Path) -> str:
                     continue
                 if any(rel_str.startswith(p) for p in ignored_prefixes):
                     continue
-                if rel_str in {"report.json"}:
+                if rel_str in {"report.json", "openspec/.active"}:
                     continue
                 full_path = repo_root / rel_str
                 if full_path.is_file():
@@ -168,14 +169,16 @@ def get_git_info(repo_root: Path) -> Dict[str, Any]:
         info["modified_count"] = sum(1 for l in lines if not l.startswith("??"))
         info["untracked_count"] = sum(1 for l in lines if l.startswith("??"))
 
-        # Identify unreviewed source modifications (filtering out scratch and archive)
-        ignored_prefixes = (".scratch/", "scratch/", "openspec/archive/", ".gemini/", ".git/")
+        # Identify unreviewed source modifications (filtering out scratch, archive, and internal state)
+        ignored_prefixes = (".scratch/", "scratch/", "openspec/archive/", "openspec/.", ".gemini/", ".git/")
         modified_sources = []
         for l in lines:
             filename = l[3:].strip()
+            if " -> " in filename:
+                filename = filename.split(" -> ", 1)[1].strip()
             if any(filename.startswith(p) for p in ignored_prefixes):
                 continue
-            if filename in {"report.json", ".gitignore"}:
+            if filename in {"report.json", ".gitignore", "openspec/.active"}:
                 continue
             modified_sources.append(filename)
         info["modified_source_files"] = modified_sources
@@ -285,7 +288,7 @@ def inspect_openspec(repo_root: Path, target_topic: Optional[str] = None) -> Lis
                     total_tasks += 1
                     if next_task is None:
                         next_task = stripped[5:].strip()
-                elif stripped.startswith("- [x]") or stripped.startswith("- [X]") or stripped.startswith("* [x]"):
+                elif stripped.startswith(("- [x]", "- [X]", "* [x]", "* [X]")):
                     total_tasks += 1
                     completed_tasks += 1
 
@@ -518,17 +521,25 @@ def is_test_evidence_passing(evidence: Any) -> bool:
         if not ev_clean:
             return False
         ev_lower = ev_clean.lower()
+        # Direct word matches like "PASS", "PASSED", "SUCCESS", "OK", "GREEN"
+        if ev_lower in {"pass", "passed", "ok", "success", "green"}:
+            return True
+
         # Explicit rejection of negative phrases
         if re.search(r"\b(?:not\s+passed|failed|errors?:\s*[1-9]|failure|crash)\b", ev_lower):
             return False
 
-        # Parse structured pattern: e.g. "0 failures, 12 passed" or "12 passed, 0 failures"
-        m_fail = re.search(r"(\d+)\s*(?:failures?|errors?|failed)", ev_lower)
-        m_pass = re.search(r"(\d+)\s*passed", ev_lower)
+        # Parse structured pattern: e.g. "0 failures, 12 passed" or "12 passed, 0 failures" or "12 tests passed"
+        m_fail = re.search(r"(\d+)\s*(?:tests?\s+)?(?:failures?|errors?|failed)", ev_lower)
+        m_pass = re.search(r"(\d+)\s*(?:tests?\s+)?passed", ev_lower)
         if m_fail or m_pass:
             fail_count = int(m_fail.group(1)) if m_fail else 0
             pass_count = int(m_pass.group(1)) if m_pass else 0
             return fail_count == 0 and pass_count > 0
+
+        # General "all ... tests passed" phrase
+        if re.search(r"\ball\s+(?:\d+\s+)?tests?\s+passed\b", ev_lower):
+            return True
 
         # Unittest output: "Ran N tests in ...\n\nOK"
         if re.search(r"Ran\s+([1-9][0-9]*)\s+tests?.*?\bOK\b", ev_clean, re.DOTALL):
@@ -586,13 +597,24 @@ def is_spike_completed(spike_dir: Path) -> bool:
     return False
 
 
+NON_SPIKE_SCRATCH_DIRS = {
+    "archive", "coverage", "logs", "cache", "tmp", "temp", "dist",
+    "build", "node_modules", "venv", ".venv", "__pycache__"
+}
+
+
 def inspect_spikes(repo_root: Path) -> List[str]:
     """Scan .scratch/ or scratch/ for active, uncompleted spikes."""
     spikes = []
+    changes_dir = repo_root / "openspec" / "changes"
+    known_packages = {d.name for d in changes_dir.iterdir() if d.is_dir()} if changes_dir.exists() else set()
+
     for base in [repo_root / ".scratch", repo_root / "scratch"]:
         if base.exists() and base.is_dir():
             for child in base.iterdir():
                 if child.is_dir() and not child.name.startswith("."):
+                    if child.name in NON_SPIKE_SCRATCH_DIRS or child.name in known_packages:
+                        continue
                     if not is_spike_completed(child):
                         spikes.append(str(child.relative_to(repo_root)))
     return spikes
@@ -615,7 +637,7 @@ def validate_judge_report_contract(report: Any) -> List[str]:
     errors = []
     if report.get("reviewer") != "judge":
         errors.append(f"Judge report reviewer must be 'judge', got '{report.get('reviewer')}'")
-    if report.get("status") not in {"complete", "incomplete", "skipped"}:
+    if not isinstance(report.get("status"), str) or report.get("status") not in {"complete", "incomplete", "skipped"}:
         errors.append(f"Judge report status must be one of complete/incomplete/skipped, got '{report.get('status')}'")
 
     for list_field in ("coverage", "questions", "routing_notes"):
@@ -684,29 +706,46 @@ def validate_judge_report_contract(report: Any) -> List[str]:
                 errors.append(f"{prefix}.{str_field}: must be a non-empty string")
 
         conf = finding.get("confidence")
-        if isinstance(conf, bool) or not isinstance(conf, (int, float)) or conf < 0.0 or conf > 1.0:
+        if isinstance(conf, bool) or not isinstance(conf, (int, float)) or not math.isfinite(conf) or conf < 0.0 or conf > 1.0:
             errors.append(f"{prefix}.confidence: must be a finite number between 0.0 and 1.0")
 
         path = finding.get("file")
         if not isinstance(path, str) or len(path.strip()) < 1:
             errors.append(f"{prefix}.file: must be a non-empty string")
+        elif (Path(path).is_absolute() or ".." in Path(path).parts
+                or "\\" in path or re.match(r"^[A-Za-z]:", path) or path == "."):
+            errors.append(f"{fid}: file must be a repository-relative path")
 
         fline = finding.get("line")
         if not isinstance(fline, str) or not line_regex.match(fline):
             errors.append(f"{prefix}.line: must match pattern ^L[1-9][0-9]*(-L[1-9][0-9]*)?$")
+        else:
+            start, _, end = fline.partition("-L")
+            if end and int(end) < int(start[1:]):
+                errors.append(f"{fid}: line range ends before it starts")
 
     return errors
 
 
-def inspect_audit_reports(repo_root: Path) -> Optional[Dict[str, Any]]:
+def inspect_audit_reports(repo_root: Path, topic: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Look for audit reports or delivery evidence envelopes in .scratch or workspace."""
-    search_paths = [
+    search_paths = []
+    if topic:
+        search_paths.extend([
+            repo_root / ".scratch" / topic / "delivery_evidence.json",
+            repo_root / "scratch" / topic / "delivery_evidence.json",
+            repo_root / ".scratch" / f"delivery_evidence_{topic}.json",
+            repo_root / "scratch" / f"delivery_evidence_{topic}.json",
+            repo_root / ".scratch" / topic / "review_report.json",
+            repo_root / "scratch" / topic / "review_report.json",
+        ])
+    search_paths.extend([
         repo_root / ".scratch" / "delivery_evidence.json",
         repo_root / "scratch" / "delivery_evidence.json",
         repo_root / ".scratch" / "review_report.json",
         repo_root / "scratch" / "review_report.json",
         repo_root / "report.json",
-    ]
+    ])
     for p in search_paths:
         if p.exists():
             try:
@@ -1003,7 +1042,7 @@ def apply_and_archive_openspec(
             if s.startswith("- [ ]") or s.startswith("* [ ]"):
                 has_pending = True
                 has_tasks = True
-            elif s.startswith("- [x]") or s.startswith("- [X]") or s.startswith("* [x]"):
+            elif s.startswith(("- [x]", "- [X]", "* [x]", "* [X]")):
                 has_tasks = True
         if not has_tasks:
             raise RuntimeError(f"Cannot archive '{topic_name}': tasks.md contains no tasks.")
@@ -1011,7 +1050,7 @@ def apply_and_archive_openspec(
             raise RuntimeError(f"Cannot archive '{topic_name}': package has pending tasks in tasks.md. Complete all tasks before archiving or use --force.")
 
         # 2. Audit report / Delivery Evidence check
-        audit_report = inspect_audit_reports(repo_root)
+        audit_report = inspect_audit_reports(repo_root, topic=topic_name)
         if not audit_report:
             raise RuntimeError(f"Cannot archive '{topic_name}': no passing audit report found (or delivery evidence in .scratch/).")
 
@@ -1074,6 +1113,7 @@ def apply_and_archive_openspec(
             unreviewed = [
                 f for f in modified_sources
                 if not (f.startswith("openspec/specs/") and Path(f).name in package_spec_names)
+                and f != "openspec/.active"
             ]
             if unreviewed:
                 raise RuntimeError(f"Cannot archive '{topic_name}': working tree has unreviewed source modifications ({', '.join(unreviewed[:3])}).")
@@ -1149,7 +1189,8 @@ def evaluate_repository(
     archived_packages = inspect_archived_openspec(repo_root)
     living_specs = inspect_living_specs(repo_root)
     spikes = inspect_spikes(repo_root)
-    audit_report = inspect_audit_reports(repo_root)
+    active_pkg_topic = openspec_packages[0]["topic"] if openspec_packages else None
+    audit_report = inspect_audit_reports(repo_root, topic=target_topic or active_pkg_topic)
 
     gate, state_key, next_action = determine_lifecycle_state(
         git_info, adrs, openspec_packages, spikes, audit_report

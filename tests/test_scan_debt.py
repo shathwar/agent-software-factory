@@ -110,6 +110,29 @@ class TestScanDebt(unittest.TestCase):
         self.assertEqual(res_pipe["ceiling"], "500 req/s")
         self.assertEqual(res_pipe["upgrade"], "Redis cache")
 
+    def test_vague_ceiling_and_upgrade_placeholders_are_rejected(self):
+        for placeholder in ["none", "N/A", "TBD", "todo", "fixme"]:
+            with self.subTest(placeholder=placeholder):
+                line = f"// ponytail: Quick cache. Ceiling: {placeholder}. Upgrade: Redis."
+                res = scan_debt.parse_debt_marker(line, "cache.py", 10)
+                self.assertFalse(res["is_valid"])
+                self.assertTrue(any("Ceiling" in e for e in res["errors"]))
+
+                line2 = f"// ponytail: Quick cache. Ceiling: 1k users. Upgrade: {placeholder}."
+                res2 = scan_debt.parse_debt_marker(line2, "cache.py", 12)
+                self.assertFalse(res2["is_valid"])
+                self.assertTrue(any("Upgrade" in e for e in res2["errors"]))
+
+    def test_binary_files_are_safely_skipped(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            binary_file = tmppath / "image.png"
+            # Write binary bytes including null bytes and substring ponytail:
+            binary_file.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDRponytail: bad\x00\x00")
+
+            markers = scan_debt.scan_paths([tmppath])
+            self.assertEqual(len(markers), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

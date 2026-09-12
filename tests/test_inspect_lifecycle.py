@@ -909,6 +909,141 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertIn("Requirement: Logout", merged_text)
             self.assertFalse(pkg_dir.exists())
 
+    def test_active_topic_persistence_does_not_revoke_delivery_or_block_archive(self):
+        """Active topic written to openspec/.active must not count as an unreviewed source modification."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.email", "tester@test.com"], cwd=tmppath, check=True)
+
+            pkg = tmppath / "openspec" / "changes" / "feat"
+            pkg.mkdir(parents=True)
+            (pkg / "tasks.md").write_text("- [x] 1. Done\n")
+            subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
+            subprocess.run(["git", "commit", "-m", "init"], cwd=tmppath, check=True)
+            commit_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmppath, capture_output=True, text=True).stdout.strip()
+
+            (tmppath / ".scratch").mkdir()
+            (tmppath / ".scratch" / "delivery_evidence.json").write_text(json.dumps({
+                "topic": "feat",
+                "verdict": "PASS",
+                "snapshot": {"commit": commit_sha},
+                "test_evidence": {"exit_code": 0, "passed": True, "tests_run": 1},
+                "judge_report": {
+                    "reviewer": "judge",
+                    "status": "complete",
+                    "findings": [],
+                    "coverage": ["Reviewed feat."],
+                    "questions": [],
+                    "routing_notes": [],
+                },
+            }))
+
+            # Set active topic
+            inspect_lifecycle.set_active_topic(tmppath, "feat")
+
+            # Must remain DELIVERY_READY (not revoked to AUDIT_ACTIVE due to openspec/.active)
+            res = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertEqual(res["gate"], "GATE 4: READY TO SHIP")
+            self.assertEqual(res["state_key"], "DELIVERY_READY")
+
+            # Must archive cleanly without error about openspec/.active
+            arch_res = inspect_lifecycle.apply_and_archive_openspec(tmppath, topic="feat")
+            self.assertEqual(arch_res["topic"], "feat")
+
+    def test_judge_report_unhashable_status_and_nan_confidence(self):
+        """validate_judge_report_contract handles unhashable status and invalid confidence/paths without crashing."""
+        base_report = {
+            "reviewer": "judge",
+            "status": "complete",
+            "findings": [{
+                "id": "FINDING-001",
+                "severity": "CRITICAL",
+                "category": "Correctness",
+                "file": "service.py",
+                "line": "L10-L20",
+                "title": "Bug",
+                "problem": "Crash",
+                "evidence": "val = 1 / 0",
+                "impact": "Fails",
+                "recommendation": "Fix",
+                "confidence": 0.95,
+                "fixability": "autonomous",
+            }],
+            "coverage": [],
+            "questions": [],
+            "routing_notes": [],
+        }
+
+        # 1. Unhashable status list should produce error, not crash with TypeError
+        rep_unhashable = dict(base_report, status=["complete"])
+        errs = inspect_lifecycle.validate_judge_report_contract(rep_unhashable)
+        self.assertTrue(any("status" in e for e in errs))
+
+        # 2. NaN confidence should produce error
+        rep_nan = json.loads(json.dumps(base_report))
+        rep_nan["findings"][0]["confidence"] = float("nan")
+        errs_nan = inspect_lifecycle.validate_judge_report_contract(rep_nan)
+        self.assertTrue(any("confidence" in e for e in errs_nan))
+
+        # 3. Non-relative path
+        rep_path = json.loads(json.dumps(base_report))
+        rep_path["findings"][0]["file"] = "/etc/passwd"
+        errs_path = inspect_lifecycle.validate_judge_report_contract(rep_path)
+        self.assertTrue(any("repository-relative" in e for e in errs_path))
+
+        # 4. Inverted line range
+        rep_line = json.loads(json.dumps(base_report))
+        rep_line["findings"][0]["line"] = "L20-L10"
+        errs_line = inspect_lifecycle.validate_judge_report_contract(rep_line)
+        self.assertTrue(any("line range ends before it starts" in e for e in errs_line))
+
+    def test_task_parsing_supports_uppercase_asterisk_checkbox(self):
+        """* [X] must be counted as a completed task."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            pkg_dir = tmppath / "openspec" / "changes" / "asterisk-task"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text(
+                "# Tasks\n"
+                "* [X] 1. First task\n"
+                "- [x] 2. Second task\n"
+                "- [ ] 3. Third task\n"
+            )
+            pkgs = inspect_lifecycle.inspect_openspec(tmppath)
+            self.assertEqual(len(pkgs), 1)
+            self.assertEqual(pkgs[0]["total_tasks"], 3)
+            self.assertEqual(pkgs[0]["completed_tasks"], 2)
+            self.assertEqual(pkgs[0]["pending_tasks"], 1)
+
+    def test_enhanced_test_evidence_phrases(self):
+        """is_test_evidence_passing accepts common test summary phrases and status words."""
+        self.assertTrue(inspect_lifecycle.is_test_evidence_passing("All 10 tests passed successfully!"))
+        self.assertTrue(inspect_lifecycle.is_test_evidence_passing("All tests passed"))
+        self.assertTrue(inspect_lifecycle.is_test_evidence_passing("10 tests passed"))
+        self.assertTrue(inspect_lifecycle.is_test_evidence_passing("PASS"))
+        self.assertTrue(inspect_lifecycle.is_test_evidence_passing("SUCCESS"))
+        self.assertFalse(inspect_lifecycle.is_test_evidence_passing("FAILED"))
+        self.assertFalse(inspect_lifecycle.is_test_evidence_passing("not passed"))
+
+    def test_non_spike_scratch_directories_ignored(self):
+        """Directories like coverage, logs, or known package folders in .scratch are not flagged as spikes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            pkg_dir = tmppath / "openspec" / "changes" / "billing"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text("- [ ] 1. Task\n")
+
+            # Create non-spike dirs in .scratch
+            scratch_dir = tmppath / ".scratch"
+            (scratch_dir / "coverage").mkdir(parents=True)
+            (scratch_dir / "logs").mkdir(parents=True)
+            (scratch_dir / "billing").mkdir(parents=True)
+
+            spikes = inspect_lifecycle.inspect_spikes(tmppath)
+            self.assertEqual(len(spikes), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

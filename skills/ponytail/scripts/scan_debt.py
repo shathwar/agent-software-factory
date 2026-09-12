@@ -94,6 +94,12 @@ def parse_debt_marker(raw_text: str, file_path: str, line_number: int) -> Dict[s
     if not shortcut or shortcut.lower() in {"todo", "fixme", "clean this up", "optimize", "temp"}:
         errors.append(f"Vague or missing shortcut description: '{shortcut}'")
 
+    if ceiling and ceiling.lower() in {"none", "n/a", "tbd", "todo", "fixme"}:
+        errors.append(f"Vague or placeholder 'Ceiling:' threshold: '{ceiling}'")
+
+    if upgrade and upgrade.lower() in {"none", "n/a", "tbd", "todo", "fixme"}:
+        errors.append(f"Vague or placeholder 'Upgrade:' path: '{upgrade}'")
+
     is_valid = len(errors) == 0
 
     return {
@@ -111,6 +117,11 @@ def parse_debt_marker(raw_text: str, file_path: str, line_number: int) -> Dict[s
 def scan_file(file_path: Path, base_dir: Path) -> List[Dict[str, Any]]:
     """Scan a single text file for debt markers."""
     try:
+        # Fast binary file detection
+        with file_path.open("rb") as f:
+            chunk = f.read(1024)
+            if b"\0" in chunk:
+                return []
         content = file_path.read_text(encoding="utf-8", errors="replace")
     except Exception:
         return []
@@ -118,7 +129,10 @@ def scan_file(file_path: Path, base_dir: Path) -> List[Dict[str, Any]]:
     if "ponytail:" not in content.lower():
         return []
 
-    rel_path = str(file_path.relative_to(base_dir))
+    try:
+        rel_path = str(file_path.relative_to(Path.cwd().resolve()))
+    except ValueError:
+        rel_path = str(file_path.relative_to(base_dir))
     markers = []
     for idx, line in enumerate(content.splitlines(), start=1):
         if "ponytail:" in line.lower():
