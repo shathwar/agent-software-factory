@@ -89,7 +89,7 @@ Iterate sequentially through `openspec/changes/<topic>/tasks.md`:
    - Execute `bash <resolved_path>/inspect_changes.sh --base <base-branch>` (default: `main`). Never restrict to `main...HEAD` as that omits uncommitted working-tree implementation edits.
 2. Launch [`adversarial-review`](../adversarial-review/SKILL.md) in `review-loop` mode.
 3. Stage 0 verifies code against OpenSpec/ADR; Stages 1–9 audit concurrency, chaos, correctness.
-4. Auto-fix defects under green test protection until Judge issues an explicit `PASS` report with verified test evidence.
+4. Auto-fix defects under green test protection until Judge issues an explicit `PASS` report. Package `.scratch/delivery_evidence.json` (Delivery Evidence Envelope) bundling the Judge report, verified test runner evidence, and reviewed commit/tree snapshot.
 5. **Rollback Guard**: If ADR invariant is fundamentally broken, halt and re-open Frontier Round in Gate 1.
 
 ### Gate 4: Delivery & Sign-Off

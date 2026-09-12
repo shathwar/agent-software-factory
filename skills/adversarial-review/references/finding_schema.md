@@ -145,7 +145,46 @@ The following is an example of one object inside `findings`:
 
 ---
 
-## 6. Multi-Agent Protocol: Role of the Principal Judge
+## 6. Delivery Evidence Envelope (`.scratch/delivery_evidence.json`)
+
+To prevent contaminating the specialist and Judge report contract with lifecycle metadata (which `validate_report.py` strictly rejects as unexpected properties), the engineering lifecycle handoff bundles delivery approval into a separate **Delivery Evidence Envelope** (`.scratch/delivery_evidence.json`):
+
+```json delivery_evidence
+{
+  "schema_version": "1.0",
+  "topic": "feature-topic-name",
+  "verdict": "PASS",
+  "snapshot": {
+    "commit": "a1b2c3d4e5f6...",
+    "tree_hash": "f6e5d4c3b2a1...",
+    "working_tree_clean": true
+  },
+  "test_evidence": {
+    "exit_code": 0,
+    "passed": true,
+    "tests_run": 56,
+    "failures": 0,
+    "errors": 0
+  },
+  "judge_report": {
+    "reviewer": "judge",
+    "status": "complete",
+    "findings": [],
+    "coverage": ["Inspected all implementation files and test suites."],
+    "questions": [],
+    "routing_notes": []
+  }
+}
+```
+
+### Envelope Contract Guarantees
+1. **Separation of Concerns**: The Judge produces an unadulterated 6-field report compliant with `validate_report.py`.
+2. **Snapshot Binding**: The `snapshot` object binds the verdict to the reviewed Git commit and tree hash, ensuring unreviewed working-tree modifications cannot reuse historical approval.
+3. **Structured Test Evidence**: Test results must include verifiable execution metrics (`exit_code: 0`, `tests_run > 0`, `failures: 0`).
+
+---
+
+## 7. Multi-Agent Protocol: Role of the Principal Judge
 
 For a mechanical check before adjudication, use [validate_report.py](../scripts/validate_report.py) with standard Python 3.10+ (zero external dependencies):
 
@@ -157,7 +196,7 @@ The [JSON Schema](./agent_report.schema.json) checks fields, types, enums, and b
 
 In multi-agent execution, the [specialist protocol](./review_modes.md#3-multi-agent-review-protocol) assigns Correctness, Concurrency, and Design reviewers their active scopes. Each returns the JSON envelope in Section 5 with candidates using this same 12-field contract. The Judge checks required keys, types, enums, confidence bounds, locations, and local ID uniqueness before adjudication. Request a corrected response for malformed output; do not silently drop it or treat it as a clean review. If correction is unavailable, record incomplete coverage. Candidate IDs are local to each specialist report; the [Judge](../agents/review_judge.md) independently inspects relevant source before accepting any candidate, reconciles overlaps, filters confidence below 0.70, and assigns session-wide IDs. The Judge adjudicates submitted candidates only, returning the same envelope with `reviewer: "judge"` and the unchanged 12-field findings. The orchestrator renders the final report without adding unadjudicated findings.
 
-## 7. Finding lifecycle across rounds
+## 8. Finding lifecycle across rounds
 
 The [review loop](./review_loop.md) stores OPEN, CONFIRMED, FIXED, VERIFIED, REJECTED, and HUMAN_DECISION in a separate internal ledger. These are not additional finding fields. Use its stable ID mapping across reports; do not restart final numbering each round. Reviewer and Judge output envelopes remain unchanged. The orchestrator records evidence-backed transitions from their findings and coverage records.
 

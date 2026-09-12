@@ -373,6 +373,210 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertNotEqual(res_spike["state_key"], "SPIKE_ACTIVE")
             self.assertEqual(len(res_spike["active_spikes"]), 0)
 
+    def test_unreviewed_source_changes_block_delivery(self):
+        """Reproduction for Issue 1: unreviewed source modifications must revoke DELIVERY_READY."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            # Initialize git repository
+            subprocess.run(["git", "init"], cwd=tmppath, capture_output=True, check=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+
+            # Setup feature
+            pkg_dir = tmppath / "openspec" / "changes" / "feature"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text("- [x] 1. Done\n")
+
+            src_file = tmppath / "service.py"
+            src_file.write_text("def run(): return 42\n")
+
+            subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
+            subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmppath, check=True)
+            head_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmppath, capture_output=True, text=True).stdout.strip()
+
+            # Create delivery envelope matching HEAD commit
+            scratch_dir = tmppath / ".scratch"
+            scratch_dir.mkdir()
+            (scratch_dir / "delivery_evidence.json").write_text(json.dumps({
+                "verdict": "PASS",
+                "snapshot": {"commit": head_commit},
+                "test_evidence": {"exit_code": 0, "passed": True, "tests_run": 5},
+                "judge_report": {
+                    "reviewer": "judge",
+                    "status": "complete",
+                    "findings": [],
+                },
+            }))
+
+            # Initially clean: DELIVERY_READY
+            res_clean = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertEqual(res_clean["gate"], "GATE 4: READY TO SHIP")
+            self.assertEqual(res_clean["state_key"], "DELIVERY_READY")
+
+            # Now modify implementation to raise an exception
+            src_file.write_text("def run(): raise RuntimeError('unreviewed crash')\n")
+
+            # Must revoke DELIVERY_READY and demand re-audit
+            res_dirty = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertEqual(res_dirty["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res_dirty["state_key"], "AUDIT_ACTIVE")
+            self.assertIn("unreviewed source modifications", res_dirty["next_action"])
+
+    def test_delivery_evidence_envelope_clears_gate_while_judge_report_passes_schema(self):
+        """Reproduction for Issue 2: separate envelope satisfies both validate_report and lifecycle checker."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            pkg_dir = tmppath / "openspec" / "changes" / "payments"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text("- [x] 1. Payments implemented\n")
+
+            scratch_dir = tmppath / ".scratch"
+            scratch_dir.mkdir()
+
+            # 1. Canonical Judge report adheres strictly to the 6 required fields
+            canonical_judge_report = {
+                "reviewer": "judge",
+                "status": "complete",
+                "findings": [],
+                "coverage": ["Inspected payments gateway."],
+                "questions": [],
+                "routing_notes": [],
+            }
+            # Verify validate_report.py accepts this report
+            validate_script = ROOT / "skills" / "adversarial-review" / "scripts" / "validate_report.py"
+            val_proc = subprocess.run(
+                [sys.executable, str(validate_script), "-"],
+                input=json.dumps(canonical_judge_report),
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(val_proc.returncode, 0, f"Judge report rejected by validator: {val_proc.stderr}")
+
+            # 2. Package into Delivery Evidence Envelope in .scratch/delivery_evidence.json
+            envelope = {
+                "schema_version": "1.0",
+                "topic": "payments",
+                "verdict": "PASS",
+                "snapshot": {"commit": "HEAD"},
+                "test_evidence": {"exit_code": 0, "passed": True, "tests_run": 10},
+                "judge_report": canonical_judge_report,
+            }
+            (scratch_dir / "delivery_evidence.json").write_text(json.dumps(envelope))
+
+            res = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertEqual(res["gate"], "GATE 4: READY TO SHIP")
+            self.assertEqual(res["state_key"], "DELIVERY_READY")
+            self.assertTrue(res["audit_report"]["is_envelope"])
+
+    def test_strict_test_evidence_classification(self):
+        """Reproduction for Issue 3: test evidence parsing must reject 'not passed' and 0 tests, and accept 0 failures."""
+        # 1. "not passed" must be rejected
+        self.assertFalse(inspect_lifecycle.is_test_evidence_passing("not passed"))
+
+        # 2. {"tests_run": 0} must be rejected
+        self.assertFalse(inspect_lifecycle.is_test_evidence_passing({"tests_run": 0}))
+        self.assertFalse(inspect_lifecycle.is_test_evidence_passing({"exit_code": 0, "tests_run": 0}))
+
+        # 3. "0 failures, 12 passed" must be accepted
+        self.assertTrue(inspect_lifecycle.is_test_evidence_passing("0 failures, 12 passed"))
+        self.assertTrue(inspect_lifecycle.is_test_evidence_passing("12 passed, 0 failures"))
+
+        # 4. Structured dict with passing indicators
+        self.assertTrue(inspect_lifecycle.is_test_evidence_passing({"exit_code": 0, "passed": True, "tests_run": 12}))
+        self.assertFalse(inspect_lifecycle.is_test_evidence_passing({"exit_code": 1, "passed": False}))
+
+    def test_corrupt_spike_report_remains_incomplete(self):
+        """Reproduction for Issue 4: corrupt or template-only spike reports must not count as complete."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            spike_dir = tmppath / ".scratch" / "corrupt-spike"
+            spike_dir.mkdir(parents=True)
+
+            # Corrupt JSON containing only '{'
+            (spike_dir / "report.json").write_text("{\n")
+            self.assertFalse(inspect_lifecycle.is_spike_completed(spike_dir))
+
+            # Markdown with only headings, no verdict
+            (spike_dir / "report.json").unlink()
+            (spike_dir / "report.md").write_text(
+                "## 🧪 Spike Report: Corrupt\n\n### ⚖️ Architectural Verdict\n"
+            )
+            self.assertFalse(inspect_lifecycle.is_spike_completed(spike_dir))
+
+            # Markdown with explicit confirmed verdict and details
+            (spike_dir / "report.md").write_text(
+                "## 🧪 Spike Report: Valid\n\n"
+                "### ⚖️ Architectural Verdict\n"
+                "- **Verdict**: **CONFIRMED**\n"
+                "- **Recommendation**: Use memory-mapped I/O\n"
+                "- Latency p99: 1.2ms\n"
+            )
+            self.assertTrue(inspect_lifecycle.is_spike_completed(spike_dir))
+
+    def test_explicit_invalid_topic_fails_visibly(self):
+        """Reproduction for Issue 5: requesting an invalid topic must error, not silently fall back."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            pkg_dir = tmppath / "openspec" / "changes" / "auth"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text("- [x] 1. Auth done\n")
+
+            # Direct inspect_openspec call with invalid topic
+            with self.assertRaises(ValueError) as ctx:
+                inspect_lifecycle.inspect_openspec(tmppath, target_topic="auth-typo")
+            self.assertIn("auth-typo", str(ctx.exception))
+            self.assertIn("Available: auth", str(ctx.exception))
+
+            # CLI call with --topic auth-typo
+            cmd = [sys.executable, str(INSPECT_LIFECYCLE), "--path", str(tmpdir), "--topic", "auth-typo"]
+            proc = subprocess.run(cmd, capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 1)
+            self.assertIn("auth-typo", proc.stderr)
+
+    def test_all_requirement_removal_notations(self):
+        """Reproduction for Issue 6: all supported removal notations must reliably remove requirements."""
+        living = (
+            "# Spec\n\n"
+            "### Requirement: KeepMe\n"
+            "Keep this intact.\n\n"
+            "### Requirement: BodyBracket\n"
+            "Old body.\n\n"
+            "### Requirement: BodyStatus\n"
+            "Old body.\n\n"
+            "### Requirement: HeaderBracket\n"
+            "Old body.\n\n"
+            "### Requirement: HeaderParen\n"
+            "Old body.\n"
+        )
+
+        delta = (
+            "# Delta\n\n"
+            "### Requirement: BodyBracket\n"
+            "[REMOVED]\n\n"
+            "### Requirement: BodyStatus\n"
+            "STATUS: REMOVED\n\n"
+            "### Requirement: HeaderBracket [DELETED]\n\n"
+            "### Requirement: HeaderParen (REMOVED)\n\n"
+            "### Requirement: NewReq\n"
+            "Brand new requirement.\n"
+        )
+
+        merged = inspect_lifecycle.merge_spec_requirements(living, delta)
+
+        # Untouched requirement must remain
+        self.assertIn("Requirement: KeepMe", merged)
+        self.assertIn("Keep this intact.", merged)
+
+        # New requirement must be added
+        self.assertIn("Requirement: NewReq", merged)
+        self.assertIn("Brand new requirement.", merged)
+
+        # All 4 removed requirements must be purged
+        self.assertNotIn("BodyBracket", merged)
+        self.assertNotIn("BodyStatus", merged)
+        self.assertNotIn("HeaderBracket", merged)
+        self.assertNotIn("HeaderParen", merged)
+
 
 if __name__ == "__main__":
     unittest.main()

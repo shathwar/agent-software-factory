@@ -26,14 +26,16 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
 def get_git_info(repo_root: Path) -> Dict[str, Any]:
-    """Gather git branch, commit SHA, and working tree status."""
+    """Gather git branch, commit SHA, tree hash, and working tree status."""
     info: Dict[str, Any] = {
         "is_git": False,
         "branch": "unknown",
         "commit": None,
+        "tree_hash": None,
         "is_clean": True,
         "modified_count": 0,
         "untracked_count": 0,
+        "modified_source_files": [],
     }
     try:
         branch_res = subprocess.run(
@@ -55,6 +57,15 @@ def get_git_info(repo_root: Path) -> Dict[str, Any]:
         if commit_res.returncode == 0:
             info["commit"] = commit_res.stdout.strip()
 
+        tree_res = subprocess.run(
+            ["git", "rev-parse", "HEAD^{tree}"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+        )
+        if tree_res.returncode == 0:
+            info["tree_hash"] = tree_res.stdout.strip()
+
         status_res = subprocess.run(
             ["git", "status", "--porcelain"],
             cwd=repo_root,
@@ -66,6 +77,19 @@ def get_git_info(repo_root: Path) -> Dict[str, Any]:
         info["is_clean"] = len(lines) == 0
         info["modified_count"] = sum(1 for l in lines if not l.startswith("??"))
         info["untracked_count"] = sum(1 for l in lines if l.startswith("??"))
+
+        # Identify unreviewed source modifications (filtering out scratch and archive)
+        ignored_prefixes = (".scratch/", "scratch/", "openspec/archive/", ".gemini/", ".git/")
+        modified_sources = []
+        for l in lines:
+            filename = l[3:].strip()
+            if any(filename.startswith(p) for p in ignored_prefixes):
+                continue
+            if filename in {"report.json", ".gitignore"}:
+                continue
+            modified_sources.append(filename)
+        info["modified_source_files"] = modified_sources
+
     except Exception:
         pass
     return info
@@ -132,9 +156,24 @@ def inspect_openspec(repo_root: Path, target_topic: Optional[str] = None) -> Lis
     changes_dir = repo_root / "openspec" / "changes"
     packages = []
     if not changes_dir.exists():
+        if target_topic:
+            raise ValueError(f"Specified OpenSpec topic '{target_topic}' not found (openspec/changes does not exist).")
         return packages
 
+    # Explicit topic validation: if target_topic specified, it MUST exist
+    if target_topic:
+        target_dir = changes_dir / target_topic
+        if not target_dir.exists() or not target_dir.is_dir():
+            available = [d.name for d in sorted(changes_dir.iterdir()) if d.is_dir() and not d.name.startswith(".")]
+            avail_str = f" Available: {', '.join(available)}" if available else " (no packages found)"
+            raise ValueError(f"Specified OpenSpec topic '{target_topic}' not found under openspec/changes/.{avail_str}")
+
     active_persisted = target_topic or get_active_topic(repo_root)
+    # If active_persisted was read from file, verify existence; clear if stale
+    if active_persisted and not target_topic:
+        if not (changes_dir / active_persisted).is_dir():
+            clear_active_topic(repo_root)
+            active_persisted = None
 
     for topic_dir in changes_dir.iterdir():
         if not topic_dir.is_dir() or topic_dir.name.startswith("."):
@@ -182,7 +221,7 @@ def inspect_openspec(repo_root: Path, target_topic: Optional[str] = None) -> Lis
         })
 
     # Sort packages so the true active package is at index 0:
-    # 1. Exact match with active persisted target
+    # 1. Exact match with active target
     # 2. In-progress packages (pending_tasks > 0)
     # 3. Most recently modified (mtime descending)
     # 4. Alphabetical fallback
@@ -232,7 +271,7 @@ def inspect_living_specs(repo_root: Path) -> List[Dict[str, Any]]:
 
 def normalize_req_title(raw_title: str) -> str:
     """Normalize requirement title for matching."""
-    cleaned = re.sub(r"\s*[\[\(](?:REMOVED|DELETED)[\]\)]", "", raw_title, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"\s*[\[\(](?:REMOVED|DELETED)[\]\)]|\b(?:REMOVED|DELETED)\b", "", raw_title, flags=re.IGNORECASE).strip()
     return cleaned.lower()
 
 
@@ -245,6 +284,11 @@ def parse_requirements_doc(content: str) -> Tuple[str, List[Dict[str, Any]]]:
     requirements: List[Dict[str, Any]] = []
     current_req: Optional[Dict[str, Any]] = None
 
+    removal_pattern = re.compile(
+        r"^\s*(?:[\[\(](?:REMOVED|DELETED)[\]\)]|(?:STATUS:\s*)?(?:REMOVED|DELETED)\b)",
+        re.IGNORECASE,
+    )
+
     for line in lines:
         match = req_header_regex.match(line.rstrip("\r\n"))
         if match:
@@ -252,7 +296,7 @@ def parse_requirements_doc(content: str) -> Tuple[str, List[Dict[str, Any]]]:
                 requirements.append(current_req)
             level = match.group(1)
             raw_title = match.group(2).strip()
-            is_removal = bool(re.search(r"[\[\(](?:REMOVED|DELETED)[\]\)]", raw_title, re.IGNORECASE))
+            is_removal = bool(re.search(r"(?:[\[\(](?:REMOVED|DELETED)[\]\)]|\b(?:REMOVED|DELETED)\b)", raw_title, re.IGNORECASE))
             norm_key = normalize_req_title(raw_title)
             current_req = {
                 "header": line.rstrip("\r\n"),
@@ -274,9 +318,11 @@ def parse_requirements_doc(content: str) -> Tuple[str, List[Dict[str, Any]]]:
     # Check body lines for removal markers if not explicit in header
     for req in requirements:
         if not req["is_removal"]:
-            body_text = "".join(req["body_lines"][:3]).strip()
-            if re.match(r"^(?:\[(?:REMOVED|DELETED)\]|STATUS:\s*(?:REMOVED|DELETED)|REMOVED|DELETED)\b", body_text, re.IGNORECASE):
-                req["is_removal"] = True
+            for bline in req["body_lines"][:3]:
+                stripped = bline.strip()
+                if stripped and removal_pattern.match(stripped):
+                    req["is_removal"] = True
+                    break
 
     preamble = "".join(preamble_lines)
     return preamble, requirements
@@ -319,7 +365,7 @@ def merge_spec_requirements(living_content: str, delta_content: str) -> str:
         result.append(preamble.rstrip())
 
     for req in living_dict.values():
-        clean_header = re.sub(r"\s*[\[\(](?:REMOVED|DELETED)[\]\)]", "", req["header"], flags=re.IGNORECASE).rstrip()
+        clean_header = re.sub(r"\s*[\[\(](?:REMOVED|DELETED)[\]\)]|\b(?:REMOVED|DELETED)\b", "", req["header"], flags=re.IGNORECASE).rstrip()
         body = "".join(req["body_lines"]).strip()
         if body:
             result.append(f"{clean_header}\n{body}")
@@ -330,7 +376,7 @@ def merge_spec_requirements(living_content: str, delta_content: str) -> str:
 
 
 def is_test_evidence_passing(evidence: Any) -> bool:
-    """Validate that test evidence explicitly confirms passing tests."""
+    """Validate that test evidence explicitly confirms passing tests using strict structured checks."""
     if evidence is None:
         return False
     if isinstance(evidence, bool):
@@ -342,65 +388,103 @@ def is_test_evidence_passing(evidence: Any) -> bool:
         if "exit_code" in evidence:
             if evidence["exit_code"] != 0:
                 return False
-        # 2. Passed flag must be True
+        # 2. Passed flag must be boolean True
         if "passed" in evidence:
-            if not evidence["passed"]:
+            if evidence["passed"] is not True:
                 return False
-        # 3. Failure counts must be 0
+        # 3. Tests run count must be positive integer (> 0)
+        if "tests_run" in evidence:
+            if not isinstance(evidence["tests_run"], int) or evidence["tests_run"] <= 0:
+                return False
+        # 4. Failure/error counts must be 0
         for fail_key in ("failed", "errors", "failures"):
             if fail_key in evidence and isinstance(evidence[fail_key], (int, float)):
                 if evidence[fail_key] > 0:
                     return False
-        # 4. Status string
+        # 5. Status string
         if "status" in evidence:
             st = str(evidence["status"]).lower().strip()
             if st not in {"pass", "passed", "ok", "success", "green"}:
                 return False
-        # Check that at least one positive assertion is present
+
+        # Affirmative passing criteria:
         has_positive = (
-            ("exit_code" in evidence and evidence["exit_code"] == 0)
-            or ("passed" in evidence and evidence["passed"] is True)
+            (evidence.get("passed") is True)
+            or ("exit_code" in evidence and evidence["exit_code"] == 0 and evidence.get("tests_run", 1) > 0)
             or ("status" in evidence and str(evidence["status"]).lower().strip() in {"pass", "passed", "ok", "success", "green"})
-            or ("tests_run" in evidence and evidence.get("failed", 0) == 0 and evidence.get("errors", 0) == 0)
             or ("test_evidence" in evidence and is_test_evidence_passing(evidence["test_evidence"]))
         )
         return has_positive
+
     if isinstance(evidence, str):
-        ev_lower = evidence.lower().strip()
-        if not ev_lower or any(bad in ev_lower for bad in ["fail", "error", "exit_code: 1", "exit code 1"]):
+        ev_clean = evidence.strip()
+        if not ev_clean:
             return False
-        return any(good in ev_lower for good in ["pass", "ok", "success", "green", "0 failures", "exit_code: 0", "exit code 0"])
-    if isinstance(evidence, (int, float)):
-        return evidence == 0
+        ev_lower = ev_clean.lower()
+        # Explicit rejection of negative phrases
+        if re.search(r"\b(?:not\s+passed|failed|errors?:\s*[1-9]|failure|crash)\b", ev_lower):
+            return False
+
+        # Parse structured pattern: e.g. "0 failures, 12 passed" or "12 passed, 0 failures"
+        m_fail = re.search(r"(\d+)\s*(?:failures?|errors?|failed)", ev_lower)
+        m_pass = re.search(r"(\d+)\s*passed", ev_lower)
+        if m_fail or m_pass:
+            fail_count = int(m_fail.group(1)) if m_fail else 0
+            pass_count = int(m_pass.group(1)) if m_pass else 0
+            return fail_count == 0 and pass_count > 0
+
+        # Unittest output: "Ran N tests in ...\n\nOK"
+        if re.search(r"Ran\s+([1-9][0-9]*)\s+tests?.*?\bOK\b", ev_clean, re.DOTALL):
+            return True
+
+        # Pytest summary: "X passed in Ys"
+        m_pytest = re.search(r"([1-9][0-9]*)\s+passed\b", ev_lower)
+        if m_pytest and not re.search(r"[1-9][0-9]*\s+(?:failed|error)", ev_lower):
+            return True
+
+        return False
+
     return False
 
 
 def is_spike_completed(spike_dir: Path) -> bool:
-    """Check if a spike directory contains completion evidence or verdict."""
-    for marker in [".completed", ".done", "DONE", "done.txt"]:
+    """Check if a spike directory contains verified completion evidence or verdict."""
+    for marker in [".completed", ".done"]:
         if (spike_dir / marker).exists():
             return True
 
     for report_file in [spike_dir / "report.json", spike_dir / "verdict.json"]:
         if report_file.exists():
             try:
-                data = json.loads(report_file.read_text(encoding="utf-8"))
-                if data.get("verdict") or data.get("status") in {"complete", "completed", "done", "passed"}:
+                content = report_file.read_text(encoding="utf-8").strip()
+                if not content:
+                    return False
+                data = json.loads(content)
+                if not isinstance(data, dict):
+                    return False
+                verdict = str(data.get("verdict", "")).strip().upper()
+                if verdict in {"CONFIRMED", "REFUTED", "QUALIFIED", "PASS", "SUCCESS"}:
+                    return True
+                st = str(data.get("status", "")).strip().lower()
+                if st in {"complete", "completed", "done"} and (data.get("recommendation") or data.get("outcome")):
                     return True
             except Exception:
-                return True
+                # Corrupt or interrupted JSON must never count as completed
+                return False
 
     for md_file in spike_dir.glob("*.md"):
         try:
-            content = md_file.read_text(encoding="utf-8", errors="replace")
-            if re.search(
-                r"(?:##\s*🧪\s*Spike Report|###\s*⚖️\s*Architectural Verdict|\bVerdict:\s*(?:CONFIRMED|REFUTED|QUALIFIED)|\bstatus:\s*complete\b)",
+            content = md_file.read_text(encoding="utf-8", errors="replace").strip()
+            # Headings alone do NOT establish completion; an explicit verdict is required
+            verdict_match = re.search(
+                r"\bVerdict\*{0,2}:\s*\*{0,2}(CONFIRMED|REFUTED|QUALIFIED|PASS|APPROVED)\b",
                 content,
                 re.IGNORECASE,
-            ):
+            )
+            if verdict_match and len(content.splitlines()) >= 5:
                 return True
         except Exception:
-            pass
+            return False
 
     return False
 
@@ -418,8 +502,10 @@ def inspect_spikes(repo_root: Path) -> List[str]:
 
 
 def inspect_audit_reports(repo_root: Path) -> Optional[Dict[str, Any]]:
-    """Look for audit reports in .scratch or workspace."""
+    """Look for audit reports or delivery evidence envelopes in .scratch or workspace."""
     search_paths = [
+        repo_root / ".scratch" / "delivery_evidence.json",
+        repo_root / "scratch" / "delivery_evidence.json",
         repo_root / ".scratch" / "review_report.json",
         repo_root / "scratch" / "review_report.json",
         repo_root / "report.json",
@@ -428,20 +514,35 @@ def inspect_audit_reports(repo_root: Path) -> Optional[Dict[str, Any]]:
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8"))
-                findings = data.get("findings", [])
+                if not isinstance(data, dict):
+                    continue
+
+                # Support Delivery Evidence Envelope format
+                is_envelope = "judge_report" in data or "snapshot" in data
+                judge_data = data.get("judge_report", data) if is_envelope else data
+                snapshot_info = data.get("snapshot") if is_envelope and isinstance(data.get("snapshot"), dict) else {}
+
+                findings = judge_data.get("findings", [])
                 critical_or_high = [
                     f for f in findings
                     if isinstance(f, dict) and f.get("severity") in {"CRITICAL", "HIGH"}
                 ]
-                reviewer = str(data.get("reviewer", "unknown")).lower()
-                status = str(data.get("status", "unknown")).lower()
-                verdict = str(data.get("verdict", "")).strip().upper()
+                reviewer = str(judge_data.get("reviewer", data.get("reviewer", "unknown"))).lower()
+                status = str(judge_data.get("status", data.get("status", "unknown"))).lower()
+
+                # Verdict and test evidence can be in envelope or top-level
+                verdict = str(data.get("verdict", judge_data.get("verdict", ""))).strip().upper()
                 raw_test_evidence = data.get("test_evidence") if "test_evidence" in data else data.get("tests_passed")
+                if raw_test_evidence is None and "test_evidence" in judge_data:
+                    raw_test_evidence = judge_data.get("test_evidence")
                 test_evidence_passed = is_test_evidence_passing(raw_test_evidence)
-                snapshot_sha = data.get("commit") or data.get("snapshot") or data.get("head_sha")
+
+                snapshot_sha = snapshot_info.get("commit") or data.get("commit") or data.get("snapshot") or data.get("head_sha")
+                snapshot_tree = snapshot_info.get("tree_hash") or data.get("tree_hash")
 
                 return {
                     "path": str(p.relative_to(repo_root)),
+                    "is_envelope": is_envelope,
                     "reviewer": reviewer,
                     "status": status,
                     "verdict": verdict,
@@ -451,6 +552,7 @@ def inspect_audit_reports(repo_root: Path) -> Optional[Dict[str, Any]]:
                     "raw_test_evidence": raw_test_evidence,
                     "test_evidence_passed": test_evidence_passed,
                     "snapshot_sha": str(snapshot_sha) if snapshot_sha else None,
+                    "snapshot_tree": str(snapshot_tree) if snapshot_tree else None,
                 }
             except Exception:
                 pass
@@ -562,7 +664,7 @@ def determine_lifecycle_state(
                     "Audit report lacks verified test evidence. Run test suite and record passing test results.",
                 )
 
-            # 5. Snapshot binding check
+            # 5. Snapshot binding check: commit match
             snapshot_sha = audit_report.get("snapshot_sha")
             current_commit = git_info.get("commit")
             if current_commit:
@@ -578,6 +680,18 @@ def determine_lifecycle_state(
                         "AUDIT_ACTIVE",
                         f"Audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'. Re-run audit on current code.",
                     )
+
+            # 6. Unreviewed source changes check: working tree must not have unreviewed modifications
+            modified_sources = git_info.get("modified_source_files", [])
+            if modified_sources:
+                mod_str = ", ".join(modified_sources[:3])
+                if len(modified_sources) > 3:
+                    mod_str += f" (+{len(modified_sources)-3} more)"
+                return (
+                    "GATE 3: ADVERSARIAL AUDIT",
+                    "AUDIT_ACTIVE",
+                    f"Working tree has unreviewed source modifications ({mod_str}). Re-run adversarial audit on current code before shipping.",
+                )
 
             # All checks pass
             return (
@@ -637,10 +751,10 @@ def apply_and_archive_openspec(
         if has_pending:
             raise RuntimeError(f"Cannot archive '{topic_name}': package has pending tasks in tasks.md. Complete all tasks before archiving or use --force.")
 
-        # 2. Audit report check
+        # 2. Audit report / Delivery Evidence check
         audit_report = inspect_audit_reports(repo_root)
         if not audit_report:
-            raise RuntimeError(f"Cannot archive '{topic_name}': no passing audit report found in .scratch/review_report.json.")
+            raise RuntimeError(f"Cannot archive '{topic_name}': no passing audit report found (or delivery evidence in .scratch/).")
         if not audit_report.get("is_judge"):
             raise RuntimeError(f"Cannot archive '{topic_name}': audit reviewer is '{audit_report.get('reviewer')}', requires Judge approval.")
         if audit_report.get("critical_or_high_count", 0) > 0:
@@ -663,6 +777,10 @@ def apply_and_archive_openspec(
                 raise RuntimeError(f"Cannot archive '{topic_name}': audit report lacks commit snapshot SHA.")
             if not current_commit.startswith(snapshot_sha) and not snapshot_sha.startswith(current_commit):
                 raise RuntimeError(f"Cannot archive '{topic_name}': audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'.")
+
+        modified_sources = git_info.get("modified_source_files", [])
+        if modified_sources:
+            raise RuntimeError(f"Cannot archive '{topic_name}': working tree has unreviewed source modifications ({', '.join(modified_sources[:3])}).")
 
     synced_specs = []
 
@@ -750,6 +868,8 @@ def format_summary(data: Dict[str, Any]) -> str:
         status_str = "Clean" if git["is_clean"] else f"Dirty ({git['modified_count']} mod, {git['untracked_count']} untracked)"
         commit_str = f" [{git['commit'][:7]}]" if git.get("commit") else ""
         lines.append(f"• Git Branch     : {git['branch']}{commit_str} ({status_str})")
+        if git.get("modified_source_files"):
+            lines.append(f"  └─ Unreviewed  : {', '.join(git['modified_source_files'][:3])}")
     else:
         lines.append("• Git Branch     : Non-git workspace")
 
@@ -787,10 +907,11 @@ def format_summary(data: Dict[str, Any]) -> str:
 
     report = data["audit_report"]
     if report:
+        env_str = " [Envelope]" if report.get("is_envelope") else ""
         verdict_str = f" verdict={report.get('verdict') or report.get('status')}"
         ev_str = f" tests={'passed' if report.get('test_evidence_passed') else 'failed/missing'}"
         crit_str = f" critical/high={report.get('critical_or_high_count')}"
-        lines.append(f"• Audit Report   : {report['path']} (by {report['reviewer']},{verdict_str},{ev_str},{crit_str})")
+        lines.append(f"• Audit Report   : {report['path']}{env_str} (by {report['reviewer']},{verdict_str},{ev_str},{crit_str})")
 
     lines.append("─────────────────────────────────────────────────────────────────────")
     lines.append("👉 RECOMMENDED NEXT ACTION:")
@@ -858,7 +979,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(f"Error archiving OpenSpec package: {e}", file=sys.stderr)
             return 1
 
-    data = evaluate_repository(repo_root, target_topic=args.topic)
+    try:
+        data = evaluate_repository(repo_root, target_topic=args.topic)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
 
     if args.format == "json":
         print(json.dumps(data, indent=2))
