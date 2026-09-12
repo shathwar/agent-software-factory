@@ -115,6 +115,57 @@ class TestVerifyTDD(unittest.TestCase):
         self.assertIn("--ref-range", res.stdout)
         self.assertIn("--trim-receipt", res.stdout)
 
+    def test_assertion_pattern_polyglot_and_context_managers(self):
+        """Polyglot assertions and context managers satisfy assertion check."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            test_file = Path(tmpdir) / "test_polyglot.py"
+            test_file.write_text(
+                "def test_pytest_raises():\n"
+                "    with pytest.raises(ValueError):\n"
+                "        raise ValueError('boom')\n"
+                "\n"
+                "def test_rust_assert_eq():\n"
+                "    assert_eq!(1, 1)\n"
+                "\n"
+                "def test_go_require():\n"
+                "    require.NoError(t, err)\n"
+                "\n"
+                "def test_c_style_assert():\n"
+                "    assert(x == 1)\n"
+            )
+            findings = verify_tdd.check_anti_patterns(test_file)
+            assertless = [f for f in findings if f.category == "assertless_test"]
+            self.assertEqual(assertless, [])
+
+    def test_comment_lines_do_not_trigger_whitebox_spy(self):
+        """Comments mentioning private variables should not be flagged as whitebox spys."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            test_file = Path(tmpdir) / "test_comments.py"
+            test_file.write_text(
+                "# Note: do not test obj._internal directly\n"
+                "// Or check service._cache in other tests\n"
+                "/* Another comment about db._pool */\n"
+                "* star comment obj._hidden\n"
+                "def test_public():\n"
+                "    assert run_action() == 42\n"
+            )
+            findings = verify_tdd.check_anti_patterns(test_file)
+            whitebox = [f for f in findings if f.category == "whitebox_spy"]
+            self.assertEqual(whitebox, [])
+
+    def test_mock_counter_ignores_dispatch(self):
+        """Methods like dispatch or dispatcher should not falsely increment mock count."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            test_file = Path(tmpdir) / "test_dispatch.py"
+            code_lines = ["def test_event_dispatcher():\n"]
+            for i in range(10):
+                code_lines.append(f"    dispatcher.dispatch_event('evt_{i}')\n")
+            code_lines.append("    assert dispatcher.count == 10\n")
+            test_file.write_text("".join(code_lines))
+            findings = verify_tdd.check_anti_patterns(test_file)
+            hollow_mocks = [f for f in findings if f.category == "hollow_mock"]
+            self.assertEqual(hollow_mocks, [])
+
 
 if __name__ == "__main__":
     unittest.main()

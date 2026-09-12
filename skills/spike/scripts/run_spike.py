@@ -41,7 +41,7 @@ class BenchmarkMetrics:
     stddev_ms: float
 
 
-def run_single_iteration(cmd: str, cwd: Path | None = None) -> tuple[float, bool]:
+def run_single_iteration(cmd: str, cwd: Path | None = None, timeout_sec: float | None = 60.0) -> tuple[float, bool]:
     """Execute a single run of the command and measure elapsed time in milliseconds."""
     start = time.perf_counter()
     try:
@@ -50,10 +50,14 @@ def run_single_iteration(cmd: str, cwd: Path | None = None) -> tuple[float, bool
             shell=True,
             cwd=cwd,
             capture_output=True,
-            text=True
+            text=True,
+            timeout=timeout_sec
         )
         elapsed_ms = (time.perf_counter() - start) * 1000.0
         return elapsed_ms, res.returncode == 0
+    except subprocess.TimeoutExpired:
+        elapsed_ms = (time.perf_counter() - start) * 1000.0
+        return elapsed_ms, False
     except Exception:
         elapsed_ms = (time.perf_counter() - start) * 1000.0
         return elapsed_ms, False
@@ -78,17 +82,18 @@ def run_benchmark(
     warmup: int,
     concurrency: int,
     duration_sec: float | None = None,
-    cwd: Path | None = None
+    cwd: Path | None = None,
+    timeout_sec: float | None = 60.0
 ) -> BenchmarkMetrics:
     """Run warmup and full benchmark suite."""
     # 1. Warmup Phase
     if warmup > 0:
         if concurrency > 1:
             with ThreadPoolExecutor(max_workers=concurrency) as executor:
-                list(executor.map(lambda _: run_single_iteration(cmd, cwd), range(warmup)))
+                list(executor.map(lambda _: run_single_iteration(cmd, cwd, timeout_sec), range(warmup)))
         else:
             for _ in range(warmup):
-                run_single_iteration(cmd, cwd)
+                run_single_iteration(cmd, cwd, timeout_sec)
 
     # 2. Measurement Phase
     latencies: list[float] = []
@@ -104,7 +109,7 @@ def run_benchmark(
             while time.perf_counter() < deadline or futures:
                 # Keep worker queue saturated while before deadline
                 while len(futures) < concurrency and time.perf_counter() < deadline:
-                    futures.add(executor.submit(run_single_iteration, cmd, cwd))
+                    futures.add(executor.submit(run_single_iteration, cmd, cwd, timeout_sec))
                 if not futures:
                     break
                 # Wait for at least one future to complete or timeout
@@ -123,7 +128,7 @@ def run_benchmark(
     else:
         # Iteration-based run
         with ThreadPoolExecutor(max_workers=concurrency) as executor:
-            futures = [executor.submit(run_single_iteration, cmd, cwd) for _ in range(iterations)]
+            futures = [executor.submit(run_single_iteration, cmd, cwd, timeout_sec) for _ in range(iterations)]
             for f in as_completed(futures):
                 try:
                     elapsed_ms, ok = f.result()
@@ -237,6 +242,7 @@ def main() -> int:
     parser.add_argument("--expected-p99", type=float, help="Expected p99 latency threshold in ms")
     parser.add_argument("--expected-rps", type=float, help="Expected minimum throughput (RPS)")
     parser.add_argument("--expected-err", type=float, help="Expected maximum error rate percentage")
+    parser.add_argument("--timeout", type=float, default=60.0, help="Timeout per iteration in seconds (default: 60.0)")
     parser.add_argument("--json", action="store_true", help="Output results in JSON format")
 
     args = parser.parse_args()
@@ -249,7 +255,8 @@ def main() -> int:
         warmup=args.warmup,
         concurrency=args.concurrency,
         duration_sec=args.duration,
-        cwd=cwd
+        cwd=cwd,
+        timeout_sec=args.timeout
     )
 
     if args.json:

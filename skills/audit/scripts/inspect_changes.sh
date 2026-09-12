@@ -112,7 +112,7 @@ else
     done
 fi
 
-INSPECT_TMP=$(mktemp -d "${TMPDIR:-/tmp}/adversarial-review.XXXXXX")
+INSPECT_TMP=$(mktemp -d "${TMPDIR:-/tmp}/audit.XXXXXX")
 trap 'rm -rf "$INSPECT_TMP"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM

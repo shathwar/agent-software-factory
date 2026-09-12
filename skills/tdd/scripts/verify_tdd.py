@@ -117,14 +117,22 @@ def check_anti_patterns(file_path: Path) -> list[Finding]:
     mock_count = 0
 
     assertion_pattern = re.compile(
-        r"(?:assert\s|self\.assert|\.assert|expect\(|\.toBe|\.toEqual|\.toThrow|t\.Error|t\.Fatal|assert\.)"
+        r"(?:\bassert(?:_|\b)|\.assert|self\.assert|expect\(|\.toBe|\.toEqual|\.toThrow|\.toHave|pytest\.raises|t\.Error|t\.Fatal|require\.)"
     )
     test_def_pattern = re.compile(
         r"^\s*(?:def\s+(test_[a-zA-Z0-9_]+)|func\s+(Test[a-zA-Z0-9_]+)|(?:it|test)\s*\(\s*['\"]([^'\"]+)['\"])"
     )
     private_access_pattern = re.compile(r"\b[a-zA-Z0-9_]+\._[a-zA-Z0-9][a-zA-Z0-9_]*\b")
+    mock_pattern = re.compile(
+        r"(?:\b|_)(?:mock\w*|patch\w*|magicmock|spyon|sinon|gomock)\b",
+        re.IGNORECASE
+    )
 
     for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith(("#", "//", "/*", "*")):
+            continue
+
         if private_matches := private_access_pattern.findall(line):
             legit = [m for m in private_matches if not m.startswith("self._")]
             if legit:
@@ -136,7 +144,7 @@ def check_anti_patterns(file_path: Path) -> list[Finding]:
                     severity="WARNING"
                 ))
 
-        if "mock" in line.lower() or "patch" in line.lower() or "spyOn" in line:
+        if mock_pattern.search(line):
             mock_count += 1
 
         if m := test_def_pattern.search(line):

@@ -119,6 +119,36 @@ class TestRunSpike(unittest.TestCase):
         self.assertGreaterEqual(metrics.total_runs, 1)
         self.assertEqual(metrics.failed_runs, 0)
 
+    def test_command_timeout_expired_handled_gracefully(self):
+        """Commands exceeding timeout_sec are marked as failures rather than hanging or crashing."""
+        metrics = run_spike.run_benchmark(
+            cmd=f"{sys.executable} -c 'import time; time.sleep(1.0)'",
+            iterations=2,
+            warmup=0,
+            concurrency=1,
+            timeout_sec=0.1
+        )
+        self.assertEqual(metrics.total_runs, 2)
+        self.assertEqual(metrics.failed_runs, 2)
+        self.assertEqual(metrics.successful_runs, 0)
+        self.assertEqual(metrics.error_rate_pct, 100.0)
+
+    def test_cli_timeout_argument(self):
+        """CLI accepts --timeout flag and enforces it."""
+        cmd = [
+            sys.executable,
+            str(RUN_SPIKE),
+            "--cmd", f"{sys.executable} -c 'import time; time.sleep(0.5)'",
+            "--iterations", "2",
+            "--warmup", "0",
+            "--timeout", "0.1",
+            "--json"
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        data = json.loads(res.stdout)
+        self.assertEqual(data["metrics"]["failed_runs"], 2)
+        self.assertEqual(data["metrics"]["error_rate_pct"], 100.0)
+
 
 if __name__ == "__main__":
     unittest.main()
