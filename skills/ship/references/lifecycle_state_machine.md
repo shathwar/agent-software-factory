@@ -37,11 +37,16 @@ A formal specification of the 4-gate engineering lifecycle state machine, its tr
 │  (Code Bug)  │       │ (Architectural Flaw)
 └─── Fix Loop ─┘       └───────────────────────┐
                │                               │
-               ▼ (Judge PASS)                  ▼
-                   ┌───────────────────────┐       ┌───────────────────────┐
-                   │    DELIVERY_READY     │       │    FRONTIER_ROUNDS    │
-                   └───────────────────────┘       │   (Spec Amendment)    │
-                                                   └───────────────────────┘
+                ▼ (Judge PASS)                  ▼
+                    ┌───────────────────────┐       ┌───────────────────────┐
+                    │    DELIVERY_READY     │       │    FRONTIER_ROUNDS    │
+                    └───────────┬───────────┘       │   (Spec Amendment)    │
+                                │ inspect_lifecycle --archive
+                                ▼
+                    ┌───────────────────────┐
+                    │       ARCHIVED        │
+                    │ (Living Specs Synced) │
+                    └───────────────────────┘
 ```
 
 ---
@@ -86,8 +91,14 @@ A formal specification of the 4-gate engineering lifecycle state machine, its tr
 - **Guard**:
   - Stage 0 confirms 100% compliance with `openspec/` and ADR invariants.
   - Stages 1–9 identify zero Critical or High production defects.
-  - Review Judge issues an official `PASS` verdict.
+  - Review Judge issues an official `PASS` verdict report (`reviewer == "judge"`).
+  - Explicit test runner evidence is verified against the reviewed commit snapshot.
 - **Output**: Delivery Walkthrough, summary scorecard, and clean commit recommendation.
+
+### State 7: `DELIVERY_READY` ➔ `ARCHIVED` (OpenSpec Apply & Archive)
+- **Guard**: Delivery Walkthrough completed and signed off; all automated test suites pass.
+- **Action**: Run `python3 skills/ship/scripts/inspect_lifecycle.py --archive <topic>`.
+- **Output**: Delta specs in `openspec/changes/<topic>/specs/` merged/synced to living truth in `openspec/specs/`. Active package moved from `openspec/changes/<topic>/` to `openspec/archive/<YYYY-MM-DD>-<topic>/`. Lifecycle returns to clean state for next proposal.
 
 ---
 
@@ -99,19 +110,21 @@ To deterministically evaluate the lifecycle state without manual guesswork, run 
 python3 skills/ship/scripts/inspect_lifecycle.py
 ```
 
-The tool inspects `openspec/`, `tasks.md`, `docs/adr/`, Git status, and `.scratch/` audit reports, outputting the exact active Gate and recommended next action.
+The tool inspects `openspec/`, `tasks.md`, `docs/adr/`, Git status, and `.scratch/` audit reports, outputting the exact active Gate and recommended next action. Run with `--archive [topic]` to apply specs and archive completed packages.
 
 ### Manual Resume Protocol (If running without tooling)
 If an agent run is aborted, timed out, or restarted in a new session:
 
 1. **Step 1: Check OpenSpec directory**:
    - Check `openspec/changes/` for the active feature directory.
-   - If not found, resume at `INITIAL_PROPOSAL`.
+   - If not found or if changes are already archived under `openspec/archive/`, resume at `INITIAL_PROPOSAL`.
 2. **Step 2: Inspect `tasks.md`**:
    - If `tasks.md` has unchecked tasks (`- [ ]`), find the first unchecked item and resume `TDD_ACTIVE`.
    - Run the test suite once before writing code to verify the baseline state.
 3. **Step 3: Inspect Git Diff**:
-   - If all tasks in `tasks.md` are checked `[x]`, run `git diff main...HEAD`.
+   - If all tasks in `tasks.md` are checked `[x]`, inspect changes across the working tree (staged, unstaged, and untracked) against the base branch (`git status`, `git diff HEAD`).
    - If changes are un-audited, resume at `AUDIT_ACTIVE`.
 4. **Step 4: Inspect Review Report**:
-   - If an audit report exists in `.scratch/` with a `PASS` verdict, resume at `DELIVERY_READY`.
+   - If a report exists in `.scratch/review_report.json` with Judge adjudication, `PASS` verdict, zero open Critical/High defects, and test evidence matching current code, resume at `DELIVERY_READY`.
+5. **Step 5: Apply and Archive**:
+   - Once walkthrough is accepted, sync delta specs to `openspec/specs/` and move package to `openspec/archive/<YYYY-MM-DD>-<topic>/`.

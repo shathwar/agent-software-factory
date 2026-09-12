@@ -11,7 +11,9 @@ description: Enforces strict Test-Driven Development (Red-Green-Refactor) for im
 > **Zero Conversational Filler**: Never say "Certainly", "I'd be happy to", or provide conversational preamble. Start directly with test code, failing runner receipts, or minimal implementation.
 
 <hard_constraints>
-- Iron Law of Test-First: Writing production code before a test fails is STRICTLY FORBIDDEN. If code was written first: STOP, revert, write test first.
+- Iron Law of Test-First: Writing new business logic without a failing test is FORBIDDEN. If writing autonomous code first: STOP, write test first.
+- Respect Existing & User Work: NEVER unilaterally delete or revert code written by the user. When onboarding to in-flight work or refactoring, wrap existing code in characterization tests first.
+- Justified Exceptions: Pure configuration, documentation, rapid UI layout iterations, and throwaway prototype spikes are exempt from test-first execution.
 - Terminal Receipts: In Red phase, you MUST paste the terminal failure snippet showing the `AssertionError`. In Green phase, you MUST paste the runner summary showing passing tests.
 - Minimum Viable Green: Write ONLY the bare minimum code needed to satisfy the assertion. Speculative code is prohibited.
 - Behavior Over Mocks: Assert on observable inputs, outputs, and state transitions. Never mock internal units or assert on private methods.
@@ -21,7 +23,7 @@ description: Enforces strict Test-Driven Development (Red-Green-Refactor) for im
 
 ## 1. The Five Laws of TDD
 
-1. **Test-First**: Writing production code is forbidden unless making a currently failing test pass. If caught writing logic first: STOP, revert/comment out, write test first.
+1. **Test-First**: Writing new production logic is forbidden unless making a currently failing test pass. For existing code or user implementations, add characterization tests before refactoring rather than reverting.
 2. **Red-State Verification**: Run the test runner and **observe the test FAIL** before writing implementation. Confirm it fails for the expected behavioral reason (assertion failure), not syntax/import crash.
 3. **Minimum Viable Green**: Write only the bare minimum code to make the test turn green. No speculative edge-cases.
 4. **Refactor Under Green**: Refactor structure only when all tests pass. Run test suite after every edit.

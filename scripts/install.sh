@@ -21,6 +21,8 @@ DEFAULT_TARGET="$HOME/.gemini/config/skills"
 TARGET_DIR="$DEFAULT_TARGET"
 INSTALL_MODE="symlink"
 DRY_RUN=0
+OVERWRITE=0
+BACKUP=0
 
 usage() {
     cat <<EOF
@@ -30,6 +32,8 @@ Options:
   --target <dir>     Target skills directory (default: $DEFAULT_TARGET)
   --mode <symlink|copy>
                      Installation mode: 'symlink' or 'copy' (default: symlink)
+  --overwrite        Overwrite existing non-symlink directories (default: preserve & skip)
+  --backup           Back up existing directories with timestamp suffix before replacing
   --dry-run          Print actions without modifying the filesystem
   --list             List available skills in this repository
   -h, --help         Show this help message
@@ -57,6 +61,15 @@ while [[ $# -gt 0 ]]; do
         --mode)
             INSTALL_MODE="$2"
             shift 2
+            ;;
+        --overwrite)
+            OVERWRITE=1
+            shift
+            ;;
+        --backup)
+            BACKUP=1
+            OVERWRITE=1
+            shift
             ;;
         --dry-run)
             DRY_RUN=1
@@ -86,6 +99,8 @@ echo "====================================================================="
 echo " Source directory : $SKILLS_DIR"
 echo " Target directory : $TARGET_DIR"
 echo " Mode             : $INSTALL_MODE"
+echo " Overwrite        : $((OVERWRITE))"
+echo " Backup           : $((BACKUP))"
 if [[ $DRY_RUN -eq 1 ]]; then
     echo " (DRY-RUN enabled: no changes will be made)"
 fi
@@ -96,6 +111,7 @@ if [[ $DRY_RUN -eq 0 ]]; then
 fi
 
 installed_count=0
+skipped_count=0
 
 for skill_path in "$SKILLS_DIR"/*; do
     if [[ ! -d "$skill_path" || ! -f "$skill_path/SKILL.md" ]]; then
@@ -105,10 +121,30 @@ for skill_path in "$SKILLS_DIR"/*; do
     skill_name="$(basename "$skill_path")"
     dest_path="$TARGET_DIR/$skill_name"
 
-    if [[ -e "$dest_path" || -L "$dest_path" ]]; then
-        echo " ⚠️  $skill_name: destination already exists at $dest_path (updating...)"
+    # Destination already exists
+    if [[ -L "$dest_path" ]]; then
+        # Existing symlink: safe to re-link
+        echo " 🔗 Updating existing symlink at $dest_path"
         if [[ $DRY_RUN -eq 0 ]]; then
-            rm -rf "$dest_path"
+            rm -f "$dest_path"
+        fi
+    elif [[ -e "$dest_path" ]]; then
+        # Existing non-symlink file or directory
+        if [[ $BACKUP -eq 1 ]]; then
+            backup_path="${dest_path}.bak.$(date +%Y%m%d%H%M%S)"
+            echo " 📦 Backing up existing directory: $dest_path -> $backup_path"
+            if [[ $DRY_RUN -eq 0 ]]; then
+                mv "$dest_path" "$backup_path"
+            fi
+        elif [[ $OVERWRITE -eq 1 ]]; then
+            echo " ⚠️  Overwriting existing directory at $dest_path (--overwrite set)"
+            if [[ $DRY_RUN -eq 0 ]]; then
+                rm -rf "$dest_path"
+            fi
+        else
+            echo " 🛡️  Preserving existing directory at $dest_path (use --overwrite or --backup to replace)"
+            skipped_count=$((skipped_count + 1))
+            continue
         fi
     fi
 
@@ -127,5 +163,5 @@ for skill_path in "$SKILLS_DIR"/*; do
 done
 
 echo "---------------------------------------------------------------------"
-echo "✓ Successfully installed $installed_count skill(s) into $TARGET_DIR"
+echo "✓ Successfully installed $installed_count skill(s) into $TARGET_DIR (skipped: $skipped_count)"
 echo "====================================================================="

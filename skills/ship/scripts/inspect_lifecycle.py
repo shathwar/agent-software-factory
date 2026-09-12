@@ -13,12 +13,15 @@ Evaluates filesystem indicators to determine active gate:
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+import time
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
 def get_git_info(repo_root: Path) -> Dict[str, Any]:
@@ -78,6 +81,7 @@ def inspect_adrs(repo_root: Path) -> List[Dict[str, Any]]:
     return adrs
 
 
+
 def inspect_openspec(repo_root: Path) -> List[Dict[str, Any]]:
     """Scan openspec/changes/ for active change packages and parse tasks.md."""
     changes_dir = repo_root / "openspec" / "changes"
@@ -126,6 +130,86 @@ def inspect_openspec(repo_root: Path) -> List[Dict[str, Any]]:
     return packages
 
 
+def inspect_archived_openspec(repo_root: Path) -> List[Dict[str, Any]]:
+    """Scan openspec/archive/ for completed historical change packages."""
+    archive_dir = repo_root / "openspec" / "archive"
+    archived = []
+    if not archive_dir.exists():
+        return archived
+
+    for child in sorted(archive_dir.iterdir()):
+        if child.is_dir() and not child.name.startswith("."):
+            archived.append({
+                "name": child.name,
+                "path": str(child.relative_to(repo_root)),
+            })
+    return archived
+
+
+def inspect_living_specs(repo_root: Path) -> List[Dict[str, Any]]:
+    """Scan openspec/specs/ for living cumulative system specifications."""
+    specs_dir = repo_root / "openspec" / "specs"
+    specs = []
+    if not specs_dir.exists():
+        return specs
+
+    for child in sorted(specs_dir.glob("*.md")):
+        specs.append({
+            "name": child.name,
+            "path": str(child.relative_to(repo_root)),
+        })
+    return specs
+
+
+def apply_and_archive_openspec(repo_root: Path, topic: Optional[str] = None) -> Dict[str, Any]:
+    """Sync delta specs from changes to openspec/specs/, then move change package to openspec/archive/."""
+    changes_dir = repo_root / "openspec" / "changes"
+    if not changes_dir.exists():
+        raise FileNotFoundError(f"No openspec/changes directory found at {changes_dir}")
+
+    # Resolve target package directory
+    if topic:
+        topic_dir = changes_dir / topic
+        if not topic_dir.exists() or not topic_dir.is_dir():
+            raise FileNotFoundError(f"OpenSpec change directory '{topic}' not found under {changes_dir}")
+    else:
+        active_dirs = [d for d in sorted(changes_dir.iterdir()) if d.is_dir() and not d.name.startswith(".")]
+        if not active_dirs:
+            raise FileNotFoundError("No active change packages found in openspec/changes/ to archive.")
+        topic_dir = active_dirs[0]
+
+    topic_name = topic_dir.name
+    synced_specs = []
+
+    # 1. Sync delta specs to living specs directory (openspec/specs/)
+    source_specs = topic_dir / "specs"
+    living_specs_dir = repo_root / "openspec" / "specs"
+    if source_specs.exists() and source_specs.is_dir():
+        living_specs_dir.mkdir(parents=True, exist_ok=True)
+        for spec_file in sorted(source_specs.glob("*.md")):
+            dest_spec = living_specs_dir / spec_file.name
+            shutil.copy2(spec_file, dest_spec)
+            synced_specs.append(spec_file.name)
+
+    # 2. Archive completed change package to openspec/archive/<date>-<topic>
+    date_str = datetime.date.today().strftime("%Y-%m-%d")
+    archive_dir = repo_root / "openspec" / "archive"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+
+    dest_archive = archive_dir / f"{date_str}-{topic_name}"
+    if dest_archive.exists():
+        dest_archive = archive_dir / f"{date_str}-{topic_name}-{int(time.time())}"
+
+    shutil.move(str(topic_dir), str(dest_archive))
+
+    return {
+        "topic": topic_name,
+        "synced_specs": synced_specs,
+        "living_specs_dir": str(living_specs_dir.relative_to(repo_root)),
+        "archived_path": str(dest_archive.relative_to(repo_root)),
+    }
+
+
 def inspect_spikes(repo_root: Path) -> List[str]:
     """Scan .scratch/ or scratch/ for active spikes."""
     spikes = []
@@ -148,11 +232,27 @@ def inspect_audit_reports(repo_root: Path) -> Optional[Dict[str, Any]]:
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8"))
+                findings = data.get("findings", [])
+                critical_or_high = [
+                    f for f in findings
+                    if isinstance(f, dict) and f.get("severity") in {"CRITICAL", "HIGH"}
+                ]
+                reviewer = str(data.get("reviewer", "unknown")).lower()
+                status = str(data.get("status", "unknown")).lower()
+                verdict = str(data.get("verdict", "")).strip().upper()
+                test_evidence = data.get("test_evidence") or data.get("tests_passed")
+                snapshot_sha = data.get("commit") or data.get("snapshot") or data.get("head_sha")
+
                 return {
                     "path": str(p.relative_to(repo_root)),
-                    "reviewer": data.get("reviewer", "unknown"),
-                    "status": data.get("status", "unknown"),
-                    "findings_count": len(data.get("findings", [])),
+                    "reviewer": reviewer,
+                    "status": status,
+                    "verdict": verdict,
+                    "findings_count": len(findings),
+                    "critical_or_high_count": len(critical_or_high),
+                    "is_judge": reviewer in {"judge", "review_judge"},
+                    "test_evidence": bool(test_evidence),
+                    "snapshot_sha": str(snapshot_sha) if snapshot_sha else None,
                 }
             except Exception:
                 pass
@@ -204,19 +304,68 @@ def determine_lifecycle_state(
 
         # All tasks completed!
         if active_pkg["pending_tasks"] == 0 and active_pkg["total_tasks"] > 0:
-            # Check if audit is complete
-            if audit_report and audit_report.get("status") in {"pass", "approved", "complete"}:
-                return (
-                    "GATE 4: READY TO SHIP",
-                    "DELIVERY_READY",
-                    "All tasks complete, tests green, and audit PASSED. Produce Delivery Walkthrough and prepare PR.",
-                )
-            else:
+            if not audit_report:
                 return (
                     "GATE 3: ADVERSARIAL AUDIT",
                     "AUDIT_ACTIVE",
                     "All implementation tasks marked complete. Run 'adversarial-review' in review-loop mode against base branch.",
                 )
+
+            # 1. Reviewer must be Judge (not an unadjudicated specialist)
+            if not audit_report.get("is_judge"):
+                reviewer_name = audit_report.get("reviewer", "unknown")
+                return (
+                    "GATE 3: ADVERSARIAL AUDIT",
+                    "AUDIT_ACTIVE",
+                    f"Audit report is from '{reviewer_name}', not Judge. Requires explicit Judge adjudication before shipping.",
+                )
+
+            # 2. Must not contain unresolved CRITICAL or HIGH findings
+            crit_count = audit_report.get("critical_or_high_count", 0)
+            if crit_count > 0:
+                return (
+                    "GATE 3: ADVERSARIAL AUDIT",
+                    "AUDIT_ACTIVE",
+                    f"Audit has {crit_count} unresolved CRITICAL/HIGH finding(s). Must remediate defects before shipping.",
+                )
+
+            # 3. Must have explicit passing verdict or clean findings
+            verdict = audit_report.get("verdict", "")
+            status = audit_report.get("status", "")
+            findings_count = audit_report.get("findings_count", 0)
+            verdict_ok = verdict in {"PASS", "APPROVED"} or (status in {"complete", "pass", "approved"} and findings_count == 0)
+            if not verdict_ok:
+                return (
+                    "GATE 3: ADVERSARIAL AUDIT",
+                    "AUDIT_ACTIVE",
+                    f"Audit verdict '{verdict or status}' is not PASS. Remediate findings or re-run review.",
+                )
+
+            # 4. Require explicit test evidence
+            if not audit_report.get("test_evidence"):
+                return (
+                    "GATE 3: ADVERSARIAL AUDIT",
+                    "AUDIT_ACTIVE",
+                    "Audit report lacks verified test evidence. Run test suite and record validation results.",
+                )
+
+            # 5. Snapshot binding check
+            snapshot_sha = audit_report.get("snapshot_sha")
+            current_commit = git_info.get("commit")
+            if snapshot_sha and current_commit:
+                if not current_commit.startswith(snapshot_sha) and not snapshot_sha.startswith(current_commit):
+                    return (
+                        "GATE 3: ADVERSARIAL AUDIT",
+                        "AUDIT_ACTIVE",
+                        f"Audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'. Re-run audit on current code.",
+                    )
+
+            # All checks pass
+            return (
+                "GATE 4: READY TO SHIP",
+                "DELIVERY_READY",
+                f"All tasks complete, tests verified green, and Judge audit PASSED. Ready to deliver Delivery Walkthrough. Run 'python3 skills/ship/scripts/inspect_lifecycle.py --archive' to sync living specs and archive '{active_pkg['topic']}'.",
+            )
 
     # Only ADRs exist
     return (
@@ -231,6 +380,8 @@ def evaluate_repository(repo_root: Path) -> Dict[str, Any]:
     git_info = get_git_info(repo_root)
     adrs = inspect_adrs(repo_root)
     openspec_packages = inspect_openspec(repo_root)
+    archived_packages = inspect_archived_openspec(repo_root)
+    living_specs = inspect_living_specs(repo_root)
     spikes = inspect_spikes(repo_root)
     audit_report = inspect_audit_reports(repo_root)
 
@@ -246,6 +397,8 @@ def evaluate_repository(repo_root: Path) -> Dict[str, Any]:
         "git": git_info,
         "adrs": adrs,
         "openspec_packages": openspec_packages,
+        "openspec_archived": archived_packages,
+        "openspec_living_specs": living_specs,
         "active_spikes": spikes,
         "audit_report": audit_report,
     }
@@ -269,11 +422,19 @@ def format_summary(data: Dict[str, Any]) -> str:
     if data["openspec_packages"]:
         for pkg in data["openspec_packages"]:
             progress = f"{pkg['completed_tasks']}/{pkg['total_tasks']} tasks complete"
-            lines.append(f"• OpenSpec       : {pkg['topic']} ({progress})")
+            lines.append(f"• OpenSpec Active: {pkg['topic']} ({progress})")
             if pkg["next_task"]:
                 lines.append(f"  └─ Next Task   : {pkg['next_task']}")
     else:
-        lines.append(f"• OpenSpec       : None")
+        lines.append(f"• OpenSpec Active: None")
+
+    if data.get("openspec_living_specs"):
+        spec_names = ", ".join(s["name"] for s in data["openspec_living_specs"])
+        lines.append(f"• Living Specs   : {spec_names}")
+
+    if data.get("openspec_archived"):
+        arch_names = ", ".join(a["name"] for a in data["openspec_archived"])
+        lines.append(f"• Archive        : {len(data['openspec_archived'])} package(s) ({arch_names})")
 
     if data["active_spikes"]:
         lines.append(f"• Active Spikes  : {', '.join(data['active_spikes'])}")
@@ -303,9 +464,40 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         default="text",
         help="Output format (default: text).",
     )
+    parser.add_argument(
+        "--archive",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="TOPIC",
+        help="Sync delta specs to openspec/specs/ and move completed change package to openspec/archive/.",
+    )
 
     args = parser.parse_args(argv)
     repo_root = Path(args.path).resolve()
+
+    if args.archive is not None:
+        try:
+            topic = args.archive if args.archive else None
+            res = apply_and_archive_openspec(repo_root, topic)
+            if args.format == "json":
+                print(json.dumps(res, indent=2))
+            else:
+                print("═════════════════════════════════════════════════════════════════════")
+                print(f" 📦 OPENSPEC APPLIED & ARCHIVED: {res['topic']}")
+                print("═════════════════════════════════════════════════════════════════════")
+                if res["synced_specs"]:
+                    print(f"• Synced Specs   : {', '.join(res['synced_specs'])} -> {res['living_specs_dir']}/")
+                else:
+                    print("• Synced Specs   : None")
+                print(f"• Archived To    : {res['archived_path']}")
+                print("• Lifecycle      : Reset to Gate 1 (ready for next feature proposal)")
+                print("═════════════════════════════════════════════════════════════════════")
+            return 0
+        except Exception as e:
+            print(f"Error archiving OpenSpec package: {e}", file=sys.stderr)
+            return 1
+
     data = evaluate_repository(repo_root)
 
     if args.format == "json":

@@ -59,15 +59,18 @@ This framework transforms AI from an unpredictable code generator into a **disci
 | **Reviewer Fatigue on AI PRs** | [**`adversarial-review`**](./skills/adversarial-review/SKILL.md) performs a 10-stage systems audit (Correctness, Concurrency, Failure, Craftsmanship) with an evidence-based Judge that rejects hallucinations. | **Senior/Staff engineers stop wasting hours catching basic race conditions, unindexed queries, and missing timeouts.** |
 | **Hollow, Backfilled Unit Tests** | [**`tdd`**](./skills/tdd/SKILL.md) enforces the *Iron Law of Test-First*. Agents are strictly forbidden from writing production code before proving a behavioral test fails. | **Real regression safety; tests verify observable behavior instead of mock configurations.** |
 | **Vanishing Architectural Context** | [**`adversarial-design`**](./skills/adversarial-design/SKILL.md) enforces the *Facts vs. Decisions Law* and compiles an **Architecture Decision Record (ADR)** and **OpenSpec package** directly into Git. | **Full audit trails for SOC2/compliance, clean RFC records, and effortless onboarding.** |
-| **Security & Compliance Hurdles** | **Zero external dependencies.** The entire test suite, inspector CLIs, debt scanners, and validators run on standard library Python 3.10+ and POSIX bash. | **Zero pip/npm audit hurdles; security and platform teams approve instantly.** |
-| **LLM Token Costs & Latency** | All core skills and agent prompts are **token-optimized ("cavemanned")**, stripping conversational fluff while preserving 100% of hard constraints. | **~50% fewer context tokens, lower API costs, and sharper model instruction adherence.** |
+| **Security & Compliance Hurdles** | **Zero external dependencies.** The entire test suite, inspector CLIs, debt scanners, and validators run on standard library Python 3.10+ and POSIX bash. | **Simplifies internal enterprise security audits; zero supply chain or third-party package vulnerabilities.** |
+| **LLM Token Costs & Latency** | All core skills and agent prompts are **token-optimized ("cavemanned")**, stripping conversational fluff while retaining strict technical constraints. | **Measured 30–50% reduction in reference token overhead, lower prompt costs, and sharper model instruction adherence.** |
 
 ### Team Rollout Playbook
+
+> [!TIP]
+> **Recommended Starting Point**: Pilot **[`adversarial-review`](./skills/adversarial-review/SKILL.md) in review-only mode**. Its read-only inspection, evidence requirements, and bounded repair workflow provide an immediate, low-risk way to measure useful defect findings and false-positive rates on real pull requests.
 
 Teams can adopt skills incrementally without changing their entire workflow:
 1. **Phase 1: Pre-PR Defense ([`adversarial-review`](./skills/adversarial-review/SKILL.md))**: Run `/adversarial-review` on pull requests before requesting senior peer review. Catch race conditions and missing error paths early.
 2. **Phase 2: Anti-Bloat Coding ([`ponytail`](./skills/ponytail/SKILL.md))**: Use `/ponytail` on everyday tasks to enforce standard-library reuse. Add `python3 skills/ponytail/scripts/scan_debt.py --strict` to CI to enforce documented debt ceilings.
-3. **Phase 3: Autonomous Lifecycle ([`ship`](./skills/ship/SKILL.md))**: Run `/ship "<feature>"` to drive complete features from architectural grilling (ADRs) through TDD to audited PRs.
+3. **Phase 3: Autonomous Lifecycle ([`ship`](./skills/ship/SKILL.md))**: Run `/ship "<feature>"` to drive complete features from architectural grilling (ADRs) through TDD to audited PRs. *(Note: `ship` is currently in **Experimental Preview**; validate individual skills first).*
 
 ---
 
@@ -75,12 +78,12 @@ Teams can adopt skills incrementally without changing their entire workflow:
 
 | Skill Name | Command / Trigger | Lifecycle Stage | Description |
 |---|---|---|---|
-| [**`ship`**](./skills/ship/SKILL.md) | `/ship`, `"ship"`, `/lifecycle` | **Full Lifecycle Orchestrator** | **Chains all 5 skills into an autonomous pipeline with 4 transition gates.** |
+| [**`adversarial-review`**](./skills/adversarial-review/SKILL.md) | `/adversarial-review`, `"adversarial review"` | Post-implementation | **Recommended Pilot**. 10-stage systems audit across correctness, concurrency, failure modes, and production risk. |
+| [**`ponytail`**](./skills/ponytail/SKILL.md) | `/ponytail`, `"ponytail"`, `"lazy senior dev"` | Simplicity & Anti-Bloat | Forces the simplest working solution: YAGNI, standard library first, zero unrequested abstractions. |
+| [**`tdd`**](./skills/tdd/SKILL.md) | `/tdd`, `"tdd"`, `"red-green-refactor"` | Implementation | Disciplined test-driven development engine with dedicated Test Driver, Implementer, and Refactorer agents. |
 | [**`adversarial-design`**](./skills/adversarial-design/SKILL.md) | `/adversarial-design`, `"grill me on this design"` | Pre-implementation | Relentlessly stress-tests architectures and plans using frontier rounds. Compiles an ADR & OpenSpec. |
 | [**`prototype`**](./skills/prototype/SKILL.md) | `/prototype`, `"prototype"`, `"spike"` | Empirical Validation | Rapid, disposable spikes answering ungrillable design questions in isolated sandboxes. |
-| [**`tdd`**](./skills/tdd/SKILL.md) | `/tdd`, `"tdd"`, `"red-green-refactor"` | Implementation | Disciplined test-driven development engine with dedicated Test Driver, Implementer, and Refactorer agents. |
-| [**`ponytail`**](./skills/ponytail/SKILL.md) | `/ponytail`, `"ponytail"`, `"lazy senior dev"` | Simplicity & Anti-Bloat | Forces the simplest working solution: YAGNI, standard library first, zero unrequested abstractions. |
-| [**`adversarial-review`**](./skills/adversarial-review/SKILL.md) | `/adversarial-review`, `"adversarial review"` | Post-implementation | 10-stage systems audit across correctness, concurrency, failure modes, and production risk. |
+| [**`ship`**](./skills/ship/SKILL.md) | `/ship`, `"ship"`, `/lifecycle` | Full Lifecycle Orchestrator *(Preview)* | Chains all 5 skills into an autonomous pipeline with 4 transition gates. *(Experimental)*. |
 
 ---
 
@@ -322,18 +325,38 @@ skills/
 
 ## Installation
 
-To install all skills into your environment's skill directory (defaults to `~/.gemini/config/skills/`):
+To install skills into your environment's skill directory (defaults to `~/.gemini/config/skills/`):
 
 ```bash
 ./scripts/install.sh
 ```
 
-Or test with a dry run or custom target:
+### Safety & Team Customisation Flags
+The installer defaults to preserving existing non-symlink directories to avoid overwriting team configurations:
+- **`--backup`**: Safely back up existing directories to timestamped `.bak.<timestamp>` paths before installing.
+- **`--overwrite`**: Explicitly permit replacing existing non-symlink directories.
+- **`--dry-run`**: Preview all link/copy actions without touching the filesystem.
+- **`--mode <symlink|copy>`**: Choose between symbolic links (default) or copied files.
 
 ```bash
-./scripts/install.sh --dry-run
-./scripts/install.sh --target /path/to/custom/skills --mode symlink
+# Safe update with timestamped backup of existing directories
+./scripts/install.sh --backup
+
+# Preview installation
+./scripts/install.sh --dry-run --target /path/to/custom/skills
 ```
+
+---
+
+## Supported Environments & Maintenance
+
+- **Operating Systems**: macOS (Ventura+), Linux (Ubuntu 20.04+, RHEL 8+, Debian 11+).
+- **Runtimes**: Python 3.10+ (standard library only; zero external pip dependencies) and POSIX Bash (`bash 4.0+`).
+- **VCS**: Git 2.25+.
+- **Maintainer & Repository**: Maintained by Sumanth (`shathwar/skills`).
+- **Release Versioning**: Release tags follow Semantic Versioning (`vMAJOR.MINOR.PATCH`). Production adoption should pin against specific tagged releases.
+
+---
 
 ## Validation
 

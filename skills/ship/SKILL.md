@@ -15,7 +15,7 @@ description: Complete autonomous engineering lifecycle orchestrator. Chains adve
 - Gate 1 Checkpoint: NEVER proceed to Gate 2 without explicit user confirmation of the ADR/OpenSpec package.
 - Test-First Law: In Gate 2, every task MUST follow strict Red-Green-Refactor with failing behavioral tests before code.
 - Terminal Receipts: Gate transitions (Gate 2 ➔ 3 and Gate 3 ➔ 4) REQUIRE pasting the raw terminal test runner output (exit code, test count, duration). Unsubstantiated claims of "tests pass" are rejected.
-- Audit Clearance: Gate 4 delivery REQUIRES an explicit PASS verdict from the adversarial-review Judge.
+- Audit Clearance: Gate 4 delivery REQUIRES an explicit PASS report from the adversarial-review Judge, zero open CRITICAL/HIGH defects, and verified test evidence bound to current code.
 </hard_constraints>
 
 ---
@@ -84,15 +84,18 @@ Iterate sequentially through `openspec/changes/<topic>/tasks.md`:
 4. Mark task completed `- [x]` and repeat.
 
 ### Gate 3: Adversarial Code Audit
-1. Run `bash skills/adversarial-review/scripts/inspect_changes.sh main...HEAD`.
+1. Inspect implementation changes across the working tree (staged, unstaged, and untracked) against the base branch:
+   - Resolve `inspect_changes.sh` from the installed skill directory (`${SKILLS_DIR:-$HOME/.gemini/config/skills}/adversarial-review/scripts/inspect_changes.sh`) or local workspace path.
+   - Execute `bash <resolved_path>/inspect_changes.sh --base <base-branch>` (default: `main`). Never restrict to `main...HEAD` as that omits uncommitted working-tree implementation edits.
 2. Launch [`adversarial-review`](../adversarial-review/SKILL.md) in `review-loop` mode.
 3. Stage 0 verifies code against OpenSpec/ADR; Stages 1–9 audit concurrency, chaos, correctness.
-4. Auto-fix defects under green test protection until Judge issues `PASS`.
+4. Auto-fix defects under green test protection until Judge issues an explicit `PASS` report with verified test evidence.
 5. **Rollback Guard**: If ADR invariant is fundamentally broken, halt and re-open Frontier Round in Gate 1.
 
 ### Gate 4: Delivery & Sign-Off
 1. Run full test suite.
 2. Deliver Walkthrough: changes summary, ADR links, audit scorecard, `scan_debt.py` ledger.
+3. Apply & Archive OpenSpec: Sync delta specs to `openspec/specs/` and move completed package to `openspec/archive/<YYYY-MM-DD>-<topic>/` via `python3 ${SKILLS_DIR:-$HOME/.gemini/config/skills}/ship/scripts/inspect_lifecycle.py --archive [topic]`.
 
 ---
 

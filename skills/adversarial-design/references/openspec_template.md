@@ -114,3 +114,31 @@ When the feature implementation is complete, [`adversarial-review`](../../advers
 1. **Missing Requirements**: If any `SHALL` statement or `Scenario` in `specs/` is not implemented in code, it is flagged as a **`[HIGH] SpecAlignment` defect**.
 2. **Scope Creep**: If code introduces capabilities or APIs not specified in `proposal.md`, it is flagged as **`[MEDIUM] SpecAlignment (Scope Creep)`**.
 3. **Behavioral Divergence**: If code behaves differently than the `WHEN/THEN` outcome, it is flagged as a **`[CRITICAL] Correctness / SpecAlignment` defect**.
+
+---
+
+## 4. OpenSpec Lifecycle: Apply & Archive
+
+OpenSpec distinguishes between **in-flight change packages** (`openspec/changes/`), **living system specifications** (`openspec/specs/`), and **historical records** (`openspec/archive/`):
+
+```text
+1. Propose & Design (Gate 1)
+   openspec/changes/<feature>/ (proposal.md, specs/*.md, tasks.md)
+        │
+        ▼ 2. Implement & Audit (Gates 2 & 3)
+   Execute tasks.md (- [x]) ➔ Adversarial Review (Judge PASS)
+        │
+        ▼ 3. Apply & Archive (Gate 4 Delivery)
+   Sync specs:    openspec/changes/<feature>/specs/*.md ➔ openspec/specs/
+   Move package:  openspec/changes/<feature>/           ➔ openspec/archive/<YYYY-MM-DD>-<feature>/
+```
+
+### Automation via Tooling
+Upon Gate 4 delivery sign-off, run:
+```bash
+python3 skills/ship/scripts/inspect_lifecycle.py --archive
+```
+This automatically:
+1. Syncs all delta specification files into `openspec/specs/` (the cumulative living truth of the system).
+2. Archives the completed change directory to `openspec/archive/<YYYY-MM-DD>-<feature>/`.
+3. Cleans `openspec/changes/`, resetting the lifecycle state machine to Gate 1 ready for the next feature proposal.

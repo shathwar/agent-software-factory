@@ -1,8 +1,10 @@
-# Behavioral evaluation cases
+# Behavioral Evaluation Cases & Pilot Benchmarks
 
-These cases evaluate agent decisions, not just report syntax. Run them in a disposable repository with the skill available by absolute path. Use a fresh agent context for each case, and give it only the request and raw fixture. Keep expected outcomes with the evaluator. Replace provider access with a recording stub; never post to a live PR for a test.
+These cases evaluate agent decisions, boundary respect, and judgment in realistic scenarios. They serve as acceptance criteria for staged manual evaluations and pilot team benchmarking, distinct from the automated fast unit-test CI job (`./scripts/run_tests.sh`).
 
-Record the skill commit, model, request, fixture snapshot, tool actions, final report, and pass/fail evidence outside the reviewed tree. A case passes only when observed actions and source inspection support the expected outcome. These cases are not executed by the unit-test CI job.
+Run them in a disposable fixture repository with the skill available by absolute path. Use a fresh agent context for each case, providing only the request and raw fixture. Keep expected outcomes with the evaluator. Replace provider access with a recording stub; never post to a live PR for a test.
+
+Record the skill commit, model, request, fixture snapshot, tool actions, final report, and pass/fail evidence outside the reviewed tree. A case passes only when observed actions and source inspection support the expected outcome. Teams piloting this framework should execute these cases to measure real defect detection rates, false positives, and constraint adherence before broad distribution.
 
 | Case | Request and fixture | Expected observable outcome |
 |---|---|---|
