@@ -2285,6 +2285,114 @@ gates:
             self.assertIn("Ship-Delivery: BLOCKED", trailer_text)
             self.assertNotIn("Ship-Delivery: READY", trailer_text)
 
+    def test_archive_clears_active_change_and_records_archived_delivery(self):
+        """Archiving a package clears active_change_id to None and evaluates to ARCHIVED."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            pkg = tmppath / "openspec" / "changes" / "notifications"
+            pkg.mkdir(parents=True)
+            (pkg / "tasks.md").write_text("- [x] 1. Dispatch push notifications\n")
+
+            inspect_lifecycle.set_active_change(tmppath, "notifications")
+            self.assertEqual(inspect_lifecycle.get_active_change(tmppath), "notifications")
+
+            res = inspect_lifecycle.apply_and_archive_openspec(tmppath, "notifications", force=True)
+            self.assertEqual(res["change"], "notifications")
+
+            # Active change should be cleared
+            self.assertIsNone(inspect_lifecycle.get_active_change(tmppath))
+            state = inspect_lifecycle.load_ledger(tmppath, auto_sync=False)
+            self.assertIsNone(state.get("active_change_id"))
+
+            # Evaluating archived change reports ARCHIVED state
+            eval_res = inspect_lifecycle.evaluate_repository(tmppath, target_change="notifications")
+            self.assertEqual(eval_res["gate"], "GATE 4: READY TO SHIP")
+            self.assertEqual(eval_res["state_key"], "ARCHIVED")
+            self.assertIn("notifications", eval_res["next_action"])
+
+    def test_archive_rejected_if_ledger_has_failing_tests_or_blockers(self):
+        """Archiving without --force is rejected if ledger contains failing tests or blockers."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            pkg = tmppath / "openspec" / "changes" / "checkout"
+            pkg.mkdir(parents=True)
+            (pkg / "tasks.md").write_text("- [x] 1. Cart checkout\n")
+
+            scratch = tmppath / ".scratch"
+            scratch.mkdir(parents=True)
+            report_file = scratch / "review_report.json"
+            report_file.write_text(json.dumps({
+                "reviewer": "judge",
+                "status": "complete",
+                "verdict": "PASS",
+                "change": "checkout",
+                "findings": [],
+                "tests_passed": True,
+                "coverage": 100,
+                "questions": [],
+                "routing_notes": "",
+            }))
+
+            # Record failing test run to ledger
+            inspect_lifecycle.record_test_run_to_ledger(
+                tmppath,
+                {"passed": False, "failed_count": 2, "command": "npm test"},
+                change_id="checkout",
+            )
+
+            with self.assertRaises(RuntimeError) as ctx:
+                inspect_lifecycle.apply_and_archive_openspec(tmppath, "checkout", force=False)
+            self.assertIn("Tests: 2 test(s) failing", str(ctx.exception))
+
+    def test_sync_ledger_preserves_archived_changes(self):
+        """sync_ledger_from_workspace does not reset archived changes back to gate-1-design."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            pkg = tmppath / "openspec" / "changes" / "search"
+            pkg.mkdir(parents=True)
+            (pkg / "tasks.md").write_text("- [x] 1. Indexing\n")
+
+            inspect_lifecycle.apply_and_archive_openspec(tmppath, "search", force=True)
+
+            # Re-sync ledger
+            synced = inspect_lifecycle.sync_ledger_from_workspace(tmppath)
+            search_entry = synced["changes"]["search"]
+            self.assertEqual(search_entry["phase"], "gate-4-delivery")
+            self.assertEqual(search_entry["evidence"]["delivery"]["status"], "ARCHIVED")
+
+    def test_rollback_clears_obsolete_audit_blockers(self):
+        """Rolling back to gate-2-impl clears obsolete Audit blockers."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            inspect_lifecycle.mutate_change_state(
+                tmppath,
+                "auth",
+                lambda entry: entry.update({
+                    "phase": "gate-3-audit",
+                    "blockers": ["Audit: 2 unresolved CRITICAL/HIGH finding(s)", "Tests: 1 test(s) failing"],
+                    "evidence": {
+                        "audit": {"verdict": "FAIL"},
+                        "implementation": {"status": "PASSED"},
+                    }
+                })
+            )
+
+            # Create mock checkpoint
+            chk_dir = tmppath / ".scratch" / "checkpoints"
+            chk_dir.mkdir(parents=True)
+            (chk_dir / "auth_gate-2-impl.json").write_text(json.dumps({
+                "gate": "gate-2-impl",
+                "timestamp": "2026-09-13T00:00:00Z",
+                "files": {},
+            }))
+
+            inspect_lifecycle.perform_rollback(tmppath, target_gate="gate-2-impl", change="auth")
+            ledger = inspect_lifecycle.load_ledger(tmppath, auto_sync=False)
+            auth_entry = ledger["changes"]["auth"]
+            self.assertEqual(auth_entry["phase"], "gate-2-impl")
+            self.assertNotIn("Audit: 2 unresolved CRITICAL/HIGH finding(s)", auth_entry["blockers"])
+            self.assertIn("Tests: 1 test(s) failing", auth_entry["blockers"])
+
 
 if __name__ == "__main__":
     unittest.main()

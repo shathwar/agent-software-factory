@@ -513,16 +513,36 @@ def inspect_openspec(
     """Scan openspec/changes/ for active change packages and parse tasks.md."""
     resolved_target = target_change or target_topic
     changes_dir = repo_root / "openspec" / "changes"
+    archive_dir = repo_root / "openspec" / "archive"
     packages = []
+    
+    def target_is_archived(target: str) -> bool:
+        if archive_dir.exists():
+            for d in archive_dir.iterdir():
+                if d.is_dir() and (d.name == target or d.name.endswith(f"-{target}")):
+                    return True
+        state_file = repo_root / ".ship" / "state.json"
+        if state_file.exists():
+            try:
+                data = json.loads(state_file.read_text(encoding="utf-8"))
+                entry = data.get("changes", {}).get(target, {})
+                if entry.get("evidence", {}).get("delivery", {}).get("status") == "ARCHIVED":
+                    return True
+            except Exception:
+                pass
+        return False
+
     if not changes_dir.exists():
-        if resolved_target:
+        if resolved_target and not target_is_archived(resolved_target):
             raise ValueError(f"Specified OpenSpec change '{resolved_target}' not found (openspec/changes does not exist).")
         return packages
 
-    # Explicit change validation: if target specified, it MUST exist
+    # Explicit change validation: if target specified, it MUST exist or be archived
     if resolved_target:
         target_dir = changes_dir / resolved_target
         if not target_dir.exists() or not target_dir.is_dir():
+            if target_is_archived(resolved_target):
+                return packages
             available = [d.name for d in sorted(changes_dir.iterdir()) if d.is_dir() and not d.name.startswith(".")]
             avail_str = f" Available: {', '.join(available)}" if available else " (no packages found)"
             raise ValueError(f"Specified OpenSpec change '{resolved_target}' not found under openspec/changes/.{avail_str}")
@@ -1337,7 +1357,7 @@ def sync_ledger_from_workspace(repo_root: Path, target_change_id: Optional[str] 
 
     discovered_changes = [p["change"] for p in packages]
     if not discovered_changes:
-        if active_change_id:
+        if active_change_id and existing.get("changes", {}).get(active_change_id, {}).get("evidence", {}).get("delivery", {}).get("status") != "ARCHIVED":
             discovered_changes = [active_change_id]
         elif adrs:
             discovered_changes = [adrs[0]["name"].replace(".md", "").lower()]
@@ -1348,6 +1368,11 @@ def sync_ledger_from_workspace(repo_root: Path, target_change_id: Optional[str] 
         if change not in changes:
             changes[change] = create_empty_change_entry(change)
         entry = changes[change]
+
+        # Do not demote already archived changes
+        if entry.get("evidence", {}).get("delivery", {}).get("status") == "ARCHIVED":
+            entry["phase"] = "gate-4-delivery"
+            continue
 
         matched_pkg = next((p for p in packages if p["change"] == change or p.get("topic") == change), None)
         if matched_pkg:
@@ -1423,7 +1448,7 @@ def sync_ledger_from_workspace(repo_root: Path, target_change_id: Optional[str] 
         if entry.get("revision_counter", 0) == 0:
             entry["revision_counter"] = 1
 
-    if not active_change_id and discovered_changes:
+    if not active_change_id and discovered_changes and discovered_changes != ["default"]:
         active_change_id = discovered_changes[0]
 
     new_ledger = {
@@ -1457,6 +1482,7 @@ def mutate_change_state(
     repo_root: Path,
     change_id: str,
     updater: Any,
+    set_active: bool = True,
 ) -> Dict[str, Any]:
     """Safely mutate a specific change in .ship/state.json with file locking and increment revision counter."""
     with ledger_lock(repo_root):
@@ -1470,7 +1496,10 @@ def mutate_change_state(
         entry = changes[change_id]
         updater(entry)
         entry["revision_counter"] = entry.get("revision_counter", 0) + 1
-        ledger["active_change_id"] = change_id
+        if set_active:
+            ledger["active_change_id"] = change_id
+        elif ledger.get("active_change_id") == change_id:
+            ledger["active_change_id"] = None
         save_ledger(repo_root, ledger)
         return entry
 
@@ -1820,7 +1849,7 @@ def generate_gate_trailers(
 ) -> List[str]:
     """Generate compact RFC 5133 Git commit trailers matching ship.json gates."""
     if ledger is None:
-        ledger = load_ledger(repo_root, auto_sync=True)
+        ledger = load_ledger(repo_root, auto_sync=False)
     if config is None:
         config = load_ship_config(repo_root)
 
@@ -1991,6 +2020,17 @@ def determine_lifecycle_state(
             "GATE 1b: EMPIRICAL SPIKE ACTIVE",
             "SPIKE_ACTIVE",
             f"Complete empirical spike in '{spike_name}'. Deliver verdict to settle design frontier.",
+        )
+
+    # Check if active change is archived
+    if active_change and active_change.get("evidence", {}).get("delivery", {}).get("status") == "ARCHIVED":
+        cid = active_change.get("change_id", "active")
+        arch_path = active_change.get("evidence", {}).get("delivery", {}).get("archived_path")
+        path_str = f" in '{arch_path}'" if arch_path else ""
+        return (
+            "GATE 4: READY TO SHIP",
+            "ARCHIVED",
+            f"Change '{cid}' has been delivered and archived{path_str}.",
         )
 
     # If no OpenSpec packages and no ADRs, we are at Gate 1
@@ -2300,7 +2340,23 @@ def apply_and_archive_openspec(
         if has_pending:
             raise RuntimeError(f"Cannot archive '{change_name}': package has pending tasks in tasks.md. Complete all tasks before archiving or use --force.")
 
-        # 2. Audit report / Delivery Evidence check
+        # 2. Authoritative ledger blockers & test evidence check
+        ledger = load_ledger(repo_root, auto_sync=False)
+        change_entry = ledger.get("changes", {}).get(change_name)
+        if change_entry:
+            blockers = change_entry.get("blockers", [])
+            if blockers:
+                raise RuntimeError(
+                    f"Cannot archive '{change_name}': active ledger blockers ({'; '.join(blockers)}). Remediate blockers before archiving or use --force."
+                )
+            impl_ev = change_entry.get("evidence", {}).get("implementation", {})
+            if impl_ev.get("tests_passed") is False or impl_ev.get("status") == "FAILED":
+                failed_cnt = impl_ev.get("failed_count", 1)
+                raise RuntimeError(
+                    f"Cannot archive '{change_name}': {failed_cnt} test(s) failing recorded in ledger. Fix tests before archiving or use --force."
+                )
+
+        # 3. Audit report / Delivery Evidence check
         audit_report = inspect_audit_reports(repo_root, change=change_name)
         if not audit_report:
             raise RuntimeError(f"Cannot archive '{change_name}': no passing audit report found (or delivery evidence in .scratch/).")
@@ -2430,7 +2486,7 @@ def apply_and_archive_openspec(
                 entry["evidence"]["delivery"]["status"] = "ARCHIVED"
                 entry["evidence"]["delivery"]["archived_path"] = str(dest_archive.relative_to(repo_root))
                 entry["evidence"]["delivery"]["trailers"] = trailers
-            mutate_change_state(repo_root, change_name, update_delivery)
+            mutate_change_state(repo_root, change_name, update_delivery, set_active=False)
         except Exception:
             pass
 
@@ -2859,6 +2915,12 @@ def perform_rollback(
                 "git_note_oid": None,
                 "snapshot_fingerprint": None,
             }
+            if canonical_tag == "gate-1-spec":
+                entry["blockers"] = []
+                entry["evidence"]["implementation"]["status"] = "PENDING"
+                entry["evidence"]["implementation"]["tests_passed"] = None
+            else:
+                entry["blockers"] = [b for b in entry.get("blockers", []) if not b.startswith("Audit:")]
         mutate_change_state(repo_root, resolved_change, update_rb)
     except Exception:
         pass
