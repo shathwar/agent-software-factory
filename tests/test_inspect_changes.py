@@ -306,6 +306,17 @@ class InspectorTests(unittest.TestCase):
         self.assertIn("-> tests/core_test.cpp", output)
         self.assertNotIn("[MISSING TEST] src/core.c", output)
 
+    def test_max_diff_lines_truncation_and_scope(self):
+        # Generate a large diff
+        large_content = "\n".join(f"line_{i} = {i}" for i in range(50)) + "\n"
+        self.write("worker.py", large_content)
+        output = self.inspect("--max-diff-lines", "15", "--full-diff")
+        self.assertIn("[!] TRUNCATED: Diff output exceeded 15 lines", output)
+
+        # Test scope option execution
+        scoped_output = self.inspect("--scope", "src", "--no-diff")
+        self.assertIn("END OF CHANGE INSPECTOR REPORT", scoped_output)
+
 
 if __name__ == "__main__":
     unittest.main()

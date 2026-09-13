@@ -315,6 +315,26 @@ class TestVerifyTDD(unittest.TestCase):
         self.assertNotIn("🔴 Failure Trace:", trimmed)
         self.assertIn("Test Suite Summary:", trimmed)
 
+    def test_type_definitions_exempt_from_parity(self):
+        """Pure type/interface/DTO definitions must be exempted from 1:1 test parity requirements."""
+        type_files = [
+            "src/types/user.ts",
+            "api/schema.d.ts",
+            "db/schema.prisma",
+            "models/account.dto.ts",
+            "types.ts",
+            "pkg/interfaces/service.go",
+        ]
+        for tf in type_files:
+            self.assertTrue(verify_tdd.is_type_definition(tf), f"Failed for {tf}")
+            self.assertFalse(verify_tdd.is_production_code(tf), f"Should not be production code: {tf}")
+
+        # An edit containing only type definitions passes strict TDD parity with zero test files required
+        result = verify_tdd.audit_tdd(type_files, strict=True)
+        self.assertTrue(result.passed)
+        self.assertEqual(len(result.untested_files), 0)
+        self.assertEqual(len(result.production_files), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

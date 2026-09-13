@@ -26,50 +26,78 @@ The headless workflow decouples the 4 gates into asynchronous CI steps:
                                       ▼
                       GitHub Action triggers Gate 2 & 3
                   • TDD: Red-Green-Refactor tasks.md
-                  • Ponytail: stdlib-first anti-bloat
+                  • Simplify: stdlib-first anti-bloat
                   • Adversarial Review: Judge PASS audit
-                                      │
-                                      ▼
-               3. Action opens Pull Request with:
-                  • Delivery Walkthrough Report
-                  • Judge PASS Evidence Envelope
-                  • Zero-regression terminal receipts
+                                       │
+                                       ▼
+                3. Action opens Pull Request with:
+                   • Delivery Walkthrough Report
+                   • Judge PASS Evidence Envelope
+                   • Zero-regression terminal receipts
 ```
 
 ---
 
-## 2. Configuration: `.ship.json`
+## 2. Architecture: Agent Runner vs. Lifecycle Inspector
 
-Every repository or monorepo service should include a `.ship.json` at its root or service directory:
+> [!IMPORTANT]
+> **Separation of Concerns**:
+> - **The Agent Runner / Harness** (`agy run`, Claude Code CLI, Gemini CLI, or LLM agent worker) generates code, architectures ADRs, runs TDD cycles, and interacts with LLMs.
+> - **The Lifecycle Inspector** (`inspect_lifecycle.py`) is an autonomous, zero-dependency state machine, gate assertion engine, and git ref recorder. It verifies that criteria for each gate are strictly satisfied before allowing transitions.
+
+---
+
+## 3. Configuration: `.ship.json`
+
+Every repository or monorepo service can include a `.ship.json` (or `.ship.yaml`) at its root or service directory:
 
 ```json
 {
+  "$schema": "https://raw.githubusercontent.com/shathwar/skills/main/skills/ship/references/ship.schema.json",
   "version": 1,
   "project": {
     "name": "payment-gateway",
     "scope": "services/payment"
   },
   "gates": {
-    "gate2_tdd": {
-      "test_command": "pytest -q tests/unit",
-      "typecheck_command": "mypy services/payment"
+    "design": {
+      "adr_dir": "docs/adr",
+      "specs_dir": "openspec/specs"
     },
-    "gate3_audit": {
-      "max_fix_iterations": 3,
-      "debt_threshold": 0,
-      "base_branch": "main"
+    "spike": {
+      "timeout": 60.0,
+      "concurrency": 1
     },
-    "gate4_delivery": {
-      "require_clean_working_tree": true,
-      "target_branch": "main"
+    "implementation": {
+      "test": "pytest -q tests/unit",
+      "typecheck": "mypy services/payment",
+      "lint": "ruff check ."
+    },
+    "simplify": {
+      "max_debt": 0,
+      "strict": true
+    },
+    "audit": {
+      "base_branch": "main",
+      "reviewers": ["correctness", "concurrency", "design", "judge"],
+      "max_iterations": 3
+    },
+    "delivery": {
+      "target_branch": "main",
+      "clean_worktree": true,
+      "sync_specs": true,
+      "archive_packages": true
     }
+  },
+  "telemetry": {
+    "sink": ".scratch/lifecycle_events.jsonl"
   }
 }
 ```
 
 ---
 
-## 3. Reference GitHub Action Workflow (`.github/workflows/ship_headless.yml`)
+## 4. Reference Secure GitHub Action Workflow (`.github/workflows/ship_headless.yml`)
 
 ```yaml
 name: Autonomous Ship Lifecycle
@@ -85,7 +113,12 @@ permissions:
 
 jobs:
   gate1_spec:
-    if: github.event_name == 'issues' && github.event.action == 'opened' && startsWith(github.event.issue.body, '/ship')
+    # Security: Restrict execution to organization members/collaborators to prevent DoS and runner exhaustion
+    if: >
+      github.event_name == 'issues' &&
+      github.event.action == 'opened' &&
+      startsWith(github.event.issue.body, '/ship') &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -96,29 +129,49 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Run Gate 1 (Design & Specification)
+      # Security: Sanitize title to prevent shell injection (FINDING-001)
+      - name: Sanitize Topic Title
         env:
-          ISSUE_TITLE: ${{ github.event.issue.title }}
+          RAW_TITLE: ${{ github.event.issue.title }}
         run: |
-          TOPIC=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
-          echo "Running Gate 1 for topic: $TOPIC"
-          # Run agent with design
+          python3 -c '
+          import os, re, sys
+          raw = os.environ.get("RAW_TITLE", "")
+          topic = re.sub(r"[^a-zA-Z0-9_-]+", "-", raw).strip("-").lower()[:50]
+          if not topic:
+              print("Invalid topic: must contain alphanumeric characters", file=sys.stderr)
+              sys.exit(1)
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+              f.write(f"TOPIC={topic}\n")
+          '
+
+      - name: Run Gate 1 Agent (Design & Specification)
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          echo "Executing Gate 1 agent runner for topic: $TOPIC"
+          # 1. Execute agent runner harness with design skill prompt
+          # e.g., agy run --skill design "Design spec for: $TOPIC based on $ISSUE_BODY"
+          # 2. Record and assert Gate 1 Checkpoint
           python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint gate-1-spec --topic "$TOPIC"
 
       - name: Post Spec Comment
         uses: actions/github-script@v7
         with:
           script: |
-            const fs = require('fs');
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `### 📋 Specification Ready for Review\n\nPlease review the generated ADR and OpenSpec package. When approved, label this issue with \`ship:approved\` to proceed to implementation.`
+              body: `### 📋 Specification Ready for Review\n\nPlease review the generated ADR and OpenSpec package for \`${process.env.TOPIC}\`. When approved, label this issue with \`ship:approved\` to proceed to implementation.`
             });
 
   gate2_and_3_implementation:
-    if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'ship:approved'
+    if: >
+      github.event_name == 'issues' &&
+      github.event.action == 'labeled' &&
+      github.event.label.name == 'ship:approved' &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.sender.author_association)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -131,15 +184,20 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Verify Gate 1 Checkpoint
+      - name: Verify Gate 1 Checkpoint Status
         run: |
           python3 skills/ship/scripts/inspect_lifecycle.py --format json
 
-      - name: Run Gate 2 (Implementation) & Gate 3 (Code Audit)
+      - name: Run Gate 2 (TDD Implementation) & Gate 3 (Code Audit)
         run: |
-          # Dispatch isolated subagents for TDD and Audit
+          # 1. Execute agent runner harness for TDD tasks
+          # e.g., agy run --skill tdd "Execute tasks in active openspec"
           python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint gate-2-impl
-          # Run audit loop until Judge PASS
+
+          # 2. Execute agent runner harness for Audit loop
+          # e.g., agy run --skill audit "Review changes in review-loop mode"
+
+          # 3. Assert full delivery status
           python3 skills/ship/scripts/inspect_lifecycle.py --status-check
 
       - name: Open Pull Request
@@ -158,11 +216,11 @@ jobs:
 
 ---
 
-## 4. State Machine Automation Commands
+## 5. State Machine Automation Commands
 
 | Command | Purpose in CI/CD |
 |---|---|
 | `python3 skills/ship/scripts/inspect_lifecycle.py --status-check` | Exits `0` if ready for delivery, `1` if blocked, `2` if rollback required. Use in CI branch protection. |
-| `python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint <gate>` | Records immutable git refs (`refs/ship/...`) and JSON receipts in `.scratch/`. |
-| `python3 skills/ship/scripts/inspect_lifecycle.py --rollback gate-1-spec` | Automatically backs up broken edits to `.scratch/` and resets `tasks.md` for revision. |
+| `python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint <gate>` | Records immutable internal git refs (`refs/ship/...`) and JSON receipts in `.scratch/`. |
+| `python3 skills/ship/scripts/inspect_lifecycle.py --rollback gate-1-spec` | Safely archives untracked/modified edits to `.scratch/backups/` and resets `tasks.md` for revision. |
 | `python3 skills/ship/scripts/inspect_lifecycle.py --archive <topic>` | Syncs delta specs into `openspec/specs/` and archives completed change packages. |

@@ -197,19 +197,38 @@ def load_ship_config(repo_root: Path, explicit_path: Optional[str] = None) -> Di
             "scope": ".",
         },
         "gates": {
-            "gate2_tdd": {
-                "test_command": "",
-                "typecheck_command": "",
+            "design": {
+                "adr_dir": "docs/adr",
+                "specs_dir": "openspec/specs",
             },
-            "gate3_audit": {
-                "max_fix_iterations": 3,
-                "debt_threshold": 0,
+            "spike": {
+                "timeout": 60.0,
+                "concurrency": 1,
+            },
+            "implementation": {
+                "test": "",
+                "typecheck": "",
+                "lint": "",
+            },
+            "simplify": {
+                "max_debt": 0,
+                "strict": True,
+            },
+            "audit": {
                 "base_branch": "main",
+                "reviewers": ["correctness", "concurrency", "design", "judge"],
+                "max_iterations": 3,
             },
-            "gate4_delivery": {
-                "require_clean_working_tree": True,
+            "delivery": {
                 "target_branch": "main",
+                "clean_worktree": True,
+                "sync_specs": True,
+                "archive_packages": True,
             },
+        },
+        "create_git_tag": False,
+        "telemetry": {
+            "sink": None,
         },
         "config_source": None,
     }
@@ -1521,14 +1540,49 @@ def apply_and_archive_openspec(
     }
 
 
+def emit_telemetry_event(
+    repo_root: Path,
+    event_type: str,
+    payload: Dict[str, Any],
+    sink: Optional[str] = None,
+    config: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Emit a structured telemetry event to a local file or configured telemetry sink."""
+    target_sink = sink
+    if not target_sink and config:
+        target_sink = config.get("telemetry", {}).get("sink")
+    if not target_sink:
+        return
+
+    event = {
+        "event_type": event_type,
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "repo": repo_root.name,
+        "payload": payload,
+    }
+    try:
+        sink_path = Path(target_sink)
+        if not sink_path.is_absolute():
+            sink_path = repo_root / sink_path
+        sink_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(sink_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(event) + "\n")
+    except Exception:
+        pass
+
+
 def create_checkpoint(
     repo_root: Path,
     gate_name: str,
     topic: Optional[str] = None,
+    create_git_tag: bool = False,
+    telemetry_sink: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Record a git checkpoint tag/ref and receipt for the given lifecycle gate."""
     resolved_topic = topic or get_active_topic(repo_root) or "default"
     git_info = get_git_info(repo_root)
+    cfg = load_ship_config(repo_root)
+    allow_git_tag = create_git_tag or cfg.get("create_git_tag", False)
 
     canonical = gate_name.lower().strip()
     if canonical in {"1", "gate1", "gate-1", "spec", "gate-1-spec"}:
@@ -1587,11 +1641,12 @@ def create_checkpoint(
                 capture_output=True,
                 check=True,
             )
-            subprocess.run(
-                ["git", "tag", "-f", tag_name, target_ref_sha],
-                cwd=repo_root,
-                capture_output=True,
-            )
+            if allow_git_tag:
+                subprocess.run(
+                    ["git", "tag", "-f", tag_name, target_ref_sha],
+                    cwd=repo_root,
+                    capture_output=True,
+                )
             ref_created = True
         except Exception:
             pass
@@ -1603,7 +1658,8 @@ def create_checkpoint(
         "topic": resolved_topic,
         "gate": canonical_tag,
         "ref": ref_name,
-        "tag": tag_name,
+        "tag": tag_name if allow_git_tag else None,
+        "tag_created": allow_git_tag,
         "commit": commit_sha or "none",
         "snapshot_commit": snapshot_sha or commit_sha or "none",
         "fingerprint": fingerprint,
@@ -1613,6 +1669,8 @@ def create_checkpoint(
     }
     receipt_file.write_text(json.dumps(receipt_data, indent=2), encoding="utf-8")
 
+    emit_telemetry_event(repo_root, "checkpoint_created", receipt_data, sink=telemetry_sink, config=cfg)
+
     return receipt_data
 
 
@@ -1621,6 +1679,7 @@ def perform_rollback(
     target_gate: str,
     topic: Optional[str] = None,
     force: bool = False,
+    telemetry_sink: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Safely roll back lifecycle and working state to target checkpoint (e.g. State 5b)."""
     resolved_topic = topic or get_active_topic(repo_root) or "default"
@@ -1633,6 +1692,7 @@ def perform_rollback(
         canonical_tag = canonical.replace(" ", "-")
 
     git_info = get_git_info(repo_root)
+    cfg = load_ship_config(repo_root)
     timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_dir = repo_root / ".scratch" / f"rollback_{timestamp_str}"
 
@@ -1653,23 +1713,24 @@ def perform_rollback(
 
     if git_info.get("is_git"):
         target_sha: Optional[str] = None
-        tag_check = subprocess.run(
-            ["git", "rev-parse", "--verify", target_tag],
+        # Check internal private ref first to avoid requiring global tags
+        ref_check = subprocess.run(
+            ["git", "rev-parse", "--verify", target_ref],
             cwd=repo_root,
             capture_output=True,
             text=True,
         )
-        if tag_check.returncode == 0:
-            target_sha = tag_check.stdout.strip()
+        if ref_check.returncode == 0:
+            target_sha = ref_check.stdout.strip()
         else:
-            ref_check = subprocess.run(
-                ["git", "rev-parse", "--verify", target_ref],
+            tag_check = subprocess.run(
+                ["git", "rev-parse", "--verify", target_tag],
                 cwd=repo_root,
                 capture_output=True,
                 text=True,
             )
-            if ref_check.returncode == 0:
-                target_sha = ref_check.stdout.strip()
+            if tag_check.returncode == 0:
+                target_sha = tag_check.stdout.strip()
             elif checkpoint_info and checkpoint_info.get("snapshot_commit"):
                 target_sha = checkpoint_info["snapshot_commit"]
             elif checkpoint_info and checkpoint_info.get("commit"):
@@ -1685,7 +1746,7 @@ def perform_rollback(
         backup_dir.mkdir(parents=True, exist_ok=True)
         try:
             patch_res = subprocess.run(
-                ["git", "diff", "HEAD"],
+                ["git", "diff", "--no-renames", "HEAD"],
                 cwd=repo_root,
                 capture_output=True,
             )
@@ -1697,7 +1758,7 @@ def perform_rollback(
         if target_sha and current_sha and current_sha != target_sha and target_sha != "none":
             try:
                 commit_diff_res = subprocess.run(
-                    ["git", "diff", target_sha, "HEAD"],
+                    ["git", "diff", "--no-renames", target_sha, "HEAD"],
                     cwd=repo_root,
                     capture_output=True,
                 )
@@ -1721,7 +1782,7 @@ def perform_rollback(
         # Perform scoped restoration of implementation files modified or added since target_sha
         if target_sha and target_sha != "none":
             try:
-                diff_cmd = ["git", "diff", "--name-only", target_sha]
+                diff_cmd = ["git", "diff", "--no-renames", "--name-only", target_sha]
                 diff_proc = subprocess.run(diff_cmd, cwd=repo_root, capture_output=True, text=True)
                 changed_files = [line.strip() for line in diff_proc.stdout.splitlines() if line.strip()]
 
@@ -1754,6 +1815,13 @@ def perform_rollback(
                             backed_up_files.append(rel_path)
                         except Exception:
                             pass
+                    elif full_path.is_dir() and rel_path not in backed_up_files:
+                        dest = backup_dir / rel_path
+                        try:
+                            shutil.copytree(full_path, dest, dirs_exist_ok=True)
+                            backed_up_files.append(rel_path)
+                        except Exception:
+                            pass
 
                     # Check if file existed at target_sha
                     cat_check = subprocess.run(
@@ -1772,11 +1840,29 @@ def perform_rollback(
                         if chk_proc.returncode == 0:
                             restored_files.append(rel_path)
                     else:
-                        # File was newly created since target_sha: remove it from worktree & index
-                        subprocess.run(["git", "rm", "-f", "--cached", rel_path], cwd=repo_root, capture_output=True)
+                        # File was newly created since target_sha: preserve in untracked_removed safety stash before removing
+                        safety_stash = backup_dir / "untracked_removed" / rel_path
+                        safety_stash.parent.mkdir(parents=True, exist_ok=True)
                         if full_path.is_file():
+                            try:
+                                shutil.copy2(full_path, safety_stash)
+                            except Exception:
+                                pass
+                            subprocess.run(["git", "rm", "-f", "--cached", rel_path], cwd=repo_root, capture_output=True)
                             full_path.unlink(missing_ok=True)
+                            parent = full_path.parent
+                            while parent != repo_root and parent.is_dir():
+                                try:
+                                    parent.rmdir()
+                                    parent = parent.parent
+                                except OSError:
+                                    break
                         elif full_path.is_dir():
+                            try:
+                                shutil.copytree(full_path, safety_stash, dirs_exist_ok=True)
+                            except Exception:
+                                pass
+                            subprocess.run(["git", "rm", "-rf", "--cached", rel_path], cwd=repo_root, capture_output=True)
                             shutil.rmtree(full_path, ignore_errors=True)
                         removed_files.append(rel_path)
 
@@ -1811,22 +1897,22 @@ def perform_rollback(
     has_backups = bool(backed_up_files) or (backup_dir.exists() and (
         (backup_dir / "working_diff.patch").exists() or (backup_dir / "committed_diff.patch").exists()
     ))
-    return {
+    res_payload = {
         "status": "success",
         "topic": resolved_topic,
         "target_gate": canonical_tag,
         "backup_directory": str(backup_dir.relative_to(repo_root)) if has_backups else None,
+        "has_backups": has_backups,
         "backed_up_files": backed_up_files,
         "restored_files": restored_files,
         "removed_files": removed_files,
         "reset_tasks_count": reset_tasks_count,
         "git_reset_performed": git_reset_performed,
         "checkpoint_found": bool(checkpoint_info),
-        "message": (
-            f"Safely rolled back to {canonical_tag}. Restored {len(restored_files)} implementation file(s), "
-            f"removed {len(removed_files)} new file(s), and reset state to Gate 1 (Spec Amendment)."
-        ),
+        "message": f"Successfully rolled back to {canonical_tag}. Restored {len(restored_files)} files, removed {len(removed_files)} new files, backed up to {backup_dir.name}/.",
     }
+    emit_telemetry_event(repo_root, "rollback_executed", res_payload, sink=telemetry_sink, config=cfg)
+    return res_payload
 
 
 def evaluate_repository(
@@ -1928,8 +2014,8 @@ def format_summary(data: Dict[str, Any]) -> str:
 
     if data.get("config", {}).get("config_source"):
         cfg = data["config"]
-        t_cmd = cfg.get("gates", {}).get("gate2_tdd", {}).get("test_command") or "autodetect"
-        lines.append(f"• Config File    : {cfg['config_source']} (test_cmd: '{t_cmd}')")
+        t_cmd = cfg.get("gates", {}).get("implementation", {}).get("test") or "autodetect"
+        lines.append(f"• Config File    : {cfg['config_source']} (test: '{t_cmd}')")
 
     lines.append("─────────────────────────────────────────────────────────────────────")
     lines.append("👉 RECOMMENDED NEXT ACTION:")
@@ -1998,6 +2084,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         action="store_true",
         help="Print deterministic working tree fingerprint SHA-256 and exit.",
     )
+    parser.add_argument(
+        "--create-git-tag",
+        action="store_true",
+        help="Also create a git tag in refs/tags/ (default: False, records in refs/ship/ only).",
+    )
+    parser.add_argument(
+        "--telemetry-sink",
+        default=None,
+        help="Path to file for appending structured JSON lifecycle events.",
+    )
 
     args = parser.parse_args(argv)
     repo_root = Path(args.path).resolve()
@@ -2008,15 +2104,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.checkpoint:
         try:
-            res = create_checkpoint(repo_root, args.checkpoint, topic=args.topic)
+            res = create_checkpoint(
+                repo_root,
+                args.checkpoint,
+                topic=args.topic,
+                create_git_tag=args.create_git_tag,
+                telemetry_sink=args.telemetry_sink,
+            )
             if args.format == "json":
                 print(json.dumps(res, indent=2))
             else:
+                tag_display = f" ({res['tag']})" if res.get("tag") else ""
                 print("═════════════════════════════════════════════════════════════════════")
                 print(f" 🏷️  LIFECYCLE CHECKPOINT CREATED: {res['gate']}")
                 print("═════════════════════════════════════════════════════════════════════")
                 print(f"• Topic          : {res['topic']}")
-                print(f"• Git Ref / Tag  : {res['ref']} ({res['tag']})")
+                print(f"• Git Ref / Tag  : {res['ref']}{tag_display}")
                 print(f"• Snapshot Commit: {res['commit'][:7] if res.get('commit') else 'none'}")
                 print(f"• Fingerprint    : {res['fingerprint'][:12]}...")
                 print("═════════════════════════════════════════════════════════════════════")
@@ -2027,7 +2130,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.rollback:
         try:
-            res = perform_rollback(repo_root, args.rollback, topic=args.topic, force=args.force)
+            res = perform_rollback(
+                repo_root,
+                args.rollback,
+                topic=args.topic,
+                force=args.force,
+                telemetry_sink=args.telemetry_sink,
+            )
             if args.format == "json":
                 print(json.dumps(res, indent=2))
             else:

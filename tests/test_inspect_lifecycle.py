@@ -1321,8 +1321,9 @@ class TestInspectLifecycle(unittest.TestCase):
             config_data = {
                 "project": {"name": "billing", "scope": "services/billing"},
                 "gates": {
-                    "gate2_tdd": {"test_command": "pnpm test"},
-                    "gate3_audit": {"max_fix_iterations": 5, "debt_threshold": 2},
+                    "implementation": {"test": "pnpm test"},
+                    "simplify": {"max_debt": 2},
+                    "audit": {"max_iterations": 5},
                 },
             }
             (tmppath / ".ship.json").write_text(json.dumps(config_data))
@@ -1331,8 +1332,9 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(cfg["config_source"], ".ship.json")
             self.assertEqual(cfg["project"]["name"], "billing")
             self.assertEqual(cfg["project"]["scope"], "services/billing")
-            self.assertEqual(cfg["gates"]["gate2_tdd"]["test_command"], "pnpm test")
-            self.assertEqual(cfg["gates"]["gate3_audit"]["max_fix_iterations"], 5)
+            self.assertEqual(cfg["gates"]["implementation"]["test"], "pnpm test")
+            self.assertEqual(cfg["gates"]["simplify"]["max_debt"], 2)
+            self.assertEqual(cfg["gates"]["audit"]["max_iterations"], 5)
 
             # Check format_summary displays config
             eval_data = inspect_lifecycle.evaluate_repository(tmppath)
@@ -1348,18 +1350,18 @@ class TestInspectLifecycle(unittest.TestCase):
 project:
   name: "auth-service"
 gates:
-  gate2_tdd:
-    test_command: "pytest -q"
-  gate3_audit:
-    max_fix_iterations: 4
+  implementation:
+    test: "pytest -q"
+  audit:
+    max_iterations: 4
 """
             (tmppath / ".ship.yaml").write_text(yaml_content)
 
             cfg = inspect_lifecycle.load_ship_config(tmppath)
             self.assertEqual(cfg["config_source"], ".ship.yaml")
             self.assertEqual(cfg["project"]["name"], "auth-service")
-            self.assertEqual(cfg["gates"]["gate2_tdd"]["test_command"], "pytest -q")
-            self.assertEqual(cfg["gates"]["gate3_audit"]["max_fix_iterations"], 4)
+            self.assertEqual(cfg["gates"]["implementation"]["test"], "pytest -q")
+            self.assertEqual(cfg["gates"]["audit"]["max_iterations"], 4)
 
     def test_create_checkpoint_and_rollback(self):
         """Verify checkpoint creation and safe rollback with backup."""
@@ -1464,20 +1466,20 @@ gates:
 project:
   name: "billing" # Project name comment
 gates:
-  gate2_tdd:
-    test_command: "pytest -q" # quiet mode
-  gate3_audit:
-    max_fix_iterations: 3
+  implementation:
+    test: "pytest -q" # quiet mode
+  audit:
+    max_iterations: 3
     critical_paths:
       - services/billing/core
       - services/billing/api
 """
         parsed = inspect_lifecycle.parse_simple_yaml(yaml_text)
         self.assertEqual(parsed["project"]["name"], "billing")
-        self.assertEqual(parsed["gates"]["gate2_tdd"]["test_command"], "pytest -q")
-        self.assertEqual(parsed["gates"]["gate3_audit"]["max_fix_iterations"], 3)
+        self.assertEqual(parsed["gates"]["implementation"]["test"], "pytest -q")
+        self.assertEqual(parsed["gates"]["audit"]["max_iterations"], 3)
         self.assertEqual(
-            parsed["gates"]["gate3_audit"]["critical_paths"],
+            parsed["gates"]["audit"]["critical_paths"],
             ["services/billing/core", "services/billing/api"],
         )
 
@@ -1687,6 +1689,178 @@ gates:
             git_info = inspect_lifecycle.get_git_info(tmppath)
             self.assertIn("spaced file.py", git_info["modified_source_files"])
             self.assertNotIn('"spaced file.py"', git_info["modified_source_files"])
+
+    def test_rollback_handles_renamed_files(self):
+        """Rollback must restore original file and remove destination when a file was renamed after checkpoint."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init", "-b", "main"], cwd=tmppath, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+
+            pkg_dir = tmppath / "openspec" / "changes" / "feature"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text("- [x] 1. Initial task\n")
+
+            orig_file = tmppath / "original.py"
+            orig_file.write_text("def orig(): pass\n")
+            subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
+            subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=tmppath, check=True, capture_output=True)
+
+            # Create checkpoint for Gate 2
+            chk = inspect_lifecycle.create_checkpoint(tmppath, gate_name="gate-2-impl", topic="feature")
+            self.assertEqual(chk["gate"], "gate-2-impl")
+
+            # Rename file using git mv
+            subprocess.run(["git", "mv", "original.py", "renamed.py"], cwd=tmppath, check=True)
+            self.assertFalse((tmppath / "original.py").exists())
+            self.assertTrue((tmppath / "renamed.py").exists())
+
+            # Perform rollback
+            rb = inspect_lifecycle.perform_rollback(tmppath, target_gate="gate-2-impl", topic="feature")
+            self.assertEqual(rb["status"], "success")
+            self.assertIn("original.py", rb["restored_files"])
+            self.assertIn("renamed.py", rb["removed_files"])
+            self.assertTrue((tmppath / "original.py").exists())
+            self.assertFalse((tmppath / "renamed.py").exists())
+            self.assertEqual((tmppath / "original.py").read_text(), "def orig(): pass\n")
+
+            # Check that backed up files recorded renamed.py
+            self.assertIn("renamed.py", rb["backed_up_files"])
+
+            # Working tree has no modified source files
+            git_info = inspect_lifecycle.get_git_info(tmppath)
+            self.assertEqual(git_info["modified_source_files"], [])
+
+    def test_checkpoint_private_ref_does_not_pollute_tags(self):
+        """create_checkpoint must isolate refs to refs/ship/ without creating refs/tags/ by default."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+
+            (tmppath / "README.md").write_text("# Test\n")
+            subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
+            subprocess.run(["git", "commit", "-m", "Init"], cwd=tmppath, check=True, capture_output=True)
+
+            # 1. Default: records to refs/ship/... but NOT to refs/tags/
+            chk = inspect_lifecycle.create_checkpoint(tmppath, "gate-1-spec", topic="auth")
+            self.assertTrue(chk["ref_created"])
+            self.assertFalse(chk["tag_created"])
+            self.assertIsNone(chk["tag"])
+
+            ref_check = subprocess.run(
+                ["git", "rev-parse", "--verify", "refs/ship/auth/gate-1-spec"],
+                cwd=tmppath, capture_output=True, text=True
+            )
+            self.assertEqual(ref_check.returncode, 0)
+
+            tag_check = subprocess.run(
+                ["git", "rev-parse", "--verify", "refs/tags/ship/auth/gate-1-spec"],
+                cwd=tmppath, capture_output=True, text=True
+            )
+            self.assertNotEqual(tag_check.returncode, 0)
+
+            # 2. With create_git_tag=True: explicitly permits git tag in refs/tags/
+            chk_tagged = inspect_lifecycle.create_checkpoint(tmppath, "gate-1-spec", topic="auth", create_git_tag=True)
+            self.assertTrue(chk_tagged["tag_created"])
+            self.assertIsNotNone(chk_tagged["tag"])
+
+            tag_check2 = subprocess.run(
+                ["git", "rev-parse", "--verify", "refs/tags/ship/auth/gate-1-spec"],
+                cwd=tmppath, capture_output=True, text=True
+            )
+            self.assertEqual(tag_check2.returncode, 0)
+
+    def test_rollback_preserves_untracked_directories_and_files(self):
+        """Rollback must safely archive newly created untracked directories and files into untracked_removed/."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+
+            (tmppath / "main.py").write_text("def main(): pass\n")
+            subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
+            subprocess.run(["git", "commit", "-m", "Base"], cwd=tmppath, check=True, capture_output=True)
+
+            # Checkpoint
+            inspect_lifecycle.create_checkpoint(tmppath, "gate-1-spec", topic="data-safety")
+
+            # Create new untracked file and new untracked directory
+            (tmppath / "new_file.py").write_text("# precious untracked content\n")
+            new_dir = tmppath / "new_package"
+            new_dir.mkdir()
+            (new_dir / "module.py").write_text("def helper(): return 42\n")
+
+            # Perform rollback
+            rb = inspect_lifecycle.perform_rollback(tmppath, "gate-1-spec", topic="data-safety")
+            self.assertEqual(rb["status"], "success")
+
+            # Verify working tree no longer has new files
+            self.assertFalse((tmppath / "new_file.py").exists())
+            self.assertFalse((tmppath / "new_package").exists())
+
+            # Verify safety stash preserved the byte-for-byte content
+            backup_dir = tmppath / rb["backup_directory"]
+            safety_file = backup_dir / "untracked_removed" / "new_file.py"
+            safety_dir_file = backup_dir / "untracked_removed" / "new_package" / "module.py"
+            self.assertTrue(safety_file.exists())
+            self.assertTrue(safety_dir_file.exists())
+            self.assertEqual(safety_file.read_text(), "# precious untracked content\n")
+            self.assertEqual(safety_dir_file.read_text(), "def helper(): return 42\n")
+
+    def test_telemetry_sink_emission(self):
+        """Emits structured JSON events to telemetry sink upon lifecycle events."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+
+            (tmppath / "app.py").write_text("pass\n")
+            subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
+            subprocess.run(["git", "commit", "-m", "Init"], cwd=tmppath, check=True, capture_output=True)
+
+            sink_file = tmppath / ".scratch" / "telemetry_events.jsonl"
+            inspect_lifecycle.create_checkpoint(tmppath, "gate-1-spec", topic="metrics", telemetry_sink=str(sink_file))
+            inspect_lifecycle.perform_rollback(tmppath, "gate-1-spec", topic="metrics", telemetry_sink=str(sink_file))
+
+            self.assertTrue(sink_file.exists())
+            lines = [json.loads(line) for line in sink_file.read_text().splitlines() if line.strip()]
+            self.assertEqual(len(lines), 2)
+            self.assertEqual(lines[0]["event_type"], "checkpoint_created")
+            self.assertEqual(lines[1]["event_type"], "rollback_executed")
+            self.assertEqual(lines[0]["payload"]["topic"], "metrics")
+
+    def test_ship_schema_conformance(self):
+        """Verify load_ship_config default_config aligns with ship.schema.json structure."""
+        schema_file = Path(__file__).resolve().parent.parent / "skills" / "ship" / "references" / "ship.schema.json"
+        self.assertTrue(schema_file.exists())
+        schema = json.loads(schema_file.read_text(encoding="utf-8"))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg = inspect_lifecycle.load_ship_config(Path(tmpdir))
+
+            # Validate top-level keys
+            expected_gates = {"design", "spike", "implementation", "simplify", "audit", "delivery"}
+            self.assertEqual(set(cfg["gates"].keys()), expected_gates)
+
+            # Check implementation gate commands
+            self.assertIn("test", cfg["gates"]["implementation"])
+            self.assertIn("typecheck", cfg["gates"]["implementation"])
+            self.assertIn("lint", cfg["gates"]["implementation"])
+
+            # Check audit gate properties
+            self.assertIn("base_branch", cfg["gates"]["audit"])
+            self.assertIn("reviewers", cfg["gates"]["audit"])
+            self.assertIn("max_iterations", cfg["gates"]["audit"])
+
+            # Check delivery gate properties
+            self.assertIn("clean_worktree", cfg["gates"]["delivery"])
+            self.assertIn("sync_specs", cfg["gates"]["delivery"])
+            self.assertIn("archive_packages", cfg["gates"]["delivery"])
 
 
 if __name__ == "__main__":

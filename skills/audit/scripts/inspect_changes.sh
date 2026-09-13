@@ -26,6 +26,8 @@ cd "$REPO_ROOT"
 PRINT_DIFF=true
 TARGET_DIFF=""
 EXPLICIT_BASE=""
+SCOPE_DIR=""
+MAX_DIFF_LINES=2000
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -37,6 +39,25 @@ while [[ $# -gt 0 ]]; do
         --base=*)
             EXPLICIT_BASE="${1#*=}"
             [[ -z "$EXPLICIT_BASE" ]] && { echo "Error: --base requires a branch argument." >&2; exit 2; }
+            shift
+            ;;
+        --scope)
+            [[ $# -lt 2 ]] && { echo "Error: --scope requires a directory argument." >&2; exit 2; }
+            SCOPE_DIR="$2"
+            shift 2
+            ;;
+        --scope=*)
+            SCOPE_DIR="${1#*=}"
+            [[ -z "$SCOPE_DIR" ]] && { echo "Error: --scope requires a directory argument." >&2; exit 2; }
+            shift
+            ;;
+        --max-diff-lines)
+            [[ $# -lt 2 ]] && { echo "Error: --max-diff-lines requires an integer argument." >&2; exit 2; }
+            MAX_DIFF_LINES="$2"
+            shift 2
+            ;;
+        --max-diff-lines=*)
+            MAX_DIFF_LINES="${1#*=}"
             shift
             ;;
         --no-diff)
@@ -55,10 +76,12 @@ while [[ $# -gt 0 ]]; do
             echo "               Default: Auto-detects uncommitted changes or branch diff vs main"
             echo ""
             echo "Options:"
-            echo "  --base <ref> Base branch or ref to diff working tree against (e.g. 'main')"
-            echo "  --no-diff    Omit the full unified diff output"
-            echo "  --full-diff  Print the full unified diff output (default)"
-            echo "  -h, --help   Show this help message"
+            echo "  --base <ref>         Base branch or ref to diff working tree against (e.g. 'main')"
+            echo "  --scope <dir>        Restrict caller grep to subproject directory (auto-detects .ship.json scope)"
+            echo "  --max-diff-lines <N> Maximum diff lines to output before truncating (default: 2000)"
+            echo "  --no-diff            Omit the full unified diff output"
+            echo "  --full-diff          Print the full unified diff output (default)"
+            echo "  -h, --help           Show this help message"
             exit 0
             ;;
         -*)
@@ -83,6 +106,13 @@ fi
 
 # --- 2. Resolve Branch, Base & Target Scope ---
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "HEAD")
+
+if [[ -z "$SCOPE_DIR" && -f ".ship.json" ]]; then
+    DETECTED_SCOPE=$(grep -o '"scope"[[:space:]]*:[[:space:]]*"[^"]*"' .ship.json 2>/dev/null | head -n 1 | sed -E 's/.*"scope"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/' || true)
+    if [[ -n "$DETECTED_SCOPE" && "$DETECTED_SCOPE" != "." ]]; then
+        SCOPE_DIR="$DETECTED_SCOPE"
+    fi
+fi
 
 # Preserve the exact ref: origin/main does not imply a local main branch.
 BASE_BRANCH=""
@@ -594,9 +624,14 @@ else
         fi
 
         CALLERS=()
+        GREP_PATHSPEC=()
+        if [[ -n "$SCOPE_DIR" && -d "$SCOPE_DIR" ]]; then
+            GREP_PATHSPEC+=("$SCOPE_DIR")
+        fi
+        GREP_PATHSPEC+=("--" ":!${prod}" ":!*/${BASE_NAME}" ":!*test*" ":!*spec*" ":!*Test*" ":!*.md" ":!*.lock" ":!*.map" ":!*.min.*" ":!*.svg")
         while IFS= read -r caller; do
             [[ -n "$caller" ]] && CALLERS+=("$caller")
-        done < <(git grep -l "\b${STEM}\b" -- ":!${prod}" ":!*/${BASE_NAME}" ":!*test*" ":!*spec*" ":!*Test*" ":!*.md" ":!*.lock" ":!*.map" ":!*.min.*" ":!*.svg" 2>/dev/null | head -n 6 || true)
+        done < <(git grep -l "\b${STEM}\b" "${GREP_PATHSPEC[@]}" 2>/dev/null | head -n 6 || true)
 
         if [[ ${#CALLERS[@]} -gt 0 ]]; then
             echo "  Callers of ${STEM}:"
@@ -616,7 +651,15 @@ echo ""
 # --- 10. Full Diff Output ---
 if [[ "$PRINT_DIFF" == "true" ]]; then
     echo "Full diff:"
-    cat "$INSPECT_TMP/diff"
+    DIFF_LINE_COUNT=$(wc -l < "$INSPECT_TMP/diff" | tr -d ' ')
+    if [[ "$DIFF_LINE_COUNT" -gt "$MAX_DIFF_LINES" ]]; then
+        head -n "$MAX_DIFF_LINES" "$INSPECT_TMP/diff"
+        echo ""
+        echo "  [!] TRUNCATED: Diff output exceeded $MAX_DIFF_LINES lines (total: $DIFF_LINE_COUNT lines)."
+        echo "      Use '--max-diff-lines $DIFF_LINE_COUNT' to view the entire diff, or '--no-diff' to omit."
+    else
+        cat "$INSPECT_TMP/diff"
+    fi
     echo ""
 fi
 

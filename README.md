@@ -353,14 +353,21 @@ To install skills into your environment's skill directory (defaults to `~/.gemin
 
 ### Safety & Team Customisation Flags
 The installer defaults to preserving existing non-symlink directories to avoid overwriting team configurations:
+- **`--target-claude`**: Install directly to Claude Code skills directory (`~/.claude/skills`).
+- **`--target-cursor`**: Install directly to Cursor skills directory (`~/.cursor/skills`).
+- **`--target-antigravity` / `--target-gemini`**: Install to Antigravity global directory (`~/.gemini/config/skills`).
 - **`--backup`**: Safely back up existing directories to timestamped `.bak.<timestamp>` paths before installing.
 - **`--overwrite`**: Explicitly permit replacing existing non-symlink directories.
 - **`--dry-run`**: Preview all link/copy actions without touching the filesystem.
-- **`--mode <symlink|copy>`**: Choose between symbolic links (default) or copied files.
+- **`--mode <symlink|copy>`**: Choose between symbolic links (default on Unix) or copied files (auto-selected on Windows).
 
 ```bash
 # Safe update with timestamped backup of existing directories
 ./scripts/install.sh --backup
+
+# Install to Claude Code or Cursor
+./scripts/install.sh --target-claude
+./scripts/install.sh --target-cursor
 
 # Preview installation
 ./scripts/install.sh --dry-run --target /path/to/custom/skills

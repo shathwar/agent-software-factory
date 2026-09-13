@@ -20,9 +20,17 @@ SKILLS_DIR="$REPO_ROOT/skills"
 DEFAULT_TARGET="$HOME/.gemini/config/skills"
 TARGET_DIR="$DEFAULT_TARGET"
 INSTALL_MODE="symlink"
+MODE_EXPLICIT=0
 DRY_RUN=0
 OVERWRITE=0
 BACKUP=0
+
+IS_WINDOWS=0
+case "$(uname -s 2>/dev/null || echo 'unknown')" in
+    CYGWIN*|MINGW*|MSYS*)
+        IS_WINDOWS=1
+        ;;
+esac
 
 usage() {
     local code="${1:-0}"
@@ -31,8 +39,12 @@ Usage: ./scripts/install.sh [options]
 
 Options:
   --target <dir>     Target skills directory (default: $DEFAULT_TARGET)
+  --target-claude    Install to Claude Code skills directory (~/.claude/skills)
+  --target-cursor    Install to Cursor skills directory (~/.cursor/skills)
+  --target-antigravity, --target-gemini
+                     Install to Antigravity global directory (~/.gemini/config/skills)
   --mode <symlink|copy>
-                     Installation mode: 'symlink' or 'copy' (default: symlink)
+                     Installation mode: 'symlink' or 'copy' (default: symlink on Unix, copy on Windows)
   --overwrite        Overwrite existing non-symlink directories (default: preserve & skip)
   --backup           Back up existing directories with timestamp suffix before replacing
   --dry-run          Print actions without modifying the filesystem
@@ -59,8 +71,21 @@ while [[ $# -gt 0 ]]; do
             TARGET_DIR="$2"
             shift 2
             ;;
+        --target-claude)
+            TARGET_DIR="$HOME/.claude/skills"
+            shift
+            ;;
+        --target-cursor)
+            TARGET_DIR="$HOME/.cursor/skills"
+            shift
+            ;;
+        --target-antigravity|--target-gemini)
+            TARGET_DIR="$HOME/.gemini/config/skills"
+            shift
+            ;;
         --mode)
             INSTALL_MODE="$2"
+            MODE_EXPLICIT=1
             shift 2
             ;;
         --overwrite)
@@ -88,6 +113,11 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [[ $MODE_EXPLICIT -eq 0 && $IS_WINDOWS -eq 1 ]]; then
+    INSTALL_MODE="copy"
+    echo "ℹ️  Windows environment detected: defaulting to --mode copy for filesystem safety."
+fi
 
 if [[ "$INSTALL_MODE" != "symlink" && "$INSTALL_MODE" != "copy" ]]; then
     echo "Error: --mode must be either 'symlink' or 'copy'." >&2
@@ -152,7 +182,10 @@ for skill_path in "$SKILLS_DIR"/*; do
     if [[ "$INSTALL_MODE" == "symlink" ]]; then
         echo " 🔗 Linking $skill_name -> $dest_path"
         if [[ $DRY_RUN -eq 0 ]]; then
-            ln -s "$skill_path" "$dest_path"
+            if ! ln -s "$skill_path" "$dest_path" 2>/dev/null; then
+                echo " ⚠️  Symlink creation failed. Falling back to copy."
+                cp -R "$skill_path" "$dest_path"
+            fi
         fi
     else
         echo " 📋 Copying $skill_name -> $dest_path"

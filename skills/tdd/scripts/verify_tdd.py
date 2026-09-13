@@ -38,6 +38,15 @@ EXCLUDE_PATH_PATTERNS = [
     re.compile(r"\.(?:md|json|yml|yaml|toml|ini|cfg|txt|sql|html|css|scss|svg|png|jpg)$"),
 ]
 
+# Patterns identifying pure type / interface / data definitions exempted from 1:1 behavioral unit tests
+TYPE_DEFINITION_PATTERNS = [
+    re.compile(r"\.d\.ts$"),
+    re.compile(r"(?:^|[\\/])(?:types|interfaces|dtos)[\\/].*\.(?:ts|js|py|go|rs|cs|java|kt)$"),
+    re.compile(r"(?:^|[\\/])(?:types|interfaces|enums|dtos)\.(?:ts|js|py|go|rs|cs|java|kt)$"),
+    re.compile(r"\.(?:types|dto|interface|schema)\.[a-zA-Z0-9]+$"),
+    re.compile(r"(?:^|[\\/])(?:schema\.prisma|\.graphqls?|\.proto)$"),
+]
+
 
 class GitDiscoveryError(RuntimeError):
     """Raised when git diff or file discovery fails."""
@@ -73,8 +82,13 @@ def is_excluded(path: str) -> bool:
     return any(p.search(normalized) for p in EXCLUDE_PATH_PATTERNS)
 
 
+def is_type_definition(path: str) -> bool:
+    normalized = path.replace("\\", "/")
+    return any(p.search(normalized) for p in TYPE_DEFINITION_PATTERNS)
+
+
 def is_production_code(path: str) -> bool:
-    if is_excluded(path) or is_test_file(path):
+    if is_excluded(path) or is_test_file(path) or is_type_definition(path):
         return False
     suffix = Path(path).suffix.lower()
     return suffix in CODE_EXTENSIONS

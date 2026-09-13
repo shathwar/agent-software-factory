@@ -127,6 +127,16 @@ class TestInstallScript(unittest.TestCase):
         self.assertNotEqual(res.returncode, 0)
         self.assertIn("Unknown option", res.stderr)
 
+    def test_target_client_flags(self):
+        res_claude = self.run_installer("--target-claude", "--dry-run")
+        self.assertIn("/.claude/skills", res_claude.stdout)
+
+        res_cursor = self.run_installer("--target-cursor", "--dry-run")
+        self.assertIn("/.cursor/skills", res_cursor.stdout)
+
+        res_agy = self.run_installer("--target-antigravity", "--dry-run")
+        self.assertIn("/.gemini/config/skills", res_agy.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

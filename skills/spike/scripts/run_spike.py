@@ -62,10 +62,18 @@ def run_single_iteration(cmd: str, cwd: Path | None = None, timeout_sec: float |
         return elapsed_ms, proc.returncode == 0
     except subprocess.TimeoutExpired:
         if proc is not None:
-            if hasattr(os, "killpg"):
+            if sys.platform == "win32":
+                try:
+                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True)
+                except Exception:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+            elif hasattr(os, "killpg"):
                 try:
                     os.killpg(proc.pid, signal.SIGKILL)
-                except ProcessLookupError:
+                except (ProcessLookupError, PermissionError):
                     pass
                 except Exception:
                     pass
