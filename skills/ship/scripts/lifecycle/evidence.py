@@ -455,6 +455,15 @@ def validate_review_approval(
         env_text = " in delivery envelope" if review_report.get("is_envelope") else ""
         return f"Judge report{env_text} is malformed: {err_msg}. Re-run review to produce a valid Judge report."
 
+    return validate_review_snapshot(review_report, git_info, package_spec_names)
+
+
+def validate_review_snapshot(
+    review_report: Dict[str, Any],
+    git_info: Dict[str, Any],
+    package_spec_names: Optional[Set[str]] = None,
+) -> Optional[str]:
+    """Validate the reviewed code snapshot, excluding workflow evidence artifacts."""
     snapshot_sha = review_report.get("snapshot_sha")
     snapshot_fingerprint = review_report.get("snapshot_fingerprint")
     current_commit = git_info.get("commit")

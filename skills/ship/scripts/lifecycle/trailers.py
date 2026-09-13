@@ -3,6 +3,8 @@
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from .evidence import validate_review_approval, validate_review_snapshot
+
 
 def canonicalize_gate_name(gate_name: str) -> str:
     """Canonicalize gate name to lowercase dashed identifier."""
@@ -101,10 +103,6 @@ class CommitTrailerGenerator:
         verdict = review_ev.get("verdict")
         reviewer = review_ev.get("reviewer") or "judge"
 
-        is_review_stale = False
-        snap_fp = review_ev.get("snapshot_fingerprint")
-        snap_sha = review_ev.get("snapshot_sha")
-
         git_info: Dict[str, Any] = {}
         if get_git_info_fn:
             try:
@@ -118,19 +116,14 @@ class CommitTrailerGenerator:
             except Exception:
                 git_info = {}
 
-        current_fp = git_info.get("working_tree_fingerprint")
-        current_commit = git_info.get("commit")
-
-        if snap_fp and current_fp and snap_fp != current_fp:
-            is_review_stale = True
-        elif snap_sha and current_commit and not (current_commit.startswith(snap_sha) or snap_sha.startswith(current_commit)):
-            is_review_stale = True
-        elif snap_sha and not snap_fp and not git_info.get("is_clean", True):
-            is_review_stale = True
+        approval_error = validate_review_approval(review_ev, cid, git_info)
+        is_review_stale = bool(validate_review_snapshot(review_ev, git_info))
 
         if verdict:
             if is_review_stale and verdict in {"PASS", "APPROVED"}:
                 trailers.append(f"Ship-Review: STALE (modified since review by {reviewer})")
+            elif approval_error and verdict in {"PASS", "APPROVED"}:
+                trailers.append(f"Ship-Review: BLOCKED (by {reviewer})")
             else:
                 trailers.append(f"Ship-Review: {verdict} (by {reviewer})")
         else:
@@ -139,10 +132,10 @@ class CommitTrailerGenerator:
         # 6. Gate: Delivery
         deliv_ev = evidence.get("delivery", {})
         deliv_status = deliv_ev.get("status", "PENDING")
-        if has_test_failures or blockers or is_review_stale:
+        if has_test_failures or blockers or approval_error:
             if deliv_status == "ARCHIVED":
                 trailers.append("Ship-Delivery: ARCHIVED")
-            elif change_entry.get("phase") == "delivery" or deliv_status == "READY" or is_review_stale:
+            elif change_entry.get("phase") == "delivery" or deliv_status == "READY" or approval_error:
                 trailers.append("Ship-Delivery: BLOCKED")
         elif change_entry.get("phase") == "delivery" or deliv_status in {"READY", "ARCHIVED"}:
             trailers.append(f"Ship-Delivery: {deliv_status if deliv_status != 'PENDING' else 'READY'}")

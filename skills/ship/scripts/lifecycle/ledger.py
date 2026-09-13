@@ -9,6 +9,9 @@ import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
 
+from .evidence import validate_review_approval
+from .vcs import GitClient
+
 try:
     import fcntl
 except ImportError:
@@ -25,6 +28,39 @@ def read_json_file(path: Path, default: Any = None) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return default
+
+
+def read_ledger_file(path: Path) -> Optional[Dict[str, Any]]:
+    """Distinguish first use from damaged authoritative state; never repair implicitly."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+    except (ValueError, OSError) as exc:
+        raise ValueError(f"Cannot read ledger {path}; preserved unchanged. Restore a known-good copy or explicitly move it aside before --sync-state: {exc}") from exc
+    valid = (
+        isinstance(data, dict) and data.get("version", 1) == 1
+        and isinstance(data.get("changes"), dict)
+        and (data.get("active_change_id") is None or isinstance(data.get("active_change_id"), str))
+    )
+    if valid:
+        for cid, entry in data["changes"].items():
+            if not isinstance(cid, str) or not isinstance(entry, dict):
+                valid = False
+                break
+            for key, kind in (("task_status", dict), ("evidence", dict), ("checkpoints", dict), ("blockers", list)):
+                if key in entry and not isinstance(entry[key], kind):
+                    valid = False
+            if isinstance(entry.get("blockers", []), list) and any(not isinstance(b, str) for b in entry.get("blockers", [])):
+                valid = False
+            revision = entry.get("revision_counter", 0)
+            if type(revision) is not int or revision < 0:
+                valid = False
+            if isinstance(entry.get("evidence", {}), dict) and any(not isinstance(ev, dict) for ev in entry.get("evidence", {}).values()):
+                valid = False
+    if not valid:
+        raise ValueError(f"Invalid ledger schema in {path}; preserved unchanged. Restore a known-good copy or explicitly move it aside before --sync-state.")
+    return data
 
 
 def ensure_gitignore_has_ship(repo_root: Path) -> None:
@@ -161,13 +197,14 @@ class FileLedgerStore:
 
     @classmethod
     def get_active_change(cls, repo_root: Path) -> Optional[str]:
-        ledger_data = read_json_file(cls.get_ledger_path(repo_root))
+        ledger_data = read_ledger_file(cls.get_ledger_path(repo_root))
         if isinstance(ledger_data, dict) and ledger_data.get("active_change_id"):
             return ledger_data["active_change_id"]
         return None
 
     @classmethod
     def save(cls, repo_root: Path, ledger: Dict[str, Any]) -> None:
+        read_ledger_file(cls.get_ledger_path(repo_root))
         ship_dir = repo_root / ".ship"
         ship_dir.mkdir(parents=True, exist_ok=True)
         ensure_gitignore_has_ship(repo_root)
@@ -200,7 +237,7 @@ class FileLedgerStore:
     ) -> Dict[str, Any]:
         with cls.lock(repo_root):
             ledger_path = cls.get_ledger_path(repo_root)
-            loaded = read_json_file(ledger_path)
+            loaded = read_ledger_file(ledger_path)
             existing: Dict[str, Any] = loaded if isinstance(loaded, dict) and "changes" in loaded else {}
 
             changes: Dict[str, Any] = dict(existing.get("changes", {}))
@@ -211,7 +248,7 @@ class FileLedgerStore:
             spikes = inspect_spikes_fn(repo_root) if inspect_spikes_fn else []
 
             # Re-read ledger state to capture any concurrent updates committed during workspace discovery
-            latest_loaded = read_json_file(ledger_path)
+            latest_loaded = read_ledger_file(ledger_path)
             if isinstance(latest_loaded, dict) and "changes" in latest_loaded:
                 for cid, cval in latest_loaded["changes"].items():
                     if cid not in changes:
@@ -286,6 +323,8 @@ class FileLedgerStore:
                     entry["evidence"]["review"]["report_path"] = review.get("path") or review.get("report_file")
                     entry["evidence"]["review"]["snapshot_sha"] = review.get("snapshot_sha")
                     entry["evidence"]["review"]["snapshot_fingerprint"] = review.get("snapshot_fingerprint")
+                    for key in ("is_judge", "is_envelope", "judge_report_valid", "judge_report_errors", "change"):
+                        entry["evidence"]["review"][key] = review.get(key)
 
                 chk_dir = repo_root / ".scratch" / "checkpoints"
                 if chk_dir.exists():
@@ -333,7 +372,8 @@ class FileLedgerStore:
                     if verd in {"FAIL", "FAILED", "REJECTED"}:
                         blockers.append(f"Review: verdict is {verd}")
 
-                    if review_ev.get("verdict") in {"PASS", "APPROVED"} and crit == 0 and not blockers:
+                    approval_error = validate_review_approval(review_ev, change, GitClient().get_info(repo_root))
+                    if not approval_error and not blockers:
                         entry["phase"] = "delivery"
                     else:
                         entry["phase"] = "review"
@@ -365,10 +405,7 @@ class FileLedgerStore:
                 "active_change_id": active_change_id,
                 "changes": changes,
             }
-            try:
-                cls.save(repo_root, new_ledger)
-            except Exception:
-                pass
+            cls.save(repo_root, new_ledger)
             return new_ledger
 
     @classmethod
@@ -379,7 +416,7 @@ class FileLedgerStore:
         sync_fn: Optional[Callable[[Path], Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         ledger_path = cls.get_ledger_path(repo_root)
-        data = read_json_file(ledger_path)
+        data = read_ledger_file(ledger_path)
         if isinstance(data, dict) and "changes" in data:
             return data
         if auto_sync and sync_fn:
@@ -460,12 +497,16 @@ class FileLedgerStore:
             ev["report_path"] = report.get("path") or report.get("report_file")
             ev["snapshot_sha"] = report.get("snapshot_sha")
             ev["snapshot_fingerprint"] = report.get("snapshot_fingerprint")
+            for key in ("is_judge", "is_envelope", "judge_report_valid", "judge_report_errors", "change"):
+                ev[key] = report.get(key)
 
             if get_git_info_fn and attach_note_fn:
                 git_info = get_git_info_fn(repo_root)
                 commit = git_info.get("commit")
                 if commit:
                     note_oid = attach_note_fn(repo_root, commit, "review_report", report, change_id=cid)
+                    if not note_oid:
+                        raise RuntimeError("Review evidence could not be saved to Git notes; ledger unchanged")
                     ev["git_note_oid"] = note_oid
 
             blockers = [b for b in entry.get("blockers", []) if not is_review_blocker(b)]
@@ -476,7 +517,11 @@ class FileLedgerStore:
                 blockers.append(f"Review: verdict is {ev.get('verdict')}")
             entry["blockers"] = blockers
 
-            if ev.get("verdict") in {"PASS", "APPROVED"} and crit == 0 and not blockers:
+            git_info = get_git_info_fn(repo_root) if get_git_info_fn else {}
+            approval_error = validate_review_approval(ev, cid, git_info)
+            if approval_error:
+                blockers.append(f"Review: {approval_error}")
+            if not approval_error and not blockers:
                 entry["phase"] = "delivery"
             else:
                 entry["phase"] = "review"
@@ -507,7 +552,8 @@ class FileLedgerStore:
                 git_info = get_git_info_fn(repo_root)
                 commit = git_info.get("commit")
                 if commit:
-                    attach_note_fn(repo_root, commit, "test_evidence", test_summary, change_id=cid)
+                    if not attach_note_fn(repo_root, commit, "test_evidence", test_summary, change_id=cid):
+                        raise RuntimeError("Test evidence could not be saved to Git notes; ledger unchanged")
                     impl["evidence_ref"] = notes_ref
 
             blockers = [b for b in entry.get("blockers", []) if not b.startswith("Tests:")]
@@ -522,7 +568,7 @@ class FileLedgerStore:
         with cls.lock(repo_root):
             state_file = cls.get_ledger_path(repo_root)
             if state_file.exists():
-                data = read_json_file(state_file, {})
+                data = read_ledger_file(state_file)
                 if isinstance(data, dict) and (change is None or data.get("active_change_id") == (change.strip() if change else None)):
                     data["active_change_id"] = None
                     cls.save(repo_root, data)

@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 INSPECT_LIFECYCLE = ROOT / "skills" / "ship" / "scripts" / "inspect_lifecycle.py"
@@ -1963,7 +1964,9 @@ class TestInspectLifecycle(unittest.TestCase):
                         "spike": {"status": "PASSED", "verdict": "latency < 20ms"},
                         "implementation": {"status": "PASSED"},
                         "simplify": {"debt_count": 0},
-                        "review": {"verdict": "PASS", "reviewer": "judge"},
+                        "review": {"verdict": "PASS", "reviewer": "judge", "status": "complete",
+                                   "change": "auth-v2", "is_judge": True, "judge_report_valid": True,
+                                   "test_evidence_passed": True},
                         "delivery": {"status": "READY"},
                     }
                 })
@@ -2237,6 +2240,11 @@ class TestInspectLifecycle(unittest.TestCase):
         """Rolling back to implementation clears obsolete Review blockers."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
+            self._init_git_repo(tmppath)
+            (tmppath / "service.py").write_text("value = 1\n")
+            subprocess.run(["git", "add", "."], cwd=tmppath, check=True, capture_output=True)
+            subprocess.run(["git", "commit", "-m", "initial"], cwd=tmppath, check=True, capture_output=True)
+            inspect_lifecycle.create_checkpoint(tmppath, "implementation", change="auth")
             inspect_lifecycle.mutate_change_state(
                 tmppath,
                 "auth",
@@ -2249,15 +2257,6 @@ class TestInspectLifecycle(unittest.TestCase):
                     }
                 })
             )
-
-            # Create mock checkpoint
-            chk_dir = tmppath / ".scratch" / "checkpoints"
-            chk_dir.mkdir(parents=True)
-            (chk_dir / "auth_implementation.json").write_text(json.dumps({
-                "gate": "implementation",
-                "timestamp": "2026-09-13T00:00:00Z",
-                "files": {},
-            }))
 
             inspect_lifecycle.perform_rollback(tmppath, target_gate="implementation", change="auth")
             ledger = inspect_lifecycle.load_ledger(tmppath, auto_sync=False)
@@ -2452,6 +2451,8 @@ class TestInspectLifecycle(unittest.TestCase):
                             "verdict": "PASS",
                             "reviewer": "judge",
                             "snapshot_fingerprint": original_fp,
+                            "change": "feature-y", "is_judge": True, "judge_report_valid": True,
+                            "status": "complete", "test_evidence_passed": True,
                         },
                         "delivery": {"status": "READY"},
                     }
@@ -2491,6 +2492,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # Record review targeting commit c1 (SHA-only review, no snapshot_fingerprint)
             review_dict = {
+                "is_judge": True, "judge_report_valid": True,
                 "change": "feature-z",
                 "reviewer": "judge",
                 "status": "complete",
@@ -2573,6 +2575,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # Now record a replacement PASS review
             pass_review = {
+                "is_judge": True, "judge_report_valid": True,
                 "change": "auth-service",
                 "reviewer": "judge",
                 "status": "complete",
@@ -2627,6 +2630,232 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(ch["blockers"], [])
             # Revision counter must be incremented by 1!
             self.assertEqual(ch["revision_counter"], initial_rev + 1)
+
+
+    def test_review_approval_contract_matches_ledger_and_trailers(self):
+        """A fresh PASS cannot bypass Judge, schema, tests, or change validation."""
+        for invalid in ({"reviewer": "correctness"}, {"status": "skipped"},
+                        {"test_evidence": False}, {"change": "other"}, {"coverage": "invalid"}):
+            with self.subTest(invalid=invalid), tempfile.TemporaryDirectory() as tmpdir:
+                root = Path(tmpdir)
+                self._init_git_repo(root)
+                pkg = root / "openspec/changes/feature"
+                pkg.mkdir(parents=True)
+                (pkg / "tasks.md").write_text("- [x] Done\n")
+                subprocess.run(["git", "add", "."], cwd=root, check=True, capture_output=True)
+                subprocess.run(["git", "commit", "-m", "initial"], cwd=root, check=True, capture_output=True)
+                inspect_lifecycle.set_active_change(root, "feature")
+                inspect_lifecycle.sync_ledger_from_workspace(root)
+                report = root / ".scratch/review_report.json"
+                report.parent.mkdir()
+                payload = {
+                    "change": "feature", "reviewer": "judge", "status": "complete", "verdict": "PASS",
+                    "findings": [], "coverage": ["Checked"], "questions": [], "routing_notes": [],
+                    "test_evidence": True,
+                    "working_tree_fingerprint": inspect_lifecycle.compute_working_tree_fingerprint(root),
+                }
+                payload.update(invalid)
+                report.write_text(json.dumps(payload))
+                entry = inspect_lifecycle.record_review_to_ledger(root, report, "feature")
+                self.assertEqual(entry["phase"], "review")
+                self.assertNotEqual(inspect_lifecycle.evaluate_repository(root)["state_key"], "DELIVERY_READY")
+                for sync in (False, True):
+                    if sync:
+                        inspect_lifecycle.sync_ledger_from_workspace(root)
+                    trailers = inspect_lifecycle.generate_gate_trailers(root, "feature")
+                    self.assertNotIn("Ship-Review: PASS (by judge)", trailers)
+                    self.assertNotIn("Ship-Delivery: READY", trailers)
+                    self.assertIn("Ship-Delivery: BLOCKED", trailers)
+
+    def test_sha_review_ignores_evidence_but_rejects_source_edits(self):
+        """Evaluation, recording and trailers use the same source-only dirty check."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self._init_git_repo(root)
+            pkg = root / "openspec/changes/feature"
+            pkg.mkdir(parents=True)
+            (pkg / "tasks.md").write_text("- [x] Done\n")
+            (root / "service.py").write_text("value = 1\n")
+            subprocess.run(["git", "add", "."], cwd=root, check=True, capture_output=True)
+            subprocess.run(["git", "commit", "-m", "initial"], cwd=root, check=True, capture_output=True)
+            sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+            inspect_lifecycle.set_active_change(root, "feature")
+            inspect_lifecycle.sync_ledger_from_workspace(root)
+            report = root / ".scratch/review_report.json"
+            report.parent.mkdir()
+            report.write_text(json.dumps({
+                "change": "feature", "reviewer": "judge", "status": "complete", "verdict": "PASS",
+                "findings": [], "coverage": ["Checked"], "questions": [], "routing_notes": [],
+                "test_evidence": True, "commit": sha,
+            }))
+            entry = inspect_lifecycle.record_review_to_ledger(root, report, "feature")
+            self.assertEqual(entry["phase"], "delivery")
+            self.assertFalse(inspect_lifecycle.get_git_info(root)["is_clean"])
+            self.assertEqual(inspect_lifecycle.evaluate_repository(root)["state_key"], "DELIVERY_READY")
+            self.assertIn("Ship-Review: PASS (by judge)", inspect_lifecycle.generate_gate_trailers(root, "feature"))
+            self.assertIn("Ship-Delivery: READY", inspect_lifecycle.generate_gate_trailers(root, "feature"))
+            (root / "service.py").write_text("value = 2\n")
+            self.assertNotEqual(inspect_lifecycle.evaluate_repository(root)["state_key"], "DELIVERY_READY")
+            trailers = inspect_lifecycle.generate_gate_trailers(root, "feature")
+            self.assertTrue(any(t.startswith("Ship-Review: STALE") for t in trailers))
+            self.assertIn("Ship-Delivery: BLOCKED", trailers)
+            self.assertEqual(inspect_lifecycle.record_review_to_ledger(root, report, "feature")["phase"], "review")
+
+
+    def _recovery_repo(self, root):
+        self._init_git_repo(root)
+        pkg = root / "openspec/changes/alpha"
+        pkg.mkdir(parents=True)
+        (pkg / "tasks.md").write_text("- [x] Done\n")
+        (root / "alpha.py").write_text("alpha = 1\n")
+        (root / "beta.py").write_text("beta = 1\n")
+        subprocess.run(["git", "add", "."], cwd=root, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "initial"], cwd=root, check=True, capture_output=True)
+        return pkg
+
+    def test_rollback_rejects_other_active_changes_without_mutation(self):
+        for source in ("ledger", "package", "default"):
+            with self.subTest(source=source), tempfile.TemporaryDirectory() as tmpdir:
+                root = Path(tmpdir)
+                self._recovery_repo(root)
+                inspect_lifecycle.create_checkpoint(root, "design", change="alpha")
+                if source in {"ledger", "default"}:
+                    inspect_lifecycle.mutate_change_state(root, "default" if source == "default" else "beta", lambda e: e.update(phase="review"))
+                else:
+                    pkg = root / "openspec/changes/beta"
+                    pkg.mkdir()
+                    (pkg / "tasks.md").write_text("- [x] Done\n")
+                (root / "alpha.py").write_text("alpha = 2\n")
+                (root / "beta.py").write_text("beta = 2\n")
+                before = (root / ".ship/state.json").read_bytes()
+                for force in (False, True):
+                    with self.assertRaisesRegex(RuntimeError, "isolated worktrees"):
+                        inspect_lifecycle.perform_rollback(root, "design", change="alpha", force=force)
+                self.assertEqual((root / "beta.py").read_text(), "beta = 2\n")
+                self.assertEqual((root / "alpha.py").read_text(), "alpha = 2\n")
+                self.assertEqual((root / ".ship/state.json").read_bytes(), before)
+
+    def test_rollback_requires_valid_checkpoint_before_clearing_failures(self):
+        for bad in ("missing", "corrupt", "missing-object", "mismatched-ref"):
+            with self.subTest(checkpoint=bad), tempfile.TemporaryDirectory() as tmpdir:
+                root = Path(tmpdir)
+                pkg = self._recovery_repo(root)
+                if bad != "missing":
+                    inspect_lifecycle.create_checkpoint(root, "design", change="alpha")
+                    receipt = root / ".scratch/checkpoints/alpha_design.json"
+                    if bad == "corrupt":
+                        receipt.write_text("{")
+                    elif bad == "missing-object":
+                        data = json.loads(receipt.read_text())
+                        data["snapshot_commit"] = "f" * 40
+                        receipt.write_text(json.dumps(data))
+                    else:
+                        subprocess.run(["git", "update-ref", "refs/ship/alpha/design", "HEAD"], cwd=root, check=True)
+                inspect_lifecycle.record_test_run_to_ledger(root, {"passed": False, "failed_count": 1}, "alpha")
+                before = (root / ".ship/state.json").read_bytes()
+                with self.assertRaises(RuntimeError):
+                    inspect_lifecycle.perform_rollback(root, "design", change="alpha")
+                self.assertEqual((root / ".ship/state.json").read_bytes(), before)
+                self.assertEqual((pkg / "tasks.md").read_text(), "- [x] Done\n")
+
+    def test_corrupt_ledger_is_preserved_by_all_state_operations(self):
+        for invalid in ('{"changes":', '{"version":1,"changes":[]}', '{"version":9,"changes":{}}'):
+            with self.subTest(invalid=invalid), tempfile.TemporaryDirectory() as tmpdir:
+                root = Path(tmpdir)
+                self._recovery_repo(root)
+                (root / ".ship").mkdir()
+                state = root / ".ship/state.json"
+                state.write_text(invalid)
+                operations = [
+                    lambda: inspect_lifecycle.load_ledger(root),
+                    lambda: inspect_lifecycle.sync_ledger_from_workspace(root),
+                    lambda: inspect_lifecycle.set_active_change(root, "alpha"),
+                    lambda: inspect_lifecycle.mutate_change_state(root, "alpha", lambda e: e.update(blockers=[])),
+                    lambda: inspect_lifecycle.clear_active_change(root),
+                    lambda: inspect_lifecycle.save_ledger(root, {"version": 1, "changes": {}}),
+                    lambda: inspect_lifecycle.create_checkpoint(root, "design", change="alpha"),
+                ]
+                for operation in operations:
+                    with self.assertRaisesRegex(ValueError, "preserved unchanged"):
+                        operation()
+                    self.assertEqual(state.read_text(), invalid)
+                # Explicit operator recovery preserves the damaged file for inspection.
+                state.rename(state.with_suffix(".damaged"))
+                self.assertIn("alpha", inspect_lifecycle.sync_ledger_from_workspace(root)["changes"])
+
+    def test_rollback_backup_failure_preserves_code_and_ledger(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self._recovery_repo(root)
+            inspect_lifecycle.create_checkpoint(root, "design", change="alpha")
+            (root / "alpha.py").write_text("alpha = 2\n")
+            (root / "new.py").write_text("precious new code\n")
+            before = (root / ".ship/state.json").read_bytes()
+            with patch("lifecycle.checkpoints.shutil.copy2", side_effect=OSError("disk full")):
+                with self.assertRaisesRegex(RuntimeError, "Rollback failed"):
+                    inspect_lifecycle.perform_rollback(root, "design", change="alpha")
+            self.assertEqual((root / "alpha.py").read_text(), "alpha = 2\n")
+            self.assertEqual((root / "new.py").read_text(), "precious new code\n")
+            self.assertEqual((root / ".ship/state.json").read_bytes(), before)
+
+    def test_failed_checkpoint_snapshot_does_not_replace_previous_checkpoint(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self._recovery_repo(root)
+            inspect_lifecycle.create_checkpoint(root, "design", change="alpha")
+            receipt = root / ".scratch/checkpoints/alpha_design.json"
+            before = receipt.read_bytes()
+            (root / "alpha.py").write_text("uncommitted work\n")
+            from lifecycle.vcs import GitClient
+            original = GitClient.run_cmd
+            def fail_commit(client, path, *args, **kwargs):
+                if args and args[0] == "commit-tree":
+                    raise subprocess.CalledProcessError(1, args, stderr="failed snapshot")
+                return original(client, path, *args, **kwargs)
+            with patch.object(GitClient, "run_cmd", fail_commit):
+                with self.assertRaisesRegex(RuntimeError, "snapshot failed"):
+                    inspect_lifecycle.create_checkpoint(root, "design", change="alpha")
+            self.assertEqual(receipt.read_bytes(), before)
+            self.assertEqual((root / "alpha.py").read_text(), "uncommitted work\n")
+
+    def test_rollback_preserves_unusual_filenames_in_backup(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self._recovery_repo(root)
+            name = ' odd"name\n.py'
+            (root / name).write_text("original\n")
+            subprocess.run(["git", "add", "--", name], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-m", "filename"], cwd=root, check=True, capture_output=True)
+            inspect_lifecycle.create_checkpoint(root, "design", change="alpha")
+            (root / name).write_text("changed\n")
+            result = inspect_lifecycle.perform_rollback(root, "design", change="alpha")
+            self.assertEqual((root / name).read_text(), "original\n")
+            self.assertEqual((root / result["backup_directory"] / name).read_text(), "changed\n")
+
+
+    def test_failed_git_note_write_does_not_advance_ledger(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self._recovery_repo(root)
+            inspect_lifecycle.mutate_change_state(root, "alpha", lambda e: e.update(blockers=["Hold"]))
+            before = (root / ".ship/state.json").read_bytes()
+            from lifecycle.vcs import GitClient
+            with patch.object(GitClient, "attach_git_note_evidence", return_value=None):
+                with self.assertRaisesRegex(RuntimeError, "Git notes; ledger unchanged"):
+                    inspect_lifecycle.record_test_run_to_ledger(root, {"passed": True}, "alpha")
+                with self.assertRaisesRegex(RuntimeError, "Git notes; ledger unchanged"):
+                    inspect_lifecycle.record_review_to_ledger(root, {"verdict": "PASS"}, "alpha")
+            self.assertEqual((root / ".ship/state.json").read_bytes(), before)
+
+    def test_unborn_checkpoint_cannot_be_used_for_rollback(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self._init_git_repo(root)
+            inspect_lifecycle.create_checkpoint(root, "design", change="alpha")
+            before = (root / ".ship/state.json").read_bytes()
+            with self.assertRaisesRegex(RuntimeError, "with commits"):
+                inspect_lifecycle.perform_rollback(root, "design", change="alpha")
+            self.assertEqual((root / ".ship/state.json").read_bytes(), before)
 
 
 if __name__ == "__main__":

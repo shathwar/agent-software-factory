@@ -223,3 +223,28 @@ jobs:
 | `python3 skills/ship/scripts/inspect_lifecycle.py --archive <change>` | Syncs delta specs into `openspec/specs/` and archives completed change packages. |
 | `python3 skills/ship/scripts/inspect_lifecycle.py --generate-trailers` | Emits RFC 5133 Git commit trailers mapping to `.ship.json` gates. |
 | `python3 skills/ship/scripts/inspect_lifecycle.py --sync-state` | Re-synchronizes `.ship/state.json` authoritative ledger from workspace artifacts. |
+
+
+## Recovery boundaries
+
+Rollback restores a whole checkout snapshot. Use one active change per checkout and
+separate Git worktrees for parallel changes. Rollback refuses a checkout containing
+other active ledger changes or OpenSpec packages, including with `--force`.
+A matching checkpoint receipt and valid snapshot/base commits are required. A
+checkpoint recorded before the first Git commit cannot restore files.
+
+Rollback copies affected files, including task progress, before restoring or deleting
+anything. Backups live in `.scratch/rollback_<timestamp>/`, with new files also under
+`untracked_removed/`. Backup failures stop the operation. If a later Git operation
+fails, the command reports failure and the backup location; inspect that backup and
+Git status before retrying. The ledger is not advanced on a failed rollback.
+
+A corrupt or unsupported `.ship/state.json` stops state operations and is left
+unchanged. Restore a known-good copy. If none exists, explicitly move the damaged
+file to a recovery location before running `--sync-state`, then reconcile manual
+holds, test failures, and other records that workspace artifacts cannot reconstruct.
+Do not automate that move or treat inferred state as restored approval evidence.
+
+Evidence recording fails if its Git note cannot be saved; fix the Git write error
+and retry before considering the ledger updated. Checkpoint snapshot failures also
+return an error rather than substituting HEAD for uncommitted work.
