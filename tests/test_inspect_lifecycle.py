@@ -111,7 +111,7 @@ class TestInspectLifecycle(unittest.TestCase):
             scratch_dir.mkdir()
             (scratch_dir / "review_report.json").write_text(
                 json.dumps({
-                    "topic": "webhooks",
+                    "change": "webhooks",
                     "reviewer": "judge",
                     "status": "complete",
                     "verdict": "PASS",
@@ -215,7 +215,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # With force=True to bypass audit requirement in unit test
             res = inspect_lifecycle.apply_and_archive_openspec(tmppath, "billing", force=True)
-            self.assertEqual(res["topic"], "billing")
+            self.assertEqual(res["change"], "billing")
             self.assertIn("invoices.md", res["synced_specs"])
 
             # Verify living spec was synced
@@ -358,7 +358,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 inspect_lifecycle.apply_and_archive_openspec(tmppath, "unfinished")
             self.assertIn("no passing audit report found", str(ctx.exception))
 
-    def test_resume_selects_active_topic_and_ignores_completed_spikes(self):
+    def test_resume_selects_active_change_and_ignores_completed_spikes(self):
         """Reproduction for Issue 4: prioritize in-progress packages and ignore completed spikes."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
@@ -378,12 +378,12 @@ class TestInspectLifecycle(unittest.TestCase):
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "implementation")
             self.assertEqual(res["state_key"], "TDD_ACTIVE")
-            self.assertEqual(res["openspec_packages"][0]["topic"], "z-current")
+            self.assertEqual(res["openspec_packages"][0]["change"], "z-current")
 
             # Explicit openspec/.active persistence
-            inspect_lifecycle.set_active_topic(tmppath, "a-old")
+            inspect_lifecycle.set_active_change(tmppath, "a-old")
             res_explicit = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res_explicit["openspec_packages"][0]["topic"], "a-old")
+            self.assertEqual(res_explicit["openspec_packages"][0]["change"], "a-old")
 
             # Completed spike (.scratch/spike-redis/verdict.json) must not force SPIKE_ACTIVE
             spike_dir = tmppath / ".scratch" / "spike-redis"
@@ -419,7 +419,7 @@ class TestInspectLifecycle(unittest.TestCase):
             scratch_dir = tmppath / ".scratch"
             scratch_dir.mkdir()
             (scratch_dir / "delivery_evidence.json").write_text(json.dumps({
-                "topic": "feature",
+                "change": "feature",
                 "verdict": "PASS",
                 "snapshot": {"commit": head_commit},
                 "test_evidence": {"exit_code": 0, "passed": True, "tests_run": 5},
@@ -480,7 +480,7 @@ class TestInspectLifecycle(unittest.TestCase):
             # 2. Package into Delivery Evidence Envelope in .scratch/delivery_evidence.json
             envelope = {
                 "schema_version": "1.0",
-                "topic": "payments",
+                "change": "payments",
                 "verdict": "PASS",
                 "snapshot": {"commit": "HEAD"},
                 "test_evidence": {"exit_code": 0, "passed": True, "tests_run": 10},
@@ -538,22 +538,22 @@ class TestInspectLifecycle(unittest.TestCase):
             )
             self.assertTrue(inspect_lifecycle.is_spike_completed(spike_dir))
 
-    def test_explicit_invalid_topic_fails_visibly(self):
-        """Reproduction for Issue 5: requesting an invalid topic must error, not silently fall back."""
+    def test_explicit_invalid_change_fails_visibly(self):
+        """Reproduction for Issue 5: requesting an invalid change must error, not silently fall back."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             pkg_dir = tmppath / "openspec" / "changes" / "auth"
             pkg_dir.mkdir(parents=True)
             (pkg_dir / "tasks.md").write_text("- [x] 1. Auth done\n")
 
-            # Direct inspect_openspec call with invalid topic
+            # Direct inspect_openspec call with invalid change
             with self.assertRaises(ValueError) as ctx:
-                inspect_lifecycle.inspect_openspec(tmppath, target_topic="auth-typo")
+                inspect_lifecycle.inspect_openspec(tmppath, target_change="auth-typo")
             self.assertIn("auth-typo", str(ctx.exception))
             self.assertIn("Available: auth", str(ctx.exception))
 
-            # CLI call with --topic auth-typo
-            cmd = [sys.executable, str(INSPECT_LIFECYCLE), "--path", str(tmpdir), "--topic", "auth-typo"]
+            # CLI call with --change auth-typo
+            cmd = [sys.executable, str(INSPECT_LIFECYCLE), "--path", str(tmpdir), "--change", "auth-typo"]
             proc = subprocess.run(cmd, capture_output=True, text=True)
             self.assertEqual(proc.returncode, 1)
             self.assertIn("auth-typo", proc.stderr)
@@ -602,8 +602,8 @@ class TestInspectLifecycle(unittest.TestCase):
         self.assertNotIn("HeaderBracket", merged)
         self.assertNotIn("HeaderParen", merged)
 
-    def test_envelope_topic_mismatch_blocks_delivery_and_archive(self):
-        """Reproduction for Issue 1: approval envelope for topic 'auth' cannot authorise package 'billing'."""
+    def test_envelope_change_mismatch_blocks_delivery_and_archive(self):
+        """Reproduction for Issue 1: approval envelope for change 'auth' cannot authorise package 'billing'."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             pkg_dir = tmppath / "openspec" / "changes" / "billing"
@@ -613,10 +613,10 @@ class TestInspectLifecycle(unittest.TestCase):
             scratch_dir = tmppath / ".scratch"
             scratch_dir.mkdir()
 
-            # Envelope approves topic 'auth'
+            # Envelope approves change 'auth'
             envelope = {
                 "schema_version": "1.0",
-                "topic": "auth",
+                "change": "auth",
                 "verdict": "PASS",
                 "snapshot": {"commit": "HEAD"},
                 "test_evidence": {"exit_code": 0, "passed": True, "tests_run": 5},
@@ -631,26 +631,20 @@ class TestInspectLifecycle(unittest.TestCase):
             }
             (scratch_dir / "delivery_evidence.json").write_text(json.dumps(envelope))
 
-            # Delivery check must reject because envelope topic is 'auth', but active package is 'billing'
+            # Delivery check must reject because envelope change is 'auth', but active package is 'billing'
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "audit")
             self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
-            self.assertTrue(
-                "Audit approval is for change 'auth'" in res["next_action"]
-                or "Audit approval is for topic 'auth'" in res["next_action"]
-            )
+            self.assertIn("Audit approval is for change 'auth'", res["next_action"])
             self.assertIn("billing", res["next_action"])
 
             # Archive must raise RuntimeError
             with self.assertRaises(RuntimeError) as ctx:
-                inspect_lifecycle.apply_and_archive_openspec(tmppath, topic="billing")
-            self.assertTrue(
-                "audit approval is for change 'auth'" in str(ctx.exception)
-                or "audit approval is for topic 'auth'" in str(ctx.exception)
-            )
+                inspect_lifecycle.apply_and_archive_openspec(tmppath, change="billing")
+            self.assertIn("audit approval is for change 'auth'", str(ctx.exception))
 
-            # Matching topic 'billing' clears gate
-            envelope["topic"] = "billing"
+            # Matching change 'billing' clears gate
+            envelope["change"] = "billing"
             (scratch_dir / "delivery_evidence.json").write_text(json.dumps(envelope))
             res_ok = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res_ok["gate"], "delivery")
@@ -680,7 +674,7 @@ class TestInspectLifecycle(unittest.TestCase):
             scratch_dir.mkdir()
             envelope = {
                 "schema_version": "1.0",
-                "topic": "feature",
+                "change": "feature",
                 "verdict": "PASS",
                 "snapshot": {
                     "working_tree_fingerprint": fingerprint,
@@ -713,7 +707,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # Archive must also be blocked by fingerprint mismatch
             with self.assertRaises(RuntimeError) as ctx:
-                inspect_lifecycle.apply_and_archive_openspec(tmppath, topic="feature")
+                inspect_lifecycle.apply_and_archive_openspec(tmppath, change="feature")
             self.assertIn("fingerprint mismatch", str(ctx.exception))
 
     def test_ordinary_requirement_title_with_word_deleted_is_preserved_not_removed(self):
@@ -773,7 +767,7 @@ class TestInspectLifecycle(unittest.TestCase):
             # Envelope saved with symbolic HEAD commit and NO working_tree_fingerprint
             envelope = {
                 "schema_version": "1.0",
-                "topic": "feature",
+                "change": "feature",
                 "verdict": "PASS",
                 "snapshot": {"commit": "HEAD"},
                 "test_evidence": {"exit_code": 0, "passed": True, "tests_run": 5},
@@ -796,7 +790,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # Archive must also reject symbolic commit
             with self.assertRaises(RuntimeError) as ctx:
-                inspect_lifecycle.apply_and_archive_openspec(tmppath, topic="feature")
+                inspect_lifecycle.apply_and_archive_openspec(tmppath, change="feature")
             self.assertIn("symbolic or unresolved", str(ctx.exception))
 
             # Resolving to immutable commit SHA clears delivery
@@ -839,7 +833,7 @@ class TestInspectLifecycle(unittest.TestCase):
             # Malformed envelope: only {"reviewer": "judge"}, missing required 5 fields
             malformed_envelope = {
                 "schema_version": "1.0",
-                "topic": "feature",
+                "change": "feature",
                 "verdict": "PASS",
                 "snapshot": {"commit": head_commit},
                 "test_evidence": {"exit_code": 0, "passed": True, "tests_run": 5},
@@ -854,7 +848,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # Archive must also reject malformed judge report
             with self.assertRaises(RuntimeError) as ctx:
-                inspect_lifecycle.apply_and_archive_openspec(tmppath, topic="feature")
+                inspect_lifecycle.apply_and_archive_openspec(tmppath, change="feature")
             self.assertIn("Judge report in delivery envelope is malformed", str(ctx.exception))
 
             # Canonical 6-field report passes validation
@@ -902,7 +896,7 @@ class TestInspectLifecycle(unittest.TestCase):
             scratch_dir.mkdir()
             envelope = {
                 "schema_version": "1.0",
-                "topic": "auth",
+                "change": "auth",
                 "verdict": "PASS",
                 "snapshot": {"commit": head_commit},
                 "test_evidence": {"exit_code": 0, "passed": True, "tests_run": 5},
@@ -921,7 +915,7 @@ class TestInspectLifecycle(unittest.TestCase):
             import unittest.mock as mock
             with mock.patch("shutil.move", side_effect=OSError("Simulated move failure")):
                 with self.assertRaises(RuntimeError) as ctx:
-                    inspect_lifecycle.apply_and_archive_openspec(tmppath, topic="auth")
+                    inspect_lifecycle.apply_and_archive_openspec(tmppath, change="auth")
                 self.assertIn("Simulated move failure", str(ctx.exception))
 
             # Spec modification must be rolled back!
@@ -929,15 +923,15 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertTrue(pkg_dir.exists())
 
             # Now retry with normal shutil.move - archive must succeed cleanly
-            inspect_lifecycle.apply_and_archive_openspec(tmppath, topic="auth")
+            inspect_lifecycle.apply_and_archive_openspec(tmppath, change="auth")
             # Living spec should now contain both Login and Logout
             merged_text = living_spec.read_text()
             self.assertIn("Requirement: Login", merged_text)
             self.assertIn("Requirement: Logout", merged_text)
             self.assertFalse(pkg_dir.exists())
 
-    def test_active_topic_persistence_does_not_revoke_delivery_or_block_archive(self):
-        """Active topic written to openspec/.active must not count as an unreviewed source modification."""
+    def test_active_change_persistence_does_not_revoke_delivery_or_block_archive(self):
+        """Active change written to openspec/.active must not count as an unreviewed source modification."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
@@ -953,7 +947,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             (tmppath / ".scratch").mkdir()
             (tmppath / ".scratch" / "delivery_evidence.json").write_text(json.dumps({
-                "topic": "feat",
+                "change": "feat",
                 "verdict": "PASS",
                 "snapshot": {"commit": commit_sha},
                 "test_evidence": {"exit_code": 0, "passed": True, "tests_run": 1},
@@ -967,8 +961,8 @@ class TestInspectLifecycle(unittest.TestCase):
                 },
             }))
 
-            # Set active topic
-            inspect_lifecycle.set_active_topic(tmppath, "feat")
+            # Set active change
+            inspect_lifecycle.set_active_change(tmppath, "feat")
 
             # Must remain DELIVERY_READY (not revoked to AUDIT_ACTIVE due to openspec/.active)
             res = inspect_lifecycle.evaluate_repository(tmppath)
@@ -976,8 +970,8 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(res["state_key"], "DELIVERY_READY")
 
             # Must archive cleanly without error about openspec/.active
-            arch_res = inspect_lifecycle.apply_and_archive_openspec(tmppath, topic="feat")
-            self.assertEqual(arch_res["topic"], "feat")
+            arch_res = inspect_lifecycle.apply_and_archive_openspec(tmppath, change="feat")
+            self.assertEqual(arch_res["change"], "feat")
 
     def test_judge_report_unhashable_status_and_nan_confidence(self):
         """validate_judge_report_contract handles unhashable status and invalid confidence/paths without crashing."""
@@ -1091,8 +1085,8 @@ class TestInspectLifecycle(unittest.TestCase):
             fp_unstaged = inspect_lifecycle.compute_working_tree_fingerprint(tmppath)
             self.assertNotEqual(fp_staged, fp_unstaged)
 
-    def test_legacy_flat_report_without_topic_or_contract_blocks_delivery(self):
-        """A flat report lacking topic or standard contract fields (status, findings, coverage) must block delivery."""
+    def test_legacy_flat_report_without_change_or_contract_blocks_delivery(self):
+        """A flat report lacking change or standard contract fields (status, findings, coverage) must block delivery."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             pkg_dir = tmppath / "openspec" / "changes" / "feature"
@@ -1101,7 +1095,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             scratch_dir = tmppath / ".scratch"
             scratch_dir.mkdir()
-            # Flat legacy report missing topic and required contract fields
+            # Flat legacy report missing change and required contract fields
             (scratch_dir / "review_report.json").write_text(json.dumps({
                 "reviewer": "judge",
                 "verdict": "PASS",
@@ -1114,12 +1108,11 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
             self.assertTrue(
                 "Audit approval lacks 'change'" in res["next_action"]
-                or "Audit approval lacks 'topic'" in res["next_action"]
                 or "Judge report is malformed" in res["next_action"]
             )
 
-    def test_malformed_topic_evidence_blocks_delivery_without_fallback(self):
-        """Malformed topic evidence (judge_report: null) must block delivery and not fall back to global approval."""
+    def test_malformed_change_evidence_blocks_delivery_without_fallback(self):
+        """Malformed change evidence (judge_report: null) must block delivery and not fall back to global approval."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             pkg_dir = tmppath / "openspec" / "changes" / "feature"
@@ -1131,7 +1124,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # Global passing report (older approval)
             (scratch_dir / "delivery_evidence.json").write_text(json.dumps({
-                "topic": "feature",
+                "change": "feature",
                 "verdict": "PASS",
                 "test_evidence": True,
                 "judge_report": {
@@ -1144,11 +1137,11 @@ class TestInspectLifecycle(unittest.TestCase):
                 },
             }))
 
-            # Topic-specific envelope with judge_report: null
-            topic_scratch = scratch_dir / "feature"
-            topic_scratch.mkdir()
-            (topic_scratch / "delivery_evidence.json").write_text(json.dumps({
-                "topic": "feature",
+            # Change-specific envelope with judge_report: null
+            change_scratch = scratch_dir / "feature"
+            change_scratch.mkdir()
+            (change_scratch / "delivery_evidence.json").write_text(json.dumps({
+                "change": "feature",
                 "verdict": "PASS",
                 "judge_report": None,
                 "test_evidence": True,
@@ -1181,7 +1174,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # 1. Report without snapshot_fingerprint
             (scratch_dir / "delivery_evidence.json").write_text(json.dumps({
-                "topic": "feature",
+                "change": "feature",
                 "verdict": "PASS",
                 "test_evidence": True,
                 "snapshot_sha": "deadbeef1234567",
@@ -1213,7 +1206,7 @@ class TestInspectLifecycle(unittest.TestCase):
             # 2. Report with valid snapshot_fingerprint clears delivery
             current_fp = inspect_lifecycle.compute_working_tree_fingerprint(tmppath)
             (scratch_dir / "delivery_evidence.json").write_text(json.dumps({
-                "topic": "feature",
+                "change": "feature",
                 "verdict": "PASS",
                 "test_evidence": True,
                 "working_tree_fingerprint": current_fp,
@@ -1232,7 +1225,7 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(res2["state_key"], "DELIVERY_READY")
 
     def test_archiving_package_does_not_create_phantom_active_spike(self):
-        """Retained delivery evidence in .scratch/<topic> must not be flagged as an active spike after archiving."""
+        """Retained delivery evidence in .scratch/<change> must not be flagged as an active spike after archiving."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
@@ -1244,7 +1237,7 @@ class TestInspectLifecycle(unittest.TestCase):
             scratch_dir.mkdir(parents=True)
             current_fp = inspect_lifecycle.compute_working_tree_fingerprint(tmppath)
             (scratch_dir / "delivery_evidence.json").write_text(json.dumps({
-                "topic": "auth",
+                "change": "auth",
                 "verdict": "PASS",
                 "test_evidence": True,
                 "working_tree_fingerprint": current_fp,
@@ -1264,7 +1257,7 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(res_ready["state_key"], "DELIVERY_READY")
 
             # Successfully archive auth
-            inspect_lifecycle.apply_and_archive_openspec(tmppath, topic="auth")
+            inspect_lifecycle.apply_and_archive_openspec(tmppath, change="auth")
 
             # Next evaluation must NOT treat .scratch/auth as an active spike
             res_after = inspect_lifecycle.evaluate_repository(tmppath)
@@ -1295,7 +1288,7 @@ class TestInspectLifecycle(unittest.TestCase):
             scratch_dir.mkdir()
             envelope = {
                 "schema_version": "1.0",
-                "topic": "feature",
+                "change": "feature",
                 "verdict": "PASS",
                 "snapshot": {"commit": head_commit},
                 "test_evidence": {"exit_code": 0, "passed": True, "tests_run": 5},
@@ -1318,7 +1311,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # Archive must also reject skipped status
             with self.assertRaises(RuntimeError) as ctx:
-                inspect_lifecycle.apply_and_archive_openspec(tmppath, topic="feature")
+                inspect_lifecycle.apply_and_archive_openspec(tmppath, change="feature")
             self.assertIn("requires 'complete'", str(ctx.exception))
 
     def test_ship_json_config_loading(self):
@@ -1349,23 +1342,22 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertIn(".ship.json", summary)
             self.assertIn("pnpm test", summary)
 
-    def test_ship_yaml_config_loading(self):
-        """Verify zero-dependency .ship.yaml parsing and loading."""
+    def test_ship_json_config_loading_custom_path(self):
+        """Verify .ship.json parsing from explicit custom path."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            yaml_content = """# Ship lifecycle configuration
-project:
-  name: "auth-service"
-gates:
-  implementation:
-    test: "pytest -q"
-  audit:
-    max_iterations: 4
-"""
-            (tmppath / ".ship.yaml").write_text(yaml_content)
+            json_content = json.dumps({
+                "project": {"name": "auth-service"},
+                "gates": {
+                    "implementation": {"test": "pytest -q"},
+                    "audit": {"max_iterations": 4},
+                },
+            })
+            custom_file = tmppath / "custom.ship.json"
+            custom_file.write_text(json_content)
 
-            cfg = inspect_lifecycle.load_ship_config(tmppath)
-            self.assertEqual(cfg["config_source"], ".ship.yaml")
+            cfg = inspect_lifecycle.load_ship_config(tmppath, explicit_path=str(custom_file))
+            self.assertEqual(cfg["config_source"], "custom.ship.json")
             self.assertEqual(cfg["project"]["name"], "auth-service")
             self.assertEqual(cfg["gates"]["implementation"]["test"], "pytest -q")
             self.assertEqual(cfg["gates"]["audit"]["max_iterations"], 4)
@@ -1390,9 +1382,9 @@ gates:
             subprocess.run(["git", "commit", "-m", "Initial spec commit"], cwd=tmppath, check=True)
 
             # Create checkpoint for design
-            chk = inspect_lifecycle.create_checkpoint(tmppath, "design", topic="payment")
+            chk = inspect_lifecycle.create_checkpoint(tmppath, "design", change="payment")
             self.assertEqual(chk["gate"], "design")
-            self.assertEqual(chk["topic"], "payment")
+            self.assertEqual(chk["change"], "payment")
             self.assertTrue(chk["ref_created"])
             chk_file = tmppath / ".scratch" / "checkpoints" / "payment_design.json"
             self.assertTrue(chk_file.exists())
@@ -1402,7 +1394,7 @@ gates:
             tasks_file.write_text("- [x] Task 1: Setup stripe\n- [x] Task 2: Webhooks\n")
 
             # Perform rollback to design
-            rb = inspect_lifecycle.perform_rollback(tmppath, "design", topic="payment")
+            rb = inspect_lifecycle.perform_rollback(tmppath, "design", change="payment")
             self.assertEqual(rb["status"], "success")
             self.assertEqual(rb["target_gate"], "design")
             self.assertEqual(rb["reset_tasks_count"], 2)
@@ -1440,7 +1432,7 @@ gates:
             subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
             subprocess.run(["git", "commit", "-m", "Initial checkpoint commit"], cwd=tmppath, check=True)
 
-            inspect_lifecycle.create_checkpoint(tmppath, "design", topic="payment")
+            inspect_lifecycle.create_checkpoint(tmppath, "design", change="payment")
 
             # Commit a broken implementation and an additional file in implementation
             service_file.write_text("def pay(): raise RuntimeError('broken')\n")
@@ -1450,7 +1442,7 @@ gates:
             subprocess.run(["git", "commit", "-m", "Broken implementation"], cwd=tmppath, check=True)
 
             # Perform rollback to design
-            rb = inspect_lifecycle.perform_rollback(tmppath, "design", topic="payment")
+            rb = inspect_lifecycle.perform_rollback(tmppath, "design", change="payment")
             self.assertEqual(rb["status"], "success")
             self.assertIn("service.py", rb["restored_files"])
             self.assertIn("extra.py", rb["removed_files"])
@@ -1467,35 +1459,38 @@ gates:
             self.assertTrue((backup_path / "extra.py").exists())
             self.assertIn("raise RuntimeError", (backup_path / "service.py").read_text())
 
-    def test_ship_yaml_multiline_lists_and_comments(self):
-        """Verify YAML parser handles multiline bullet lists and unquoted inline comments."""
-        yaml_text = """
-project:
-  name: "billing" # Project name comment
-gates:
-  implementation:
-    test: "pytest -q" # quiet mode
-  audit:
-    max_iterations: 3
-    critical_paths:
-      - services/billing/core
-      - services/billing/api
-"""
-        parsed = inspect_lifecycle.parse_simple_yaml(yaml_text)
-        self.assertEqual(parsed["project"]["name"], "billing")
-        self.assertEqual(parsed["gates"]["implementation"]["test"], "pytest -q")
-        self.assertEqual(parsed["gates"]["audit"]["max_iterations"], 3)
-        self.assertEqual(
-            parsed["gates"]["audit"]["critical_paths"],
-            ["services/billing/core", "services/billing/api"],
-        )
+    def test_ship_json_deep_merge_and_defaults(self):
+        """Verify JSON config loading deep-merges overrides while preserving default gate configs."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            json_content = json.dumps({
+                "project": {"name": "billing"},
+                "gates": {
+                    "audit": {
+                        "max_iterations": 3,
+                        "critical_paths": ["services/billing/core", "services/billing/api"],
+                    },
+                    "implementation": {
+                        "test": "pytest -q",
+                    },
+                },
+            })
+            (tmppath / ".ship.json").write_text(json_content)
+            parsed = inspect_lifecycle.load_ship_config(tmppath)
+            self.assertEqual(parsed["project"]["name"], "billing")
+            self.assertEqual(parsed["gates"]["implementation"]["test"], "pytest -q")
+            self.assertEqual(parsed["gates"]["audit"]["max_iterations"], 3)
+            self.assertEqual(
+                parsed["gates"]["audit"]["critical_paths"],
+                ["services/billing/core", "services/billing/api"],
+            )
 
     def test_checkpoint_in_precommit_repo(self):
         """Verify checkpoint gracefully handles repository before first commit."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             subprocess.run(["git", "init"], cwd=tmppath, check=True)
-            chk = inspect_lifecycle.create_checkpoint(tmppath, "design", topic="new-feature")
+            chk = inspect_lifecycle.create_checkpoint(tmppath, "design", change="new-feature")
             self.assertEqual(chk["gate"], "design")
             self.assertEqual(chk["commit"], "none")
             self.assertFalse(chk["ref_created"])
@@ -1542,7 +1537,7 @@ gates:
             unrelated_file.write_text("unrelated pre-checkpoint edit\n")
 
             # 3. Checkpoint created
-            chk = inspect_lifecycle.create_checkpoint(tmppath, "design", topic="payment")
+            chk = inspect_lifecycle.create_checkpoint(tmppath, "design", change="payment")
             self.assertTrue(chk["ref_created"])
             self.assertIn("snapshot_commit", chk)
 
@@ -1553,7 +1548,7 @@ gates:
             new_impl_file.write_text("temp = 1\n")
 
             # 5. Perform rollback to design
-            rb = inspect_lifecycle.perform_rollback(tmppath, "design", topic="payment")
+            rb = inspect_lifecycle.perform_rollback(tmppath, "design", change="payment")
             self.assertEqual(rb["status"], "success")
 
             # 6. Verify unrelated file reverted to CHECKPOINT content (not initial commit content!)
@@ -1583,14 +1578,14 @@ gates:
             subprocess.run(["git", "commit", "-m", "Initial commit with tracked.cfg"], cwd=tmppath, check=True)
 
             # 2. Create checkpoint
-            chk = inspect_lifecycle.create_checkpoint(tmppath, "design", topic="payment")
+            chk = inspect_lifecycle.create_checkpoint(tmppath, "design", change="payment")
             self.assertTrue(chk["ref_created"])
 
             # 3. User modifies service.py in implementation gate
             service_file.write_text("def pay(): raise RuntimeError('broken')\n")
 
             # 4. Perform rollback
-            rb = inspect_lifecycle.perform_rollback(tmppath, "design", topic="payment")
+            rb = inspect_lifecycle.perform_rollback(tmppath, "design", change="payment")
             self.assertEqual(rb["status"], "success")
 
             # 5. Verify tracked.cfg is NOT deleted!
@@ -1613,7 +1608,7 @@ gates:
             # Create a checkpoint file under .scratch/checkpoints
             chk_dir = scratch_dir / "checkpoints"
             chk_dir.mkdir()
-            (chk_dir / "feature_design.json").write_text(json.dumps({"topic": "feature", "gate": "design"}))
+            (chk_dir / "feature_design.json").write_text(json.dumps({"change": "feature", "gate": "design"}))
 
             # Create a rollback backup directory
             rollback_dir = scratch_dir / "rollback_20260912_120000"
@@ -1654,8 +1649,8 @@ gates:
             spikes = inspect_lifecycle.inspect_spikes(tmppath)
             self.assertEqual(spikes, [])
 
-    def test_topic_suffixed_audit_and_review_reports_discovered(self):
-        """inspect_audit_reports must discover .scratch/review_report_<topic>.json and audit_report_<topic>.json."""
+    def test_change_suffixed_audit_and_review_reports_discovered(self):
+        """inspect_audit_reports must discover .scratch/review_report_<change>.json and audit_report_<change>.json."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             scratch_dir = tmppath / ".scratch"
@@ -1666,7 +1661,7 @@ gates:
                 "reviewer": "judge",
                 "status": "complete",
                 "verdict": "PASS",
-                "topic": "billing",
+                "change": "billing",
                 "findings": [],
                 "coverage": ["billing.py"],
                 "questions": [],
@@ -1674,9 +1669,9 @@ gates:
                 "tests_passed": True,
             }))
 
-            rep = inspect_lifecycle.inspect_audit_reports(tmppath, topic="billing")
+            rep = inspect_lifecycle.inspect_audit_reports(tmppath, change="billing")
             self.assertIsNotNone(rep)
-            self.assertEqual(rep["topic"], "billing")
+            self.assertEqual(rep["change"], "billing")
             self.assertTrue(rep["test_evidence_passed"])
 
     def test_porcelain_quoted_filenames_stripped(self):
@@ -1715,7 +1710,7 @@ gates:
             subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=tmppath, check=True, capture_output=True)
 
             # Create checkpoint for Implementation
-            chk = inspect_lifecycle.create_checkpoint(tmppath, gate_name="implementation", topic="feature")
+            chk = inspect_lifecycle.create_checkpoint(tmppath, gate_name="implementation", change="feature")
             self.assertEqual(chk["gate"], "implementation")
 
             # Rename file using git mv
@@ -1724,7 +1719,7 @@ gates:
             self.assertTrue((tmppath / "renamed.py").exists())
 
             # Perform rollback
-            rb = inspect_lifecycle.perform_rollback(tmppath, target_gate="implementation", topic="feature")
+            rb = inspect_lifecycle.perform_rollback(tmppath, target_gate="implementation", change="feature")
             self.assertEqual(rb["status"], "success")
             self.assertIn("original.py", rb["restored_files"])
             self.assertIn("renamed.py", rb["removed_files"])
@@ -1739,8 +1734,8 @@ gates:
             git_info = inspect_lifecycle.get_git_info(tmppath)
             self.assertEqual(git_info["modified_source_files"], [])
 
-    def test_checkpoint_private_ref_does_not_pollute_tags(self):
-        """create_checkpoint must isolate refs to refs/ship/ without creating refs/tags/ by default."""
+    def test_checkpoint_records_git_ref_and_skips_tag_by_default(self):
+        """Checkpoints record refs/ship/... by default and omit refs/tags/ unless create_git_tag=True."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             subprocess.run(["git", "init"], cwd=tmppath, check=True)
@@ -1752,7 +1747,7 @@ gates:
             subprocess.run(["git", "commit", "-m", "Init"], cwd=tmppath, check=True, capture_output=True)
 
             # 1. Default: records to refs/ship/... but NOT to refs/tags/
-            chk = inspect_lifecycle.create_checkpoint(tmppath, "design", topic="auth")
+            chk = inspect_lifecycle.create_checkpoint(tmppath, "design", change="auth")
             self.assertTrue(chk["ref_created"])
             self.assertFalse(chk["tag_created"])
             self.assertIsNone(chk["tag"])
@@ -1770,7 +1765,7 @@ gates:
             self.assertNotEqual(tag_check.returncode, 0)
 
             # 2. With create_git_tag=True: explicitly permits git tag in refs/tags/
-            chk_tagged = inspect_lifecycle.create_checkpoint(tmppath, "design", topic="auth", create_git_tag=True)
+            chk_tagged = inspect_lifecycle.create_checkpoint(tmppath, "design", change="auth", create_git_tag=True)
             self.assertTrue(chk_tagged["tag_created"])
             self.assertIsNotNone(chk_tagged["tag"])
 
@@ -1793,7 +1788,7 @@ gates:
             subprocess.run(["git", "commit", "-m", "Base"], cwd=tmppath, check=True, capture_output=True)
 
             # Checkpoint
-            inspect_lifecycle.create_checkpoint(tmppath, "design", topic="data-safety")
+            inspect_lifecycle.create_checkpoint(tmppath, "design", change="data-safety")
 
             # Create new untracked file and new untracked directory
             (tmppath / "new_file.py").write_text("# precious untracked content\n")
@@ -1802,7 +1797,7 @@ gates:
             (new_dir / "module.py").write_text("def helper(): return 42\n")
 
             # Perform rollback
-            rb = inspect_lifecycle.perform_rollback(tmppath, "design", topic="data-safety")
+            rb = inspect_lifecycle.perform_rollback(tmppath, "design", change="data-safety")
             self.assertEqual(rb["status"], "success")
 
             # Verify working tree no longer has new files
@@ -1831,15 +1826,15 @@ gates:
             subprocess.run(["git", "commit", "-m", "Init"], cwd=tmppath, check=True, capture_output=True)
 
             sink_file = tmppath / ".scratch" / "telemetry_events.jsonl"
-            inspect_lifecycle.create_checkpoint(tmppath, "design", topic="metrics", telemetry_sink=str(sink_file))
-            inspect_lifecycle.perform_rollback(tmppath, "design", topic="metrics", telemetry_sink=str(sink_file))
+            inspect_lifecycle.create_checkpoint(tmppath, "design", change="metrics", telemetry_sink=str(sink_file))
+            inspect_lifecycle.perform_rollback(tmppath, "design", change="metrics", telemetry_sink=str(sink_file))
 
             self.assertTrue(sink_file.exists())
             lines = [json.loads(line) for line in sink_file.read_text().splitlines() if line.strip()]
             self.assertEqual(len(lines), 2)
             self.assertEqual(lines[0]["event_type"], "checkpoint_created")
             self.assertEqual(lines[1]["event_type"], "rollback_executed")
-            self.assertEqual(lines[0]["payload"]["topic"], "metrics")
+            self.assertEqual(lines[0]["payload"]["change"], "metrics")
 
     def test_ship_schema_conformance(self):
         """Verify load_ship_config default_config aligns with ship.schema.json structure."""
@@ -1906,17 +1901,17 @@ gates:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             entry1 = inspect_lifecycle.mutate_change_state(
-                tmppath, "topic-a", lambda e: e.update({"phase": "design"})
+                tmppath, "change-a", lambda e: e.update({"phase": "design"})
             )
             self.assertEqual(entry1["revision_counter"], 1)
 
             entry2 = inspect_lifecycle.mutate_change_state(
-                tmppath, "topic-a", lambda e: e.update({"phase": "implementation"})
+                tmppath, "change-a", lambda e: e.update({"phase": "implementation"})
             )
             self.assertEqual(entry2["revision_counter"], 2)
 
             entry3 = inspect_lifecycle.mutate_change_state(
-                tmppath, "topic-a", lambda e: e["task_status"].update({"completed": 3})
+                tmppath, "change-a", lambda e: e["task_status"].update({"completed": 3})
             )
             self.assertEqual(entry3["revision_counter"], 3)
 

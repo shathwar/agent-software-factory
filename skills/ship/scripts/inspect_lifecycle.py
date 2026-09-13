@@ -117,83 +117,8 @@ def compute_working_tree_fingerprint(repo_root: Path) -> str:
     return hasher.hexdigest()
 
 
-def parse_simple_yaml(text: str) -> Dict[str, Any]:
-    """Zero-dependency parser for simple and nested YAML configurations."""
-    result: Dict[str, Any] = {}
-    stack: List[Tuple[int, Any, Optional[str]]] = [(-1, result, None)]
-
-    def parse_scalar(val_str: str) -> Any:
-        if " #" in val_str and not (
-            (val_str.startswith('"') and val_str.endswith('"')) or
-            (val_str.startswith("'") and val_str.endswith("'"))
-        ):
-            val_str = val_str.split(" #", 1)[0].rstrip()
-
-        val_str = val_str.strip()
-        if not val_str:
-            return ""
-        if val_str.startswith("[") and val_str.endswith("]"):
-            return [parse_scalar(x.strip()) for x in val_str[1:-1].split(",") if x.strip()]
-        if val_str.lower() in {"true", "yes", "on"}:
-            return True
-        if val_str.lower() in {"false", "no", "off"}:
-            return False
-        if re.match(r"^-?\d+$", val_str):
-            return int(val_str)
-        if re.match(r"^-?\d+\.\d+$", val_str):
-            try:
-                return float(val_str)
-            except ValueError:
-                pass
-        if (val_str.startswith('"') and val_str.endswith('"')) or (val_str.startswith("'") and val_str.endswith("'")):
-            return val_str[1:-1]
-        return val_str
-
-    for raw_line in text.splitlines():
-        line = raw_line.rstrip()
-        if not line or line.lstrip().startswith("#"):
-            continue
-        indent = len(raw_line) - len(raw_line.lstrip())
-        trimmed = line.strip()
-
-        while len(stack) > 1 and stack[-1][0] >= indent:
-            stack.pop()
-
-        _, current_container, active_key = stack[-1]
-
-        if trimmed.startswith("- "):
-            item_val_str = trimmed[2:].strip()
-            item_val = parse_scalar(item_val_str)
-            if isinstance(current_container, list):
-                current_container.append(item_val)
-            elif active_key is not None and len(stack) > 1:
-                parent_container = stack[-2][1]
-                if isinstance(parent_container, dict):
-                    if not isinstance(parent_container.get(active_key), list):
-                        parent_container[active_key] = []
-                        stack[-1] = (stack[-1][0], parent_container[active_key], None)
-                    parent_container[active_key].append(item_val)
-            continue
-
-        if ":" in trimmed:
-            key, val = trimmed.split(":", 1)
-            key = key.strip().strip("'\"")
-            val = val.strip()
-
-            if not val:
-                new_dict: Dict[str, Any] = {}
-                if isinstance(current_container, dict):
-                    current_container[key] = new_dict
-                    stack.append((indent, new_dict, key))
-            else:
-                parsed_val = parse_scalar(val)
-                if isinstance(current_container, dict):
-                    current_container[key] = parsed_val
-    return result
-
-
 def load_ship_config(repo_root: Path, explicit_path: Optional[str] = None) -> Dict[str, Any]:
-    """Load configuration from .ship.json or .ship.yaml/.ship.yml."""
+    """Load configuration from .ship.json."""
     default_config: Dict[str, Any] = {
         "version": 1,
         "project": {
@@ -246,22 +171,18 @@ def load_ship_config(repo_root: Path, explicit_path: Optional[str] = None) -> Di
         if p.exists() and p.is_file():
             config_file = p
     else:
-        for candidate in [".ship.json", ".ship.yaml", ".ship.yml"]:
-            p = repo_root / candidate
-            if p.exists() and p.is_file():
-                config_file = p
-                break
+        candidate = repo_root / ".ship.json"
+        if candidate.exists() and candidate.is_file():
+            config_file = candidate
 
     if not config_file:
         return default_config
 
     try:
         content = config_file.read_text(encoding="utf-8", errors="replace")
-        loaded: Dict[str, Any] = {}
-        if config_file.suffix == ".json":
-            loaded = json.loads(content)
-        else:
-            loaded = parse_simple_yaml(content)
+        loaded: Dict[str, Any] = json.loads(content)
+        if not isinstance(loaded, dict):
+            return default_config
 
         def deep_merge(target: Dict[str, Any], source: Dict[str, Any]) -> None:
             for k, v in source.items():
@@ -363,8 +284,6 @@ def get_active_change(repo_root: Path) -> Optional[str]:
             pass
     return None
 
-get_active_topic = get_active_change
-
 
 @contextmanager
 def ledger_lock(repo_root: Path, timeout_sec: float = 10.0):
@@ -415,8 +334,6 @@ def set_active_change(repo_root: Path, change: str) -> None:
                 data["active_change_id"] = change.strip()
                 save_ledger(repo_root, data)
 
-set_active_topic = set_active_change
-
 
 def clear_active_change(repo_root: Path, change: Optional[str] = None) -> None:
     """Clear openspec/.active and .ship/state.json active_change_id."""
@@ -435,16 +352,13 @@ def clear_active_change(repo_root: Path, change: Optional[str] = None) -> None:
                 data["active_change_id"] = None
                 save_ledger(repo_root, data)
 
-clear_active_topic = clear_active_change
-
 
 def inspect_openspec(
     repo_root: Path,
     target_change: Optional[str] = None,
-    target_topic: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Scan openspec/changes/ for active change packages and parse tasks.md."""
-    resolved_target = target_change or target_topic
+    resolved_target = target_change
     changes_dir = repo_root / "openspec" / "changes"
     archive_dir = repo_root / "openspec" / "archive"
     packages = []
@@ -520,7 +434,6 @@ def inspect_openspec(
 
         packages.append({
             "change": change_dir.name,
-            "topic": change_dir.name,  # Alias for backward compatibility
             "path": str(change_dir.relative_to(repo_root)),
             "has_proposal": proposal_file.exists(),
             "has_specs": specs_dir.exists() and any(specs_dir.iterdir()) if specs_dir.exists() else False,
@@ -856,10 +769,10 @@ def inspect_spikes(repo_root: Path) -> List[str]:
                 known_packages.add(d.name)
                 m = re.match(r"^\d{4}-\d{2}-\d{2}-(.+)$", d.name)
                 if m:
-                    topic_part = m.group(1)
-                    known_packages.add(topic_part)
-                    if "-" in topic_part:
-                        known_packages.add(re.sub(r"-\d+$", "", topic_part))
+                    change_part = m.group(1)
+                    known_packages.add(change_part)
+                    if "-" in change_part:
+                        known_packages.add(re.sub(r"-\d+$", "", change_part))
 
     for base in [repo_root / ".scratch", repo_root / "scratch"]:
         if base.exists() and base.is_dir():
@@ -889,7 +802,7 @@ def validate_judge_report_contract(report: Any, allow_delivery_keys: bool = Fals
     allowed_keys = set(top_required)
     if allow_delivery_keys:
         allowed_keys |= {
-            "topic", "verdict", "test_evidence", "tests_passed",
+            "change", "verdict", "test_evidence", "tests_passed",
             "commit", "head_sha", "snapshot", "tree_hash", "working_tree_fingerprint"
         }
 
@@ -1007,7 +920,6 @@ def parse_audit_report_file(p: Path, repo_root: Path) -> Dict[str, Any]:
             "snapshot_sha": None,
             "snapshot_tree": None,
             "snapshot_fingerprint": None,
-            "topic": None,
             "judge_report_valid": False,
             "judge_report_errors": [err],
         }
@@ -1064,7 +976,7 @@ def parse_audit_report_file(p: Path, repo_root: Path) -> Dict[str, Any]:
     snapshot_tree = snapshot_info.get("tree_hash") or data.get("tree_hash")
     snapshot_fingerprint = snapshot_info.get("working_tree_fingerprint") or data.get("working_tree_fingerprint")
 
-    change = data.get("change") or data.get("topic") or snapshot_info.get("change") or snapshot_info.get("topic") or judge_data.get("change") or judge_data.get("topic")
+    change = data.get("change") or snapshot_info.get("change") or judge_data.get("change")
 
     return {
         "path": str(p.relative_to(repo_root)),
@@ -1081,7 +993,6 @@ def parse_audit_report_file(p: Path, repo_root: Path) -> Dict[str, Any]:
         "snapshot_tree": str(snapshot_tree) if snapshot_tree else None,
         "snapshot_fingerprint": str(snapshot_fingerprint) if snapshot_fingerprint else None,
         "change": str(change).strip() if change else None,
-        "topic": str(change).strip() if change else None,
         "judge_report_valid": judge_report_valid,
         "judge_report_errors": judge_report_errors,
     }
@@ -1090,10 +1001,9 @@ def parse_audit_report_file(p: Path, repo_root: Path) -> Dict[str, Any]:
 def inspect_audit_reports(
     repo_root: Path,
     change: Optional[str] = None,
-    topic: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Look for audit reports or delivery evidence envelopes in .scratch or workspace."""
-    target = change or topic
+    target = change
     if target:
         change_paths = [
             repo_root / ".scratch" / target / "delivery_evidence.json",
@@ -1280,7 +1190,7 @@ def sync_ledger_from_workspace(repo_root: Path, target_change_id: Optional[str] 
             entry["phase"] = "delivery"
             continue
 
-        matched_pkg = next((p for p in packages if p["change"] == change or p.get("topic") == change), None)
+        matched_pkg = next((p for p in packages if p["change"] == change), None)
         if matched_pkg:
             entry["task_status"]["total"] = matched_pkg["total_tasks"]
             entry["task_status"]["completed"] = matched_pkg["completed_tasks"]
@@ -1432,7 +1342,7 @@ def attach_git_note_evidence(
     except Exception:
         existing_evidence = {"raw_previous_note": raw_note}
 
-    cid = change_id or data.get("change") or data.get("topic") or get_active_change(repo_root) or "default"
+    cid = change_id or data.get("change") or get_active_change(repo_root) or "default"
     now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
     fingerprint = compute_working_tree_fingerprint(repo_root)
 
@@ -1725,7 +1635,7 @@ def record_audit_to_ledger(
     else:
         report = report_path_or_dict
 
-    cid = change_id or report.get("change") or report.get("topic") or get_active_change(repo_root) or "default"
+    cid = change_id or report.get("change") or get_active_change(repo_root) or "default"
 
     def updater(entry: Dict[str, Any]) -> None:
         ev = entry["evidence"]["audit"]
@@ -1830,8 +1740,8 @@ def validate_delivery_readiness(
         return audit_blocked("Audit report lacks verified test evidence. Run test suite and record passing test results.")
 
     # 5. Package / Change exact match check
-    report_change = audit_report.get("change") or audit_report.get("topic")
-    pkg_change = active_pkg.get("change") or active_pkg.get("topic")
+    report_change = audit_report.get("change")
+    pkg_change = active_pkg.get("change")
     if not report_change:
         return audit_blocked(f"Audit approval lacks 'change'. Requires exact match with active package '{pkg_change}' before shipping.")
     if report_change != pkg_change:
@@ -1939,7 +1849,7 @@ def determine_lifecycle_state(
     # If OpenSpec package exists, check tasks
     if openspec_packages:
         active_pkg = openspec_packages[0]
-        pkg_change_name = active_pkg.get("change") or active_pkg.get("topic")
+        pkg_change_name = active_pkg.get("change")
         if not active_pkg["has_tasks"] or active_pkg["total_tasks"] == 0:
             return (
                 "design",
@@ -1997,7 +1907,6 @@ def determine_lifecycle_state(
 def apply_and_archive_openspec(
     repo_root: Path,
     change: Optional[str] = None,
-    topic: Optional[str] = None,
     force: bool = False,
 ) -> Dict[str, Any]:
     """Sync delta specs from changes to openspec/specs/, then move change package to openspec/archive/."""
@@ -2005,7 +1914,7 @@ def apply_and_archive_openspec(
     if not changes_dir.exists():
         raise FileNotFoundError(f"No openspec/changes directory found at {changes_dir}")
 
-    resolved_target = change or topic
+    resolved_target = change
     # Resolve target package directory
     if resolved_target:
         change_dir = changes_dir / resolved_target
@@ -2078,7 +1987,7 @@ def apply_and_archive_openspec(
         if not audit_report.get("test_evidence_passed"):
             raise RuntimeError(f"Cannot archive '{change_name}': audit report lacks verified passing test evidence.")
 
-        report_change = audit_report.get("change") or audit_report.get("topic")
+        report_change = audit_report.get("change")
         if not report_change:
             raise RuntimeError(
                 f"Cannot archive '{change_name}': audit report lacks 'change' field to authorise package."
@@ -2208,7 +2117,6 @@ def apply_and_archive_openspec(
 
     return {
         "change": change_name,
-        "topic": change_name,
         "synced_specs": synced_specs,
         "living_specs_dir": str(living_specs_dir.relative_to(repo_root)),
         "archived_path": str(dest_archive.relative_to(repo_root)),
@@ -2248,19 +2156,8 @@ def emit_telemetry_event(
 
 
 def canonicalize_gate_name(gate_name: str) -> str:
-    """Map gate names and legacy aliases to canonical gate names defined in ship.json."""
-    canonical = gate_name.lower().strip()
-    if canonical in {"1", "gate1", "gate-1", "spec", "gate-1-spec", "design", "gate-1-design"}:
-        return "design"
-    elif canonical in {"2", "gate2", "gate-2", "impl", "gate-2-impl", "tdd", "implementation"}:
-        return "implementation"
-    elif canonical in {"3", "gate3", "gate-3", "audit", "gate-3-audit"}:
-        return "audit"
-    elif canonical in {"4", "gate4", "gate-4", "delivery", "gate-4-delivery"}:
-        return "delivery"
-    elif canonical in {"spike", "1b", "gate-1b", "gate-1b-spike"}:
-        return "spike"
-    return canonical.replace(" ", "-")
+    """Canonicalize gate name to lowercase dashed identifier."""
+    return gate_name.lower().strip().replace(" ", "-")
 
 
 def _backup_path(src: Path, dest: Path) -> None:
@@ -2279,12 +2176,11 @@ def create_checkpoint(
     repo_root: Path,
     gate_name: str,
     change: Optional[str] = None,
-    topic: Optional[str] = None,
     create_git_tag: bool = False,
     telemetry_sink: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Record a git checkpoint tag/ref and receipt for the given lifecycle gate."""
-    resolved_change = change or topic or get_active_change(repo_root) or "default"
+    resolved_change = change or get_active_change(repo_root) or "default"
     git_info = get_git_info(repo_root)
     cfg = load_ship_config(repo_root)
     allow_git_tag = create_git_tag or cfg.get("create_git_tag", False)
@@ -2324,7 +2220,6 @@ def create_checkpoint(
     receipt_file = chk_dir / f"{resolved_change}_{canonical_tag}.json"
     receipt_data = {
         "change": resolved_change,
-        "topic": resolved_change,
         "gate": canonical_tag,
         "ref": ref_name,
         "tag": tag_name if allow_git_tag else None,
@@ -2355,12 +2250,11 @@ def perform_rollback(
     repo_root: Path,
     target_gate: str,
     change: Optional[str] = None,
-    topic: Optional[str] = None,
     force: bool = False,
     telemetry_sink: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Safely roll back lifecycle and working state to target checkpoint (e.g. State 5b)."""
-    resolved_change = change or topic or get_active_change(repo_root) or "default"
+    resolved_change = change or get_active_change(repo_root) or "default"
     canonical_tag = canonicalize_gate_name(target_gate)
 
     git_info = get_git_info(repo_root)
@@ -2488,7 +2382,6 @@ def perform_rollback(
     res_payload = {
         "status": "success",
         "change": resolved_change,
-        "topic": resolved_change,
         "target_gate": canonical_tag,
         "backup_directory": str(backup_dir.relative_to(repo_root)) if has_backups else None,
         "has_backups": has_backups,
@@ -2522,14 +2415,13 @@ def perform_rollback(
 def evaluate_repository(
     repo_root: Path,
     target_change: Optional[str] = None,
-    target_topic: Optional[str] = None,
     config_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Perform a full lifecycle evaluation of the repository."""
     config = load_ship_config(repo_root, explicit_path=config_path)
     git_info = get_git_info(repo_root)
     adrs = inspect_adrs(repo_root)
-    resolved_target = target_change or target_topic
+    resolved_target = target_change
     openspec_packages = inspect_openspec(repo_root, target_change=resolved_target)
     archived_packages = inspect_archived_openspec(repo_root)
     living_specs = inspect_living_specs(repo_root)
@@ -2548,7 +2440,6 @@ def evaluate_repository(
     return {
         "repo_root": str(repo_root),
         "target_change": resolved_change,
-        "target_topic": resolved_change,
         "gate": gate,
         "state_key": state_key,
         "next_action": next_action,
@@ -2577,8 +2468,8 @@ def format_summary(data: Dict[str, Any]) -> str:
         lines.append(f"• Change ID      : {ac.get('change_id')} (rev: r{ac.get('revision_counter', 0)}, phase: {ac.get('phase')})")
         if ac.get("blockers"):
             lines.append(f"  └─ Blockers    : {', '.join(ac['blockers'])}")
-    elif data.get("target_change") or data.get("target_topic"):
-        lines.append(f"• Active Change  : {data.get('target_change') or data.get('target_topic')}")
+    elif data.get("target_change"):
+        lines.append(f"• Active Change  : {data.get('target_change')}")
 
     git = data["git"]
     if git["is_git"]:
@@ -2601,7 +2492,7 @@ def format_summary(data: Dict[str, Any]) -> str:
     if pkgs:
         for p in pkgs:
             marker = " [ACTIVE]" if p.get("is_active_target") else ""
-            pkg_name = p.get("change") or p.get("topic")
+            pkg_name = p.get("change")
             lines.append(
                 f"• OpenSpec '{pkg_name}'{marker} : {p['completed_tasks']}/{p['total_tasks']} tasks complete, "
                 f"specs={'yes' if p['has_specs'] else 'no'}, proposal={'yes' if p['has_proposal'] else 'no'}"
@@ -2659,15 +2550,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="Target a specific change ID (e.g. feature-login).",
     )
     parser.add_argument(
-        "--topic",
-        dest="change",
-        default=None,
-        help="Target a specific OpenSpec package (alias for --change).",
-    )
-    parser.add_argument(
         "--config",
         default=None,
-        help="Path to custom .ship.json or .ship.yaml configuration.",
+        help="Path to custom .ship.json configuration.",
     )
     parser.add_argument(
         "--checkpoint",
@@ -2775,7 +2660,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         ledger = load_ledger(repo_root)
         ledger["active_change_id"] = args.set_active_change
         save_ledger(repo_root, ledger)
-        set_active_topic(repo_root, args.set_active_change)
+        set_active_change(repo_root, args.set_active_change)
         output_result({"active_change_id": args.set_active_change}, [f"Active change set to: {args.set_active_change}"])
         return 0
 
@@ -2841,7 +2726,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
             tag_display = f" ({res['tag']})" if res.get("tag") else ""
             output_result(res, banner(f"🏷️  LIFECYCLE CHECKPOINT CREATED: {res['gate']}", [
-                f"• Change         : {res.get('change') or res.get('topic')}",
+                f"• Change         : {res.get('change')}",
                 f"• Git Ref / Tag  : {res['ref']}{tag_display}",
                 f"• Snapshot Commit: {res['commit'][:7] if res.get('commit') else 'none'}",
                 f"• Fingerprint    : {res['fingerprint'][:12]}...",
@@ -2861,7 +2746,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 telemetry_sink=args.telemetry_sink,
             )
             rb_lines = [
-                f"• Change         : {res.get('change') or res.get('topic')}",
+                f"• Change         : {res.get('change')}",
                 f"• Target Gate    : {res['target_gate']}",
             ]
             if res.get("backup_directory"):
@@ -2880,7 +2765,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             change_id = args.archive if args.archive else args.change
             res = apply_and_archive_openspec(repo_root, change=change_id, force=args.force)
             specs_str = f"{', '.join(res['synced_specs'])} -> {res['living_specs_dir']}/" if res["synced_specs"] else "None"
-            output_result(res, banner(f"📦 OPENSPEC APPLIED & ARCHIVED: {res.get('change') or res.get('topic')}", [
+            output_result(res, banner(f"📦 OPENSPEC APPLIED & ARCHIVED: {res.get('change')}", [
                 f"• Synced Specs   : {specs_str}",
                 f"• Archived To    : {res['archived_path']}",
                 "• Lifecycle      : Reset to design (ready for next feature proposal)",
