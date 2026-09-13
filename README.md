@@ -383,7 +383,7 @@ The installer defaults to preserving existing non-symlink directories to avoid o
 
 For teams operating across multiple AI coding tools with tight context budgets:
 - **Universal Root Rules ([`nano/AGENTS.md`](./nano/AGENTS.md))**: A complete, high-density distillation of all 6 skills (< 100 lines) ready to copy to `AGENTS.md`, `.cursorrules`, or `CLAUDE.md`.
-- **Scoped Nano Rules**: Standalone files under [`nano/`](./nano/) (`audit.nano.md`, `simplify.nano.md`, `tdd.nano.md`, etc.) under 50 lines each for targeted task injection.
+- **Scoped Nano Rules**: Standalone files under [`nano/`](./nano/) (`review.nano.md`, `simplify.nano.md`, `tdd.nano.md`, etc.) under 50 lines each for targeted task injection.
 
 
 ---

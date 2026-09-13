@@ -62,9 +62,9 @@ This document defines the canonical specification format produced at the conclus
 
 ---
 
-## 6. Downstream Verification Criteria (For `audit`)
+## 6. Downstream Verification Criteria (For `review`)
 
-*These explicit acceptance criteria will be verified by the Principal Reviewer in `audit` Stage 0 (Spec Alignment) and Stages 1–3:*
+*These explicit acceptance criteria will be verified by the Principal Reviewer in `review` Stage 0 (Spec Alignment) and Stages 1–3:*
 
 - [ ] Criterion 1: [Specific behavioral or contract expectation]
 - [ ] Criterion 2: [Concurrency or lock handling check]

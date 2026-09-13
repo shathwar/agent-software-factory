@@ -14,7 +14,7 @@
 
 ## 2. Operating Focus
 
-1. **Fact Discovery**: Audit existing models, schemas, and routes autonomously.
+1. **Fact Discovery**: Inspect existing models, schemas, and routes autonomously.
 2. **Frontier Batching**: Format unblocked decisions with concrete recommendations:
    ```markdown
    ❓ **Q1** - **<Decision Title>**: <Context and tradeoffs>

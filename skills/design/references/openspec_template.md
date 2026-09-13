@@ -125,8 +125,8 @@ OpenSpec distinguishes between **in-flight change packages** (`openspec/changes/
 1. Propose & Design (design gate)
    openspec/changes/<feature>/ (proposal.md, specs/*.md, tasks.md)
         │
-        ▼ 2. Implement & Audit (implementation & audit gates)
-   Execute tasks.md (- [x]) ➔ Code Audit (Judge PASS)
+        ▼ 2. Implement & Review (implementation & review gates)
+   Execute tasks.md (- [x]) ➔ Code Review (Judge PASS)
         │
         ▼ 3. Apply & Archive (delivery gate)
    Sync specs:    openspec/changes/<feature>/specs/*.md ➔ openspec/specs/
