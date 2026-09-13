@@ -1,15 +1,23 @@
-"""VCS and Git operations implementation."""
-
+from contextlib import contextmanager
 import datetime
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
+import threading
+import time
 from typing import Any, Dict, List, Optional, Tuple
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None  # type: ignore
 
 from .models import GitInfo
 
 GIT_NOTES_REF = "refs/notes/ship-evidence"
+_vcs_tls = threading.local()
 
 
 class GitClient:
@@ -134,6 +142,66 @@ class GitClient:
             pass
         return info
 
+    def get_git_common_dir(self, repo_root: Path) -> Path:
+        """Resolve the common git directory shared across worktrees."""
+        out = self.get_output(repo_root, "rev-parse", "--git-common-dir")
+        if out:
+            p = Path(out)
+            if not p.is_absolute():
+                p = (repo_root / p).resolve()
+            return p
+        return (repo_root / ".git").resolve()
+
+    @contextmanager
+    def notes_lock(self, repo_root: Path, timeout_sec: float = 10.0):
+        """Cross-worktree file lock on the shared git common directory."""
+        common_dir = self.get_git_common_dir(repo_root)
+        common_dir.mkdir(parents=True, exist_ok=True)
+        lock_file = (common_dir / "ship_notes.lock").resolve()
+        lock_key = str(lock_file)
+
+        if not hasattr(_vcs_tls, "locks"):
+            _vcs_tls.locks = {}
+
+        depth = _vcs_tls.locks.get(lock_key, 0)
+        if depth > 0:
+            _vcs_tls.locks[lock_key] = depth + 1
+            try:
+                yield
+            finally:
+                _vcs_tls.locks[lock_key] -= 1
+            return
+
+        fd = os.open(str(lock_file), os.O_RDWR | os.O_CREAT, 0o666)
+        locked = False
+        try:
+            if fcntl:
+                start_time = time.time()
+                while True:
+                    try:
+                        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        locked = True
+                        break
+                    except (BlockingIOError, IOError, OSError):
+                        if time.time() - start_time >= timeout_sec:
+                            fcntl.flock(fd, fcntl.LOCK_EX)
+                            locked = True
+                            break
+                        time.sleep(0.01)
+            _vcs_tls.locks[lock_key] = 1
+            yield
+        finally:
+            _vcs_tls.locks[lock_key] = 0
+            if locked and fcntl:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+                except Exception:
+                    pass
+            try:
+                os.close(fd)
+            except Exception:
+                pass
+
     def attach_git_note_evidence(
         self,
         repo_root: Path,
@@ -152,46 +220,52 @@ class GitClient:
         if not resolved_sha:
             return None
 
-        raw_note = self.get_output(repo_root, "notes", f"--ref={ref}", "show", resolved_sha)
-        try:
-            existing_evidence = json.loads(raw_note) if raw_note else {}
-        except Exception:
-            existing_evidence = {"raw_previous_note": raw_note}
-
         cid = change_id or data.get("change") or active_change or "default"
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         fingerprint = self.compute_working_tree_fingerprint(repo_root)
 
-        changes = existing_evidence.setdefault("changes", {})
-        change_entry = changes.setdefault(cid, {})
+        with self.notes_lock(repo_root):
+            for attempt in range(5):
+                raw_note = self.get_output(repo_root, "notes", f"--ref={ref}", "show", resolved_sha)
+                try:
+                    existing_evidence = json.loads(raw_note) if raw_note else {}
+                except Exception:
+                    existing_evidence = {"raw_previous_note": raw_note}
 
-        runs = change_entry.setdefault(f"{evidence_type}_runs", [])
-        runs.append({
-            "timestamp": now_iso,
-            "commit": resolved_sha,
-            "fingerprint": fingerprint,
-            "change_id": cid,
-            "evidence_type": evidence_type,
-            "data": data,
-        })
+                changes = existing_evidence.setdefault("changes", {})
+                change_entry = changes.setdefault(cid, {})
 
-        change_entry[evidence_type] = data
-        change_entry["last_updated"] = now_iso
-        existing_evidence[evidence_type] = data
-        existing_evidence["last_change_id"] = cid
-        existing_evidence["last_updated"] = now_iso
+                runs = change_entry.setdefault(f"{evidence_type}_runs", [])
+                runs.append({
+                    "timestamp": now_iso,
+                    "commit": resolved_sha,
+                    "fingerprint": fingerprint,
+                    "change_id": cid,
+                    "evidence_type": evidence_type,
+                    "data": data,
+                })
 
-        res = self.run_cmd(
-            repo_root,
-            "notes",
-            f"--ref={ref}",
-            "add",
-            "-f",
-            "-m",
-            json.dumps(existing_evidence, indent=2),
-            resolved_sha,
-        )
-        return resolved_sha if res.returncode == 0 else None
+                change_entry[evidence_type] = data
+                change_entry["last_updated"] = now_iso
+                existing_evidence[evidence_type] = data
+                existing_evidence["last_change_id"] = cid
+                existing_evidence["last_updated"] = now_iso
+
+                res = self.run_cmd(
+                    repo_root,
+                    "notes",
+                    f"--ref={ref}",
+                    "add",
+                    "-f",
+                    "-m",
+                    json.dumps(existing_evidence, indent=2),
+                    resolved_sha,
+                )
+                if res.returncode == 0:
+                    return resolved_sha
+                time.sleep(0.02 * (attempt + 1))
+
+        return None
 
     def read_git_note_evidence(
         self,

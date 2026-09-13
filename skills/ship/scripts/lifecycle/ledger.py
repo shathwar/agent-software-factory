@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
 
@@ -12,6 +13,8 @@ try:
     import fcntl
 except ImportError:
     fcntl = None  # type: ignore
+
+_tls = threading.local()
 
 
 def read_json_file(path: Path, default: Any = None) -> Any:
@@ -39,54 +42,39 @@ def ensure_gitignore_has_ship(repo_root: Path) -> None:
         except Exception:
             pass
 
-    git_dir = repo_root / ".git"
-    if git_dir.is_dir():
-        _append_ignore_entry(git_dir / "info" / "exclude")
-
-    gitignore = repo_root / ".gitignore"
-    if gitignore.exists():
-        _append_ignore_entry(gitignore)
+    info_exclude = repo_root / ".git" / "info" / "exclude"
+    if info_exclude.parent.exists():
+        _append_ignore_entry(info_exclude)
+    else:
+        _append_ignore_entry(repo_root / ".gitignore")
 
 
 def make_default_review_evidence() -> Dict[str, Any]:
     """Default review evidence structure."""
     return {
         "verdict": None,
-        "status": None,
-        "reviewer": None,
+        "status": "PENDING",
         "findings_count": 0,
         "critical_or_high_count": 0,
-        "test_evidence_passed": None,
+        "reviewer": None,
         "report_path": None,
-        "git_note_oid": None,
         "snapshot_fingerprint": None,
+        "test_evidence_passed": None,
     }
 
 
 def make_default_evidence() -> Dict[str, Any]:
-    """Default lifecycle evidence structure."""
     return {
-        "design": {"adr": None, "status": None},
+        "design": {"adr": None, "status": "PENDING"},
         "spike": {"status": "NONE", "verdict": None, "dir": None},
-        "implementation": {
-            "status": "PENDING",
-            "tests_passed": None,
-            "failed_count": 0,
-            "evidence_ref": None,
-        },
-        "simplify": {"status": "PENDING", "debt_count": 0},
+        "implementation": {"status": "PENDING", "tests_passed": None, "failed_count": 0},
+        "simplify": {"debt_count": 0, "status": "PENDING"},
         "review": make_default_review_evidence(),
-        "delivery": {
-            "status": "PENDING",
-            "archived_path": None,
-            "commit": None,
-            "trailers": [],
-        },
+        "delivery": {"status": "PENDING"},
     }
 
 
 def create_empty_change_entry(change_id: str) -> Dict[str, Any]:
-    """Create a default ChangeState entry according to the lifecycle schema."""
     return {
         "change_id": change_id,
         "phase": "design",
@@ -94,8 +82,8 @@ def create_empty_change_entry(change_id: str) -> Dict[str, Any]:
             "total": 0,
             "completed": 0,
             "pending": 0,
-            "in_progress": None,
             "next": None,
+            "in_progress": None,
         },
         "blockers": [],
         "revision_counter": 0,
@@ -116,7 +104,20 @@ class FileLedgerStore:
     def lock(cls, repo_root: Path, timeout_sec: float = 10.0):
         ship_dir = repo_root / ".ship"
         ship_dir.mkdir(parents=True, exist_ok=True)
-        lock_file = ship_dir / "state.lock"
+        lock_file = (ship_dir / "state.lock").resolve()
+        lock_key = str(lock_file)
+
+        if not hasattr(_tls, "locks"):
+            _tls.locks = {}
+
+        current_depth = _tls.locks.get(lock_key, 0)
+        if current_depth > 0:
+            _tls.locks[lock_key] = current_depth + 1
+            try:
+                yield
+            finally:
+                _tls.locks[lock_key] -= 1
+            return
 
         fd = os.open(str(lock_file), os.O_RDWR | os.O_CREAT, 0o666)
         locked = False
@@ -134,8 +135,10 @@ class FileLedgerStore:
                             locked = True
                             break
                         time.sleep(0.01)
+            _tls.locks[lock_key] = 1
             yield
         finally:
+            _tls.locks[lock_key] = 0
             if locked and fcntl:
                 try:
                     fcntl.flock(fd, fcntl.LOCK_UN)
@@ -185,120 +188,157 @@ class FileLedgerStore:
         inspect_spikes_fn: Optional[Callable[[Path], List[str]]] = None,
         inspect_review_fn: Optional[Callable[..., Optional[Dict[str, Any]]]] = None,
     ) -> Dict[str, Any]:
-        ledger_path = cls.get_ledger_path(repo_root)
-        loaded = read_json_file(ledger_path)
-        existing: Dict[str, Any] = loaded if isinstance(loaded, dict) and "changes" in loaded else {}
+        with cls.lock(repo_root):
+            ledger_path = cls.get_ledger_path(repo_root)
+            loaded = read_json_file(ledger_path)
+            existing: Dict[str, Any] = loaded if isinstance(loaded, dict) and "changes" in loaded else {}
 
-        changes: Dict[str, Any] = existing.get("changes", {})
-        active_change_id = target_change_id or existing.get("active_change_id") or cls.get_active_change(repo_root)
+            changes: Dict[str, Any] = dict(existing.get("changes", {}))
+            active_change_id = target_change_id or existing.get("active_change_id") or cls.get_active_change(repo_root)
 
-        packages = inspect_openspec_fn(repo_root, target_change=None) if inspect_openspec_fn else []
-        adrs = inspect_adrs_fn(repo_root) if inspect_adrs_fn else []
-        spikes = inspect_spikes_fn(repo_root) if inspect_spikes_fn else []
+            packages = inspect_openspec_fn(repo_root, target_change=None) if inspect_openspec_fn else []
+            adrs = inspect_adrs_fn(repo_root) if inspect_adrs_fn else []
+            spikes = inspect_spikes_fn(repo_root) if inspect_spikes_fn else []
 
-        discovered_changes = [p["change"] for p in packages]
-        if not discovered_changes:
-            if active_change_id and existing.get("changes", {}).get(active_change_id, {}).get("evidence", {}).get("delivery", {}).get("status") != "ARCHIVED":
-                discovered_changes = [active_change_id]
-            elif adrs:
-                discovered_changes = [adrs[0]["name"].replace(".md", "").lower()]
-            else:
-                discovered_changes = ["default"]
+            # Re-read ledger state to capture any concurrent updates committed during workspace discovery
+            latest_loaded = read_json_file(ledger_path)
+            if isinstance(latest_loaded, dict) and "changes" in latest_loaded:
+                for cid, cval in latest_loaded["changes"].items():
+                    if cid not in changes:
+                        changes[cid] = cval
+                    elif isinstance(cval, dict) and cval.get("revision_counter", 0) > changes[cid].get("revision_counter", 0):
+                        changes[cid] = cval
+                if not active_change_id and latest_loaded.get("active_change_id"):
+                    active_change_id = latest_loaded["active_change_id"]
 
-        for change in discovered_changes:
-            if change not in changes:
-                changes[change] = create_empty_change_entry(change)
-            entry = changes[change]
-
-            if entry.get("evidence", {}).get("delivery", {}).get("status") == "ARCHIVED":
-                entry["phase"] = "delivery"
-                continue
-
-            matched_pkg = next((p for p in packages if p["change"] == change), None)
-            if matched_pkg:
-                entry["task_status"]["total"] = matched_pkg["total_tasks"]
-                entry["task_status"]["completed"] = matched_pkg["completed_tasks"]
-                entry["task_status"]["pending"] = matched_pkg["pending_tasks"]
-                entry["task_status"]["next"] = matched_pkg["next_task"]
-                entry["task_status"]["in_progress"] = matched_pkg["next_task"]
-
-            if adrs:
-                entry["evidence"]["design"]["adr"] = adrs[0]["name"]
-                entry["evidence"]["design"]["status"] = adrs[0].get("status")
-
-            if spikes:
-                entry["evidence"]["spike"]["status"] = "ACTIVE"
-                entry["evidence"]["spike"]["dir"] = spikes[0]
-            else:
-                if entry["evidence"]["spike"].get("status") == "ACTIVE":
-                    entry["evidence"]["spike"]["status"] = "PASSED"
-
-            review = inspect_review_fn(repo_root, change=change) if inspect_review_fn else None
-            if review:
-                verdict = review.get("verdict") or review.get("status")
-                entry["evidence"]["review"]["verdict"] = verdict
-                entry["evidence"]["review"]["status"] = review.get("status")
-                entry["evidence"]["review"]["reviewer"] = review.get("reviewer")
-                entry["evidence"]["review"]["findings_count"] = review.get("findings_count", 0)
-                entry["evidence"]["review"]["critical_or_high_count"] = review.get("critical_or_high_count", 0)
-                entry["evidence"]["review"]["test_evidence_passed"] = review.get("test_evidence_passed")
-                entry["evidence"]["review"]["report_path"] = review.get("path") or review.get("report_file")
-                entry["evidence"]["review"]["snapshot_fingerprint"] = review.get("snapshot_fingerprint")
-
-            chk_dir = repo_root / ".scratch" / "checkpoints"
-            if chk_dir.exists():
-                for cf in chk_dir.glob(f"{change}_*.json"):
-                    cdata = read_json_file(cf)
-                    if isinstance(cdata, dict):
-                        gate_k = cdata.get("gate", cf.stem.replace(f"{change}_", ""))
-                        entry["checkpoints"][gate_k] = cdata
-
-            existing_test_blockers = [b for b in entry.get("blockers", []) if b.startswith("Tests:")]
-            if entry.get("evidence", {}).get("implementation", {}).get("tests_passed") is False:
-                failed_cnt = entry["evidence"]["implementation"].get("failed_count", 1)
-                t_blocker = f"Tests: {failed_cnt} test(s) failing"
-                if t_blocker not in existing_test_blockers:
-                    existing_test_blockers.append(t_blocker)
-
-            blockers: List[str] = list(existing_test_blockers)
-            if spikes:
-                entry["phase"] = "spike"
-                blockers.append(f"Spike active in {spikes[0]}")
-            elif not matched_pkg or matched_pkg["total_tasks"] == 0:
-                entry["phase"] = "design"
-            elif matched_pkg["pending_tasks"] > 0 or any(b.startswith("Tests:") for b in blockers):
-                entry["phase"] = "implementation"
-            else:
-                review_ev = entry["evidence"]["review"]
-                crit = review_ev.get("critical_or_high_count", 0)
-                verd = review_ev.get("verdict", "")
-                if crit > 0:
-                    blockers.append(f"Review has {crit} unresolved CRITICAL/HIGH finding(s)")
-                if verd in {"FAIL", "FAILED", "REJECTED"}:
-                    blockers.append(f"Review verdict is {verd}")
-
-                if review_ev.get("verdict") in {"PASS", "APPROVED"} and crit == 0 and not blockers:
-                    entry["phase"] = "delivery"
+            discovered_changes = [p["change"] for p in packages]
+            if not discovered_changes:
+                if active_change_id and changes.get(active_change_id, {}).get("evidence", {}).get("delivery", {}).get("status") != "ARCHIVED":
+                    discovered_changes = [active_change_id]
+                elif adrs:
+                    discovered_changes = [adrs[0]["name"].replace(".md", "").lower()]
                 else:
-                    entry["phase"] = "review"
+                    discovered_changes = ["default"]
 
-            entry["blockers"] = blockers
-            if entry.get("revision_counter", 0) == 0:
-                entry["revision_counter"] = 1
+            for change in discovered_changes:
+                if change not in changes:
+                    changes[change] = create_empty_change_entry(change)
+                entry = changes[change]
 
-        if not active_change_id and discovered_changes and discovered_changes != ["default"]:
-            active_change_id = discovered_changes[0]
+                old_phase = entry.get("phase")
+                old_blockers = list(entry.get("blockers", []))
 
-        new_ledger = {
-            "version": 1,
-            "active_change_id": active_change_id,
-            "changes": changes,
-        }
-        try:
-            cls.save(repo_root, new_ledger)
-        except Exception:
-            pass
-        return new_ledger
+                if entry.get("evidence", {}).get("delivery", {}).get("status") == "ARCHIVED":
+                    entry["phase"] = "delivery"
+                    continue
+
+                matched_pkg = next((p for p in packages if p["change"] == change), None)
+                if matched_pkg:
+                    entry["task_status"]["total"] = matched_pkg["total_tasks"]
+                    entry["task_status"]["completed"] = matched_pkg["completed_tasks"]
+                    entry["task_status"]["pending"] = matched_pkg["pending_tasks"]
+                    entry["task_status"]["next"] = matched_pkg["next_task"]
+                    entry["task_status"]["in_progress"] = matched_pkg["next_task"]
+
+                if adrs:
+                    entry["evidence"]["design"]["adr"] = adrs[0]["name"]
+                    entry["evidence"]["design"]["status"] = adrs[0].get("status")
+
+                if spikes:
+                    entry["evidence"]["spike"]["status"] = "ACTIVE"
+                    entry["evidence"]["spike"]["dir"] = spikes[0]
+                else:
+                    if entry["evidence"]["spike"].get("status") == "ACTIVE":
+                        entry["evidence"]["spike"]["status"] = "PASSED"
+
+                review = inspect_review_fn(repo_root, change=change) if inspect_review_fn else None
+                if review:
+                    verdict = review.get("verdict") or review.get("status")
+                    entry["evidence"]["review"]["verdict"] = verdict
+                    entry["evidence"]["review"]["status"] = review.get("status")
+                    entry["evidence"]["review"]["reviewer"] = review.get("reviewer")
+                    entry["evidence"]["review"]["findings_count"] = review.get("findings_count", 0)
+                    entry["evidence"]["review"]["critical_or_high_count"] = review.get("critical_or_high_count", 0)
+                    entry["evidence"]["review"]["test_evidence_passed"] = review.get("test_evidence_passed")
+                    entry["evidence"]["review"]["report_path"] = review.get("path") or review.get("report_file")
+                    entry["evidence"]["review"]["snapshot_fingerprint"] = review.get("snapshot_fingerprint")
+
+                chk_dir = repo_root / ".scratch" / "checkpoints"
+                if chk_dir.exists():
+                    for cf in chk_dir.glob(f"{change}_*.json"):
+                        cdata = read_json_file(cf)
+                        if isinstance(cdata, dict):
+                            gate_k = cdata.get("gate", cf.stem.replace(f"{change}_", ""))
+                            entry["checkpoints"][gate_k] = cdata
+
+                # Preserve explicit non-derived blockers (e.g. manual holds, design approval)
+                explicit_blockers = [
+                    b for b in entry.get("blockers", [])
+                    if not (
+                        b.startswith("Tests:")
+                        or b.startswith("Spike active in ")
+                        or b.startswith("Review has ")
+                        or b.startswith("Review verdict is ")
+                    )
+                ]
+
+                existing_test_blockers = [b for b in entry.get("blockers", []) if b.startswith("Tests:")]
+                if entry.get("evidence", {}).get("implementation", {}).get("tests_passed") is False:
+                    failed_cnt = entry["evidence"]["implementation"].get("failed_count", 1)
+                    t_blocker = f"Tests: {failed_cnt} test(s) failing"
+                    if t_blocker not in existing_test_blockers:
+                        existing_test_blockers.append(t_blocker)
+
+                blockers: List[str] = list(existing_test_blockers)
+                for eb in explicit_blockers:
+                    if eb not in blockers:
+                        blockers.append(eb)
+
+                if spikes:
+                    entry["phase"] = "spike"
+                    blockers.append(f"Spike active in {spikes[0]}")
+                elif not matched_pkg or matched_pkg["total_tasks"] == 0:
+                    entry["phase"] = "design"
+                elif matched_pkg["pending_tasks"] > 0 or any(b.startswith("Tests:") for b in blockers):
+                    entry["phase"] = "implementation"
+                else:
+                    review_ev = entry["evidence"]["review"]
+                    crit = review_ev.get("critical_or_high_count", 0)
+                    verd = review_ev.get("verdict", "")
+                    if crit > 0:
+                        blockers.append(f"Review has {crit} unresolved CRITICAL/HIGH finding(s)")
+                    if verd in {"FAIL", "FAILED", "REJECTED"}:
+                        blockers.append(f"Review verdict is {verd}")
+
+                    if review_ev.get("verdict") in {"PASS", "APPROVED"} and crit == 0 and not blockers:
+                        entry["phase"] = "delivery"
+                    else:
+                        entry["phase"] = "review"
+
+                deduped_blockers: List[str] = []
+                for b in blockers:
+                    if b not in deduped_blockers:
+                        deduped_blockers.append(b)
+                entry["blockers"] = deduped_blockers
+
+                if entry.get("revision_counter", 0) == 0:
+                    entry["revision_counter"] = 1
+                elif entry.get("phase") != old_phase or entry.get("blockers") != old_blockers:
+                    entry["revision_counter"] = entry.get("revision_counter", 1) + 1
+
+            if not active_change_id and discovered_changes and discovered_changes != ["default"]:
+                active_change_id = discovered_changes[0]
+
+            new_ledger = {
+                "version": 1,
+                "active_change_id": active_change_id,
+                "changes": changes,
+            }
+            try:
+                cls.save(repo_root, new_ledger)
+            except Exception:
+                pass
+            return new_ledger
 
     @classmethod
     def load(

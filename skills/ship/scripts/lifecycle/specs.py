@@ -289,6 +289,7 @@ class OpenSpecRepository:
         clear_active_fn: Optional[Callable[[Path, Optional[str]], Any]] = None,
         generate_trailers_fn: Optional[Callable[..., str]] = None,
         mutate_change_fn: Optional[Callable[..., Any]] = None,
+        get_active_fn: Optional[Callable[[Path], Optional[str]]] = None,
     ) -> Dict[str, Any]:
         """Sync delta specs from changes to openspec/specs/, then move change package to openspec/archive/."""
         changes_dir = repo_root / "openspec" / "changes"
@@ -296,12 +297,29 @@ class OpenSpecRepository:
             raise FileNotFoundError(f"No openspec/changes directory found at {changes_dir}")
 
         resolved_target = change
-        if resolved_target:
+        if not resolved_target and load_ledger_fn:
+            try:
+                ledger = load_ledger_fn(repo_root, auto_sync=False)
+                if isinstance(ledger, dict):
+                    resolved_target = ledger.get("active_change_id")
+            except Exception:
+                pass
+        if not resolved_target and get_active_fn:
+            try:
+                resolved_target = get_active_fn(repo_root)
+            except Exception:
+                pass
+
+        if resolved_target and (changes_dir / resolved_target).is_dir():
             change_dir = changes_dir / resolved_target
-            if not change_dir.exists() or not change_dir.is_dir():
-                raise FileNotFoundError(f"OpenSpec change directory '{resolved_target}' not found under {changes_dir}")
+        elif resolved_target and change:
+            raise FileNotFoundError(f"OpenSpec change directory '{resolved_target}' not found under {changes_dir}")
         else:
-            packages = self.inspect_openspec(repo_root)
+            packages = self.inspect_openspec(
+                repo_root,
+                target_change=resolved_target,
+                get_active_fn=get_active_fn,
+            )
             if not packages:
                 raise FileNotFoundError("No active change packages found in openspec/changes/ to archive.")
             change_dir = repo_root / packages[0]["path"]

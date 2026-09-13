@@ -105,6 +105,7 @@ class ISpecRepository(Protocol):
         repo_path: Path,
         change: Optional[str] = None,
         force: bool = False,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """Promote active OpenSpec change to living truth and archive it."""
         ...

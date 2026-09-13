@@ -23,6 +23,7 @@ class CommitTrailerGenerator:
         load_config_fn: Optional[Callable[..., Dict[str, Any]]] = None,
         get_active_change_fn: Optional[Callable[[Path], Optional[str]]] = None,
         create_empty_change_fn: Optional[Callable[[str], Dict[str, Any]]] = None,
+        get_git_info_fn: Optional[Callable[[Path], Dict[str, Any]]] = None,
     ) -> List[str]:
         if ledger is None and load_ledger_fn:
             ledger = load_ledger_fn(repo_root, auto_sync=False)
@@ -99,18 +100,47 @@ class CommitTrailerGenerator:
         review_ev = evidence.get("review", {})
         verdict = review_ev.get("verdict")
         reviewer = review_ev.get("reviewer") or "judge"
+
+        is_review_stale = False
+        snap_fp = review_ev.get("snapshot_fingerprint")
+        snap_sha = review_ev.get("snapshot_sha")
+
+        git_info: Dict[str, Any] = {}
+        if get_git_info_fn:
+            try:
+                git_info = get_git_info_fn(repo_root) or {}
+            except Exception:
+                git_info = {}
+        elif (repo_root / ".git").exists():
+            try:
+                from .vcs import GitClient
+                git_info = GitClient().get_info(repo_root) or {}
+            except Exception:
+                git_info = {}
+
+        current_fp = git_info.get("working_tree_fingerprint")
+        current_commit = git_info.get("commit")
+
+        if snap_fp and current_fp and snap_fp != current_fp:
+            is_review_stale = True
+        elif snap_sha and current_commit and not (current_commit.startswith(snap_sha) or snap_sha.startswith(current_commit)):
+            is_review_stale = True
+
         if verdict:
-            trailers.append(f"Ship-Review: {verdict} (by {reviewer})")
+            if is_review_stale and verdict in {"PASS", "APPROVED"}:
+                trailers.append(f"Ship-Review: STALE (modified since review by {reviewer})")
+            else:
+                trailers.append(f"Ship-Review: {verdict} (by {reviewer})")
         else:
             trailers.append("Ship-Review: PENDING")
 
         # 6. Gate: Delivery
         deliv_ev = evidence.get("delivery", {})
         deliv_status = deliv_ev.get("status", "PENDING")
-        if has_test_failures or blockers:
+        if has_test_failures or blockers or is_review_stale:
             if deliv_status == "ARCHIVED":
                 trailers.append("Ship-Delivery: ARCHIVED")
-            elif change_entry.get("phase") == "delivery" or deliv_status == "READY":
+            elif change_entry.get("phase") == "delivery" or deliv_status == "READY" or is_review_stale:
                 trailers.append("Ship-Delivery: BLOCKED")
         elif change_entry.get("phase") == "delivery" or deliv_status in {"READY", "ARCHIVED"}:
             trailers.append(f"Ship-Delivery: {deliv_status if deliv_status != 'PENDING' else 'READY'}")

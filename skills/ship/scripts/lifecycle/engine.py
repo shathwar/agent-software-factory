@@ -200,8 +200,10 @@ class LifecycleEngine:
                 load_ledger_fn=lambda r2, auto_sync=False: self.ledger.load(r2, auto_sync=auto_sync),
                 load_config_fn=self.config_manager.load,
                 get_active_change_fn=self.ledger.get_active_change,
+                get_git_info_fn=self.vcs.get_info,
             ),
             mutate_change_fn=lambda r, cid, upd, set_active=False: self.ledger.mutate_change(
                 r, cid, upd, set_active=set_active, sync_fn=self.sync_ledger
             ),
+            get_active_fn=self.ledger.get_active_change,
         )

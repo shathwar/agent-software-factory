@@ -199,6 +199,7 @@ def generate_gate_trailers(
         load_config_fn=_config_mgr.load,
         get_active_change_fn=_ledger_store.get_active_change,
         create_empty_change_fn=create_empty_change_entry,
+        get_git_info_fn=_vcs.get_info,
     )
 
 

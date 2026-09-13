@@ -1,6 +1,7 @@
 """Unit tests for ship lifecycle inspector (inspect_lifecycle.py)."""
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -2264,6 +2265,216 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(auth_entry["phase"], "implementation")
             self.assertNotIn("Review: 2 unresolved CRITICAL/HIGH finding(s)", auth_entry["blockers"])
             self.assertIn("Tests: 1 test(s) failing", auth_entry["blockers"])
+
+    def test_sync_from_workspace_preserves_concurrent_changes(self):
+        """Workspace sync holds file lock across entire read-modify-save transaction."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            # Pre-populate ledger with an active change
+            inspect_lifecycle.mutate_change_state(
+                tmppath,
+                "change-a",
+                lambda entry: entry.update({"phase": "design", "blockers": []})
+            )
+
+            # Custom openspec inspector that concurrently inserts a new change into ledger while sync is running
+            def inspecting_openspec(r, target_change=None):
+                # Another agent mutates ledger during workspace discovery
+                inspect_lifecycle.mutate_change_state(
+                    r,
+                    "change-b",
+                    lambda entry: entry.update({"phase": "implementation", "blockers": []})
+                )
+                return [{"change": "change-a", "total_tasks": 1, "completed_tasks": 0, "pending_tasks": 1, "next_task": "T1"}]
+
+            res = inspect_lifecycle.FileLedgerStore.sync_from_workspace(
+                tmppath,
+                inspect_openspec_fn=inspecting_openspec,
+            )
+            # Both change-a and concurrently added change-b must exist in ledger
+            self.assertIn("change-a", res["changes"])
+            self.assertIn("change-b", res["changes"])
+            fresh_ledger = inspect_lifecycle.load_ledger(tmppath, auto_sync=False)
+            self.assertIn("change-a", fresh_ledger["changes"])
+            self.assertIn("change-b", fresh_ledger["changes"])
+
+    def test_sync_preserves_explicit_blockers_and_increments_revision(self):
+        """Explicit domain blockers (e.g. Awaiting design approval) survive sync and bump revision_counter."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            inspect_lifecycle.mutate_change_state(
+                tmppath,
+                "feature-x",
+                lambda entry: entry.update({
+                    "phase": "design",
+                    "blockers": ["Awaiting design approval", "Security team signoff"],
+                    "revision_counter": 2,
+                })
+            )
+
+            # Sync workspace with package that has tasks
+            def inspect_pkg(r, target_change=None):
+                return [{
+                    "change": "feature-x",
+                    "total_tasks": 2,
+                    "completed_tasks": 0,
+                    "pending_tasks": 2,
+                    "next_task": "Task 1",
+                }]
+
+            synced = inspect_lifecycle.FileLedgerStore.sync_from_workspace(
+                tmppath,
+                inspect_openspec_fn=inspect_pkg,
+            )
+
+            fx = synced["changes"]["feature-x"]
+            # Explicit blockers must still be present!
+            self.assertIn("Awaiting design approval", fx["blockers"])
+            self.assertIn("Security team signoff", fx["blockers"])
+            # Phase changed from design to implementation -> revision_counter incremented
+            self.assertEqual(fx["phase"], "implementation")
+            self.assertGreater(fx["revision_counter"], 2)
+
+    def test_concurrent_worktrees_git_notes_shared_locking(self):
+        """Cross-worktree evidence recording synchronizes on shared git common dir."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            repo = tmppath / "main_repo"
+            repo.mkdir()
+            subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
+            (repo / "file.txt").write_text("hello")
+            subprocess.run(["git", "add", "file.txt"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-m", "initial"], cwd=repo, check=True)
+            head_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
+
+            # Create a second worktree
+            wt_path = tmppath / "worktree_b"
+            subprocess.run(["git", "worktree", "add", "-b", "branch_b", str(wt_path)], cwd=repo, check=True, capture_output=True)
+
+            # Record evidence from worktree A (main) and worktree B (linked worktree)
+            sha_a = inspect_lifecycle.attach_git_note_evidence(
+                repo,
+                head_sha,
+                evidence_type="review",
+                data={"verdict": "PASS", "reviewer": "judge"},
+                change_id="change_alpha",
+            )
+            sha_b = inspect_lifecycle.attach_git_note_evidence(
+                wt_path,
+                head_sha,
+                evidence_type="test_evidence",
+                data={"suite": "wt_tests", "passed": True},
+                change_id="change_beta",
+            )
+
+            self.assertEqual(sha_a, head_sha)
+            self.assertEqual(sha_b, head_sha)
+
+            # Both changes must be readable from both worktrees!
+            alpha_notes_main = inspect_lifecycle.read_git_note_evidence(repo, head_sha, change_id="change_alpha")
+            beta_notes_main = inspect_lifecycle.read_git_note_evidence(repo, head_sha, change_id="change_beta")
+            alpha_notes_wt = inspect_lifecycle.read_git_note_evidence(wt_path, head_sha, change_id="change_alpha")
+            beta_notes_wt = inspect_lifecycle.read_git_note_evidence(wt_path, head_sha, change_id="change_beta")
+
+            self.assertEqual(alpha_notes_main["review"]["verdict"], "PASS")
+            self.assertEqual(beta_notes_main["test_evidence"]["suite"], "wt_tests")
+            self.assertEqual(alpha_notes_wt["review"]["verdict"], "PASS")
+            self.assertEqual(beta_notes_wt["test_evidence"]["suite"], "wt_tests")
+
+    def test_default_archive_picks_active_package_over_newer_package(self):
+        """When change is None, archive targets active_change_id from ledger rather than newest mtime package."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            changes_dir = tmppath / "openspec" / "changes"
+            alpha_dir = changes_dir / "alpha"
+            beta_dir = changes_dir / "beta"
+            alpha_dir.mkdir(parents=True)
+            beta_dir.mkdir(parents=True)
+
+            (alpha_dir / "tasks.md").write_text("- [x] Complete alpha task\n")
+            (alpha_dir / "specs.md").write_text("## Requirement: Alpha\nAlpha spec")
+            (beta_dir / "tasks.md").write_text("- [x] Complete beta task\n")
+            (beta_dir / "specs.md").write_text("## Requirement: Beta\nBeta spec")
+
+            # Set mtime of beta to be newer than alpha
+            os.utime(str(alpha_dir), (1000, 1000))
+            os.utime(str(beta_dir), (2000, 2000))
+
+            # Ledger explicitly sets alpha as active_change_id
+            inspect_lifecycle.mutate_change_state(
+                tmppath,
+                "alpha",
+                lambda entry: entry.update({
+                    "phase": "delivery",
+                    "blockers": [],
+                    "evidence": {"delivery": {"status": "READY"}}
+                }),
+                set_active=True,
+            )
+
+            # Archive with change=None (default)
+            res = inspect_lifecycle.apply_and_archive_openspec(tmppath, change=None, force=True)
+
+            self.assertEqual(res["change"], "alpha")
+            self.assertFalse(alpha_dir.exists())
+            self.assertTrue(beta_dir.exists())  # beta must remain untouched!
+
+    def test_trailers_detect_stale_review_when_working_tree_fingerprint_changes(self):
+        """If source tree is modified after review, review trailer emits STALE and delivery emits BLOCKED."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            # Create a real git repo
+            subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+            src_file = tmppath / "main.py"
+            src_file.write_text("print('hello')\n")
+            subprocess.run(["git", "add", "main.py"], cwd=tmppath, check=True)
+            subprocess.run(["git", "commit", "-m", "init"], cwd=tmppath, check=True)
+
+            client = inspect_lifecycle.GitClient()
+            git_info_original = client.get_info(tmppath)
+            original_fp = git_info_original["working_tree_fingerprint"]
+
+            # Record review passing with original fingerprint
+            inspect_lifecycle.mutate_change_state(
+                tmppath,
+                "feature-y",
+                lambda entry: entry.update({
+                    "phase": "delivery",
+                    "blockers": [],
+                    "task_status": {"total": 2, "completed": 2, "pending": 0},
+                    "evidence": {
+                        "implementation": {"status": "PASSED", "tests_passed": True},
+                        "review": {
+                            "verdict": "PASS",
+                            "reviewer": "judge",
+                            "snapshot_fingerprint": original_fp,
+                        },
+                        "delivery": {"status": "READY"},
+                    }
+                }),
+                set_active=True,
+            )
+
+            # Before modification: trailers are PASS and READY
+            trailers_before = inspect_lifecycle.generate_gate_trailers(tmppath, change_id="feature-y")
+            text_before = "\n".join(trailers_before)
+            self.assertIn("Ship-Review: PASS (by judge)", text_before)
+            self.assertIn("Ship-Delivery: READY", text_before)
+
+            # Modify source file post-review
+            src_file.write_text("print('modified post-review')\n")
+
+            # After modification: trailers must detect stale review and block delivery!
+            trailers_after = inspect_lifecycle.generate_gate_trailers(tmppath, change_id="feature-y")
+            text_after = "\n".join(trailers_after)
+            self.assertIn("Ship-Review: STALE (modified since review by judge)", text_after)
+            self.assertNotIn("Ship-Review: PASS (by judge)", text_after)
+            self.assertIn("Ship-Delivery: BLOCKED", text_after)
+            self.assertNotIn("Ship-Delivery: READY", text_after)
 
 
 if __name__ == "__main__":
