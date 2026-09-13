@@ -125,6 +125,8 @@ class CommitTrailerGenerator:
             is_review_stale = True
         elif snap_sha and current_commit and not (current_commit.startswith(snap_sha) or snap_sha.startswith(current_commit)):
             is_review_stale = True
+        elif snap_sha and not snap_fp and not git_info.get("is_clean", True):
+            is_review_stale = True
 
         if verdict:
             if is_review_stale and verdict in {"PASS", "APPROVED"}:
