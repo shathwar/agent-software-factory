@@ -784,8 +784,8 @@ def validate_judge_report_contract(report: Any, allow_delivery_keys: bool = Fals
     allowed_keys = set(top_required)
     if allow_delivery_keys:
         allowed_keys |= {
-            "change", "verdict", "test_evidence", "tests_passed",
-            "commit", "head_sha", "snapshot", "tree_hash", "working_tree_fingerprint"
+            "change", "verdict", "test_evidence",
+            "commit", "snapshot", "tree_hash", "working_tree_fingerprint"
         }
 
     extra = report.keys() - allowed_keys
@@ -947,14 +947,10 @@ def parse_audit_report_file(p: Path, repo_root: Path) -> Dict[str, Any]:
 
     # Verdict and test evidence can be in envelope or top-level
     verdict = str(data.get("verdict", judge_data.get("verdict", ""))).strip().upper()
-    raw_test_evidence = data.get("test_evidence") if "test_evidence" in data else data.get("tests_passed")
-    if raw_test_evidence is None:
-        raw_test_evidence = judge_data.get("test_evidence")
+    raw_test_evidence = data.get("test_evidence") if "test_evidence" in data else judge_data.get("test_evidence")
     test_evidence_passed = is_test_evidence_passing(raw_test_evidence)
 
-    raw_snapshot = data.get("snapshot")
-    legacy_snapshot_str = raw_snapshot if isinstance(raw_snapshot, str) else None
-    snapshot_sha = snapshot_info.get("commit") or data.get("commit") or legacy_snapshot_str or data.get("head_sha")
+    snapshot_sha = snapshot_info.get("commit") or data.get("commit")
     snapshot_tree = snapshot_info.get("tree_hash") or data.get("tree_hash")
     snapshot_fingerprint = snapshot_info.get("working_tree_fingerprint") or data.get("working_tree_fingerprint")
 
@@ -984,37 +980,25 @@ def inspect_audit_reports(
     repo_root: Path,
     change: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
-    """Look for audit reports or delivery evidence envelopes in .scratch or workspace."""
     target = change
+    report_names = ("delivery_evidence.json", "review_report.json", "audit_report.json")
+    candidate_paths: List[Path] = []
     if target:
-        change_paths = [
-            repo_root / ".scratch" / target / "delivery_evidence.json",
-            repo_root / "scratch" / target / "delivery_evidence.json",
-            repo_root / ".scratch" / f"delivery_evidence_{target}.json",
-            repo_root / "scratch" / f"delivery_evidence_{target}.json",
-            repo_root / ".scratch" / target / "review_report.json",
-            repo_root / "scratch" / target / "review_report.json",
-            repo_root / ".scratch" / f"review_report_{target}.json",
-            repo_root / "scratch" / f"review_report_{target}.json",
-            repo_root / ".scratch" / target / "audit_report.json",
-            repo_root / "scratch" / target / "audit_report.json",
-            repo_root / ".scratch" / f"audit_report_{target}.json",
-            repo_root / "scratch" / f"audit_report_{target}.json",
-        ]
-        for p in change_paths:
-            if p.exists():
-                return parse_audit_report_file(p, repo_root)
+        for name in report_names:
+            candidate_paths.extend([
+                repo_root / ".scratch" / target / name,
+                repo_root / "scratch" / target / name,
+                repo_root / ".scratch" / f"{Path(name).stem}_{target}.json",
+                repo_root / "scratch" / f"{Path(name).stem}_{target}.json",
+            ])
+    for name in report_names:
+        candidate_paths.extend([
+            repo_root / ".scratch" / name,
+            repo_root / "scratch" / name,
+        ])
+    candidate_paths.append(repo_root / "report.json")
 
-    fallback_paths = [
-        repo_root / ".scratch" / "delivery_evidence.json",
-        repo_root / "scratch" / "delivery_evidence.json",
-        repo_root / ".scratch" / "review_report.json",
-        repo_root / "scratch" / "review_report.json",
-        repo_root / ".scratch" / "audit_report.json",
-        repo_root / "scratch" / "audit_report.json",
-        repo_root / "report.json",
-    ]
-    for p in fallback_paths:
+    for p in candidate_paths:
         if p.exists():
             return parse_audit_report_file(p, repo_root)
 
@@ -1681,59 +1665,55 @@ def record_test_run_to_ledger(
     return mutate_change_state(repo_root, cid, updater)
 
 
-def validate_delivery_readiness(
+def validate_audit_approval(
     audit_report: Dict[str, Any],
-    active_pkg: Dict[str, Any],
+    change_name: str,
     git_info: Dict[str, Any],
-    active_change: Optional[Dict[str, Any]],
-) -> Tuple[str, str, str]:
-    """Validate that audit and ledger requirements are met before advancing to delivery."""
-    def audit_blocked(reason: str) -> Tuple[str, str, str]:
-        return ("audit", "AUDIT_ACTIVE", reason)
-
+    package_spec_names: Optional[Set[str]] = None,
+) -> Optional[str]:
+    """Verify that an audit report strictly satisfies delivery/archive requirements. Returns error string or None."""
     # 1. Judge report contract check for envelopes
     if audit_report.get("is_envelope") and not audit_report.get("judge_report_valid"):
         err_msg = "; ".join(audit_report.get("judge_report_errors", ["Malformed Judge report structure"]))
-        return audit_blocked(f"Judge report in delivery envelope is malformed: {err_msg}. Re-run review to produce a valid Judge report.")
+        return f"Judge report in delivery envelope is malformed: {err_msg}. Re-run review to produce a valid Judge report."
 
     # 2. Reviewer must be Judge
     if not audit_report.get("is_judge"):
-        return audit_blocked(f"Audit report is from '{audit_report.get('reviewer', 'unknown')}', not Judge. Requires explicit Judge adjudication before shipping.")
+        return f"Audit report is from '{audit_report.get('reviewer', 'unknown')}', not Judge. Requires explicit Judge adjudication before shipping."
 
-    # 2. Must not contain unresolved CRITICAL or HIGH findings
+    # 3. Must not contain unresolved CRITICAL or HIGH findings
     crit_count = audit_report.get("critical_or_high_count", 0)
     if crit_count > 0:
-        return audit_blocked(f"Audit has {crit_count} unresolved CRITICAL/HIGH finding(s). Must remediate defects before shipping.")
+        return f"Audit has {crit_count} unresolved CRITICAL/HIGH finding(s). Must remediate defects before shipping."
 
-    # 3. Must have explicit passing verdict and clean findings
+    # 4. Must have explicit passing verdict and clean findings
     verdict = audit_report.get("verdict", "")
     status = audit_report.get("status", "")
     findings_count = audit_report.get("findings_count", 0)
 
     if verdict in {"FAIL", "FAILED", "REJECTED"}:
-        return audit_blocked(f"Audit verdict '{verdict}' is rejected. Remediate findings or re-run review.")
+        return f"Audit verdict '{verdict}' is rejected. Remediate findings or re-run review."
     if status in {"fail", "failed", "rejected", "incomplete", "skipped"}:
-        return audit_blocked(f"Audit status '{status}' is not complete/passing. Complete review and remediate findings.")
+        return f"Audit status '{status}' is not complete/passing (requires 'complete'). Remediate findings."
     if not (verdict in {"PASS", "APPROVED"} or (verdict == "" and status in {"complete", "pass", "approved"} and findings_count == 0)):
-        return audit_blocked(f"Audit verdict '{verdict or status}' is not PASS. Remediate findings or re-run review.")
+        return f"Audit verdict '{verdict or status}' is not PASS. Remediate findings or re-run review."
 
-    # 4. Require explicit verified passing test evidence
+    # 5. Require explicit verified passing test evidence
     if not audit_report.get("test_evidence_passed"):
-        return audit_blocked("Audit report lacks verified test evidence. Run test suite and record passing test results.")
+        return "Audit report lacks verified test evidence. Run test suite and record passing test results."
 
-    # 5. Package / Change exact match check
+    # 6. Package / Change exact match check
     report_change = audit_report.get("change")
-    pkg_change = active_pkg.get("change")
     if not report_change:
-        return audit_blocked(f"Audit approval lacks 'change'. Requires exact match with active package '{pkg_change}' before shipping.")
-    if report_change != pkg_change:
-        return audit_blocked(f"Audit approval is for change '{report_change}', but active package is '{pkg_change}'. Requires audit approval for '{pkg_change}' before shipping.")
+        return f"Audit approval lacks 'change'. Requires exact match with active package '{change_name}' before shipping."
+    if report_change != change_name:
+        return f"Audit approval is for change '{report_change}', but active package is '{change_name}'. Requires audit approval for '{change_name}' before shipping."
 
-    # 6. Judge report contract check
+    # 7. Judge report contract check for non-envelopes
     if not audit_report.get("judge_report_valid"):
         err_msg = "; ".join(audit_report.get("judge_report_errors", ["Malformed Judge report structure"]))
         env_text = " in delivery envelope" if audit_report.get("is_envelope") else ""
-        return audit_blocked(f"Judge report{env_text} is malformed: {err_msg}. Re-run review to produce a valid Judge report.")
+        return f"Judge report{env_text} is malformed: {err_msg}. Re-run review to produce a valid Judge report."
 
     # 7. Snapshot binding check
     snapshot_sha = audit_report.get("snapshot_sha")
@@ -1744,28 +1724,51 @@ def validate_delivery_readiness(
     if git_info.get("is_git"):
         if current_commit:
             if not snapshot_sha and not snapshot_fingerprint:
-                return audit_blocked("Audit report lacks commit snapshot SHA or tree fingerprint. Audit must be bound to reviewed snapshot.")
+                return "Audit report lacks commit snapshot SHA or tree fingerprint. Audit must be bound to reviewed snapshot."
             if snapshot_sha:
                 if not bool(re.match(r"^[0-9a-f]{7,40}$", snapshot_sha, re.IGNORECASE)):
                     if not snapshot_fingerprint or (current_fingerprint and snapshot_fingerprint != current_fingerprint):
-                        return audit_blocked(f"Audit snapshot commit '{snapshot_sha}' is symbolic or unresolved. Must be a resolved, immutable commit SHA or accompanied by a matching working-tree fingerprint.")
+                        return f"Audit snapshot commit '{snapshot_sha}' is symbolic or unresolved. Must be a resolved, immutable commit SHA or accompanied by a matching working-tree fingerprint."
                 elif not current_commit.startswith(snapshot_sha) and not snapshot_sha.startswith(current_commit):
-                    return audit_blocked(f"Audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'. Re-run audit on current code.")
+                    return f"Audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'. Re-run audit on current code."
         else:
             if not snapshot_fingerprint:
-                return audit_blocked("Audit report in repository before first commit lacks working-tree fingerprint. Audit must be bound to reviewed snapshot fingerprint.")
+                return "Audit report in repository before first commit lacks working-tree fingerprint. Audit must be bound to reviewed snapshot fingerprint."
             if snapshot_sha and snapshot_sha != "none":
-                return audit_blocked(f"Audit report snapshot commit '{snapshot_sha}' does not exist (repository has no commits yet). Re-run audit on current code.")
+                return f"Audit report snapshot commit '{snapshot_sha}' does not exist (repository has no commits yet). Re-run audit on current code."
 
     # 8. Working tree consistency check
     if snapshot_fingerprint:
         if not current_fingerprint or snapshot_fingerprint != current_fingerprint:
-            return audit_blocked("Working tree has been modified since review (fingerprint mismatch). Re-run adversarial audit on current code before shipping.")
+            return "Working tree has been modified since review (fingerprint mismatch). Re-run adversarial audit on current code before shipping."
     else:
         modified_sources = git_info.get("modified_source_files", [])
+        if package_spec_names is not None:
+            modified_sources = [
+                f for f in modified_sources
+                if not (f.startswith("openspec/specs/") and Path(f).name in package_spec_names)
+            ]
         if modified_sources:
             mod_str = ", ".join(modified_sources[:3]) + (f" (+{len(modified_sources)-3} more)" if len(modified_sources) > 3 else "")
-            return audit_blocked(f"Working tree has unreviewed source modifications ({mod_str}). Re-run adversarial audit on current code before shipping.")
+            return f"Working tree has unreviewed source modifications ({mod_str}). Re-run adversarial audit on current code before shipping."
+
+    return None
+
+
+def validate_delivery_readiness(
+    audit_report: Dict[str, Any],
+    active_pkg: Dict[str, Any],
+    git_info: Dict[str, Any],
+    active_change: Optional[Dict[str, Any]],
+) -> Tuple[str, str, str]:
+    """Validate that audit and ledger requirements are met before advancing to delivery."""
+    def audit_blocked(reason: str) -> Tuple[str, str, str]:
+        return ("audit", "AUDIT_ACTIVE", reason)
+
+    pkg_change = active_pkg.get("change", "")
+    err = validate_audit_approval(audit_report, pkg_change, git_info)
+    if err:
+        return audit_blocked(err)
 
     # 9. Ledger readiness validation
     if active_change:
@@ -1951,79 +1954,14 @@ def apply_and_archive_openspec(
         if not audit_report:
             raise RuntimeError(f"Cannot archive '{change_name}': no passing audit report found (or delivery evidence in .scratch/).")
 
-        if audit_report.get("is_envelope") and not audit_report.get("judge_report_valid"):
-            err_msg = "; ".join(audit_report.get("judge_report_errors", ["Malformed Judge report structure"]))
-            raise RuntimeError(f"Cannot archive '{change_name}': Judge report in delivery envelope is malformed ({err_msg}).")
-
-        if not audit_report.get("is_judge"):
-            raise RuntimeError(f"Cannot archive '{change_name}': audit reviewer is '{audit_report.get('reviewer')}', requires Judge approval.")
-        if audit_report.get("critical_or_high_count", 0) > 0:
-            raise RuntimeError(f"Cannot archive '{change_name}': audit has {audit_report.get('critical_or_high_count')} unresolved CRITICAL/HIGH findings.")
-        verdict = audit_report.get("verdict", "")
-        status = audit_report.get("status", "")
-        if verdict in {"FAIL", "FAILED", "REJECTED"} or status in {"fail", "failed", "rejected", "incomplete", "skipped"}:
-            raise RuntimeError(f"Cannot archive '{change_name}': audit verdict is '{verdict or status}', not PASS (status is '{status}', requires 'complete').")
-        verdict_ok = verdict in {"PASS", "APPROVED"} or (verdict == "" and status in {"complete", "pass", "approved"} and audit_report.get("findings_count", 0) == 0)
-        if not verdict_ok:
-            raise RuntimeError(f"Cannot archive '{change_name}': audit verdict is '{verdict or status}', not PASS.")
-        if not audit_report.get("test_evidence_passed"):
-            raise RuntimeError(f"Cannot archive '{change_name}': audit report lacks verified passing test evidence.")
-
-        report_change = audit_report.get("change")
-        if not report_change:
-            raise RuntimeError(
-                f"Cannot archive '{change_name}': audit report lacks 'change' field to authorise package."
-            )
-        if report_change != change_name:
-            raise RuntimeError(
-                f"Cannot archive '{change_name}': audit approval is for change '{report_change}', not '{change_name}'."
-            )
-
-        if not audit_report.get("judge_report_valid"):
-            err_msg = "; ".join(audit_report.get("judge_report_errors", ["Malformed Judge report structure"]))
-            env_text = " in delivery envelope" if audit_report.get("is_envelope") else ""
-            raise RuntimeError(f"Cannot archive '{change_name}': Judge report{env_text} is malformed ({err_msg}).")
-
-        git_info = get_git_info(repo_root)
-        current_commit = git_info.get("commit")
-        snapshot_sha = audit_report.get("snapshot_sha")
-        snapshot_fingerprint = audit_report.get("snapshot_fingerprint")
-        current_fingerprint = git_info.get("working_tree_fingerprint")
-
-        if git_info.get("is_git"):
-            if current_commit:
-                if not snapshot_sha and not snapshot_fingerprint:
-                    raise RuntimeError(f"Cannot archive '{change_name}': audit report lacks commit snapshot SHA or tree fingerprint.")
-                if snapshot_sha:
-                    is_hex_sha = bool(re.match(r"^[0-9a-f]{7,40}$", snapshot_sha, re.IGNORECASE))
-                    if not is_hex_sha:
-                        if not snapshot_fingerprint or (current_fingerprint and snapshot_fingerprint != current_fingerprint):
-                            raise RuntimeError(
-                                f"Cannot archive '{change_name}': audit snapshot commit '{snapshot_sha}' is symbolic or unresolved. Must be an immutable commit SHA or accompanied by a matching fingerprint."
-                            )
-                    elif not current_commit.startswith(snapshot_sha) and not snapshot_sha.startswith(current_commit):
-                        raise RuntimeError(f"Cannot archive '{change_name}': audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'.")
-            else:
-                if not snapshot_fingerprint:
-                    raise RuntimeError(f"Cannot archive '{change_name}': audit report in repository before first commit lacks working-tree fingerprint.")
-                if snapshot_sha and snapshot_sha != "none":
-                    raise RuntimeError(f"Cannot archive '{change_name}': audit report snapshot commit '{snapshot_sha}' does not exist (repository has no commits yet).")
-
         source_specs_dir = change_dir / "specs"
         package_spec_names = {s.name for s in source_specs_dir.glob("*.md")} if source_specs_dir.exists() else set()
+        git_info = get_git_info(repo_root)
 
-        if snapshot_fingerprint:
-            if not current_fingerprint or snapshot_fingerprint != current_fingerprint:
-                raise RuntimeError(f"Cannot archive '{change_name}': working tree has been modified since review (fingerprint mismatch).")
-        else:
-            modified_sources = git_info.get("modified_source_files", [])
-            # Resumable recovery: ignore living specs belonging to this package if they were partially modified in an earlier interrupted attempt
-            unreviewed = [
-                f for f in modified_sources
-                if not (f.startswith("openspec/specs/") and Path(f).name in package_spec_names)
-            ]
-            if unreviewed:
-                raise RuntimeError(f"Cannot archive '{change_name}': working tree has unreviewed source modifications ({', '.join(unreviewed[:3])}).")
+        audit_err = validate_audit_approval(audit_report, change_name, git_info, package_spec_names=package_spec_names)
+        if audit_err:
+            msg = audit_err if audit_err.startswith("Judge report") else (audit_err[:1].lower() + audit_err[1:])
+            raise RuntimeError(f"Cannot archive '{change_name}': {msg}")
 
     synced_specs = []
     living_specs_dir = repo_root / "openspec" / "specs"

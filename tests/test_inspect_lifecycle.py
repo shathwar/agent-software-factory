@@ -1668,7 +1668,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 "coverage": ["billing.py"],
                 "questions": [],
                 "routing_notes": [],
-                "tests_passed": True,
+                "test_evidence": True,
             }))
 
             rep = inspect_lifecycle.inspect_audit_reports(tmppath, change="billing")
@@ -2119,7 +2119,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 "verdict": "PASS",
                 "change": "payments",
                 "findings": [],
-                "tests_passed": True,
+                "test_evidence": True,
             }))
 
             entry = inspect_lifecycle.record_audit_to_ledger(tmppath, report_file, change_id="payments")
@@ -2168,7 +2168,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 "verdict": "PASS",
                 "change": "orders",
                 "findings": [],
-                "tests_passed": True,
+                "test_evidence": True,
             }))
 
             # Record a failed test in the ledger
@@ -2324,7 +2324,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 "verdict": "PASS",
                 "change": "checkout",
                 "findings": [],
-                "tests_passed": True,
+                "test_evidence": True,
                 "coverage": 100,
                 "questions": [],
                 "routing_notes": "",
