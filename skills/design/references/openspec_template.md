@@ -80,7 +80,7 @@ The system SHALL [formal statement of requirement using RFC 2119 keyword SHALL /
 - **Data & Migration**: [Zero-downtime migration steps, index coverage]
 
 ## 3. Reference Architecture Decision Record
-- Links to or embeds the authoritative ADR: `docs/adr/ADR-<NNNN>-<topic>.md`
+- Links to or embeds the authoritative ADR: `docs/adr/ADR-<NNNN>-<change>.md`
 ```
 
 ---

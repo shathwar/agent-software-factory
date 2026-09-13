@@ -28,6 +28,6 @@
 ## 3. Handoff Contract
 
 When frontier is empty and user confirms:
-1. Write ADR to `docs/adr/ADR-<NNNN>-<topic>.md` ([template](../references/adr_template.md)).
-2. Write OpenSpec package to `openspec/changes/<topic>/` ([template](../references/openspec_template.md)).
+1. Write ADR to `docs/adr/ADR-<NNNN>-<change>.md` ([template](../references/adr_template.md)).
+2. Write OpenSpec package to `openspec/changes/<change>/` ([template](../references/openspec_template.md)).
 3. Hand off to **Lifecycle Orchestrator** or **Test Driver**.

@@ -635,13 +635,19 @@ class TestInspectLifecycle(unittest.TestCase):
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "GATE 3: ADVERSARIAL AUDIT")
             self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
-            self.assertIn("Audit approval is for topic 'auth'", res["next_action"])
+            self.assertTrue(
+                "Audit approval is for change 'auth'" in res["next_action"]
+                or "Audit approval is for topic 'auth'" in res["next_action"]
+            )
             self.assertIn("billing", res["next_action"])
 
             # Archive must raise RuntimeError
             with self.assertRaises(RuntimeError) as ctx:
                 inspect_lifecycle.apply_and_archive_openspec(tmppath, topic="billing")
-            self.assertIn("audit approval is for topic 'auth'", str(ctx.exception))
+            self.assertTrue(
+                "audit approval is for change 'auth'" in str(ctx.exception)
+                or "audit approval is for topic 'auth'" in str(ctx.exception)
+            )
 
             # Matching topic 'billing' clears gate
             envelope["topic"] = "billing"
@@ -1107,7 +1113,8 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(res["gate"], "GATE 3: ADVERSARIAL AUDIT")
             self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
             self.assertTrue(
-                "Audit approval lacks 'topic'" in res["next_action"]
+                "Audit approval lacks 'change'" in res["next_action"]
+                or "Audit approval lacks 'topic'" in res["next_action"]
                 or "Judge report is malformed" in res["next_action"]
             )
 
@@ -1861,6 +1868,243 @@ gates:
             self.assertIn("clean_worktree", cfg["gates"]["delivery"])
             self.assertIn("sync_specs", cfg["gates"]["delivery"])
             self.assertIn("archive_packages", cfg["gates"]["delivery"])
+
+    def test_ledger_multi_change_isolation(self):
+        """State ledger supports multiple distinct changes without collision."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            # 1. Mutate change-alpha
+            inspect_lifecycle.mutate_change_state(
+                tmppath,
+                "change-alpha",
+                lambda entry: entry.update({
+                    "phase": "gate-2-impl",
+                    "blockers": ["1 failing test in test_alpha.py"],
+                })
+            )
+            # 2. Mutate change-beta
+            inspect_lifecycle.mutate_change_state(
+                tmppath,
+                "change-beta",
+                lambda entry: entry.update({
+                    "phase": "gate-3-audit",
+                    "blockers": [],
+                })
+            )
+
+            ledger = inspect_lifecycle.load_ledger(tmppath, auto_sync=False)
+            self.assertIn("change-alpha", ledger["changes"])
+            self.assertIn("change-beta", ledger["changes"])
+            self.assertEqual(ledger["changes"]["change-alpha"]["phase"], "gate-2-impl")
+            self.assertEqual(ledger["changes"]["change-alpha"]["blockers"], ["1 failing test in test_alpha.py"])
+            self.assertEqual(ledger["changes"]["change-beta"]["phase"], "gate-3-audit")
+            self.assertEqual(ledger["changes"]["change-beta"]["blockers"], [])
+            self.assertEqual(ledger["active_change_id"], "change-beta")
+
+    def test_ledger_monotonic_revision_counter(self):
+        """Revision counter monotonically increments on each change mutation."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            entry1 = inspect_lifecycle.mutate_change_state(
+                tmppath, "topic-a", lambda e: e.update({"phase": "gate-1-design"})
+            )
+            self.assertEqual(entry1["revision_counter"], 1)
+
+            entry2 = inspect_lifecycle.mutate_change_state(
+                tmppath, "topic-a", lambda e: e.update({"phase": "gate-2-impl"})
+            )
+            self.assertEqual(entry2["revision_counter"], 2)
+
+            entry3 = inspect_lifecycle.mutate_change_state(
+                tmppath, "topic-a", lambda e: e["task_status"].update({"completed": 3})
+            )
+            self.assertEqual(entry3["revision_counter"], 3)
+
+    def test_ledger_atomic_persistence(self):
+        """save_ledger atomically creates .ship/state.json without temp file remnants."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            data = {"version": 1, "active_change_id": "test", "changes": {}}
+            inspect_lifecycle.save_ledger(tmppath, data)
+
+            state_file = tmppath / ".ship" / "state.json"
+            self.assertTrue(state_file.exists())
+            loaded = json.loads(state_file.read_text(encoding="utf-8"))
+            self.assertEqual(loaded["active_change_id"], "test")
+
+            # Check no .tmp files remain
+            tmp_files = list((tmppath / ".ship").glob("*.tmp"))
+            self.assertEqual(len(tmp_files), 0)
+
+    def test_ledger_self_healing_from_workspace(self):
+        """Missing .ship/state.json is reconstructed deterministically from workspace artifacts."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            # Create OpenSpec package
+            pkg_dir = tmppath / "openspec" / "changes" / "billing"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text("- [x] 1. Setup DB\n- [ ] 2. Handle invoice\n")
+            # Create ADR
+            adr_dir = tmppath / "docs" / "adr"
+            adr_dir.mkdir(parents=True)
+            (adr_dir / "ADR-0001-billing.md").write_text("# ADR\n**Status**: ACCEPTED\n")
+
+            # Ensure .ship does NOT exist
+            self.assertFalse((tmppath / ".ship" / "state.json").exists())
+
+            # Load ledger should trigger self-healing sync
+            ledger = inspect_lifecycle.load_ledger(tmppath, auto_sync=True)
+            self.assertTrue((tmppath / ".ship" / "state.json").exists())
+            self.assertIn("billing", ledger["changes"])
+            billing = ledger["changes"]["billing"]
+            self.assertEqual(billing["phase"], "gate-2-impl")
+            self.assertEqual(billing["task_status"]["total"], 2)
+            self.assertEqual(billing["task_status"]["completed"], 1)
+            self.assertEqual(billing["task_status"]["pending"], 1)
+            self.assertEqual(billing["evidence"]["design"]["status"], "ACCEPTED")
+
+    def test_git_notes_evidence_attachment_and_retrieval(self):
+        """Structured validation evidence can be attached and retrieved via git notes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+            (tmppath / "code.py").write_text("print('hello')\n")
+            subprocess.run(["git", "add", "code.py"], cwd=tmppath, check=True)
+            commit_res = subprocess.run(
+                ["git", "commit", "-m", "Initial"], cwd=tmppath, check=True, capture_output=True, text=True
+            )
+            head_sha = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=tmppath, check=True, capture_output=True, text=True
+            ).stdout.strip()
+
+            # Attach audit evidence
+            audit_data = {"verdict": "PASS", "reviewer": "judge", "findings_count": 0}
+            oid = inspect_lifecycle.attach_git_note_evidence(tmppath, head_sha, "audit", audit_data)
+            self.assertIsNotNone(oid)
+
+            # Retrieve evidence
+            notes = inspect_lifecycle.read_git_note_evidence(tmppath, head_sha)
+            self.assertIn("audit", notes)
+            self.assertEqual(notes["audit"]["verdict"], "PASS")
+
+            # Attach additional test evidence to the same commit
+            test_data = {"passed": True, "tests_run": 42}
+            inspect_lifecycle.attach_git_note_evidence(tmppath, head_sha, "tests", test_data)
+
+            # Both should coexist in the note
+            updated_notes = inspect_lifecycle.read_git_note_evidence(tmppath, head_sha)
+            self.assertIn("audit", updated_notes)
+            self.assertIn("tests", updated_notes)
+            self.assertEqual(updated_notes["tests"]["tests_run"], 42)
+
+    def test_git_notes_sync_configuration(self):
+        """configure_git_notes_sync adds fetch and push refspecs for notes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
+            subprocess.run(
+                ["git", "remote", "add", "origin", "git@github.com:example/repo.git"],
+                cwd=tmppath,
+                check=True,
+            )
+
+            res = inspect_lifecycle.configure_git_notes_sync(tmppath, remote="origin")
+            self.assertTrue(res["configured"])
+
+            fetch_cfg = subprocess.run(
+                ["git", "config", "--get-all", "remote.origin.fetch"],
+                cwd=tmppath,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("+refs/notes/*:refs/notes/*", fetch_cfg.stdout)
+
+            push_cfg = subprocess.run(
+                ["git", "config", "--get-all", "remote.origin.push"],
+                cwd=tmppath,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("refs/notes/*:refs/notes/*", push_cfg.stdout)
+
+    def test_gate_trailers_generation(self):
+        """Commit trailers are generated matching ship.json gates."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            inspect_lifecycle.mutate_change_state(
+                tmppath,
+                "auth-v2",
+                lambda entry: entry.update({
+                    "phase": "gate-4-delivery",
+                    "task_status": {"total": 3, "completed": 3, "pending": 0},
+                    "evidence": {
+                        "design": {"adr": "docs/adr/ADR-0002-auth.md", "status": "ACCEPTED"},
+                        "spike": {"status": "PASSED", "verdict": "latency < 20ms"},
+                        "implementation": {"status": "PASSED"},
+                        "simplify": {"debt_count": 0},
+                        "audit": {"verdict": "PASS", "reviewer": "judge"},
+                        "delivery": {"status": "READY"},
+                    }
+                })
+            )
+
+            trailers = inspect_lifecycle.generate_gate_trailers(tmppath, change_id="auth-v2")
+            trailer_text = "\n".join(trailers)
+
+            self.assertIn("Ship-Change: auth-v2", trailer_text)
+            self.assertIn("Ship-Design: ADR-0002-auth (ACCEPTED)", trailer_text)
+            self.assertIn("Ship-Spike: PASSED (latency < 20ms)", trailer_text)
+            self.assertIn("Ship-Implementation: PASSED (3/3 tasks)", trailer_text)
+            self.assertIn("Ship-Simplify: DEBT-0", trailer_text)
+            self.assertIn("Ship-Audit: PASS (by judge)", trailer_text)
+            self.assertIn("Ship-Delivery: READY", trailer_text)
+
+    def test_cli_ledger_and_trailers(self):
+        """CLI arguments for setting active change, sync state, and trailers execute properly."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            pkg_dir = tmppath / "openspec" / "changes" / "orders"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text("- [x] 1. Order models\n")
+
+            # 1. Sync state CLI
+            code = inspect_lifecycle.main(["--path", str(tmppath), "--sync-state"])
+            self.assertEqual(code, 0)
+            self.assertTrue((tmppath / ".ship" / "state.json").exists())
+
+            # 2. Set active change CLI
+            code = inspect_lifecycle.main(["--path", str(tmppath), "--set-active-change", "orders"])
+            self.assertEqual(code, 0)
+            ledger = inspect_lifecycle.load_ledger(tmppath, auto_sync=False)
+            self.assertEqual(ledger["active_change_id"], "orders")
+
+            # 3. Generate trailers CLI
+            code = inspect_lifecycle.main(["--path", str(tmppath), "--generate-trailers"])
+            self.assertEqual(code, 0)
+
+    def test_change_terminology_and_cli_flag(self):
+        """Verify get/set/clear active change functions and --change CLI flag."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            pkg_dir = tmppath / "openspec" / "changes" / "user-profile"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text("- [ ] 1. Schema migration\n")
+
+            inspect_lifecycle.set_active_change(tmppath, "user-profile")
+            self.assertEqual(inspect_lifecycle.get_active_change(tmppath), "user-profile")
+
+            res = inspect_lifecycle.evaluate_repository(tmppath, target_change="user-profile")
+            self.assertEqual(res["target_change"], "user-profile")
+            self.assertEqual(res["active_change"]["change_id"], "user-profile")
+
+            # Test --change CLI flag
+            code = inspect_lifecycle.main(["--path", str(tmppath), "--change", "user-profile", "--format", "json"])
+            self.assertEqual(code, 0)
+
+            inspect_lifecycle.clear_active_change(tmppath, "user-profile")
+            self.assertIsNone(inspect_lifecycle.get_active_change(tmppath))
 
 
 if __name__ == "__main__":

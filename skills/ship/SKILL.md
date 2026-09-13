@@ -61,7 +61,7 @@ The filesystem is the persistent state machine. Orient with `python3 skills/ship
 
 | State | Indicators | Action |
 |---|---|---|
-| **State 1: Design** | No `openspec/changes/<topic>/` or `docs/adr/`. | Launch [`design`](../design/SKILL.md). Discover facts, present Frontier Rounds. |
+| **State 1: Design** | No `openspec/changes/<change>/` or `docs/adr/`. | Launch [`design`](../design/SKILL.md). Discover facts, present Frontier Rounds. |
 | **State 1b: Spike** | Design frontier hits ungrillable question. | Launch [`spike`](../spike/SKILL.md) in `.scratch/`. Report verdict. |
 | **State 2: TDD** | `tasks.md` exists with unchecked `[ ]` tasks. | Launch [`tdd`](../tdd/SKILL.md). Resume at first unchecked task. |
 | **State 3: Audit** | All tasks `[x]`, no clean review report. | Launch [`audit`](../audit/SKILL.md) in `review-loop` mode. |
@@ -75,12 +75,12 @@ The filesystem is the persistent state machine. Orient with `python3 skills/ship
 1. Discover facts autonomously from source files. Never ask code-discoverable questions.
 2. Present Frontier Rounds: `❓ Q[N]` with `➡️ Recommended Stance`.
 3. If empirical uncertainty arises, spike in `.scratch/` using [`spike`](../spike/SKILL.md).
-4. Compile `docs/adr/ADR-<NNNN>-<topic>.md` and `openspec/changes/<topic>/`.
+4. Compile `docs/adr/ADR-<NNNN>-<change>.md` and `openspec/changes/<change>/`.
 5. Checkpoint specification: `python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint gate-1-spec`.
 6. Pause at Confirmation Gate: *"Design settled. Proceed to autonomous implementation?"*
 
 ### Gate 2: Test-First Implementation
-Iterate sequentially through `openspec/changes/<topic>/tasks.md`:
+Iterate sequentially through `openspec/changes/<change>/tasks.md`:
 1. **Red**: [Test Driver](../tdd/agents/test_driver.md) writes failing behavioral test; prove assertion failure.
 2. **Green**: [Simplify Implementer](../tdd/agents/simplify_implementer.md) writes minimal code using [Laziness Ladder](../simplify/SKILL.md) and custom test commands defined in `.ship.json`.
 3. **Refactor**: [Code Refactorer](../tdd/agents/code_refactorer.md) cleans code; adds [debt markers](../simplify/references/debt_tracking.md) with ceilings.
@@ -100,7 +100,10 @@ Iterate sequentially through `openspec/changes/<topic>/tasks.md`:
 1. Verify gate status: `python3 skills/ship/scripts/inspect_lifecycle.py --status-check`.
 2. Run full test suite.
 3. Deliver Walkthrough: changes summary, ADR links, audit scorecard, `scan_debt.py` ledger.
-4. Apply & Archive OpenSpec: Sync delta specs to `openspec/specs/` and move completed package to `openspec/archive/<YYYY-MM-DD>-<topic>/` via `python3 ${SKILLS_DIR:-$HOME/.gemini/config/skills}/ship/scripts/inspect_lifecycle.py --archive [topic]`.
+4. Apply & Archive OpenSpec: Sync delta specs to `openspec/specs/` and move completed package to `openspec/archive/<YYYY-MM-DD>-<change>/` via `python3 ${SKILLS_DIR:-$HOME/.gemini/config/skills}/ship/scripts/inspect_lifecycle.py --archive [change]`.
+5. Attach Git Notes & Commit Trailers:
+   - Deep validation evidence (audit reports, test logs) is attached to the commit object via Git notes (`refs/notes/ship-evidence`). Run `inspect_lifecycle.py --sync-notes` to sync.
+   - Format standard RFC 5133 commit trailers using `python3 inspect_lifecycle.py --generate-trailers` (`Ship-Change: <change>`, `Ship-<GateName>: <status>`).
 
 ---
 

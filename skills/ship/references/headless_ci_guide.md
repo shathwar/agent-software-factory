@@ -130,30 +130,30 @@ jobs:
           python-version: "3.11"
 
       # Security: Sanitize title to prevent shell injection (FINDING-001)
-      - name: Sanitize Topic Title
+      - name: Sanitize Change ID
         env:
           RAW_TITLE: ${{ github.event.issue.title }}
         run: |
           python3 -c '
           import os, re, sys
           raw = os.environ.get("RAW_TITLE", "")
-          topic = re.sub(r"[^a-zA-Z0-9_-]+", "-", raw).strip("-").lower()[:50]
-          if not topic:
-              print("Invalid topic: must contain alphanumeric characters", file=sys.stderr)
+          change = re.sub(r"[^a-zA-Z0-9_-]+", "-", raw).strip("-").lower()[:50]
+          if not change:
+              print("Invalid change title: must contain alphanumeric characters", file=sys.stderr)
               sys.exit(1)
           with open(os.environ["GITHUB_ENV"], "a") as f:
-              f.write(f"TOPIC={topic}\n")
+              f.write(f"CHANGE={change}\n")
           '
 
       - name: Run Gate 1 Agent (Design & Specification)
         env:
           ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
-          echo "Executing Gate 1 agent runner for topic: $TOPIC"
+          echo "Executing Gate 1 agent runner for change: $CHANGE"
           # 1. Execute agent runner harness with design skill prompt
-          # e.g., agy run --skill design "Design spec for: $TOPIC based on $ISSUE_BODY"
+          # e.g., agy run --skill design "Design spec for: $CHANGE based on $ISSUE_BODY"
           # 2. Record and assert Gate 1 Checkpoint
-          python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint gate-1-spec --topic "$TOPIC"
+          python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint gate-1-spec --change "$CHANGE"
 
       - name: Post Spec Comment
         uses: actions/github-script@v7
@@ -223,4 +223,7 @@ jobs:
 | `python3 skills/ship/scripts/inspect_lifecycle.py --status-check` | Exits `0` if ready for delivery, `1` if blocked, `2` if rollback required. Use in CI branch protection. |
 | `python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint <gate>` | Records immutable internal git refs (`refs/ship/...`) and JSON receipts in `.scratch/`. |
 | `python3 skills/ship/scripts/inspect_lifecycle.py --rollback gate-1-spec` | Safely archives untracked/modified edits to `.scratch/backups/` and resets `tasks.md` for revision. |
-| `python3 skills/ship/scripts/inspect_lifecycle.py --archive <topic>` | Syncs delta specs into `openspec/specs/` and archives completed change packages. |
+| `python3 skills/ship/scripts/inspect_lifecycle.py --archive <change>` | Syncs delta specs into `openspec/specs/` and archives completed change packages. |
+| `python3 skills/ship/scripts/inspect_lifecycle.py --generate-trailers` | Emits RFC 5133 Git commit trailers mapping to `.ship.json` gates. |
+| `python3 skills/ship/scripts/inspect_lifecycle.py --sync-notes [remote]` | Configures notes fetch/push refspecs and synchronizes `refs/notes/ship-evidence`. |
+| `python3 skills/ship/scripts/inspect_lifecycle.py --sync-state` | Re-synchronizes `.ship/state.json` authoritative ledger from workspace artifacts. |

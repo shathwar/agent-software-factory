@@ -71,8 +71,8 @@ Traverse these 5 domains during grilling (details in [`systems_inquiry_matrix.md
 1. **Iterate Rounds**: Update tree, recompute frontier, batch next round.
 2. **Confirmation Gate**: Stop when frontier is empty. Present executive synthesis of decisions: *"Does this capture our shared architectural understanding?"*
 3. **Compile Specifications**:
-   - **ADR**: Write `docs/adr/ADR-<NNNN>-<topic>.md` using [`adr_template.md`](./references/adr_template.md).
-   - **OpenSpec**: When tasks or executable specs are needed, write `openspec/changes/<topic>/` using [`openspec_template.md`](./references/openspec_template.md).
+   - **ADR**: Write `docs/adr/ADR-<NNNN>-<change>.md` using [`adr_template.md`](./references/adr_template.md).
+   - **OpenSpec**: When tasks or executable specs are needed, write `openspec/changes/<change>/` using [`openspec_template.md`](./references/openspec_template.md).
    - Serves as immutable contract for implementation and [`audit`](../audit/SKILL.md).
 
 ---

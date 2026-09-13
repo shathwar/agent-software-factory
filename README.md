@@ -89,16 +89,20 @@ Teams can adopt skills incrementally without changing their entire workflow:
 
 ## 1. `ship` (The Unified Engineering Orchestrator)
 
-Give your agent the [ship SKILL.md](./skills/ship/SKILL.md) and your feature request: `/ship "Add Webhook Event Streaming"`.
+Give your agent [ship SKILL.md](./skills/ship/SKILL.md) and feature request: `/ship "Add Webhook Event Streaming"`.
 
-- **One Command, End-to-End Delivery**: Drives the entire feature lifecycle from architectural grilling to tested, simplified, and production-audited code ready to pull request.
-- **Re-Entrant State Machine**: The filesystem (`openspec/`, `tasks.md`, `docs/adr/`) acts as the persistent state machine. If interrupted, `/ship` instantly resumes at the exact active phase.
-- **Repository Manifest (`.ship.json`)**: Configure explicit test runners, typecheck commands, and monorepo scopes.
-- **Git Checkpoints & Safe Rollback**: Records immutable tags (`--checkpoint gate-1-spec`) and safely backs up broken implementations on architectural revisions (`--rollback gate-1-spec`).
-- **Lifecycle Inspector**: Run `python3 skills/ship/scripts/inspect_lifecycle.py` to evaluate repository state against all 4 gates deterministically.
-- **Headless CI & GitHub Actions**: Run headlessly in CI with issue-based approvals via the [Headless CI Guide](./skills/ship/references/headless_ci_guide.md).
-- **Agent Roster**: Led by the [Lifecycle Orchestrator](./skills/ship/agents/lifecycle_orchestrator.md).
-- **References**: Consult the [Lifecycle State Machine Guide](./skills/ship/references/lifecycle_state_machine.md).
+- **One Command Delivery**: Drives feature from architectural grilling to tested, simplified, production-audited PR.
+- **Tri-Tier State Engine**:
+  - Authoritative multi-change ledger `.ship/state.json` (multi-agent isolation via `--change <id>`).
+  - Deep commit evidence in Git notes (`refs/notes/ship-evidence`, `--sync-notes`).
+  - Standard RFC 5133 commit trailers (`Ship-Change`, `Ship-<Gate>`, `--generate-trailers`).
+- **Re-Entrant State Machine**: Filesystem (`openspec/`, `tasks.md`, `docs/adr/`) is persistent state machine. Resumes exact active phase instantly.
+- **Repository Manifest (`.ship.json`)**: Clean domain schema validated by [`ship.schema.json`](./skills/ship/references/ship.schema.json). Configures custom test commands (`gates.implementation.test`).
+- **Git Checkpoints & Safe Rollback**: Records private refs (`--checkpoint gate-1-spec`) and safely backs up broken code on architectural revisions (`--rollback gate-1-spec`).
+- **Lifecycle Inspector**: Run `python3 skills/ship/scripts/inspect_lifecycle.py` to evaluate repository state across all 4 gates deterministically.
+- **Headless CI & GitHub Actions**: Run headlessly in CI with issue-based approvals via [Headless CI Guide](./skills/ship/references/headless_ci_guide.md).
+- **Agent Roster**: Led by [Lifecycle Orchestrator](./skills/ship/agents/lifecycle_orchestrator.md).
+- **References**: [Lifecycle State Machine Guide](./skills/ship/references/lifecycle_state_machine.md) and [Formal JSON Schema](./skills/ship/references/ship.schema.json).
 
 ---
 
@@ -283,7 +287,9 @@ skills/
 │   ├── scripts/
 │   │   └── inspect_lifecycle.py
 │   └── references/
-│       └── lifecycle_state_machine.md
+│       ├── lifecycle_state_machine.md
+│       ├── headless_ci_guide.md
+│       └── ship.schema.json
 ├── design/
 │   ├── SKILL.md
 │   ├── agents/

@@ -81,7 +81,7 @@ def compute_working_tree_fingerprint(repo_root: Path) -> str:
         pass
 
     # 3. Untracked files (excluding scratch, archive, etc.)
-    ignored_prefixes = (".scratch/", "scratch/", "openspec/archive/", "openspec/.", ".gemini/", ".git/")
+    ignored_prefixes = (".scratch/", "scratch/", ".ship/", "openspec/archive/", "openspec/.", ".gemini/", ".git/")
     try:
         untracked_res = subprocess.run(
             ["git", "ls-files", "--others", "--exclude-standard", "-z"],
@@ -393,8 +393,17 @@ def inspect_adrs(repo_root: Path) -> List[Dict[str, Any]]:
     return adrs
 
 
-def get_active_topic(repo_root: Path) -> Optional[str]:
-    """Read explicitly persisted active topic from openspec/.active if present."""
+def get_active_change(repo_root: Path) -> Optional[str]:
+    """Read explicitly persisted active change ID from .ship/state.json or openspec/.active."""
+    state_file = repo_root / ".ship" / "state.json"
+    if state_file.exists():
+        try:
+            data = json.loads(state_file.read_text(encoding="utf-8"))
+            cid = data.get("active_change_id")
+            if cid:
+                return cid
+        except Exception:
+            pass
     active_file = repo_root / "openspec" / ".active"
     if active_file.exists():
         try:
@@ -405,58 +414,86 @@ def get_active_topic(repo_root: Path) -> Optional[str]:
             pass
     return None
 
+get_active_topic = get_active_change
 
-def set_active_topic(repo_root: Path, topic: str) -> None:
-    """Persist active topic to openspec/.active."""
+
+def set_active_change(repo_root: Path, change: str) -> None:
+    """Persist active change to openspec/.active and .ship/state.json."""
     active_file = repo_root / "openspec" / ".active"
     active_file.parent.mkdir(parents=True, exist_ok=True)
-    active_file.write_text(topic.strip() + "\n", encoding="utf-8")
-
-
-def clear_active_topic(repo_root: Path, topic: Optional[str] = None) -> None:
-    """Clear openspec/.active if it matches the topic (or unconditionally if topic is None)."""
-    active_file = repo_root / "openspec" / ".active"
-    if active_file.exists():
+    active_file.write_text(change.strip() + "\n", encoding="utf-8")
+    state_file = repo_root / ".ship" / "state.json"
+    if state_file.exists():
         try:
-            if topic is None:
-                active_file.unlink(missing_ok=True)
-            else:
-                current = active_file.read_text(encoding="utf-8").strip()
-                if current == topic.strip():
-                    active_file.unlink(missing_ok=True)
+            data = json.loads(state_file.read_text(encoding="utf-8"))
+            data["active_change_id"] = change.strip()
+            state_file.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
         except Exception:
             pass
 
+set_active_topic = set_active_change
 
-def inspect_openspec(repo_root: Path, target_topic: Optional[str] = None) -> List[Dict[str, Any]]:
+
+def clear_active_change(repo_root: Path, change: Optional[str] = None) -> None:
+    """Clear openspec/.active and .ship/state.json active_change_id."""
+    active_file = repo_root / "openspec" / ".active"
+    if active_file.exists():
+        try:
+            if change is None:
+                active_file.unlink(missing_ok=True)
+            else:
+                current = active_file.read_text(encoding="utf-8").strip()
+                if current == change.strip():
+                    active_file.unlink(missing_ok=True)
+        except Exception:
+            pass
+    state_file = repo_root / ".ship" / "state.json"
+    if state_file.exists():
+        try:
+            data = json.loads(state_file.read_text(encoding="utf-8"))
+            if change is None or data.get("active_change_id") == (change.strip() if change else None):
+                data["active_change_id"] = None
+                state_file.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        except Exception:
+            pass
+
+clear_active_topic = clear_active_change
+
+
+def inspect_openspec(
+    repo_root: Path,
+    target_change: Optional[str] = None,
+    target_topic: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     """Scan openspec/changes/ for active change packages and parse tasks.md."""
+    resolved_target = target_change or target_topic
     changes_dir = repo_root / "openspec" / "changes"
     packages = []
     if not changes_dir.exists():
-        if target_topic:
-            raise ValueError(f"Specified OpenSpec topic '{target_topic}' not found (openspec/changes does not exist).")
+        if resolved_target:
+            raise ValueError(f"Specified OpenSpec change '{resolved_target}' not found (openspec/changes does not exist).")
         return packages
 
-    # Explicit topic validation: if target_topic specified, it MUST exist
-    if target_topic:
-        target_dir = changes_dir / target_topic
+    # Explicit change validation: if target specified, it MUST exist
+    if resolved_target:
+        target_dir = changes_dir / resolved_target
         if not target_dir.exists() or not target_dir.is_dir():
             available = [d.name for d in sorted(changes_dir.iterdir()) if d.is_dir() and not d.name.startswith(".")]
             avail_str = f" Available: {', '.join(available)}" if available else " (no packages found)"
-            raise ValueError(f"Specified OpenSpec topic '{target_topic}' not found under openspec/changes/.{avail_str}")
+            raise ValueError(f"Specified OpenSpec change '{resolved_target}' not found under openspec/changes/.{avail_str}")
 
-    active_persisted = target_topic or get_active_topic(repo_root)
+    active_persisted = resolved_target or get_active_change(repo_root)
     # If active_persisted was read from file, verify existence; clear if stale
-    if active_persisted and not target_topic:
+    if active_persisted and not resolved_target:
         if not (changes_dir / active_persisted).is_dir():
-            clear_active_topic(repo_root)
+            clear_active_change(repo_root)
             active_persisted = None
 
-    for topic_dir in changes_dir.iterdir():
-        if not topic_dir.is_dir() or topic_dir.name.startswith("."):
+    for change_dir in changes_dir.iterdir():
+        if not change_dir.is_dir() or change_dir.name.startswith("."):
             continue
 
-        tasks_file = topic_dir / "tasks.md"
+        tasks_file = change_dir / "tasks.md"
         tasks_found = False
         total_tasks = 0
         completed_tasks = 0
@@ -475,17 +512,18 @@ def inspect_openspec(repo_root: Path, target_topic: Optional[str] = None) -> Lis
                     total_tasks += 1
                     completed_tasks += 1
 
-        proposal_file = topic_dir / "proposal.md"
-        specs_dir = topic_dir / "specs"
+        proposal_file = change_dir / "proposal.md"
+        specs_dir = change_dir / "specs"
 
         try:
-            mtime = topic_dir.stat().st_mtime
+            mtime = change_dir.stat().st_mtime
         except Exception:
             mtime = 0.0
 
         packages.append({
-            "topic": topic_dir.name,
-            "path": str(topic_dir.relative_to(repo_root)),
+            "change": change_dir.name,
+            "topic": change_dir.name,  # Alias for backward compatibility
+            "path": str(change_dir.relative_to(repo_root)),
             "has_proposal": proposal_file.exists(),
             "has_specs": specs_dir.exists() and any(specs_dir.iterdir()) if specs_dir.exists() else False,
             "has_tasks": tasks_found,
@@ -494,20 +532,15 @@ def inspect_openspec(repo_root: Path, target_topic: Optional[str] = None) -> Lis
             "pending_tasks": total_tasks - completed_tasks,
             "next_task": next_task,
             "mtime": mtime,
-            "is_active_target": (topic_dir.name == active_persisted),
+            "is_active_target": (change_dir.name == active_persisted),
         })
 
-    # Sort packages so the true active package is at index 0:
-    # 1. Exact match with active target
-    # 2. In-progress packages (pending_tasks > 0)
-    # 3. Most recently modified (mtime descending)
-    # 4. Alphabetical fallback
     packages.sort(
         key=lambda p: (
             1 if p["is_active_target"] else 0,
             1 if p["pending_tasks"] > 0 else 0,
             p["mtime"],
-            p["topic"],
+            p["change"],
         ),
         reverse=True,
     )
@@ -1064,7 +1097,7 @@ def parse_audit_report_file(p: Path, repo_root: Path) -> Dict[str, Any]:
     snapshot_tree = snapshot_info.get("tree_hash") or data.get("tree_hash")
     snapshot_fingerprint = snapshot_info.get("working_tree_fingerprint") or data.get("working_tree_fingerprint")
 
-    topic = data.get("topic") or snapshot_info.get("topic") or judge_data.get("topic")
+    change = data.get("change") or data.get("topic") or snapshot_info.get("change") or snapshot_info.get("topic") or judge_data.get("change") or judge_data.get("topic")
 
     return {
         "path": str(p.relative_to(repo_root)),
@@ -1080,30 +1113,36 @@ def parse_audit_report_file(p: Path, repo_root: Path) -> Dict[str, Any]:
         "snapshot_sha": str(snapshot_sha) if snapshot_sha else None,
         "snapshot_tree": str(snapshot_tree) if snapshot_tree else None,
         "snapshot_fingerprint": str(snapshot_fingerprint) if snapshot_fingerprint else None,
-        "topic": str(topic).strip() if topic else None,
+        "change": str(change).strip() if change else None,
+        "topic": str(change).strip() if change else None,
         "judge_report_valid": judge_report_valid,
         "judge_report_errors": judge_report_errors,
     }
 
 
-def inspect_audit_reports(repo_root: Path, topic: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def inspect_audit_reports(
+    repo_root: Path,
+    change: Optional[str] = None,
+    topic: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
     """Look for audit reports or delivery evidence envelopes in .scratch or workspace."""
-    if topic:
-        topic_paths = [
-            repo_root / ".scratch" / topic / "delivery_evidence.json",
-            repo_root / "scratch" / topic / "delivery_evidence.json",
-            repo_root / ".scratch" / f"delivery_evidence_{topic}.json",
-            repo_root / "scratch" / f"delivery_evidence_{topic}.json",
-            repo_root / ".scratch" / topic / "review_report.json",
-            repo_root / "scratch" / topic / "review_report.json",
-            repo_root / ".scratch" / f"review_report_{topic}.json",
-            repo_root / "scratch" / f"review_report_{topic}.json",
-            repo_root / ".scratch" / topic / "audit_report.json",
-            repo_root / "scratch" / topic / "audit_report.json",
-            repo_root / ".scratch" / f"audit_report_{topic}.json",
-            repo_root / "scratch" / f"audit_report_{topic}.json",
+    target = change or topic
+    if target:
+        change_paths = [
+            repo_root / ".scratch" / target / "delivery_evidence.json",
+            repo_root / "scratch" / target / "delivery_evidence.json",
+            repo_root / ".scratch" / f"delivery_evidence_{target}.json",
+            repo_root / "scratch" / f"delivery_evidence_{target}.json",
+            repo_root / ".scratch" / target / "review_report.json",
+            repo_root / "scratch" / target / "review_report.json",
+            repo_root / ".scratch" / f"review_report_{target}.json",
+            repo_root / "scratch" / f"review_report_{target}.json",
+            repo_root / ".scratch" / target / "audit_report.json",
+            repo_root / "scratch" / target / "audit_report.json",
+            repo_root / ".scratch" / f"audit_report_{target}.json",
+            repo_root / "scratch" / f"audit_report_{target}.json",
         ]
-        for p in topic_paths:
+        for p in change_paths:
             if p.exists():
                 return parse_audit_report_file(p, repo_root)
 
@@ -1121,6 +1160,578 @@ def inspect_audit_reports(repo_root: Path, topic: Optional[str] = None) -> Optio
             return parse_audit_report_file(p, repo_root)
 
     return None
+
+
+# ---------------------------------------------------------------------------
+# Tier 1: State Ledger (.ship/state.json)
+# ---------------------------------------------------------------------------
+
+def get_ledger_path(repo_root: Path) -> Path:
+    """Return path to .ship/state.json."""
+    return repo_root / ".ship" / "state.json"
+
+
+def ensure_gitignore_has_ship(repo_root: Path) -> None:
+    """Ensure .ship/ is ignored in git without creating unwanted untracked working-tree files."""
+    git_dir = repo_root / ".git"
+    if git_dir.is_dir():
+        exclude_file = git_dir / "info" / "exclude"
+        try:
+            exclude_file.parent.mkdir(parents=True, exist_ok=True)
+            content = exclude_file.read_text(encoding="utf-8") if exclude_file.exists() else ""
+            lines = [l.strip() for l in content.splitlines()]
+            if ".ship" not in lines and ".ship/" not in lines:
+                with exclude_file.open("a", encoding="utf-8") as f:
+                    if content and not content.endswith("\n"):
+                        f.write("\n")
+                    f.write(".ship/\n")
+        except Exception:
+            pass
+
+    gitignore = repo_root / ".gitignore"
+    if gitignore.exists():
+        try:
+            content = gitignore.read_text(encoding="utf-8")
+            lines = [l.strip() for l in content.splitlines()]
+            if ".ship" not in lines and ".ship/" not in lines:
+                with gitignore.open("a", encoding="utf-8") as f:
+                    if content and not content.endswith("\n"):
+                        f.write("\n")
+                    f.write(".ship/\n")
+        except Exception:
+            pass
+
+
+def create_empty_change_entry(change_id: str) -> Dict[str, Any]:
+    """Create a default ChangeState entry according to the lifecycle schema."""
+    return {
+        "change_id": change_id,
+        "phase": "gate-1-design",
+        "task_status": {
+            "total": 0,
+            "completed": 0,
+            "pending": 0,
+            "in_progress": None,
+            "next": None,
+        },
+        "blockers": [],
+        "revision_counter": 0,
+        "evidence": {
+            "design": {"adr": None, "status": None},
+            "spike": {"status": "NONE", "verdict": None, "dir": None},
+            "implementation": {
+                "status": "PENDING",
+                "tests_passed": None,
+                "failed_count": 0,
+                "evidence_ref": None,
+            },
+            "simplify": {"status": "PENDING", "debt_count": 0},
+            "audit": {
+                "verdict": None,
+                "status": None,
+                "reviewer": None,
+                "findings_count": 0,
+                "critical_or_high_count": 0,
+                "test_evidence_passed": None,
+                "report_path": None,
+                "git_note_oid": None,
+                "snapshot_fingerprint": None,
+            },
+            "delivery": {
+                "status": "PENDING",
+                "archived_path": None,
+                "commit": None,
+                "trailers": [],
+            },
+        },
+        "checkpoints": {},
+    }
+
+
+def save_ledger(repo_root: Path, ledger: Dict[str, Any]) -> None:
+    """Atomically write ledger to .ship/state.json using NamedTemporaryFile + os.replace."""
+    ship_dir = repo_root / ".ship"
+    ship_dir.mkdir(parents=True, exist_ok=True)
+    ensure_gitignore_has_ship(repo_root)
+    ledger_path = get_ledger_path(repo_root)
+
+    temp_fd, temp_path = tempfile.mkstemp(prefix="state_", suffix=".json.tmp", dir=str(ship_dir))
+    try:
+        with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
+            json.dump(ledger, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp_path, ledger_path)
+    except Exception:
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
+        raise
+
+
+def sync_ledger_from_workspace(repo_root: Path, target_change_id: Optional[str] = None) -> Dict[str, Any]:
+    """Reconcile and self-heal .ship/state.json from disk artifacts (OpenSpec, ADRs, Spikes, Audits)."""
+    ledger_path = get_ledger_path(repo_root)
+    existing: Dict[str, Any] = {}
+    if ledger_path.exists():
+        try:
+            loaded = json.loads(ledger_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict) and "changes" in loaded:
+                existing = loaded
+        except Exception:
+            existing = {}
+
+    changes: Dict[str, Any] = existing.get("changes", {})
+    active_change_id = target_change_id or existing.get("active_change_id") or get_active_change(repo_root)
+
+    packages = inspect_openspec(repo_root, target_change=None)
+    adrs = inspect_adrs(repo_root)
+    spikes = inspect_spikes(repo_root)
+
+    discovered_changes = [p["change"] for p in packages]
+    if not discovered_changes:
+        if active_change_id:
+            discovered_changes = [active_change_id]
+        elif adrs:
+            discovered_changes = [adrs[0]["name"].replace(".md", "").lower()]
+        else:
+            discovered_changes = ["default"]
+
+    for change in discovered_changes:
+        if change not in changes:
+            changes[change] = create_empty_change_entry(change)
+        entry = changes[change]
+
+        matched_pkg = next((p for p in packages if p["change"] == change or p.get("topic") == change), None)
+        if matched_pkg:
+            entry["task_status"]["total"] = matched_pkg["total_tasks"]
+            entry["task_status"]["completed"] = matched_pkg["completed_tasks"]
+            entry["task_status"]["pending"] = matched_pkg["pending_tasks"]
+            entry["task_status"]["next"] = matched_pkg["next_task"]
+            entry["task_status"]["in_progress"] = matched_pkg["next_task"]
+
+        if adrs:
+            entry["evidence"]["design"]["adr"] = adrs[0]["name"]
+            entry["evidence"]["design"]["status"] = adrs[0].get("status")
+
+        if spikes:
+            entry["evidence"]["spike"]["status"] = "ACTIVE"
+            entry["evidence"]["spike"]["dir"] = spikes[0]
+        else:
+            if entry["evidence"]["spike"].get("status") == "ACTIVE":
+                entry["evidence"]["spike"]["status"] = "PASSED"
+
+        audit = inspect_audit_reports(repo_root, change=change)
+        if audit:
+            verdict = audit.get("verdict") or audit.get("status")
+            entry["evidence"]["audit"]["verdict"] = verdict
+            entry["evidence"]["audit"]["status"] = audit.get("status")
+            entry["evidence"]["audit"]["reviewer"] = audit.get("reviewer")
+            entry["evidence"]["audit"]["findings_count"] = audit.get("findings_count", 0)
+            entry["evidence"]["audit"]["critical_or_high_count"] = audit.get("critical_or_high_count", 0)
+            entry["evidence"]["audit"]["test_evidence_passed"] = audit.get("test_evidence_passed")
+            entry["evidence"]["audit"]["report_path"] = audit.get("report_file")
+            entry["evidence"]["audit"]["snapshot_fingerprint"] = audit.get("snapshot_fingerprint")
+
+        chk_dir = repo_root / ".scratch" / "checkpoints"
+        if chk_dir.exists():
+            for cf in chk_dir.glob(f"{change}_*.json"):
+                try:
+                    cdata = json.loads(cf.read_text(encoding="utf-8"))
+                    gate_k = cdata.get("gate", cf.stem.replace(f"{change}_", ""))
+                    entry["checkpoints"][gate_k] = cdata
+                except Exception:
+                    pass
+
+        blockers: List[str] = []
+        if spikes:
+            entry["phase"] = "gate-1b-spike"
+            blockers.append(f"Spike active in {spikes[0]}")
+        elif not matched_pkg or matched_pkg["total_tasks"] == 0:
+            entry["phase"] = "gate-1-design"
+        elif matched_pkg["pending_tasks"] > 0:
+            entry["phase"] = "gate-2-impl"
+        else:
+            audit_ev = entry["evidence"]["audit"]
+            crit = audit_ev.get("critical_or_high_count", 0)
+            verd = audit_ev.get("verdict", "")
+            if crit > 0:
+                blockers.append(f"Audit has {crit} unresolved CRITICAL/HIGH finding(s)")
+            if verd in {"FAIL", "FAILED", "REJECTED"}:
+                blockers.append(f"Audit verdict is {verd}")
+
+            if audit_ev.get("verdict") in {"PASS", "APPROVED"} and crit == 0:
+                entry["phase"] = "gate-4-delivery"
+            else:
+                entry["phase"] = "gate-3-audit"
+
+        entry["blockers"] = blockers
+        if entry.get("revision_counter", 0) == 0:
+            entry["revision_counter"] = 1
+
+    if not active_change_id and discovered_changes:
+        active_change_id = discovered_changes[0]
+
+    new_ledger = {
+        "version": 1,
+        "active_change_id": active_change_id,
+        "changes": changes,
+    }
+    try:
+        save_ledger(repo_root, new_ledger)
+    except Exception:
+        pass
+    return new_ledger
+
+
+def load_ledger(repo_root: Path, auto_sync: bool = True) -> Dict[str, Any]:
+    """Load authoritative workflow state from .ship/state.json, self-healing if missing."""
+    ledger_path = get_ledger_path(repo_root)
+    if ledger_path.exists():
+        try:
+            data = json.loads(ledger_path.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and "changes" in data:
+                return data
+        except Exception:
+            pass
+    if auto_sync:
+        return sync_ledger_from_workspace(repo_root)
+    return {"version": 1, "active_change_id": None, "changes": {}}
+
+
+def mutate_change_state(
+    repo_root: Path,
+    change_id: str,
+    updater: Any,
+) -> Dict[str, Any]:
+    """Safely mutate a specific change in .ship/state.json and increment revision counter."""
+    ledger = load_ledger(repo_root, auto_sync=True)
+    changes = ledger.setdefault("changes", {})
+    if change_id not in changes:
+        changes[change_id] = create_empty_change_entry(change_id)
+    entry = changes[change_id]
+    updater(entry)
+    entry["revision_counter"] = entry.get("revision_counter", 0) + 1
+    ledger["active_change_id"] = change_id
+    save_ledger(repo_root, ledger)
+    return entry
+
+
+# ---------------------------------------------------------------------------
+# Tier 2: Git Notes (refs/notes/ship-evidence)
+# ---------------------------------------------------------------------------
+
+GIT_NOTES_REF = "refs/notes/ship-evidence"
+
+
+def attach_git_note_evidence(
+    repo_root: Path,
+    commit_sha: str,
+    evidence_type: str,
+    data: Dict[str, Any],
+    ref: str = GIT_NOTES_REF,
+) -> Optional[str]:
+    """Attach structured JSON validation evidence to a commit object via git notes."""
+    git_info = get_git_info(repo_root)
+    if not git_info.get("is_git") or not commit_sha:
+        return None
+
+    verify_res = subprocess.run(
+        ["git", "rev-parse", "--verify", commit_sha],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    if verify_res.returncode != 0:
+        return None
+    resolved_sha = verify_res.stdout.strip()
+
+    existing_evidence: Dict[str, Any] = {}
+    read_res = subprocess.run(
+        ["git", "notes", f"--ref={ref}", "show", resolved_sha],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    if read_res.returncode == 0 and read_res.stdout.strip():
+        try:
+            loaded = json.loads(read_res.stdout)
+            if isinstance(loaded, dict):
+                existing_evidence = loaded
+        except Exception:
+            existing_evidence = {"raw_previous_note": read_res.stdout.strip()}
+
+    existing_evidence[evidence_type] = data
+    existing_evidence["last_updated"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+    note_payload = json.dumps(existing_evidence, indent=2)
+    add_res = subprocess.run(
+        ["git", "notes", f"--ref={ref}", "add", "-f", "-m", note_payload, resolved_sha],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    if add_res.returncode == 0:
+        return resolved_sha
+    return None
+
+
+def read_git_note_evidence(
+    repo_root: Path,
+    commit_sha: str,
+    ref: str = GIT_NOTES_REF,
+) -> Dict[str, Any]:
+    """Read and parse structured JSON evidence from git notes on a commit."""
+    git_info = get_git_info(repo_root)
+    if not git_info.get("is_git") or not commit_sha:
+        return {}
+
+    res = subprocess.run(
+        ["git", "notes", f"--ref={ref}", "show", commit_sha],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    if res.returncode == 0 and res.stdout.strip():
+        try:
+            data = json.loads(res.stdout)
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            return {"raw": res.stdout.strip()}
+    return {}
+
+
+def configure_git_notes_sync(
+    repo_root: Path,
+    remote: str = "origin",
+) -> Dict[str, Any]:
+    """Configure git fetch and push refspecs for notes so standard sync carries refs/notes/*."""
+    git_info = get_git_info(repo_root)
+    if not git_info.get("is_git"):
+        return {"configured": False, "error": "Not a git repository"}
+
+    fetch_refspec = "+refs/notes/*:refs/notes/*"
+    push_refspec = "refs/notes/*:refs/notes/*"
+
+    fetch_cfg = subprocess.run(
+        ["git", "config", "--get-all", f"remote.{remote}.fetch"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    fetch_lines = [l.strip() for l in fetch_cfg.stdout.splitlines()]
+    if fetch_refspec not in fetch_lines:
+        try:
+            subprocess.run(
+                ["git", "config", "--add", f"remote.{remote}.fetch", fetch_refspec],
+                cwd=repo_root,
+                check=True,
+            )
+        except Exception:
+            pass
+
+    push_cfg = subprocess.run(
+        ["git", "config", "--get-all", f"remote.{remote}.push"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    push_lines = [l.strip() for l in push_cfg.stdout.splitlines()]
+    if push_refspec not in push_lines:
+        try:
+            subprocess.run(
+                ["git", "config", "--add", f"remote.{remote}.push", push_refspec],
+                cwd=repo_root,
+                check=True,
+            )
+        except Exception:
+            pass
+
+    return {
+        "configured": True,
+        "remote": remote,
+        "fetch_refspec": fetch_refspec,
+        "push_refspec": push_refspec,
+    }
+
+
+def sync_git_notes(
+    repo_root: Path,
+    remote: str = "origin",
+) -> Dict[str, Any]:
+    """Explicitly fetch and push notes between local and remote repository."""
+    configure_git_notes_sync(repo_root, remote=remote)
+    results = {"remote": remote, "fetch": "skipped", "push": "skipped"}
+    fetch_res = subprocess.run(
+        ["git", "fetch", remote, "refs/notes/*:refs/notes/*"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    results["fetch"] = "success" if fetch_res.returncode == 0 else f"failed: {fetch_res.stderr.strip()}"
+
+    push_res = subprocess.run(
+        ["git", "push", remote, "refs/notes/*"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    results["push"] = "success" if push_res.returncode == 0 else f"failed: {push_res.stderr.strip()}"
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Tier 3: Gate Commit Trailers (Ship-Change, Ship-<GateName>)
+# ---------------------------------------------------------------------------
+
+def generate_gate_trailers(
+    repo_root: Path,
+    change_id: Optional[str] = None,
+    ledger: Optional[Dict[str, Any]] = None,
+    config: Optional[Dict[str, Any]] = None,
+) -> List[str]:
+    """Generate compact RFC 5133 Git commit trailers matching ship.json gates."""
+    if ledger is None:
+        ledger = load_ledger(repo_root, auto_sync=True)
+    if config is None:
+        config = load_ship_config(repo_root)
+
+    cid = change_id or ledger.get("active_change_id") or get_active_change(repo_root) or "default"
+    change_entry = ledger.get("changes", {}).get(cid, create_empty_change_entry(cid))
+    evidence = change_entry.get("evidence", {})
+
+    trailers: List[str] = []
+    trailers.append(f"Ship-Change: {cid}")
+
+    gates_cfg = config.get("gates", {})
+
+    # 1. Gate: Design
+    design_ev = evidence.get("design", {})
+    if design_ev.get("adr"):
+        adr_name = Path(design_ev["adr"]).stem
+        status = design_ev.get("status", "ACCEPTED")
+        trailers.append(f"Ship-Design: {adr_name} ({status})")
+    elif "design" in gates_cfg:
+        trailers.append(f"Ship-Design: {change_entry.get('phase', 'gate-1-design')}")
+
+    # 2. Gate: Spike
+    spike_ev = evidence.get("spike", {})
+    if spike_ev.get("status") and spike_ev.get("status") != "NONE":
+        verdict = spike_ev.get("verdict")
+        v_str = f" ({verdict})" if verdict else ""
+        trailers.append(f"Ship-Spike: {spike_ev['status']}{v_str}")
+
+    # 3. Gate: Implementation
+    impl_ev = evidence.get("implementation", {})
+    tasks = change_entry.get("task_status", {})
+    if tasks.get("total", 0) > 0:
+        if tasks.get("pending", 0) == 0:
+            trailers.append(f"Ship-Implementation: PASSED ({tasks['completed']}/{tasks['total']} tasks)")
+        else:
+            trailers.append(f"Ship-Implementation: IN_PROGRESS ({tasks['completed']}/{tasks['total']} tasks)")
+    elif impl_ev.get("status") and impl_ev.get("status") != "PENDING":
+        trailers.append(f"Ship-Implementation: {impl_ev['status']}")
+
+    # 4. Gate: Simplify
+    simp_ev = evidence.get("simplify", {})
+    debt_cnt = simp_ev.get("debt_count", 0)
+    trailers.append(f"Ship-Simplify: DEBT-{debt_cnt}")
+
+    # 5. Gate: Audit
+    audit_ev = evidence.get("audit", {})
+    verdict = audit_ev.get("verdict")
+    reviewer = audit_ev.get("reviewer") or "judge"
+    if verdict:
+        trailers.append(f"Ship-Audit: {verdict} (by {reviewer})")
+    else:
+        trailers.append("Ship-Audit: PENDING")
+
+    # 6. Gate: Delivery
+    deliv_ev = evidence.get("delivery", {})
+    deliv_status = deliv_ev.get("status", "PENDING")
+    if change_entry.get("phase") == "gate-4-delivery" or deliv_status in {"READY", "ARCHIVED"}:
+        trailers.append(f"Ship-Delivery: {deliv_status}")
+
+    return trailers
+
+
+def record_audit_to_ledger(
+    repo_root: Path,
+    report_path_or_dict: Any,
+    change_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Record Judge audit verdict to ledger and attach evidence note to commit."""
+    if isinstance(report_path_or_dict, (str, Path)):
+        p = Path(report_path_or_dict)
+        if not p.is_absolute():
+            p = repo_root / p
+        report = parse_audit_report_file(p, repo_root)
+    else:
+        report = report_path_or_dict
+
+    cid = change_id or report.get("change") or report.get("topic") or get_active_change(repo_root) or "default"
+
+    def updater(entry: Dict[str, Any]) -> None:
+        ev = entry["evidence"]["audit"]
+        ev["verdict"] = report.get("verdict")
+        ev["status"] = report.get("status")
+        ev["reviewer"] = report.get("reviewer")
+        ev["findings_count"] = report.get("findings_count", 0)
+        ev["critical_or_high_count"] = report.get("critical_or_high_count", 0)
+        ev["test_evidence_passed"] = report.get("test_evidence_passed")
+        ev["report_path"] = report.get("report_file")
+        ev["snapshot_fingerprint"] = report.get("snapshot_fingerprint")
+
+        git_info = get_git_info(repo_root)
+        commit = git_info.get("commit")
+        if commit:
+            note_oid = attach_git_note_evidence(repo_root, commit, "audit_report", report)
+            ev["git_note_oid"] = note_oid
+
+        blockers = [b for b in entry.get("blockers", []) if not b.startswith("Audit:")]
+        crit = ev.get("critical_or_high_count", 0)
+        if crit > 0:
+            blockers.append(f"Audit: {crit} unresolved CRITICAL/HIGH finding(s)")
+        if ev.get("verdict") in {"FAIL", "FAILED", "REJECTED"}:
+            blockers.append(f"Audit: verdict is {ev.get('verdict')}")
+        entry["blockers"] = blockers
+
+        if ev.get("verdict") in {"PASS", "APPROVED"} and crit == 0 and not blockers:
+            entry["phase"] = "gate-4-delivery"
+
+    return mutate_change_state(repo_root, cid, updater)
+
+
+def record_test_run_to_ledger(
+    repo_root: Path,
+    test_summary: Dict[str, Any],
+    change_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Record test run evidence to ledger and attach to commit notes."""
+    cid = change_id or get_active_change(repo_root) or "default"
+
+    def updater(entry: Dict[str, Any]) -> None:
+        impl = entry["evidence"]["implementation"]
+        impl["status"] = "PASSED" if test_summary.get("passed", False) else "FAILED"
+        impl["tests_passed"] = test_summary.get("passed", False)
+        impl["failed_count"] = test_summary.get("failed_count", 0)
+        impl["command"] = test_summary.get("command")
+
+        git_info = get_git_info(repo_root)
+        commit = git_info.get("commit")
+        if commit:
+            attach_git_note_evidence(repo_root, commit, "test_evidence", test_summary)
+            impl["evidence_ref"] = GIT_NOTES_REF
+
+        blockers = [b for b in entry.get("blockers", []) if not b.startswith("Tests:")]
+        if not test_summary.get("passed", False):
+            blockers.append(f"Tests: {test_summary.get('failed_count', 1)} test(s) failing")
+        entry["blockers"] = blockers
+
+    return mutate_change_state(repo_root, cid, updater)
 
 
 def determine_lifecycle_state(
@@ -1145,17 +1756,18 @@ def determine_lifecycle_state(
         return (
             "GATE 1: SPECIFICATION & DESIGN",
             "INITIAL_PROPOSAL",
-            "Run '/design' or '/ship <topic>'. Explore workspace facts and present Frontier Rounds.",
+            "Run '/design' or '/ship <change>'. Explore workspace facts and present Frontier Rounds.",
         )
 
     # If OpenSpec package exists, check tasks
     if openspec_packages:
         active_pkg = openspec_packages[0]
+        pkg_change_name = active_pkg.get("change") or active_pkg.get("topic")
         if not active_pkg["has_tasks"] or active_pkg["total_tasks"] == 0:
             return (
                 "GATE 1: SPECIFICATION & DESIGN",
                 "SPEC_UNFINISHED",
-                f"Compile tasks.md and specs/ for '{active_pkg['topic']}'. Seek user confirmation to proceed.",
+                f"Compile tasks.md and specs/ for '{pkg_change_name}'. Seek user confirmation to proceed.",
             )
 
         if active_pkg["pending_tasks"] > 0:
@@ -1237,19 +1849,20 @@ def determine_lifecycle_state(
                     "Audit report lacks verified test evidence. Run test suite and record passing test results.",
                 )
 
-            # 6. Package / Topic exact match check (enforced on all reports)
-            report_topic = audit_report.get("topic")
-            if not report_topic:
+            # 6. Package / Change exact match check (enforced on all reports)
+            report_change = audit_report.get("change") or audit_report.get("topic")
+            pkg_change = active_pkg.get("change") or active_pkg.get("topic")
+            if not report_change:
                 return (
                     "GATE 3: ADVERSARIAL AUDIT",
                     "AUDIT_ACTIVE",
-                    f"Audit approval lacks 'topic'. Requires exact match with active package '{active_pkg['topic']}' before shipping.",
+                    f"Audit approval lacks 'change'. Requires exact match with active package '{pkg_change}' before shipping.",
                 )
-            if report_topic != active_pkg["topic"]:
+            if report_change != pkg_change:
                 return (
                     "GATE 3: ADVERSARIAL AUDIT",
                     "AUDIT_ACTIVE",
-                    f"Audit approval is for topic '{report_topic}', but active package is '{active_pkg['topic']}'. Requires audit approval for '{active_pkg['topic']}' before shipping.",
+                    f"Audit approval is for change '{report_change}', but active package is '{pkg_change}'. Requires audit approval for '{pkg_change}' before shipping.",
                 )
 
             # 7. Judge report contract check (enforced on all reports)
@@ -1332,7 +1945,7 @@ def determine_lifecycle_state(
             return (
                 "GATE 4: READY TO SHIP",
                 "DELIVERY_READY",
-                f"All tasks complete, tests verified green, and Judge audit PASSED. Ready to deliver Delivery Walkthrough. Run 'python3 skills/ship/scripts/inspect_lifecycle.py --archive' to sync living specs and archive '{active_pkg['topic']}'.",
+                f"All tasks complete, tests verified green, and Judge audit PASSED. Ready to deliver Delivery Walkthrough. Run 'python3 skills/ship/scripts/inspect_lifecycle.py --archive' to sync living specs and archive '{pkg_change}'.",
             )
 
     # Only ADRs exist
@@ -1352,6 +1965,7 @@ def determine_lifecycle_state(
 
 def apply_and_archive_openspec(
     repo_root: Path,
+    change: Optional[str] = None,
     topic: Optional[str] = None,
     force: bool = False,
 ) -> Dict[str, Any]:
@@ -1360,24 +1974,25 @@ def apply_and_archive_openspec(
     if not changes_dir.exists():
         raise FileNotFoundError(f"No openspec/changes directory found at {changes_dir}")
 
+    resolved_target = change or topic
     # Resolve target package directory
-    if topic:
-        topic_dir = changes_dir / topic
-        if not topic_dir.exists() or not topic_dir.is_dir():
-            raise FileNotFoundError(f"OpenSpec change directory '{topic}' not found under {changes_dir}")
+    if resolved_target:
+        change_dir = changes_dir / resolved_target
+        if not change_dir.exists() or not change_dir.is_dir():
+            raise FileNotFoundError(f"OpenSpec change directory '{resolved_target}' not found under {changes_dir}")
     else:
         packages = inspect_openspec(repo_root)
         if not packages:
             raise FileNotFoundError("No active change packages found in openspec/changes/ to archive.")
-        topic_dir = repo_root / packages[0]["path"]
+        change_dir = repo_root / packages[0]["path"]
 
-    topic_name = topic_dir.name
+    change_name = change_dir.name
 
     if not force:
         # 1. Implementation tasks check
-        tasks_file = topic_dir / "tasks.md"
+        tasks_file = change_dir / "tasks.md"
         if not tasks_file.exists():
-            raise RuntimeError(f"Cannot archive '{topic_name}': tasks.md does not exist.")
+            raise RuntimeError(f"Cannot archive '{change_name}': tasks.md does not exist.")
         content = tasks_file.read_text(encoding="utf-8", errors="replace")
         has_pending = False
         has_tasks = False
@@ -1389,47 +2004,47 @@ def apply_and_archive_openspec(
             elif s.startswith(("- [x]", "- [X]", "* [x]", "* [X]")):
                 has_tasks = True
         if not has_tasks:
-            raise RuntimeError(f"Cannot archive '{topic_name}': tasks.md contains no tasks.")
+            raise RuntimeError(f"Cannot archive '{change_name}': tasks.md contains no tasks.")
         if has_pending:
-            raise RuntimeError(f"Cannot archive '{topic_name}': package has pending tasks in tasks.md. Complete all tasks before archiving or use --force.")
+            raise RuntimeError(f"Cannot archive '{change_name}': package has pending tasks in tasks.md. Complete all tasks before archiving or use --force.")
 
         # 2. Audit report / Delivery Evidence check
-        audit_report = inspect_audit_reports(repo_root, topic=topic_name)
+        audit_report = inspect_audit_reports(repo_root, change=change_name)
         if not audit_report:
-            raise RuntimeError(f"Cannot archive '{topic_name}': no passing audit report found (or delivery evidence in .scratch/).")
+            raise RuntimeError(f"Cannot archive '{change_name}': no passing audit report found (or delivery evidence in .scratch/).")
 
         if audit_report.get("is_envelope") and not audit_report.get("judge_report_valid"):
             err_msg = "; ".join(audit_report.get("judge_report_errors", ["Malformed Judge report structure"]))
-            raise RuntimeError(f"Cannot archive '{topic_name}': Judge report in delivery envelope is malformed ({err_msg}).")
+            raise RuntimeError(f"Cannot archive '{change_name}': Judge report in delivery envelope is malformed ({err_msg}).")
 
         if not audit_report.get("is_judge"):
-            raise RuntimeError(f"Cannot archive '{topic_name}': audit reviewer is '{audit_report.get('reviewer')}', requires Judge approval.")
+            raise RuntimeError(f"Cannot archive '{change_name}': audit reviewer is '{audit_report.get('reviewer')}', requires Judge approval.")
         if audit_report.get("critical_or_high_count", 0) > 0:
-            raise RuntimeError(f"Cannot archive '{topic_name}': audit has {audit_report.get('critical_or_high_count')} unresolved CRITICAL/HIGH findings.")
+            raise RuntimeError(f"Cannot archive '{change_name}': audit has {audit_report.get('critical_or_high_count')} unresolved CRITICAL/HIGH findings.")
         verdict = audit_report.get("verdict", "")
         status = audit_report.get("status", "")
         if verdict in {"FAIL", "FAILED", "REJECTED"} or status in {"fail", "failed", "rejected", "incomplete", "skipped"}:
-            raise RuntimeError(f"Cannot archive '{topic_name}': audit verdict is '{verdict or status}', not PASS (status is '{status}', requires 'complete').")
+            raise RuntimeError(f"Cannot archive '{change_name}': audit verdict is '{verdict or status}', not PASS (status is '{status}', requires 'complete').")
         verdict_ok = verdict in {"PASS", "APPROVED"} or (verdict == "" and status in {"complete", "pass", "approved"} and audit_report.get("findings_count", 0) == 0)
         if not verdict_ok:
-            raise RuntimeError(f"Cannot archive '{topic_name}': audit verdict is '{verdict or status}', not PASS.")
+            raise RuntimeError(f"Cannot archive '{change_name}': audit verdict is '{verdict or status}', not PASS.")
         if not audit_report.get("test_evidence_passed"):
-            raise RuntimeError(f"Cannot archive '{topic_name}': audit report lacks verified passing test evidence.")
+            raise RuntimeError(f"Cannot archive '{change_name}': audit report lacks verified passing test evidence.")
 
-        report_topic = audit_report.get("topic")
-        if not report_topic:
+        report_change = audit_report.get("change") or audit_report.get("topic")
+        if not report_change:
             raise RuntimeError(
-                f"Cannot archive '{topic_name}': audit report lacks 'topic' field to authorise package."
+                f"Cannot archive '{change_name}': audit report lacks 'change' field to authorise package."
             )
-        if report_topic != topic_name:
+        if report_change != change_name:
             raise RuntimeError(
-                f"Cannot archive '{topic_name}': audit approval is for topic '{report_topic}', not '{topic_name}'."
+                f"Cannot archive '{change_name}': audit approval is for change '{report_change}', not '{change_name}'."
             )
 
         if not audit_report.get("judge_report_valid"):
             err_msg = "; ".join(audit_report.get("judge_report_errors", ["Malformed Judge report structure"]))
             env_text = " in delivery envelope" if audit_report.get("is_envelope") else ""
-            raise RuntimeError(f"Cannot archive '{topic_name}': Judge report{env_text} is malformed ({err_msg}).")
+            raise RuntimeError(f"Cannot archive '{change_name}': Judge report{env_text} is malformed ({err_msg}).")
 
         git_info = get_git_info(repo_root)
         current_commit = git_info.get("commit")
@@ -1440,28 +2055,28 @@ def apply_and_archive_openspec(
         if git_info.get("is_git"):
             if current_commit:
                 if not snapshot_sha and not snapshot_fingerprint:
-                    raise RuntimeError(f"Cannot archive '{topic_name}': audit report lacks commit snapshot SHA or tree fingerprint.")
+                    raise RuntimeError(f"Cannot archive '{change_name}': audit report lacks commit snapshot SHA or tree fingerprint.")
                 if snapshot_sha:
                     is_hex_sha = bool(re.match(r"^[0-9a-f]{7,40}$", snapshot_sha, re.IGNORECASE))
                     if not is_hex_sha:
                         if not snapshot_fingerprint or (current_fingerprint and snapshot_fingerprint != current_fingerprint):
                             raise RuntimeError(
-                                f"Cannot archive '{topic_name}': audit snapshot commit '{snapshot_sha}' is symbolic or unresolved. Must be an immutable commit SHA or accompanied by a matching fingerprint."
+                                f"Cannot archive '{change_name}': audit snapshot commit '{snapshot_sha}' is symbolic or unresolved. Must be an immutable commit SHA or accompanied by a matching fingerprint."
                             )
                     elif not current_commit.startswith(snapshot_sha) and not snapshot_sha.startswith(current_commit):
-                        raise RuntimeError(f"Cannot archive '{topic_name}': audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'.")
+                        raise RuntimeError(f"Cannot archive '{change_name}': audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'.")
             else:
                 if not snapshot_fingerprint:
-                    raise RuntimeError(f"Cannot archive '{topic_name}': audit report in repository before first commit lacks working-tree fingerprint.")
+                    raise RuntimeError(f"Cannot archive '{change_name}': audit report in repository before first commit lacks working-tree fingerprint.")
                 if snapshot_sha and snapshot_sha != "none":
-                    raise RuntimeError(f"Cannot archive '{topic_name}': audit report snapshot commit '{snapshot_sha}' does not exist (repository has no commits yet).")
+                    raise RuntimeError(f"Cannot archive '{change_name}': audit report snapshot commit '{snapshot_sha}' does not exist (repository has no commits yet).")
 
-        source_specs_dir = topic_dir / "specs"
+        source_specs_dir = change_dir / "specs"
         package_spec_names = {s.name for s in source_specs_dir.glob("*.md")} if source_specs_dir.exists() else set()
 
         if snapshot_fingerprint:
             if not current_fingerprint or snapshot_fingerprint != current_fingerprint:
-                raise RuntimeError(f"Cannot archive '{topic_name}': working tree has been modified since review (fingerprint mismatch).")
+                raise RuntimeError(f"Cannot archive '{change_name}': working tree has been modified since review (fingerprint mismatch).")
         else:
             modified_sources = git_info.get("modified_source_files", [])
             # Resumable recovery: ignore living specs belonging to this package if they were partially modified in an earlier interrupted attempt
@@ -1471,11 +2086,11 @@ def apply_and_archive_openspec(
                 and f != "openspec/.active"
             ]
             if unreviewed:
-                raise RuntimeError(f"Cannot archive '{topic_name}': working tree has unreviewed source modifications ({', '.join(unreviewed[:3])}).")
+                raise RuntimeError(f"Cannot archive '{change_name}': working tree has unreviewed source modifications ({', '.join(unreviewed[:3])}).")
 
     synced_specs = []
     living_specs_dir = repo_root / "openspec" / "specs"
-    source_specs_dir = topic_dir / "specs"
+    source_specs_dir = change_dir / "specs"
 
     # Step 1: Prepare all spec updates in-memory first
     # Map: dest_spec -> (original_content_or_None, merged_text)
@@ -1496,9 +2111,9 @@ def apply_and_archive_openspec(
     archive_dir = repo_root / "openspec" / "archive"
     archive_dir.mkdir(parents=True, exist_ok=True)
 
-    dest_archive = archive_dir / f"{date_str}-{topic_name}"
+    dest_archive = archive_dir / f"{date_str}-{change_name}"
     if dest_archive.exists():
-        dest_archive = archive_dir / f"{date_str}-{topic_name}-{int(time.time())}"
+        dest_archive = archive_dir / f"{date_str}-{change_name}-{int(time.time())}"
 
     # Track applied mutations for rollback on any failure
     applied_mutations: Dict[Path, Optional[str]] = {}
@@ -1511,9 +2126,21 @@ def apply_and_archive_openspec(
             synced_specs.append(dest_spec.name)
 
         # Move package to archive
-        shutil.move(str(topic_dir), str(dest_archive))
+        shutil.move(str(change_dir), str(dest_archive))
         package_moved = True
-        clear_active_topic(repo_root, topic_name)
+        clear_active_change(repo_root, change_name)
+
+        # Generate Gate Trailers and update ledger
+        trailers = generate_gate_trailers(repo_root, change_id=change_name)
+        try:
+            def update_delivery(entry: Dict[str, Any]) -> None:
+                entry["phase"] = "gate-4-delivery"
+                entry["evidence"]["delivery"]["status"] = "ARCHIVED"
+                entry["evidence"]["delivery"]["archived_path"] = str(dest_archive.relative_to(repo_root))
+                entry["evidence"]["delivery"]["trailers"] = trailers
+            mutate_change_state(repo_root, change_name, update_delivery)
+        except Exception:
+            pass
 
     except Exception as err:
         # ROLLBACK all living spec mutations!
@@ -1525,18 +2152,20 @@ def apply_and_archive_openspec(
                     dest_spec.write_text(original_text, encoding="utf-8")
             except Exception:
                 pass
-        if package_moved and dest_archive.exists() and not topic_dir.exists():
+        if package_moved and dest_archive.exists() and not change_dir.exists():
             try:
-                shutil.move(str(dest_archive), str(topic_dir))
+                shutil.move(str(dest_archive), str(change_dir))
             except Exception:
                 pass
         raise RuntimeError(f"Archive failed during execution; rolled back living spec updates: {err}") from err
 
     return {
-        "topic": topic_name,
+        "change": change_name,
+        "topic": change_name,
         "synced_specs": synced_specs,
         "living_specs_dir": str(living_specs_dir.relative_to(repo_root)),
         "archived_path": str(dest_archive.relative_to(repo_root)),
+        "trailers": trailers,
     }
 
 
@@ -1574,12 +2203,13 @@ def emit_telemetry_event(
 def create_checkpoint(
     repo_root: Path,
     gate_name: str,
+    change: Optional[str] = None,
     topic: Optional[str] = None,
     create_git_tag: bool = False,
     telemetry_sink: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Record a git checkpoint tag/ref and receipt for the given lifecycle gate."""
-    resolved_topic = topic or get_active_topic(repo_root) or "default"
+    resolved_change = change or topic or get_active_change(repo_root) or "default"
     git_info = get_git_info(repo_root)
     cfg = load_ship_config(repo_root)
     allow_git_tag = create_git_tag or cfg.get("create_git_tag", False)
@@ -1596,8 +2226,8 @@ def create_checkpoint(
     else:
         canonical_tag = canonical.replace(" ", "-")
 
-    ref_name = f"refs/ship/{resolved_topic}/{canonical_tag}"
-    tag_name = f"ship/{resolved_topic}/{canonical_tag}"
+    ref_name = f"refs/ship/{resolved_change}/{canonical_tag}"
+    tag_name = f"ship/{resolved_change}/{canonical_tag}"
     commit_sha = git_info.get("commit")
     fingerprint = git_info.get("working_tree_fingerprint") or compute_working_tree_fingerprint(repo_root)
     timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -1610,7 +2240,7 @@ def create_checkpoint(
                 idx_file = Path(idx_dir) / "index"
                 env = {**os.environ, "GIT_INDEX_FILE": str(idx_file)}
                 subprocess.run(["git", "read-tree", commit_sha], cwd=repo_root, env=env, capture_output=True, check=True)
-                add_cmd = ["git", "add", "-A", "--", ".", ":!.scratch", ":!scratch", ":!.gemini"]
+                add_cmd = ["git", "add", "-A", "--", ".", ":!.scratch", ":!scratch", ":!.gemini", ":!.ship"]
                 subprocess.run(add_cmd, cwd=repo_root, env=env, capture_output=True, check=True)
                 tree_res = subprocess.run(
                     ["git", "write-tree"],
@@ -1621,7 +2251,7 @@ def create_checkpoint(
                     check=True,
                 )
                 tree_sha = tree_res.stdout.strip()
-                commit_msg = f"ship-checkpoint:{resolved_topic}:{canonical_tag}"
+                commit_msg = f"ship-checkpoint:{resolved_change}:{canonical_tag}"
                 commit_res = subprocess.run(
                     ["git", "commit-tree", tree_sha, "-p", commit_sha, "-m", commit_msg],
                     cwd=repo_root,
@@ -1653,9 +2283,10 @@ def create_checkpoint(
 
     chk_dir = repo_root / ".scratch" / "checkpoints"
     chk_dir.mkdir(parents=True, exist_ok=True)
-    receipt_file = chk_dir / f"{resolved_topic}_{canonical_tag}.json"
+    receipt_file = chk_dir / f"{resolved_change}_{canonical_tag}.json"
     receipt_data = {
-        "topic": resolved_topic,
+        "change": resolved_change,
+        "topic": resolved_change,
         "gate": canonical_tag,
         "ref": ref_name,
         "tag": tag_name if allow_git_tag else None,
@@ -1669,6 +2300,14 @@ def create_checkpoint(
     }
     receipt_file.write_text(json.dumps(receipt_data, indent=2), encoding="utf-8")
 
+    try:
+        def record_chk(entry: Dict[str, Any]) -> None:
+            entry["checkpoints"][canonical_tag] = receipt_data
+            entry["phase"] = canonical_tag
+        mutate_change_state(repo_root, resolved_change, record_chk)
+    except Exception:
+        pass
+
     emit_telemetry_event(repo_root, "checkpoint_created", receipt_data, sink=telemetry_sink, config=cfg)
 
     return receipt_data
@@ -1677,12 +2316,13 @@ def create_checkpoint(
 def perform_rollback(
     repo_root: Path,
     target_gate: str,
+    change: Optional[str] = None,
     topic: Optional[str] = None,
     force: bool = False,
     telemetry_sink: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Safely roll back lifecycle and working state to target checkpoint (e.g. State 5b)."""
-    resolved_topic = topic or get_active_topic(repo_root) or "default"
+    resolved_change = change or topic or get_active_change(repo_root) or "default"
     canonical = target_gate.lower().strip()
     if canonical in {"1", "gate1", "gate-1", "spec", "gate-1-spec"}:
         canonical_tag = "gate-1-spec"
@@ -1696,9 +2336,9 @@ def perform_rollback(
     timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_dir = repo_root / ".scratch" / f"rollback_{timestamp_str}"
 
-    chk_file = repo_root / ".scratch" / "checkpoints" / f"{resolved_topic}_{canonical_tag}.json"
-    target_tag = f"ship/{resolved_topic}/{canonical_tag}"
-    target_ref = f"refs/ship/{resolved_topic}/{canonical_tag}"
+    chk_file = repo_root / ".scratch" / "checkpoints" / f"{resolved_change}_{canonical_tag}.json"
+    target_tag = f"ship/{resolved_change}/{canonical_tag}"
+    target_ref = f"refs/ship/{resolved_change}/{canonical_tag}"
     checkpoint_info: Optional[Dict[str, Any]] = None
     if chk_file.exists():
         try:
@@ -1797,8 +2437,8 @@ def perform_rollback(
                     if p and p not in changed_files:
                         changed_files.append(p)
 
-                ignored_prefixes = (".scratch/", "scratch/", ".gemini/", ".git/")
-                tasks_rel = f"openspec/changes/{resolved_topic}/tasks.md"
+                ignored_prefixes = (".scratch/", "scratch/", ".ship/", "ship/", ".gemini/", ".git/")
+                tasks_rel = f"openspec/changes/{resolved_change}/tasks.md"
 
                 for rel_path in changed_files:
                     if any(rel_path.startswith(p) for p in ignored_prefixes):
@@ -1879,7 +2519,7 @@ def perform_rollback(
                 pass
 
     # Reset tasks in tasks.md for Gate 1 spec amendment
-    pkg_dir = repo_root / "openspec" / "changes" / resolved_topic
+    pkg_dir = repo_root / "openspec" / "changes" / resolved_change
     tasks_file = pkg_dir / "tasks.md"
     reset_tasks_count = 0
     if tasks_file.exists() and canonical_tag == "gate-1-spec":
@@ -1899,7 +2539,8 @@ def perform_rollback(
     ))
     res_payload = {
         "status": "success",
-        "topic": resolved_topic,
+        "change": resolved_change,
+        "topic": resolved_change,
         "target_gate": canonical_tag,
         "backup_directory": str(backup_dir.relative_to(repo_root)) if has_backups else None,
         "has_backups": has_backups,
@@ -1911,12 +2552,32 @@ def perform_rollback(
         "checkpoint_found": bool(checkpoint_info),
         "message": f"Successfully rolled back to {canonical_tag}. Restored {len(restored_files)} files, removed {len(removed_files)} new files, backed up to {backup_dir.name}/.",
     }
+
+    try:
+        def update_rb(entry: Dict[str, Any]) -> None:
+            entry["phase"] = canonical_tag
+            entry["evidence"]["audit"] = {
+                "verdict": None,
+                "status": None,
+                "reviewer": None,
+                "findings_count": 0,
+                "critical_or_high_count": 0,
+                "test_evidence_passed": None,
+                "report_path": None,
+                "git_note_oid": None,
+                "snapshot_fingerprint": None,
+            }
+        mutate_change_state(repo_root, resolved_change, update_rb)
+    except Exception:
+        pass
+
     emit_telemetry_event(repo_root, "rollback_executed", res_payload, sink=telemetry_sink, config=cfg)
     return res_payload
 
 
 def evaluate_repository(
     repo_root: Path,
+    target_change: Optional[str] = None,
     target_topic: Optional[str] = None,
     config_path: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -1924,20 +2585,26 @@ def evaluate_repository(
     config = load_ship_config(repo_root, explicit_path=config_path)
     git_info = get_git_info(repo_root)
     adrs = inspect_adrs(repo_root)
-    openspec_packages = inspect_openspec(repo_root, target_topic=target_topic)
+    resolved_target = target_change or target_topic
+    openspec_packages = inspect_openspec(repo_root, target_change=resolved_target)
     archived_packages = inspect_archived_openspec(repo_root)
     living_specs = inspect_living_specs(repo_root)
     spikes = inspect_spikes(repo_root)
-    active_pkg_topic = openspec_packages[0]["topic"] if openspec_packages else None
-    audit_report = inspect_audit_reports(repo_root, topic=target_topic or active_pkg_topic)
+    active_pkg_change = openspec_packages[0]["change"] if openspec_packages else None
+    audit_report = inspect_audit_reports(repo_root, change=resolved_target or active_pkg_change)
 
     gate, state_key, next_action = determine_lifecycle_state(
         git_info, adrs, openspec_packages, spikes, audit_report
     )
 
+    resolved_change = resolved_target or get_active_change(repo_root) or active_pkg_change
+    ledger = load_ledger(repo_root, auto_sync=True)
+    active_change = ledger.get("changes", {}).get(resolved_change) if resolved_change else None
+
     return {
         "repo_root": str(repo_root),
-        "target_topic": target_topic or get_active_topic(repo_root),
+        "target_change": resolved_change,
+        "target_topic": resolved_change,
         "gate": gate,
         "state_key": state_key,
         "next_action": next_action,
@@ -1949,6 +2616,8 @@ def evaluate_repository(
         "active_spikes": spikes,
         "audit_report": audit_report,
         "config": config,
+        "ledger": ledger,
+        "active_change": active_change,
     }
 
 
@@ -1959,8 +2628,15 @@ def format_summary(data: Dict[str, Any]) -> str:
     lines.append(f" 🚀 LIFECYCLE STATE: {data['gate']}")
     lines.append("═════════════════════════════════════════════════════════════════════")
     lines.append(f"• Internal State : {data['state_key']}")
-    if data.get("target_topic"):
-        lines.append(f"• Active Topic   : {data['target_topic']}")
+    if data.get("active_change"):
+        ac = data["active_change"]
+        lines.append(f"• Change ID      : {ac.get('change_id')} (rev: r{ac.get('revision_counter', 0)}, phase: {ac.get('phase')})")
+        if ac.get("blockers"):
+            lines.append(f"  └─ Blockers    : {', '.join(ac['blockers'])}")
+    elif data.get("target_change"):
+        lines.append(f"• Active Change  : {data['target_change']}")
+    elif data.get("target_topic"):
+        lines.append(f"• Active Change  : {data['target_topic']}")
 
     git = data["git"]
     if git["is_git"]:
@@ -1983,8 +2659,9 @@ def format_summary(data: Dict[str, Any]) -> str:
     if pkgs:
         for p in pkgs:
             marker = " [ACTIVE]" if p.get("is_active_target") else ""
+            pkg_name = p.get("change") or p.get("topic")
             lines.append(
-                f"• OpenSpec '{p['topic']}'{marker} : {p['completed_tasks']}/{p['total_tasks']} tasks complete, "
+                f"• OpenSpec '{pkg_name}'{marker} : {p['completed_tasks']}/{p['total_tasks']} tasks complete, "
                 f"specs={'yes' if p['has_specs'] else 'no'}, proposal={'yes' if p['has_proposal'] else 'no'}"
             )
             if p["next_task"]:
@@ -2034,9 +2711,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="Path to repository root (default: current directory).",
     )
     parser.add_argument(
-        "--topic",
+        "--change",
+        dest="change",
         default=None,
-        help="Target a specific OpenSpec topic package.",
+        help="Target a specific change ID (e.g. feature-login).",
+    )
+    parser.add_argument(
+        "--topic",
+        dest="change",
+        default=None,
+        help="Target a specific OpenSpec package (alias for --change).",
     )
     parser.add_argument(
         "--config",
@@ -2071,7 +2755,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         nargs="?",
         const="",
         default=None,
-        metavar="TOPIC",
+        metavar="CHANGE",
         help="Sync delta specs to openspec/specs/ and move completed change package to openspec/archive/.",
     )
     parser.add_argument(
@@ -2094,9 +2778,119 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         default=None,
         help="Path to file for appending structured JSON lifecycle events.",
     )
+    parser.add_argument(
+        "--set-active-change",
+        default=None,
+        metavar="CHANGE_ID",
+        help="Set the active change ID in .ship/state.json.",
+    )
+    parser.add_argument(
+        "--sync-state",
+        action="store_true",
+        help="Force re-synchronize .ship/state.json from workspace artifacts.",
+    )
+    parser.add_argument(
+        "--record-audit",
+        default=None,
+        metavar="REPORT_JSON",
+        help="Record an audit report JSON into .ship/state.json and git notes.",
+    )
+    parser.add_argument(
+        "--record-tests",
+        default=None,
+        metavar="TEST_DATA",
+        help="Record test results into .ship/state.json and git notes (passed/failed or path to JSON).",
+    )
+    parser.add_argument(
+        "--sync-notes",
+        nargs="?",
+        const="origin",
+        default=None,
+        metavar="REMOTE",
+        help="Configure git fetch/push refspecs for notes and synchronize with remote.",
+    )
+    parser.add_argument(
+        "--generate-trailers",
+        action="store_true",
+        help="Generate and print RFC 5133 commit trailers for the active or specified change.",
+    )
 
     args = parser.parse_args(argv)
     repo_root = Path(args.path).resolve()
+
+    if args.set_active_change:
+        ledger = load_ledger(repo_root)
+        ledger["active_change_id"] = args.set_active_change
+        save_ledger(repo_root, ledger)
+        set_active_topic(repo_root, args.set_active_change)
+        if args.format == "json":
+            print(json.dumps({"active_change_id": args.set_active_change}, indent=2))
+        else:
+            print(f"Active change set to: {args.set_active_change}")
+        return 0
+
+    if args.sync_state:
+        synced = sync_ledger_from_workspace(repo_root, target_change_id=args.change)
+        if args.format == "json":
+            print(json.dumps(synced, indent=2))
+        else:
+            print("Successfully synchronized .ship/state.json from workspace artifacts.")
+        return 0
+
+    if args.generate_trailers:
+        trailers = generate_gate_trailers(repo_root, change_id=args.change)
+        if args.format == "json":
+            print(json.dumps({"trailers": trailers}, indent=2))
+        else:
+            for t in trailers:
+                print(t)
+        return 0
+
+    if args.sync_notes is not None:
+        remote = args.sync_notes or "origin"
+        res = sync_git_notes(repo_root, remote=remote)
+        if args.format == "json":
+            print(json.dumps(res, indent=2))
+        else:
+            print(f"Notes sync ({remote}): fetch={res['fetch']}, push={res['push']}")
+        return 0
+
+    if args.record_audit:
+        try:
+            res = record_audit_to_ledger(repo_root, args.record_audit, change_id=args.change)
+            if args.format == "json":
+                print(json.dumps(res, indent=2))
+            else:
+                verdict = res.get("evidence", {}).get("audit", {}).get("verdict")
+                rev = res.get("revision_counter", 0)
+                print(f"Audit recorded for change '{res.get('change_id')}' (verdict: {verdict}, rev: r{rev})")
+            return 0
+        except Exception as e:
+            print(f"Error recording audit: {e}", file=sys.stderr)
+            return 1
+
+    if args.record_tests:
+        try:
+            test_file = Path(args.record_tests)
+            if test_file.exists():
+                try:
+                    tdata = json.loads(test_file.read_text(encoding="utf-8"))
+                except Exception:
+                    tdata = {"passed": False, "raw": test_file.read_text(encoding="utf-8", errors="replace")}
+            else:
+                val = args.record_tests.lower().strip()
+                tdata = {"passed": val in {"pass", "passed", "true", "1", "ok"}, "command": args.record_tests}
+            res = record_test_run_to_ledger(repo_root, tdata, change_id=args.change)
+            if args.format == "json":
+                print(json.dumps(res, indent=2))
+            else:
+                st = res.get("evidence", {}).get("implementation", {}).get("status")
+                rev = res.get("revision_counter", 0)
+                print(f"Test run recorded for change '{res.get('change_id')}' (status: {st}, rev: r{rev})")
+            return 0
+        except Exception as e:
+            print(f"Error recording tests: {e}", file=sys.stderr)
+            return 1
 
     if args.fingerprint:
         print(compute_working_tree_fingerprint(repo_root))
@@ -2107,7 +2901,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             res = create_checkpoint(
                 repo_root,
                 args.checkpoint,
-                topic=args.topic,
+                change=args.change,
                 create_git_tag=args.create_git_tag,
                 telemetry_sink=args.telemetry_sink,
             )
@@ -2118,7 +2912,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 print("═════════════════════════════════════════════════════════════════════")
                 print(f" 🏷️  LIFECYCLE CHECKPOINT CREATED: {res['gate']}")
                 print("═════════════════════════════════════════════════════════════════════")
-                print(f"• Topic          : {res['topic']}")
+                print(f"• Change         : {res.get('change') or res.get('topic')}")
                 print(f"• Git Ref / Tag  : {res['ref']}{tag_display}")
                 print(f"• Snapshot Commit: {res['commit'][:7] if res.get('commit') else 'none'}")
                 print(f"• Fingerprint    : {res['fingerprint'][:12]}...")
@@ -2133,7 +2927,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             res = perform_rollback(
                 repo_root,
                 args.rollback,
-                topic=args.topic,
+                change=args.change,
                 force=args.force,
                 telemetry_sink=args.telemetry_sink,
             )
@@ -2143,7 +2937,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 print("═════════════════════════════════════════════════════════════════════")
                 print(f" 🔄 LIFECYCLE ROLLBACK EXECUTED: {res['target_gate']}")
                 print("═════════════════════════════════════════════════════════════════════")
-                print(f"• Topic          : {res['topic']}")
+                print(f"• Change         : {res.get('change') or res.get('topic')}")
                 print(f"• Target Gate    : {res['target_gate']}")
                 if res.get("backup_directory"):
                     print(f"• State Backup   : {res['backup_directory']}/")
@@ -2158,13 +2952,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.archive is not None:
         try:
-            topic = args.archive if args.archive else args.topic
-            res = apply_and_archive_openspec(repo_root, topic, force=args.force)
+            change_id = args.archive if args.archive else args.change
+            res = apply_and_archive_openspec(repo_root, change=change_id, force=args.force)
             if args.format == "json":
                 print(json.dumps(res, indent=2))
             else:
                 print("═════════════════════════════════════════════════════════════════════")
-                print(f" 📦 OPENSPEC APPLIED & ARCHIVED: {res['topic']}")
+                print(f" 📦 OPENSPEC APPLIED & ARCHIVED: {res.get('change') or res.get('topic')}")
                 print("═════════════════════════════════════════════════════════════════════")
                 if res["synced_specs"]:
                     print(f"• Synced Specs   : {', '.join(res['synced_specs'])} -> {res['living_specs_dir']}/")
@@ -2179,7 +2973,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 1
 
     try:
-        data = evaluate_repository(repo_root, target_topic=args.topic, config_path=args.config)
+        data = evaluate_repository(repo_root, target_change=args.change, config_path=args.config)
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
