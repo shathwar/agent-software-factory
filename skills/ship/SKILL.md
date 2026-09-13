@@ -102,7 +102,7 @@ Iterate sequentially through `openspec/changes/<change>/tasks.md`:
 3. Deliver Walkthrough: changes summary, ADR links, audit scorecard, `scan_debt.py` ledger.
 4. Apply & Archive OpenSpec: Sync delta specs to `openspec/specs/` and move completed package to `openspec/archive/<YYYY-MM-DD>-<change>/` via `python3 ${SKILLS_DIR:-$HOME/.gemini/config/skills}/ship/scripts/inspect_lifecycle.py --archive [change]`.
 5. Attach Git Notes & Commit Trailers:
-   - Deep validation evidence (audit reports, test logs) is attached to the commit object via Git notes (`refs/notes/ship-evidence`). Run `inspect_lifecycle.py --sync-notes` to sync.
+   - Deep validation evidence (audit reports, test logs) is attached to the commit object via Git notes (`refs/notes/ship-evidence`).
    - Format standard RFC 5133 commit trailers using `python3 inspect_lifecycle.py --generate-trailers` (`Ship-Change: <change>`, `Ship-<GateName>: <status>`).
 
 ---

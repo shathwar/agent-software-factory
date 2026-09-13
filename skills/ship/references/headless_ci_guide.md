@@ -49,7 +49,7 @@ The headless workflow decouples the lifecycle gates into asynchronous CI steps:
 
 ## 3. Configuration: `.ship.json`
 
-Every repository or monorepo service can include a `.ship.json` (or `.ship.yaml`) at its root or service directory:
+Every repository or monorepo service can include a `.ship.json` at its root or service directory:
 
 ```json
 {
@@ -88,9 +88,6 @@ Every repository or monorepo service can include a `.ship.json` (or `.ship.yaml`
       "sync_specs": true,
       "archive_packages": true
     }
-  },
-  "telemetry": {
-    "sink": ".scratch/lifecycle_events.jsonl"
   }
 }
 ```
@@ -225,5 +222,4 @@ jobs:
 | `python3 skills/ship/scripts/inspect_lifecycle.py --rollback design` | Safely archives untracked/modified edits to `.scratch/backups/` and resets `tasks.md` for revision. |
 | `python3 skills/ship/scripts/inspect_lifecycle.py --archive <change>` | Syncs delta specs into `openspec/specs/` and archives completed change packages. |
 | `python3 skills/ship/scripts/inspect_lifecycle.py --generate-trailers` | Emits RFC 5133 Git commit trailers mapping to `.ship.json` gates. |
-| `python3 skills/ship/scripts/inspect_lifecycle.py --sync-notes [remote]` | Configures notes fetch/push refspecs and synchronizes `refs/notes/ship-evidence`. |
 | `python3 skills/ship/scripts/inspect_lifecycle.py --sync-state` | Re-synchronizes `.ship/state.json` authoritative ledger from workspace artifacts. |

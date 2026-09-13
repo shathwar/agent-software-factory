@@ -37,7 +37,7 @@
 4. **Delivery (Sign-Off & Archive)**:
    - Verify repository readiness: `python3 skills/ship/scripts/inspect_lifecycle.py --status-check`.
    - Archive OpenSpec package: `python3 skills/ship/scripts/inspect_lifecycle.py --archive <change>`.
-   - Sync Git notes evidence (`--sync-notes`) and attach commit trailers (`--generate-trailers`).
+   - Attach commit trailers (`--generate-trailers`) and local Git notes evidence.
    - Deliver Walkthrough with ADR links, Judge verdict, and debt ledger.
 
 ---

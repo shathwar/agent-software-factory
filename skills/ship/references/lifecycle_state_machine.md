@@ -115,7 +115,6 @@ The Ship Engine employs a tri-tier architecture combining working-tree agility w
 
 2. **Tier 2: Git Notes (`refs/notes/ship-evidence`)**:
    - Retains deep validation evidence (full JSON audit reports, test runner logs, benchmark metrics) directly attached to commit objects without polluting commit messages.
-   - Configurable remote synchronization via `inspect_lifecycle.py --sync-notes [remote]`, ensuring notes propagate across clones and CI/CD pipelines.
 
 3. **Tier 3: Gate Commit Trailers**:
    - RFC 5133-compliant compact commit trailers automatically generated on delivery (`inspect_lifecycle.py --generate-trailers`):
@@ -146,9 +145,6 @@ python3 skills/ship/scripts/inspect_lifecycle.py --record-tests pass
 
 # Generate commit trailers for delivery commit
 python3 skills/ship/scripts/inspect_lifecycle.py --generate-trailers
-
-# Synchronize Git notes with remote
-python3 skills/ship/scripts/inspect_lifecycle.py --sync-notes origin
 ```
 
 ---

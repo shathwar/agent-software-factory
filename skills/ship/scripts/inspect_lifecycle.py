@@ -1013,33 +1013,26 @@ def get_ledger_path(repo_root: Path) -> Path:
 
 def ensure_gitignore_has_ship(repo_root: Path) -> None:
     """Ensure .ship/ is ignored in git without creating unwanted untracked working-tree files."""
-    git_dir = repo_root / ".git"
-    if git_dir.is_dir():
-        exclude_file = git_dir / "info" / "exclude"
+    def _append_ignore_entry(target: Path) -> None:
         try:
-            exclude_file.parent.mkdir(parents=True, exist_ok=True)
-            content = exclude_file.read_text(encoding="utf-8") if exclude_file.exists() else ""
+            target.parent.mkdir(parents=True, exist_ok=True)
+            content = target.read_text(encoding="utf-8") if target.exists() else ""
             lines = [l.strip() for l in content.splitlines()]
             if ".ship" not in lines and ".ship/" not in lines:
-                with exclude_file.open("a", encoding="utf-8") as f:
+                with target.open("a", encoding="utf-8") as f:
                     if content and not content.endswith("\n"):
                         f.write("\n")
                     f.write(".ship/\n")
         except Exception:
             pass
 
+    git_dir = repo_root / ".git"
+    if git_dir.is_dir():
+        _append_ignore_entry(git_dir / "info" / "exclude")
+
     gitignore = repo_root / ".gitignore"
     if gitignore.exists():
-        try:
-            content = gitignore.read_text(encoding="utf-8")
-            lines = [l.strip() for l in content.splitlines()]
-            if ".ship" not in lines and ".ship/" not in lines:
-                with gitignore.open("a", encoding="utf-8") as f:
-                    if content and not content.endswith("\n"):
-                        f.write("\n")
-                    f.write(".ship/\n")
-        except Exception:
-            pass
+        _append_ignore_entry(gitignore)
 
 
 def make_default_audit_evidence() -> Dict[str, Any]:

@@ -17,6 +17,12 @@ import verify_tdd
 
 
 class TestVerifyTDD(unittest.TestCase):
+    def _init_git_repo(self, tmppath: Path, branch: str = "main") -> None:
+        subprocess.run(["git", "init", "-b", branch], cwd=tmppath, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+        subprocess.run(["git", "config", "commit.gpgsign", "false"], cwd=tmppath, check=True)
+
     def test_file_categorization(self):
         # Production files
         self.assertTrue(verify_tdd.is_production_code("src/user_service.py"))
@@ -194,9 +200,7 @@ class TestVerifyTDD(unittest.TestCase):
         """Pre-commit repository must discover staged and untracked files without failing on HEAD."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            subprocess.run(["git", "init", "-b", "main"], cwd=tmppath, check=True, capture_output=True)
-            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+            self._init_git_repo(tmppath)
 
             src_file = tmppath / "service.py"
             src_file.write_text("def run(): pass\n")

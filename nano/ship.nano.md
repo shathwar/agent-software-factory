@@ -28,4 +28,4 @@
 - Context Isolation: Run gates via isolated subagents to prevent context rot.
 - Multi-Change Isolation: Support parallel changes via `--change <id>` in `.ship/state.json`.
 - Rollback Guard: On invariant violation in audit, rollback code cleanly to `design`.
-- Manifest Support: Honors repository `.ship.json` or `.ship.yaml`.
+- Manifest Support: Honors repository `.ship.json`.

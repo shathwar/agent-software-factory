@@ -94,7 +94,7 @@ Give your agent [ship SKILL.md](./skills/ship/SKILL.md) and feature request: `/s
 - **One Command Delivery**: Drives feature from architectural grilling to tested, simplified, production-audited PR.
 - **Tri-Tier State Engine**:
   - Authoritative multi-change ledger `.ship/state.json` (multi-agent isolation via `--change <id>`).
-  - Deep commit evidence in Git notes (`refs/notes/ship-evidence`, `--sync-notes`).
+  - Deep commit evidence in Git notes (`refs/notes/ship-evidence`).
   - Standard RFC 5133 commit trailers (`Ship-Change`, `Ship-<Gate>`, `--generate-trailers`).
 - **Re-Entrant State Machine**: Filesystem (`openspec/`, `tasks.md`, `docs/adr/`) is persistent state machine. Resumes exact active phase instantly.
 - **Repository Manifest (`.ship.json`)**: Clean domain schema validated by [`ship.schema.json`](./skills/ship/references/ship.schema.json). Configures custom test commands (`gates.implementation.test`).
