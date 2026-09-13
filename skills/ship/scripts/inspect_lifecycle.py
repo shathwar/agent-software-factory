@@ -102,7 +102,7 @@ def compute_working_tree_fingerprint(repo_root: Path) -> str:
         if untracked_res.returncode == 0:
             for raw_path in sorted(p for p in untracked_res.stdout.split(b"\0") if p):
                 rel_str = raw_path.decode("utf-8", errors="replace")
-                if any(rel_str.startswith(p) for p in ignored_prefixes) or rel_str in {"report.json", "openspec/.active"}:
+                if any(rel_str.startswith(p) for p in ignored_prefixes) or rel_str == "report.json":
                     continue
                 full_path = repo_root / rel_str
                 if full_path.is_file():
@@ -239,7 +239,7 @@ def get_git_info(repo_root: Path) -> Dict[str, Any]:
                 filename = filename.split(" -> ", 1)[1].strip()
             if filename.startswith('"') and filename.endswith('"'):
                 filename = filename[1:-1]
-            if not any(filename.startswith(p) for p in ignored_prefixes) and filename not in {"report.json", ".gitignore", "openspec/.active"}:
+            if not any(filename.startswith(p) for p in ignored_prefixes) and filename not in {"report.json", ".gitignore"}:
                 modified_sources.append(filename)
         info["modified_source_files"] = modified_sources
         info["working_tree_fingerprint"] = compute_working_tree_fingerprint(repo_root)
@@ -270,18 +270,10 @@ def inspect_adrs(repo_root: Path) -> List[Dict[str, Any]]:
 
 
 def get_active_change(repo_root: Path) -> Optional[str]:
-    """Read active change ID from .ship/state.json (with passive fallback to openspec/.active)."""
+    """Read active change ID from .ship/state.json."""
     ledger_data = read_json_file(repo_root / ".ship" / "state.json")
     if isinstance(ledger_data, dict) and ledger_data.get("active_change_id"):
         return ledger_data["active_change_id"]
-    active_file = repo_root / "openspec" / ".active"
-    if active_file.exists():
-        try:
-            val = active_file.read_text(encoding="utf-8").strip()
-            if val:
-                return val
-        except Exception:
-            pass
     return None
 
 
@@ -333,14 +325,7 @@ def set_active_change(repo_root: Path, change: str) -> None:
 
 
 def clear_active_change(repo_root: Path, change: Optional[str] = None) -> None:
-    """Clear .ship/state.json active_change_id and clean up legacy openspec/.active if present."""
-    active_file = repo_root / "openspec" / ".active"
-    if active_file.exists():
-        try:
-            if change is None or active_file.read_text(encoding="utf-8").strip() == change.strip():
-                active_file.unlink(missing_ok=True)
-        except Exception:
-            pass
+    """Clear .ship/state.json active_change_id."""
     with ledger_lock(repo_root):
         state_file = repo_root / ".ship" / "state.json"
         if state_file.exists():
@@ -2036,7 +2021,6 @@ def apply_and_archive_openspec(
             unreviewed = [
                 f for f in modified_sources
                 if not (f.startswith("openspec/specs/") and Path(f).name in package_spec_names)
-                and f != "openspec/.active"
             ]
             if unreviewed:
                 raise RuntimeError(f"Cannot archive '{change_name}': working tree has unreviewed source modifications ({', '.join(unreviewed[:3])}).")
