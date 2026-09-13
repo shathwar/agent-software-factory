@@ -15,6 +15,7 @@ bash -n scripts/install.sh
 python3 -m py_compile skills/review/scripts/validate_report.py
 python3 -m py_compile skills/simplify/scripts/scan_debt.py
 python3 -m py_compile skills/ship/scripts/inspect_lifecycle.py
+python3 -m py_compile skills/ship/scripts/lifecycle/*.py
 python3 -m py_compile skills/tdd/scripts/verify_tdd.py
 python3 -m py_compile skills/spike/scripts/run_spike.py
 echo "✓ Script syntax OK"
