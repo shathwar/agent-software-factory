@@ -1332,7 +1332,7 @@ def sync_ledger_from_workspace(repo_root: Path, target_change_id: Optional[str] 
             entry["evidence"]["audit"]["findings_count"] = audit.get("findings_count", 0)
             entry["evidence"]["audit"]["critical_or_high_count"] = audit.get("critical_or_high_count", 0)
             entry["evidence"]["audit"]["test_evidence_passed"] = audit.get("test_evidence_passed")
-            entry["evidence"]["audit"]["report_path"] = audit.get("report_file")
+            entry["evidence"]["audit"]["report_path"] = audit.get("path") or audit.get("report_file")
             entry["evidence"]["audit"]["snapshot_fingerprint"] = audit.get("snapshot_fingerprint")
 
         chk_dir = repo_root / ".scratch" / "checkpoints"
@@ -1682,7 +1682,7 @@ def record_audit_to_ledger(
         ev["findings_count"] = report.get("findings_count", 0)
         ev["critical_or_high_count"] = report.get("critical_or_high_count", 0)
         ev["test_evidence_passed"] = report.get("test_evidence_passed")
-        ev["report_path"] = report.get("report_file")
+        ev["report_path"] = report.get("path") or report.get("report_file")
         ev["snapshot_fingerprint"] = report.get("snapshot_fingerprint")
 
         git_info = get_git_info(repo_root)

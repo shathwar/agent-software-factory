@@ -2106,6 +2106,30 @@ gates:
             inspect_lifecycle.clear_active_change(tmppath, "user-profile")
             self.assertIsNone(inspect_lifecycle.get_active_change(tmppath))
 
+    def test_audit_report_path_recorded_in_ledger(self):
+        """Verify audit report path is correctly recorded in state.json evidence."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            scratch = tmppath / ".scratch"
+            scratch.mkdir(parents=True)
+            report_file = scratch / "review_report.json"
+            report_file.write_text(json.dumps({
+                "reviewer": "judge",
+                "status": "complete",
+                "verdict": "PASS",
+                "change": "payments",
+                "findings": [],
+                "tests_passed": True,
+            }))
+
+            entry = inspect_lifecycle.record_audit_to_ledger(tmppath, report_file, change_id="payments")
+            self.assertEqual(entry["evidence"]["audit"]["report_path"], ".scratch/review_report.json")
+            self.assertEqual(entry["evidence"]["audit"]["verdict"], "PASS")
+
+            # Also verify self-healing sync populates report_path
+            synced = inspect_lifecycle.sync_ledger_from_workspace(tmppath, target_change_id="payments")
+            self.assertEqual(synced["changes"]["payments"]["evidence"]["audit"]["report_path"], ".scratch/review_report.json")
+
 
 if __name__ == "__main__":
     unittest.main()
