@@ -270,7 +270,7 @@ def inspect_adrs(repo_root: Path) -> List[Dict[str, Any]]:
 
 
 def get_active_change(repo_root: Path) -> Optional[str]:
-    """Read explicitly persisted active change ID from .ship/state.json or openspec/.active."""
+    """Read active change ID from .ship/state.json (with passive fallback to openspec/.active)."""
     ledger_data = read_json_file(repo_root / ".ship" / "state.json")
     if isinstance(ledger_data, dict) and ledger_data.get("active_change_id"):
         return ledger_data["active_change_id"]
@@ -322,21 +322,18 @@ def ledger_lock(repo_root: Path, timeout_sec: float = 10.0):
 
 
 def set_active_change(repo_root: Path, change: str) -> None:
-    """Persist active change to openspec/.active and .ship/state.json."""
-    active_file = repo_root / "openspec" / ".active"
-    active_file.parent.mkdir(parents=True, exist_ok=True)
-    active_file.write_text(change.strip() + "\n", encoding="utf-8")
-    state_file = repo_root / ".ship" / "state.json"
-    if state_file.exists():
-        with ledger_lock(repo_root):
-            data = read_json_file(state_file, {})
-            if isinstance(data, dict):
-                data["active_change_id"] = change.strip()
-                save_ledger(repo_root, data)
+    """Persist active change to .ship/state.json."""
+    with ledger_lock(repo_root):
+        ledger = load_ledger(repo_root, auto_sync=False)
+        ledger_path = get_ledger_path(repo_root)
+        if not ledger.get("changes") and not ledger_path.exists():
+            ledger = sync_ledger_from_workspace(repo_root)
+        ledger["active_change_id"] = change.strip()
+        save_ledger(repo_root, ledger)
 
 
 def clear_active_change(repo_root: Path, change: Optional[str] = None) -> None:
-    """Clear openspec/.active and .ship/state.json active_change_id."""
+    """Clear .ship/state.json active_change_id and clean up legacy openspec/.active if present."""
     active_file = repo_root / "openspec" / ".active"
     if active_file.exists():
         try:
@@ -344,9 +341,9 @@ def clear_active_change(repo_root: Path, change: Optional[str] = None) -> None:
                 active_file.unlink(missing_ok=True)
         except Exception:
             pass
-    state_file = repo_root / ".ship" / "state.json"
-    if state_file.exists():
-        with ledger_lock(repo_root):
+    with ledger_lock(repo_root):
+        state_file = repo_root / ".ship" / "state.json"
+        if state_file.exists():
             data = read_json_file(state_file, {})
             if isinstance(data, dict) and (change is None or data.get("active_change_id") == (change.strip() if change else None)):
                 data["active_change_id"] = None
@@ -2657,9 +2654,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return [bar, f" {title}", bar, *lines, bar]
 
     if args.set_active_change:
-        ledger = load_ledger(repo_root)
-        ledger["active_change_id"] = args.set_active_change
-        save_ledger(repo_root, ledger)
         set_active_change(repo_root, args.set_active_change)
         output_result({"active_change_id": args.set_active_change}, [f"Active change set to: {args.set_active_change}"])
         return 0

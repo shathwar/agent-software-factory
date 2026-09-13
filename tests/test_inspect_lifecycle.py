@@ -380,8 +380,9 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(res["state_key"], "TDD_ACTIVE")
             self.assertEqual(res["openspec_packages"][0]["change"], "z-current")
 
-            # Explicit openspec/.active persistence
+            # Explicit active change persistence in .ship/state.json
             inspect_lifecycle.set_active_change(tmppath, "a-old")
+            self.assertFalse((tmppath / "openspec" / ".active").exists())
             res_explicit = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res_explicit["openspec_packages"][0]["change"], "a-old")
 
@@ -931,7 +932,7 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertFalse(pkg_dir.exists())
 
     def test_active_change_persistence_does_not_revoke_delivery_or_block_archive(self):
-        """Active change written to openspec/.active must not count as an unreviewed source modification."""
+        """Active change written to .ship/state.json or legacy openspec/.active must not count as an unreviewed source modification."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
@@ -961,17 +962,28 @@ class TestInspectLifecycle(unittest.TestCase):
                 },
             }))
 
-            # Set active change
+            # Set active change via .ship/state.json
             inspect_lifecycle.set_active_change(tmppath, "feat")
+            self.assertFalse((tmppath / "openspec" / ".active").exists())
+            self.assertEqual(inspect_lifecycle.get_active_change(tmppath), "feat")
 
-            # Must remain DELIVERY_READY (not revoked to AUDIT_ACTIVE due to openspec/.active)
+            # Must remain DELIVERY_READY
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "delivery")
             self.assertEqual(res["state_key"], "DELIVERY_READY")
 
-            # Must archive cleanly without error about openspec/.active
+            # Also simulate legacy openspec/.active left by external tool/plugin
+            legacy_active = tmppath / "openspec" / ".active"
+            legacy_active.write_text("feat\n", encoding="utf-8")
+            res_legacy = inspect_lifecycle.evaluate_repository(tmppath)
+            self.assertEqual(res_legacy["gate"], "delivery")
+            self.assertEqual(res_legacy["state_key"], "DELIVERY_READY")
+
+            # Must archive cleanly, clearing active change and cleaning up legacy openspec/.active
             arch_res = inspect_lifecycle.apply_and_archive_openspec(tmppath, change="feat")
             self.assertEqual(arch_res["change"], "feat")
+            self.assertFalse(legacy_active.exists())
+            self.assertIsNone(inspect_lifecycle.get_active_change(tmppath))
 
     def test_judge_report_unhashable_status_and_nan_confidence(self):
         """validate_judge_report_contract handles unhashable status and invalid confidence/paths without crashing."""
