@@ -34,75 +34,75 @@ import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
+def git_cmd(
+    repo_root: Path,
+    *args: str,
+    check: bool = False,
+    env: Optional[Dict[str, str]] = None,
+    text: bool = True,
+) -> subprocess.CompletedProcess[Any]:
+    """Execute a git command in the repository directory."""
+    return subprocess.run(
+        ["git", *args],
+        cwd=repo_root,
+        capture_output=True,
+        text=text,
+        check=check,
+        env=env,
+    )
+
+
+def git_out(repo_root: Path, *args: str) -> str:
+    """Execute a git command and return stripped stdout if successful, else empty string."""
+    try:
+        res = git_cmd(repo_root, *args)
+        return res.stdout.strip() if res.returncode == 0 else ""
+    except Exception:
+        return ""
+
+
+def read_json_file(path: Path, default: Any = None) -> Any:
+    """Safely load JSON from file path, returning default on missing file or parse error."""
+    if not path.exists():
+        return default
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return default
+
+
 def compute_working_tree_fingerprint(repo_root: Path) -> str:
     """Compute a deterministic SHA-256 fingerprint of HEAD commit, working tree diff, and untracked files."""
     hasher = hashlib.sha256()
 
     # 1. Commit SHA of HEAD if git repo
-    head_sha = "none"
-    try:
-        head_res = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-        )
-        if head_res.returncode == 0:
-            head_sha = head_res.stdout.strip()
-    except Exception:
-        pass
+    head_sha = git_out(repo_root, "rev-parse", "HEAD") or "none"
     hasher.update(f"HEAD:{head_sha}\n".encode("utf-8"))
 
     # 2. Diff of tracked files (both staged and unstaged)
     try:
         if head_sha != "none":
-            diff_cmd = ["git", "diff", "--no-ext-diff", "--no-textconv", "--no-color", "HEAD", "--"]
-            diff_res = subprocess.run(
-                diff_cmd,
-                cwd=repo_root,
-                capture_output=True,
-            )
+            diff_res = git_cmd(repo_root, "diff", "--no-ext-diff", "--no-textconv", "--no-color", "HEAD", "--", text=False)
             if diff_res.returncode == 0:
-                hasher.update(b"DIFF:\n")
-                hasher.update(diff_res.stdout)
+                hasher.update(b"DIFF:\n" + diff_res.stdout)
         else:
-            diff_staged = subprocess.run(
-                ["git", "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--cached", "--"],
-                cwd=repo_root,
-                capture_output=True,
-            )
-            diff_unstaged = subprocess.run(
-                ["git", "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--"],
-                cwd=repo_root,
-                capture_output=True,
-            )
+            diff_staged = git_cmd(repo_root, "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--cached", "--", text=False)
+            diff_unstaged = git_cmd(repo_root, "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--", text=False)
             if diff_staged.returncode == 0:
-                hasher.update(b"DIFF_STAGED:\n")
-                hasher.update(diff_staged.stdout)
+                hasher.update(b"DIFF_STAGED:\n" + diff_staged.stdout)
             if diff_unstaged.returncode == 0:
-                hasher.update(b"DIFF_UNSTAGED:\n")
-                hasher.update(diff_unstaged.stdout)
+                hasher.update(b"DIFF_UNSTAGED:\n" + diff_unstaged.stdout)
     except Exception:
         pass
 
     # 3. Untracked files (excluding scratch, archive, etc.)
     ignored_prefixes = (".scratch/", "scratch/", ".ship/", "openspec/archive/", "openspec/.", ".gemini/", ".git/")
     try:
-        untracked_res = subprocess.run(
-            ["git", "ls-files", "--others", "--exclude-standard", "-z"],
-            cwd=repo_root,
-            capture_output=True,
-        )
+        untracked_res = git_cmd(repo_root, "ls-files", "--others", "--exclude-standard", "-z", text=False)
         if untracked_res.returncode == 0:
-            raw_entries = [p for p in untracked_res.stdout.split(b"\0") if p]
-            for raw_path in sorted(raw_entries):
-                try:
-                    rel_str = raw_path.decode("utf-8", errors="replace")
-                except Exception:
-                    continue
-                if any(rel_str.startswith(p) for p in ignored_prefixes):
-                    continue
-                if rel_str in {"report.json", "openspec/.active"}:
+            for raw_path in sorted(p for p in untracked_res.stdout.split(b"\0") if p):
+                rel_str = raw_path.decode("utf-8", errors="replace")
+                if any(rel_str.startswith(p) for p in ignored_prefixes) or rel_str in {"report.json", "openspec/.active"}:
                     continue
                 full_path = repo_root / rel_str
                 if full_path.is_file():
@@ -294,84 +294,34 @@ def get_git_info(repo_root: Path) -> Dict[str, Any]:
         "modified_source_files": [],
         "working_tree_fingerprint": None,
     }
+    if git_out(repo_root, "rev-parse", "--is-inside-work-tree") != "true":
+        return info
+
+    info["is_git"] = True
+    info["branch"] = git_out(repo_root, "branch", "--show-current") or git_out(repo_root, "rev-parse", "--abbrev-ref", "HEAD") or "unknown"
+    info["commit"] = git_out(repo_root, "rev-parse", "HEAD") or None
+    info["tree_hash"] = git_out(repo_root, "rev-parse", "HEAD^{tree}") or None
+
     try:
-        git_check = subprocess.run(
-            ["git", "rev-parse", "--is-inside-work-tree"],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-        )
-        if git_check.returncode == 0 and git_check.stdout.strip() == "true":
-            info["is_git"] = True
-
-        if not info["is_git"]:
-            return info
-
-        branch_res = subprocess.run(
-            ["git", "branch", "--show-current"],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-        )
-        if branch_res.returncode == 0 and branch_res.stdout.strip():
-            info["branch"] = branch_res.stdout.strip()
-        else:
-            rev_abbrev = subprocess.run(
-                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                cwd=repo_root,
-                capture_output=True,
-                text=True,
-            )
-            if rev_abbrev.returncode == 0:
-                info["branch"] = rev_abbrev.stdout.strip()
-
-        commit_res = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-        )
-        if commit_res.returncode == 0:
-            info["commit"] = commit_res.stdout.strip()
-
-        tree_res = subprocess.run(
-            ["git", "rev-parse", "HEAD^{tree}"],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-        )
-        if tree_res.returncode == 0:
-            info["tree_hash"] = tree_res.stdout.strip()
-
-        status_res = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        lines = [line for line in status_res.stdout.splitlines() if line.strip()]
-        info["is_clean"] = len(lines) == 0
-        info["modified_count"] = sum(1 for l in lines if not l.startswith("??"))
-        info["untracked_count"] = sum(1 for l in lines if l.startswith("??"))
+        status_res = git_cmd(repo_root, "status", "--porcelain")
+        status_lines = [l for l in status_res.stdout.splitlines() if l.strip()]
+        info["is_clean"] = len(status_lines) == 0
+        info["modified_count"] = sum(1 for l in status_lines if not l.startswith("??"))
+        info["untracked_count"] = sum(1 for l in status_lines if l.startswith("??"))
 
         # Identify unreviewed source modifications (filtering out scratch, archive, and internal state)
         ignored_prefixes = (".scratch/", "scratch/", "openspec/archive/", "openspec/.", ".gemini/", ".git/")
         modified_sources = []
-        for l in lines:
+        for l in status_lines:
             filename = l[3:].strip()
             if " -> " in filename:
                 filename = filename.split(" -> ", 1)[1].strip()
             if filename.startswith('"') and filename.endswith('"'):
                 filename = filename[1:-1]
-            if any(filename.startswith(p) for p in ignored_prefixes):
-                continue
-            if filename in {"report.json", ".gitignore", "openspec/.active"}:
-                continue
-            modified_sources.append(filename)
+            if not any(filename.startswith(p) for p in ignored_prefixes) and filename not in {"report.json", ".gitignore", "openspec/.active"}:
+                modified_sources.append(filename)
         info["modified_source_files"] = modified_sources
         info["working_tree_fingerprint"] = compute_working_tree_fingerprint(repo_root)
-
     except Exception:
         pass
     return info
@@ -400,15 +350,9 @@ def inspect_adrs(repo_root: Path) -> List[Dict[str, Any]]:
 
 def get_active_change(repo_root: Path) -> Optional[str]:
     """Read explicitly persisted active change ID from .ship/state.json or openspec/.active."""
-    state_file = repo_root / ".ship" / "state.json"
-    if state_file.exists():
-        try:
-            data = json.loads(state_file.read_text(encoding="utf-8"))
-            cid = data.get("active_change_id")
-            if cid:
-                return cid
-        except Exception:
-            pass
+    ledger_data = read_json_file(repo_root / ".ship" / "state.json")
+    if isinstance(ledger_data, dict) and ledger_data.get("active_change_id"):
+        return ledger_data["active_change_id"]
     active_file = repo_root / "openspec" / ".active"
     if active_file.exists():
         try:
@@ -466,13 +410,10 @@ def set_active_change(repo_root: Path, change: str) -> None:
     state_file = repo_root / ".ship" / "state.json"
     if state_file.exists():
         with ledger_lock(repo_root):
-            try:
-                data = json.loads(state_file.read_text(encoding="utf-8"))
+            data = read_json_file(state_file, {})
+            if isinstance(data, dict):
                 data["active_change_id"] = change.strip()
-                state_file.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-            except Exception:
-                pass
-
+                save_ledger(repo_root, data)
 
 set_active_topic = set_active_change
 
@@ -482,25 +423,17 @@ def clear_active_change(repo_root: Path, change: Optional[str] = None) -> None:
     active_file = repo_root / "openspec" / ".active"
     if active_file.exists():
         try:
-            if change is None:
+            if change is None or active_file.read_text(encoding="utf-8").strip() == change.strip():
                 active_file.unlink(missing_ok=True)
-            else:
-                current = active_file.read_text(encoding="utf-8").strip()
-                if current == change.strip():
-                    active_file.unlink(missing_ok=True)
         except Exception:
             pass
     state_file = repo_root / ".ship" / "state.json"
     if state_file.exists():
         with ledger_lock(repo_root):
-            try:
-                data = json.loads(state_file.read_text(encoding="utf-8"))
-                if change is None or data.get("active_change_id") == (change.strip() if change else None):
-                    data["active_change_id"] = None
-                    state_file.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-            except Exception:
-                pass
-
+            data = read_json_file(state_file, {})
+            if isinstance(data, dict) and (change is None or data.get("active_change_id") == (change.strip() if change else None)):
+                data["active_change_id"] = None
+                save_ledger(repo_root, data)
 
 clear_active_topic = clear_active_change
 
@@ -1059,9 +992,7 @@ def validate_judge_report_contract(report: Any, allow_delivery_keys: bool = Fals
 
 def parse_audit_report_file(p: Path, repo_root: Path) -> Dict[str, Any]:
     """Parse and validate an audit report file or delivery evidence envelope."""
-    try:
-        content = p.read_text(encoding="utf-8")
-    except Exception as e:
+    def make_err_report(err: str) -> Dict[str, Any]:
         return {
             "path": str(p.relative_to(repo_root)),
             "is_envelope": False,
@@ -1078,49 +1009,20 @@ def parse_audit_report_file(p: Path, repo_root: Path) -> Dict[str, Any]:
             "snapshot_fingerprint": None,
             "topic": None,
             "judge_report_valid": False,
-            "judge_report_errors": [f"Could not read report file: {e}"],
+            "judge_report_errors": [err],
         }
+
+    try:
+        content = p.read_text(encoding="utf-8")
+    except Exception as e:
+        return make_err_report(f"Could not read report file: {e}")
 
     try:
         data = json.loads(content)
         if not isinstance(data, dict):
-            return {
-                "path": str(p.relative_to(repo_root)),
-                "is_envelope": False,
-                "reviewer": "unknown",
-                "status": "fail",
-                "verdict": "FAIL",
-                "findings_count": 0,
-                "critical_or_high_count": 0,
-                "is_judge": False,
-                "raw_test_evidence": None,
-                "test_evidence_passed": False,
-                "snapshot_sha": None,
-                "snapshot_tree": None,
-                "snapshot_fingerprint": None,
-                "topic": None,
-                "judge_report_valid": False,
-                "judge_report_errors": ["Report file is not a JSON object"],
-            }
+            return make_err_report("Report file is not a JSON object")
     except Exception as e:
-        return {
-            "path": str(p.relative_to(repo_root)),
-            "is_envelope": False,
-            "reviewer": "unknown",
-            "status": "fail",
-            "verdict": "FAIL",
-            "findings_count": 0,
-            "critical_or_high_count": 0,
-            "is_judge": False,
-            "raw_test_evidence": None,
-            "test_evidence_passed": False,
-            "snapshot_sha": None,
-            "snapshot_tree": None,
-            "snapshot_fingerprint": None,
-            "topic": None,
-            "judge_report_valid": False,
-            "judge_report_errors": [f"Invalid JSON in report file: {e}"],
-        }
+        return make_err_report(f"Invalid JSON in report file: {e}")
 
     # Support Delivery Evidence Envelope format
     is_envelope = "judge_report" in data or "snapshot" in data
@@ -1267,6 +1169,43 @@ def ensure_gitignore_has_ship(repo_root: Path) -> None:
             pass
 
 
+def make_default_audit_evidence() -> Dict[str, Any]:
+    """Default audit evidence structure."""
+    return {
+        "verdict": None,
+        "status": None,
+        "reviewer": None,
+        "findings_count": 0,
+        "critical_or_high_count": 0,
+        "test_evidence_passed": None,
+        "report_path": None,
+        "git_note_oid": None,
+        "snapshot_fingerprint": None,
+    }
+
+
+def make_default_evidence() -> Dict[str, Any]:
+    """Default lifecycle evidence structure."""
+    return {
+        "design": {"adr": None, "status": None},
+        "spike": {"status": "NONE", "verdict": None, "dir": None},
+        "implementation": {
+            "status": "PENDING",
+            "tests_passed": None,
+            "failed_count": 0,
+            "evidence_ref": None,
+        },
+        "simplify": {"status": "PENDING", "debt_count": 0},
+        "audit": make_default_audit_evidence(),
+        "delivery": {
+            "status": "PENDING",
+            "archived_path": None,
+            "commit": None,
+            "trailers": [],
+        },
+    }
+
+
 def create_empty_change_entry(change_id: str) -> Dict[str, Any]:
     """Create a default ChangeState entry according to the lifecycle schema."""
     return {
@@ -1281,34 +1220,7 @@ def create_empty_change_entry(change_id: str) -> Dict[str, Any]:
         },
         "blockers": [],
         "revision_counter": 0,
-        "evidence": {
-            "design": {"adr": None, "status": None},
-            "spike": {"status": "NONE", "verdict": None, "dir": None},
-            "implementation": {
-                "status": "PENDING",
-                "tests_passed": None,
-                "failed_count": 0,
-                "evidence_ref": None,
-            },
-            "simplify": {"status": "PENDING", "debt_count": 0},
-            "audit": {
-                "verdict": None,
-                "status": None,
-                "reviewer": None,
-                "findings_count": 0,
-                "critical_or_high_count": 0,
-                "test_evidence_passed": None,
-                "report_path": None,
-                "git_note_oid": None,
-                "snapshot_fingerprint": None,
-            },
-            "delivery": {
-                "status": "PENDING",
-                "archived_path": None,
-                "commit": None,
-                "trailers": [],
-            },
-        },
+        "evidence": make_default_evidence(),
         "checkpoints": {},
     }
 
@@ -1339,14 +1251,8 @@ def save_ledger(repo_root: Path, ledger: Dict[str, Any]) -> None:
 def sync_ledger_from_workspace(repo_root: Path, target_change_id: Optional[str] = None) -> Dict[str, Any]:
     """Reconcile and self-heal .ship/state.json from disk artifacts (OpenSpec, ADRs, Spikes, Audits)."""
     ledger_path = get_ledger_path(repo_root)
-    existing: Dict[str, Any] = {}
-    if ledger_path.exists():
-        try:
-            loaded = json.loads(ledger_path.read_text(encoding="utf-8"))
-            if isinstance(loaded, dict) and "changes" in loaded:
-                existing = loaded
-        except Exception:
-            existing = {}
+    loaded = read_json_file(ledger_path)
+    existing: Dict[str, Any] = loaded if isinstance(loaded, dict) and "changes" in loaded else {}
 
     changes: Dict[str, Any] = existing.get("changes", {})
     active_change_id = target_change_id or existing.get("active_change_id") or get_active_change(repo_root)
@@ -1408,12 +1314,10 @@ def sync_ledger_from_workspace(repo_root: Path, target_change_id: Optional[str] 
         chk_dir = repo_root / ".scratch" / "checkpoints"
         if chk_dir.exists():
             for cf in chk_dir.glob(f"{change}_*.json"):
-                try:
-                    cdata = json.loads(cf.read_text(encoding="utf-8"))
+                cdata = read_json_file(cf)
+                if isinstance(cdata, dict):
                     gate_k = cdata.get("gate", cf.stem.replace(f"{change}_", ""))
                     entry["checkpoints"][gate_k] = cdata
-                except Exception:
-                    pass
 
         existing_test_blockers = [b for b in entry.get("blockers", []) if b.startswith("Tests:")]
         if entry.get("evidence", {}).get("implementation", {}).get("tests_passed") is False:
@@ -1466,13 +1370,9 @@ def sync_ledger_from_workspace(repo_root: Path, target_change_id: Optional[str] 
 def load_ledger(repo_root: Path, auto_sync: bool = True) -> Dict[str, Any]:
     """Load authoritative workflow state from .ship/state.json, self-healing if missing."""
     ledger_path = get_ledger_path(repo_root)
-    if ledger_path.exists():
-        try:
-            data = json.loads(ledger_path.read_text(encoding="utf-8"))
-            if isinstance(data, dict) and "changes" in data:
-                return data
-        except Exception:
-            pass
+    data = read_json_file(ledger_path)
+    if isinstance(data, dict) and "changes" in data:
+        return data
     if auto_sync:
         return sync_ledger_from_workspace(repo_root)
     return {"version": 1, "active_change_id": None, "changes": {}}
@@ -1520,34 +1420,17 @@ def attach_git_note_evidence(
     change_id: Optional[str] = None,
 ) -> Optional[str]:
     """Attach structured JSON validation evidence to a commit object via git notes, namespaced by change ID."""
-    git_info = get_git_info(repo_root)
-    if not git_info.get("is_git") or not commit_sha:
+    if not get_git_info(repo_root).get("is_git") or not commit_sha:
+        return None
+    resolved_sha = git_out(repo_root, "rev-parse", "--verify", commit_sha)
+    if not resolved_sha:
         return None
 
-    verify_res = subprocess.run(
-        ["git", "rev-parse", "--verify", commit_sha],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-    )
-    if verify_res.returncode != 0:
-        return None
-    resolved_sha = verify_res.stdout.strip()
-
-    existing_evidence: Dict[str, Any] = {}
-    read_res = subprocess.run(
-        ["git", "notes", f"--ref={ref}", "show", resolved_sha],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-    )
-    if read_res.returncode == 0 and read_res.stdout.strip():
-        try:
-            loaded = json.loads(read_res.stdout)
-            if isinstance(loaded, dict):
-                existing_evidence = loaded
-        except Exception:
-            existing_evidence = {"raw_previous_note": read_res.stdout.strip()}
+    raw_note = git_out(repo_root, "notes", f"--ref={ref}", "show", resolved_sha)
+    try:
+        existing_evidence = json.loads(raw_note) if raw_note else {}
+    except Exception:
+        existing_evidence = {"raw_previous_note": raw_note}
 
     cid = change_id or data.get("change") or data.get("topic") or get_active_change(repo_root) or "default"
     now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -1556,36 +1439,24 @@ def attach_git_note_evidence(
     changes = existing_evidence.setdefault("changes", {})
     change_entry = changes.setdefault(cid, {})
 
-    runs_key = f"{evidence_type}_runs"
-    runs = change_entry.setdefault(runs_key, [])
-    run_record = {
+    runs = change_entry.setdefault(f"{evidence_type}_runs", [])
+    runs.append({
         "timestamp": now_iso,
         "commit": resolved_sha,
         "fingerprint": fingerprint,
         "change_id": cid,
         "evidence_type": evidence_type,
         "data": data,
-    }
-    runs.append(run_record)
+    })
 
     change_entry[evidence_type] = data
     change_entry["last_updated"] = now_iso
-
-    # Maintain top-level evidence_type for backwards compatibility
     existing_evidence[evidence_type] = data
     existing_evidence["last_change_id"] = cid
     existing_evidence["last_updated"] = now_iso
 
-    note_payload = json.dumps(existing_evidence, indent=2)
-    add_res = subprocess.run(
-        ["git", "notes", f"--ref={ref}", "add", "-f", "-m", note_payload, resolved_sha],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-    )
-    if add_res.returncode == 0:
-        return resolved_sha
-    return None
+    res = git_cmd(repo_root, "notes", f"--ref={ref}", "add", "-f", "-m", json.dumps(existing_evidence, indent=2), resolved_sha)
+    return resolved_sha if res.returncode == 0 else None
 
 
 def read_git_note_evidence(
@@ -1595,27 +1466,20 @@ def read_git_note_evidence(
     change_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Read and parse structured JSON evidence from git notes on a commit."""
-    git_info = get_git_info(repo_root)
-    if not git_info.get("is_git") or not commit_sha:
+    if not get_git_info(repo_root).get("is_git") or not commit_sha:
         return {}
-
-    res = subprocess.run(
-        ["git", "notes", f"--ref={ref}", "show", commit_sha],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-    )
-    if res.returncode == 0 and res.stdout.strip():
-        try:
-            data = json.loads(res.stdout)
-            if isinstance(data, dict):
-                if change_id:
-                    change_data = data.get("changes", {}).get(change_id)
-                    if change_data is not None:
-                        return change_data
-                return data
-        except Exception:
-            return {"raw": res.stdout.strip()}
+    resolved_sha = git_out(repo_root, "rev-parse", "--verify", commit_sha)
+    if not resolved_sha:
+        return {}
+    raw_note = git_out(repo_root, "notes", f"--ref={ref}", "show", resolved_sha)
+    try:
+        data = json.loads(raw_note) if raw_note else {}
+        if isinstance(data, dict):
+            if change_id and "changes" in data and change_id in data["changes"]:
+                return data["changes"][change_id]
+            return data
+    except Exception:
+        pass
     return {}
 
 
@@ -1663,70 +1527,39 @@ def reconcile_git_notes(
 ) -> int:
     """Reconcile remote tracking notes with local notes, performing a non-destructive merge."""
     short_name = ref_name.replace("refs/notes/", "")
-    remote_ref = f"refs/notes/{remote}/{short_name}"
-    local_ref = f"refs/notes/{short_name}"
+    remote_ref, local_ref = f"refs/notes/{remote}/{short_name}", f"refs/notes/{short_name}"
 
-    list_res = subprocess.run(
-        ["git", "notes", f"--ref={remote_ref}", "list"],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-    )
-    if list_res.returncode != 0 or not list_res.stdout.strip():
+    list_output = git_out(repo_root, "notes", f"--ref={remote_ref}", "list")
+    if not list_output:
         return 0
 
     reconciled_count = 0
-    for line in list_res.stdout.splitlines():
+    for line in list_output.splitlines():
         parts = line.strip().split()
         if len(parts) != 2:
             continue
         _blob_oid, commit_sha = parts
 
-        r_show = subprocess.run(
-            ["git", "notes", f"--ref={remote_ref}", "show", commit_sha],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-        )
-        if r_show.returncode != 0 or not r_show.stdout.strip():
+        r_note = git_out(repo_root, "notes", f"--ref={remote_ref}", "show", commit_sha)
+        if not r_note:
             continue
-
-        remote_json = {}
         try:
-            remote_json = json.loads(r_show.stdout)
+            remote_json = json.loads(r_note)
         except Exception:
-            remote_json = {"raw": r_show.stdout.strip()}
+            remote_json = {"raw": r_note}
 
-        l_show = subprocess.run(
-            ["git", "notes", f"--ref={local_ref}", "show", commit_sha],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-        )
-
-        if l_show.returncode != 0 or not l_show.stdout.strip():
-            note_content = r_show.stdout.strip()
-            subprocess.run(
-                ["git", "notes", f"--ref={local_ref}", "add", "-f", "-m", note_content, commit_sha],
-                cwd=repo_root,
-                capture_output=True,
-            )
+        l_note = git_out(repo_root, "notes", f"--ref={local_ref}", "show", commit_sha)
+        if not l_note:
+            git_cmd(repo_root, "notes", f"--ref={local_ref}", "add", "-f", "-m", r_note, commit_sha)
             reconciled_count += 1
         else:
-            local_json = {}
             try:
-                local_json = json.loads(l_show.stdout)
+                local_json = json.loads(l_note)
             except Exception:
-                local_json = {"raw": l_show.stdout.strip()}
-
+                local_json = {"raw": l_note}
             if isinstance(local_json, dict) and isinstance(remote_json, dict):
                 merged = merge_note_payloads(local_json, remote_json)
-                merged_str = json.dumps(merged, indent=2)
-                subprocess.run(
-                    ["git", "notes", f"--ref={local_ref}", "add", "-f", "-m", merged_str, commit_sha],
-                    cwd=repo_root,
-                    capture_output=True,
-                )
+                git_cmd(repo_root, "notes", f"--ref={local_ref}", "add", "-f", "-m", json.dumps(merged, indent=2), commit_sha)
                 reconciled_count += 1
 
     return reconciled_count
@@ -1737,66 +1570,27 @@ def configure_git_notes_sync(
     remote: str = "origin",
 ) -> Dict[str, Any]:
     """Configure git fetch refspecs into a separate tracking namespace and ensure branch push remains untouched."""
-    git_info = get_git_info(repo_root)
-    if not git_info.get("is_git"):
+    if not get_git_info(repo_root).get("is_git"):
         return {"configured": False, "error": "Not a git repository"}
 
     # 1. REMOVE any push refspecs that override default branch push behavior
-    push_cfg = subprocess.run(
-        ["git", "config", "--get-all", f"remote.{remote}.push"],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-    )
-    for line in push_cfg.stdout.splitlines():
+    for line in git_out(repo_root, "config", "--get-all", f"remote.{remote}.push").splitlines():
         if "refs/notes" in line:
-            try:
-                subprocess.run(
-                    ["git", "config", "--unset-all", f"remote.{remote}.push", line.strip()],
-                    cwd=repo_root,
-                    capture_output=True,
-                )
-            except Exception:
-                pass
+            git_cmd(repo_root, "config", "--unset-all", f"remote.{remote}.push", line.strip())
 
     # 2. REMOVE destructive forced fetch refspecs like +refs/notes/*:refs/notes/*
-    fetch_cfg = subprocess.run(
-        ["git", "config", "--get-all", f"remote.{remote}.fetch"],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-    )
-    for line in fetch_cfg.stdout.splitlines():
+    fetch_cfg = git_out(repo_root, "config", "--get-all", f"remote.{remote}.fetch")
+    for line in fetch_cfg.splitlines():
         if line.strip() in {"+refs/notes/*:refs/notes/*", "refs/notes/*:refs/notes/*"}:
-            try:
-                subprocess.run(
-                    ["git", "config", "--unset-all", f"remote.{remote}.fetch", line.strip()],
-                    cwd=repo_root,
-                    capture_output=True,
-                )
-            except Exception:
-                pass
+            git_cmd(repo_root, "config", "--unset-all", f"remote.{remote}.fetch", line.strip())
 
     # 3. Add non-destructive remote tracking fetch refspec: refs/notes/*:refs/notes/{remote}/*
     tracking_refspec = f"refs/notes/*:refs/notes/{remote}/*"
-    fetch_lines = [l.strip() for l in fetch_cfg.stdout.splitlines() if l.strip() not in {"+refs/notes/*:refs/notes/*", "refs/notes/*:refs/notes/*"}]
+    fetch_lines = [l.strip() for l in fetch_cfg.splitlines() if l.strip() not in {"+refs/notes/*:refs/notes/*", "refs/notes/*:refs/notes/*"}]
     if tracking_refspec not in fetch_lines:
-        try:
-            subprocess.run(
-                ["git", "config", "--add", f"remote.{remote}.fetch", tracking_refspec],
-                cwd=repo_root,
-                check=True,
-                capture_output=True,
-            )
-        except Exception:
-            pass
+        git_cmd(repo_root, "config", "--add", f"remote.{remote}.fetch", tracking_refspec)
 
-    return {
-        "configured": True,
-        "remote": remote,
-        "fetch_refspec": tracking_refspec,
-        "push_refspec": None,
-    }
+    return {"configured": True, "remote": remote, "fetch_refspec": tracking_refspec, "push_refspec": None}
 
 
 def sync_git_notes(
@@ -1809,30 +1603,13 @@ def sync_git_notes(
     short_name = ref_name.replace("refs/notes/", "")
     results: Dict[str, Any] = {"remote": remote, "fetch": "skipped", "reconciled": 0, "push": "skipped"}
 
-    fetch_res = subprocess.run(
-        ["git", "fetch", remote, f"refs/notes/{short_name}:refs/notes/{remote}/{short_name}"],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-    )
-    if fetch_res.returncode == 0:
-        results["fetch"] = "success"
-    else:
-        results["fetch"] = f"skipped/empty: {fetch_res.stderr.strip()}"
+    fetch_res = git_cmd(repo_root, "fetch", remote, f"refs/notes/{short_name}:refs/notes/{remote}/{short_name}")
+    results["fetch"] = "success" if fetch_res.returncode == 0 else f"skipped/empty: {fetch_res.stderr.strip()}"
 
-    reconciled_cnt = reconcile_git_notes(repo_root, remote=remote, ref_name=short_name)
-    results["reconciled"] = reconciled_cnt
+    results["reconciled"] = reconcile_git_notes(repo_root, remote=remote, ref_name=short_name)
 
-    push_res = subprocess.run(
-        ["git", "push", remote, f"refs/notes/{short_name}:refs/notes/{short_name}"],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-    )
-    if push_res.returncode == 0:
-        results["push"] = "success"
-    else:
-        results["push"] = f"failed: {push_res.stderr.strip()}"
+    push_res = git_cmd(repo_root, "push", remote, f"refs/notes/{short_name}:refs/notes/{short_name}")
+    results["push"] = "success" if push_res.returncode == 0 else f"failed: {push_res.stderr.strip()}"
 
     return results
 
@@ -2012,6 +1789,116 @@ def record_test_run_to_ledger(
     return mutate_change_state(repo_root, cid, updater)
 
 
+def validate_delivery_readiness(
+    audit_report: Dict[str, Any],
+    active_pkg: Dict[str, Any],
+    git_info: Dict[str, Any],
+    active_change: Optional[Dict[str, Any]],
+) -> Tuple[str, str, str]:
+    """Validate that audit and ledger requirements are met before advancing to delivery."""
+    def audit_blocked(reason: str) -> Tuple[str, str, str]:
+        return ("audit", "AUDIT_ACTIVE", reason)
+
+    # 1. Judge report contract check for envelopes
+    if audit_report.get("is_envelope") and not audit_report.get("judge_report_valid"):
+        err_msg = "; ".join(audit_report.get("judge_report_errors", ["Malformed Judge report structure"]))
+        return audit_blocked(f"Judge report in delivery envelope is malformed: {err_msg}. Re-run review to produce a valid Judge report.")
+
+    # 2. Reviewer must be Judge
+    if not audit_report.get("is_judge"):
+        return audit_blocked(f"Audit report is from '{audit_report.get('reviewer', 'unknown')}', not Judge. Requires explicit Judge adjudication before shipping.")
+
+    # 2. Must not contain unresolved CRITICAL or HIGH findings
+    crit_count = audit_report.get("critical_or_high_count", 0)
+    if crit_count > 0:
+        return audit_blocked(f"Audit has {crit_count} unresolved CRITICAL/HIGH finding(s). Must remediate defects before shipping.")
+
+    # 3. Must have explicit passing verdict and clean findings
+    verdict = audit_report.get("verdict", "")
+    status = audit_report.get("status", "")
+    findings_count = audit_report.get("findings_count", 0)
+
+    if verdict in {"FAIL", "FAILED", "REJECTED"}:
+        return audit_blocked(f"Audit verdict '{verdict}' is rejected. Remediate findings or re-run review.")
+    if status in {"fail", "failed", "rejected", "incomplete", "skipped"}:
+        return audit_blocked(f"Audit status '{status}' is not complete/passing. Complete review and remediate findings.")
+    if not (verdict in {"PASS", "APPROVED"} or (verdict == "" and status in {"complete", "pass", "approved"} and findings_count == 0)):
+        return audit_blocked(f"Audit verdict '{verdict or status}' is not PASS. Remediate findings or re-run review.")
+
+    # 4. Require explicit verified passing test evidence
+    if not audit_report.get("test_evidence_passed"):
+        return audit_blocked("Audit report lacks verified test evidence. Run test suite and record passing test results.")
+
+    # 5. Package / Change exact match check
+    report_change = audit_report.get("change") or audit_report.get("topic")
+    pkg_change = active_pkg.get("change") or active_pkg.get("topic")
+    if not report_change:
+        return audit_blocked(f"Audit approval lacks 'change'. Requires exact match with active package '{pkg_change}' before shipping.")
+    if report_change != pkg_change:
+        return audit_blocked(f"Audit approval is for change '{report_change}', but active package is '{pkg_change}'. Requires audit approval for '{pkg_change}' before shipping.")
+
+    # 6. Judge report contract check
+    if not audit_report.get("judge_report_valid"):
+        err_msg = "; ".join(audit_report.get("judge_report_errors", ["Malformed Judge report structure"]))
+        env_text = " in delivery envelope" if audit_report.get("is_envelope") else ""
+        return audit_blocked(f"Judge report{env_text} is malformed: {err_msg}. Re-run review to produce a valid Judge report.")
+
+    # 7. Snapshot binding check
+    snapshot_sha = audit_report.get("snapshot_sha")
+    snapshot_fingerprint = audit_report.get("snapshot_fingerprint")
+    current_commit = git_info.get("commit")
+    current_fingerprint = git_info.get("working_tree_fingerprint")
+
+    if git_info.get("is_git"):
+        if current_commit:
+            if not snapshot_sha and not snapshot_fingerprint:
+                return audit_blocked("Audit report lacks commit snapshot SHA or tree fingerprint. Audit must be bound to reviewed snapshot.")
+            if snapshot_sha:
+                if not bool(re.match(r"^[0-9a-f]{7,40}$", snapshot_sha, re.IGNORECASE)):
+                    if not snapshot_fingerprint or (current_fingerprint and snapshot_fingerprint != current_fingerprint):
+                        return audit_blocked(f"Audit snapshot commit '{snapshot_sha}' is symbolic or unresolved. Must be a resolved, immutable commit SHA or accompanied by a matching working-tree fingerprint.")
+                elif not current_commit.startswith(snapshot_sha) and not snapshot_sha.startswith(current_commit):
+                    return audit_blocked(f"Audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'. Re-run audit on current code.")
+        else:
+            if not snapshot_fingerprint:
+                return audit_blocked("Audit report in repository before first commit lacks working-tree fingerprint. Audit must be bound to reviewed snapshot fingerprint.")
+            if snapshot_sha and snapshot_sha != "none":
+                return audit_blocked(f"Audit report snapshot commit '{snapshot_sha}' does not exist (repository has no commits yet). Re-run audit on current code.")
+
+    # 8. Working tree consistency check
+    if snapshot_fingerprint:
+        if not current_fingerprint or snapshot_fingerprint != current_fingerprint:
+            return audit_blocked("Working tree has been modified since review (fingerprint mismatch). Re-run adversarial audit on current code before shipping.")
+    else:
+        modified_sources = git_info.get("modified_source_files", [])
+        if modified_sources:
+            mod_str = ", ".join(modified_sources[:3]) + (f" (+{len(modified_sources)-3} more)" if len(modified_sources) > 3 else "")
+            return audit_blocked(f"Working tree has unreviewed source modifications ({mod_str}). Re-run adversarial audit on current code before shipping.")
+
+    # 9. Ledger readiness validation
+    if active_change:
+        blockers = active_change.get("blockers", [])
+        if blockers:
+            test_b = [b for b in blockers if b.startswith("Tests:")]
+            if test_b:
+                return ("implementation", "TDD_ACTIVE", f"Blocked by test failure in ledger: {test_b[0]}. Run Red-Green-Refactor.")
+            return audit_blocked(f"Blocked by active ledger blockers: {'; '.join(blockers)}. Remediate findings before shipping.")
+        impl_ev = active_change.get("evidence", {}).get("implementation", {})
+        if impl_ev.get("tests_passed") is False or impl_ev.get("status") == "FAILED":
+            return ("implementation", "TDD_ACTIVE", "Blocked by failing test evidence in ledger. Run Red-Green-Refactor.")
+        audit_ev = active_change.get("evidence", {}).get("audit", {})
+        if audit_ev.get("verdict") in {"FAIL", "FAILED", "REJECTED"}:
+            return audit_blocked(f"Audit verdict recorded in ledger is '{audit_ev.get('verdict')}'. Remediate findings or re-run review.")
+        if audit_ev.get("critical_or_high_count", 0) > 0:
+            return audit_blocked(f"Ledger records {audit_ev['critical_or_high_count']} unresolved CRITICAL/HIGH finding(s). Remediate defects before shipping.")
+
+    return (
+        "delivery",
+        "DELIVERY_READY",
+        f"All tasks complete, tests verified green, and Judge audit PASSED. Ready to deliver Delivery Walkthrough. Run 'python3 skills/ship/scripts/inspect_lifecycle.py --archive' to sync living specs and archive '{pkg_change}'.",
+    )
+
+
 def determine_lifecycle_state(
     git_info: Dict[str, Any],
     adrs: List[Dict[str, Any]],
@@ -2090,203 +1977,7 @@ def determine_lifecycle_state(
                     "All implementation tasks marked complete. Run 'audit' in review-loop mode against base branch.",
                 )
 
-            # 1. Judge report contract check for envelopes
-            if audit_report.get("is_envelope") and not audit_report.get("judge_report_valid"):
-                err_msg = "; ".join(audit_report.get("judge_report_errors", ["Malformed Judge report structure"]))
-                return (
-                    "audit",
-                    "AUDIT_ACTIVE",
-                    f"Judge report in delivery envelope is malformed: {err_msg}. Re-run review to produce a valid Judge report.",
-                )
-
-            # 2. Reviewer must be Judge (not an unadjudicated specialist)
-            if not audit_report.get("is_judge"):
-                reviewer_name = audit_report.get("reviewer", "unknown")
-                return (
-                    "audit",
-                    "AUDIT_ACTIVE",
-                    f"Audit report is from '{reviewer_name}', not Judge. Requires explicit Judge adjudication before shipping.",
-                )
-
-            # 3. Must not contain unresolved CRITICAL or HIGH findings
-            crit_count = audit_report.get("critical_or_high_count", 0)
-            if crit_count > 0:
-                return (
-                    "audit",
-                    "AUDIT_ACTIVE",
-                    f"Audit has {crit_count} unresolved CRITICAL/HIGH finding(s). Must remediate defects before shipping.",
-                )
-
-            # 4. Must have explicit passing verdict and clean findings
-            verdict = audit_report.get("verdict", "")
-            status = audit_report.get("status", "")
-            findings_count = audit_report.get("findings_count", 0)
-
-            # Reject any explicit FAIL or non-pass verdict immediately
-            if verdict in {"FAIL", "FAILED", "REJECTED"}:
-                return (
-                    "audit",
-                    "AUDIT_ACTIVE",
-                    f"Audit verdict '{verdict}' is rejected. Remediate findings or re-run review.",
-                )
-            if status in {"fail", "failed", "rejected", "incomplete", "skipped"}:
-                return (
-                    "audit",
-                    "AUDIT_ACTIVE",
-                    f"Audit status '{status}' is not complete/passing. Complete review and remediate findings.",
-                )
-
-            verdict_ok = verdict in {"PASS", "APPROVED"} or (verdict == "" and status in {"complete", "pass", "approved"} and findings_count == 0)
-            if not verdict_ok:
-                return (
-                    "audit",
-                    "AUDIT_ACTIVE",
-                    f"Audit verdict '{verdict or status}' is not PASS. Remediate findings or re-run review.",
-                )
-
-            # 5. Require explicit verified passing test evidence
-            if not audit_report.get("test_evidence_passed"):
-                return (
-                    "audit",
-                    "AUDIT_ACTIVE",
-                    "Audit report lacks verified test evidence. Run test suite and record passing test results.",
-                )
-
-            # 6. Package / Change exact match check (enforced on all reports)
-            report_change = audit_report.get("change") or audit_report.get("topic")
-            pkg_change = active_pkg.get("change") or active_pkg.get("topic")
-            if not report_change:
-                return (
-                    "audit",
-                    "AUDIT_ACTIVE",
-                    f"Audit approval lacks 'change'. Requires exact match with active package '{pkg_change}' before shipping.",
-                )
-            if report_change != pkg_change:
-                return (
-                    "audit",
-                    "AUDIT_ACTIVE",
-                    f"Audit approval is for change '{report_change}', but active package is '{pkg_change}'. Requires audit approval for '{pkg_change}' before shipping.",
-                )
-
-            # 7. Judge report contract check (enforced on all reports)
-            if not audit_report.get("judge_report_valid"):
-                err_msg = "; ".join(audit_report.get("judge_report_errors", ["Malformed Judge report structure"]))
-                env_text = " in delivery envelope" if audit_report.get("is_envelope") else ""
-                return (
-                    "audit",
-                    "AUDIT_ACTIVE",
-                    f"Judge report{env_text} is malformed: {err_msg}. Re-run review to produce a valid Judge report.",
-                )
-
-            # 7. Snapshot binding check: commit match
-            snapshot_sha = audit_report.get("snapshot_sha")
-            snapshot_fingerprint = audit_report.get("snapshot_fingerprint")
-            current_commit = git_info.get("commit")
-            current_fingerprint = git_info.get("working_tree_fingerprint")
-
-            if git_info.get("is_git"):
-                if current_commit:
-                    if not snapshot_sha and not snapshot_fingerprint:
-                        return (
-                            "audit",
-                            "AUDIT_ACTIVE",
-                            "Audit report lacks commit snapshot SHA or tree fingerprint. Audit must be bound to reviewed snapshot.",
-                        )
-                    if snapshot_sha:
-                        is_hex_sha = bool(re.match(r"^[0-9a-f]{7,40}$", snapshot_sha, re.IGNORECASE))
-                        if not is_hex_sha:
-                            # Symbolic ref like 'HEAD' requires a matching working-tree fingerprint
-                            if not snapshot_fingerprint or (current_fingerprint and snapshot_fingerprint != current_fingerprint):
-                                return (
-                                    "audit",
-                                    "AUDIT_ACTIVE",
-                                    f"Audit snapshot commit '{snapshot_sha}' is symbolic or unresolved. Must be a resolved, immutable commit SHA or accompanied by a matching working-tree fingerprint.",
-                                )
-                        elif not current_commit.startswith(snapshot_sha) and not snapshot_sha.startswith(current_commit):
-                            return (
-                                "audit",
-                                "AUDIT_ACTIVE",
-                                f"Audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'. Re-run audit on current code.",
-                            )
-                else:
-                    # Git repository before first commit
-                    if not snapshot_fingerprint:
-                        return (
-                            "audit",
-                            "AUDIT_ACTIVE",
-                            "Audit report in repository before first commit lacks working-tree fingerprint. Audit must be bound to reviewed snapshot fingerprint.",
-                        )
-                    if snapshot_sha and snapshot_sha != "none":
-                        return (
-                            "audit",
-                            "AUDIT_ACTIVE",
-                            f"Audit report snapshot commit '{snapshot_sha}' does not exist (repository has no commits yet). Re-run audit on current code.",
-                        )
-
-            # 7. Working tree consistency check
-            if snapshot_fingerprint:
-                if not current_fingerprint or snapshot_fingerprint != current_fingerprint:
-                    return (
-                        "audit",
-                        "AUDIT_ACTIVE",
-                        "Working tree has been modified since review (fingerprint mismatch). Re-run adversarial audit on current code before shipping.",
-                    )
-            else:
-                # If no fingerprint provided in envelope, require clean working tree
-                modified_sources = git_info.get("modified_source_files", [])
-                if modified_sources:
-                    mod_str = ", ".join(modified_sources[:3])
-                    if len(modified_sources) > 3:
-                        mod_str += f" (+{len(modified_sources)-3} more)"
-                    return (
-                        "audit",
-                        "AUDIT_ACTIVE",
-                        f"Working tree has unreviewed source modifications ({mod_str}). Re-run adversarial audit on current code before shipping.",
-                    )
-
-            # Ledger readiness validation
-            if active_change:
-                blockers = active_change.get("blockers", [])
-                if blockers:
-                    test_b = [b for b in blockers if b.startswith("Tests:")]
-                    if test_b:
-                        return (
-                            "implementation",
-                            "TDD_ACTIVE",
-                            f"Blocked by test failure in ledger: {test_b[0]}. Run Red-Green-Refactor.",
-                        )
-                    return (
-                        "audit",
-                        "AUDIT_ACTIVE",
-                        f"Blocked by active ledger blockers: {'; '.join(blockers)}. Remediate findings before shipping.",
-                    )
-                impl_ev = active_change.get("evidence", {}).get("implementation", {})
-                if impl_ev.get("tests_passed") is False or impl_ev.get("status") == "FAILED":
-                    return (
-                        "implementation",
-                        "TDD_ACTIVE",
-                        "Blocked by failing test evidence in ledger. Run Red-Green-Refactor.",
-                    )
-                audit_ev = active_change.get("evidence", {}).get("audit", {})
-                if audit_ev.get("verdict") in {"FAIL", "FAILED", "REJECTED"}:
-                    return (
-                        "audit",
-                        "AUDIT_ACTIVE",
-                        f"Audit verdict recorded in ledger is '{audit_ev.get('verdict')}'. Remediate findings or re-run review.",
-                    )
-                if audit_ev.get("critical_or_high_count", 0) > 0:
-                    return (
-                        "audit",
-                        "AUDIT_ACTIVE",
-                        f"Ledger records {audit_ev['critical_or_high_count']} unresolved CRITICAL/HIGH finding(s). Remediate defects before shipping.",
-                    )
-
-            # All checks pass
-            return (
-                "delivery",
-                "DELIVERY_READY",
-                f"All tasks complete, tests verified green, and Judge audit PASSED. Ready to deliver Delivery Walkthrough. Run 'python3 skills/ship/scripts/inspect_lifecycle.py --archive' to sync living specs and archive '{pkg_change}'.",
-            )
+            return validate_delivery_readiness(audit_report, active_pkg, git_info, active_change)
 
     # Only ADRs exist
     has_accepted = any(a.get("status") in {"ACCEPTED", "APPROVED"} for a in adrs)
@@ -2572,6 +2263,18 @@ def canonicalize_gate_name(gate_name: str) -> str:
     return canonical.replace(" ", "-")
 
 
+def _backup_path(src: Path, dest: Path) -> None:
+    """Helper to backup a file or directory into destination directory."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if src.is_file():
+            shutil.copy2(src, dest)
+        elif src.is_dir():
+            shutil.copytree(src, dest, dirs_exist_ok=True)
+    except Exception:
+        pass
+
+
 def create_checkpoint(
     repo_root: Path,
     gate_name: str,
@@ -2587,7 +2290,6 @@ def create_checkpoint(
     allow_git_tag = create_git_tag or cfg.get("create_git_tag", False)
 
     canonical_tag = canonicalize_gate_name(gate_name)
-
     ref_name = f"refs/ship/{resolved_change}/{canonical_tag}"
     tag_name = f"ship/{resolved_change}/{canonical_tag}"
     commit_sha = git_info.get("commit")
@@ -2599,46 +2301,20 @@ def create_checkpoint(
     if git_info.get("is_git") and commit_sha:
         try:
             with tempfile.TemporaryDirectory() as idx_dir:
-                idx_file = Path(idx_dir) / "index"
-                env = {**os.environ, "GIT_INDEX_FILE": str(idx_file)}
-                subprocess.run(["git", "read-tree", commit_sha], cwd=repo_root, env=env, capture_output=True, check=True)
-                add_cmd = ["git", "add", "-A", "--", ".", ":!.scratch", ":!scratch", ":!.gemini", ":!.ship"]
-                subprocess.run(add_cmd, cwd=repo_root, env=env, capture_output=True, check=True)
-                tree_res = subprocess.run(
-                    ["git", "write-tree"],
-                    cwd=repo_root,
-                    env=env,
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                )
-                tree_sha = tree_res.stdout.strip()
+                env = {**os.environ, "GIT_INDEX_FILE": str(Path(idx_dir) / "index")}
+                git_cmd(repo_root, "read-tree", commit_sha, env=env, check=True)
+                git_cmd(repo_root, "add", "-A", "--", ".", ":!.scratch", ":!scratch", ":!.gemini", ":!.ship", env=env, check=True)
+                tree_sha = git_cmd(repo_root, "write-tree", env=env, check=True).stdout.strip()
                 commit_msg = f"ship-checkpoint:{resolved_change}:{canonical_tag}"
-                commit_res = subprocess.run(
-                    ["git", "commit-tree", tree_sha, "-p", commit_sha, "-m", commit_msg],
-                    cwd=repo_root,
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                )
-                snapshot_sha = commit_res.stdout.strip()
+                snapshot_sha = git_cmd(repo_root, "commit-tree", tree_sha, "-p", commit_sha, "-m", commit_msg, env=env, check=True).stdout.strip()
         except Exception:
             snapshot_sha = None
 
         target_ref_sha = snapshot_sha or commit_sha
         try:
-            subprocess.run(
-                ["git", "update-ref", ref_name, target_ref_sha],
-                cwd=repo_root,
-                capture_output=True,
-                check=True,
-            )
+            git_cmd(repo_root, "update-ref", ref_name, target_ref_sha, check=True)
             if allow_git_tag:
-                subprocess.run(
-                    ["git", "tag", "-f", tag_name, target_ref_sha],
-                    cwd=repo_root,
-                    capture_output=True,
-                )
+                git_cmd(repo_root, "tag", "-f", tag_name, target_ref_sha)
             ref_created = True
         except Exception:
             pass
@@ -2694,23 +2370,13 @@ def perform_rollback(
 
     chk_file = repo_root / ".scratch" / "checkpoints" / f"{resolved_change}_{canonical_tag}.json"
     if not chk_file.exists():
-        if canonical_tag == "design":
-            legacy_chk = repo_root / ".scratch" / "checkpoints" / f"{resolved_change}_gate-1-spec.json"
-            if legacy_chk.exists():
-                chk_file = legacy_chk
-        elif canonical_tag == "implementation":
-            legacy_chk = repo_root / ".scratch" / "checkpoints" / f"{resolved_change}_gate-2-impl.json"
-            if legacy_chk.exists():
-                chk_file = legacy_chk
+        legacy = "gate-1-spec" if canonical_tag == "design" else ("gate-2-impl" if canonical_tag == "implementation" else "")
+        if legacy and (repo_root / ".scratch" / "checkpoints" / f"{resolved_change}_{legacy}.json").exists():
+            chk_file = repo_root / ".scratch" / "checkpoints" / f"{resolved_change}_{legacy}.json"
 
     target_tag = f"ship/{resolved_change}/{canonical_tag}"
     target_ref = f"refs/ship/{resolved_change}/{canonical_tag}"
-    checkpoint_info: Optional[Dict[str, Any]] = None
-    if chk_file.exists():
-        try:
-            checkpoint_info = json.loads(chk_file.read_text(encoding="utf-8"))
-        except Exception:
-            pass
+    checkpoint_info: Optional[Dict[str, Any]] = read_json_file(chk_file)
 
     backed_up_files: List[str] = []
     restored_files: List[str] = []
@@ -2718,143 +2384,69 @@ def perform_rollback(
     git_reset_performed = False
 
     if git_info.get("is_git"):
-        target_sha: Optional[str] = None
-        # Check internal private ref first to avoid requiring global tags
-        ref_check = subprocess.run(
-            ["git", "rev-parse", "--verify", target_ref],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
+        target_sha: Optional[str] = (
+            git_out(repo_root, "rev-parse", "--verify", target_ref)
+            or git_out(repo_root, "rev-parse", "--verify", target_tag)
+            or (checkpoint_info.get("snapshot_commit") if checkpoint_info else None)
+            or (checkpoint_info.get("commit") if checkpoint_info else None)
         )
-        if ref_check.returncode == 0:
-            target_sha = ref_check.stdout.strip()
-        else:
-            tag_check = subprocess.run(
-                ["git", "rev-parse", "--verify", target_tag],
-                cwd=repo_root,
-                capture_output=True,
-                text=True,
-            )
-            if tag_check.returncode == 0:
-                target_sha = tag_check.stdout.strip()
-            elif checkpoint_info and checkpoint_info.get("snapshot_commit"):
-                target_sha = checkpoint_info["snapshot_commit"]
-            elif checkpoint_info and checkpoint_info.get("commit"):
-                target_sha = checkpoint_info["commit"]
 
         base_commit = (
             checkpoint_info.get("commit")
             if checkpoint_info and checkpoint_info.get("commit") and checkpoint_info.get("commit") != "none"
             else None
         )
-
         current_sha = git_info.get("commit")
         backup_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            patch_res = subprocess.run(
-                ["git", "diff", "--no-renames", "HEAD"],
-                cwd=repo_root,
-                capture_output=True,
-            )
-            if patch_res.stdout:
-                (backup_dir / "working_diff.patch").write_bytes(patch_res.stdout)
-        except Exception:
-            pass
+
+        working_diff = git_cmd(repo_root, "diff", "--no-renames", "HEAD", text=False).stdout
+        if working_diff:
+            (backup_dir / "working_diff.patch").write_bytes(working_diff)
 
         if target_sha and current_sha and current_sha != target_sha and target_sha != "none":
-            try:
-                commit_diff_res = subprocess.run(
-                    ["git", "diff", "--no-renames", target_sha, "HEAD"],
-                    cwd=repo_root,
-                    capture_output=True,
-                )
-                if commit_diff_res.stdout:
-                    (backup_dir / "committed_diff.patch").write_bytes(commit_diff_res.stdout)
-            except Exception:
-                pass
+            commit_diff = git_cmd(repo_root, "diff", "--no-renames", target_sha, "HEAD", text=False).stdout
+            if commit_diff:
+                (backup_dir / "committed_diff.patch").write_bytes(commit_diff)
 
         for src_path_str in git_info.get("modified_source_files", []):
             full_src = repo_root / src_path_str
             if full_src.is_file():
-                dest = backup_dir / src_path_str
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                try:
-                    shutil.copy2(full_src, dest)
-                    if src_path_str not in backed_up_files:
-                        backed_up_files.append(src_path_str)
-                except Exception:
-                    pass
+                _backup_path(full_src, backup_dir / src_path_str)
+                if src_path_str not in backed_up_files:
+                    backed_up_files.append(src_path_str)
 
         # Perform scoped restoration of implementation files modified or added since target_sha
         if target_sha and target_sha != "none":
             try:
-                diff_cmd = ["git", "diff", "--no-renames", "--name-only", target_sha]
-                diff_proc = subprocess.run(diff_cmd, cwd=repo_root, capture_output=True, text=True)
-                changed_files = [line.strip() for line in diff_proc.stdout.splitlines() if line.strip()]
-
-                untracked_proc = subprocess.run(
-                    ["git", "ls-files", "--others", "--exclude-standard"],
-                    cwd=repo_root,
-                    capture_output=True,
-                    text=True,
-                )
-                for line in untracked_proc.stdout.splitlines():
-                    p = line.strip()
-                    if p and p not in changed_files:
+                diff_files = git_out(repo_root, "diff", "--no-renames", "--name-only", target_sha).splitlines()
+                untracked_files = git_out(repo_root, "ls-files", "--others", "--exclude-standard").splitlines()
+                changed_files = [f.strip() for f in diff_files if f.strip()]
+                for p in [f.strip() for f in untracked_files if f.strip()]:
+                    if p not in changed_files:
                         changed_files.append(p)
 
                 ignored_prefixes = (".scratch/", "scratch/", ".ship/", "ship/", ".gemini/", ".git/")
                 tasks_rel = f"openspec/changes/{resolved_change}/tasks.md"
 
                 for rel_path in changed_files:
-                    if any(rel_path.startswith(p) for p in ignored_prefixes):
-                        continue
-                    if rel_path == tasks_rel:
+                    if any(rel_path.startswith(p) for p in ignored_prefixes) or rel_path == tasks_rel:
                         continue
 
                     full_path = repo_root / rel_path
-                    if full_path.is_file() and rel_path not in backed_up_files:
-                        dest = backup_dir / rel_path
-                        dest.parent.mkdir(parents=True, exist_ok=True)
-                        try:
-                            shutil.copy2(full_path, dest)
-                            backed_up_files.append(rel_path)
-                        except Exception:
-                            pass
-                    elif full_path.is_dir() and rel_path not in backed_up_files:
-                        dest = backup_dir / rel_path
-                        try:
-                            shutil.copytree(full_path, dest, dirs_exist_ok=True)
-                            backed_up_files.append(rel_path)
-                        except Exception:
-                            pass
+                    if (full_path.is_file() or full_path.is_dir()) and rel_path not in backed_up_files:
+                        _backup_path(full_path, backup_dir / rel_path)
+                        backed_up_files.append(rel_path)
 
                     # Check if file existed at target_sha
-                    cat_check = subprocess.run(
-                        ["git", "cat-file", "-e", f"{target_sha}:{rel_path}"],
-                        cwd=repo_root,
-                        capture_output=True,
-                    )
-                    if cat_check.returncode == 0:
-                        # Restore file from target_sha
-                        chk_proc = subprocess.run(
-                            ["git", "checkout", target_sha, "--", rel_path],
-                            cwd=repo_root,
-                            capture_output=True,
-                            text=True,
-                        )
-                        if chk_proc.returncode == 0:
+                    if git_cmd(repo_root, "cat-file", "-e", f"{target_sha}:{rel_path}").returncode == 0:
+                        if git_cmd(repo_root, "checkout", target_sha, "--", rel_path).returncode == 0:
                             restored_files.append(rel_path)
                     else:
                         # File was newly created since target_sha: preserve in untracked_removed safety stash before removing
                         safety_stash = backup_dir / "untracked_removed" / rel_path
-                        safety_stash.parent.mkdir(parents=True, exist_ok=True)
+                        _backup_path(full_path, safety_stash)
                         if full_path.is_file():
-                            try:
-                                shutil.copy2(full_path, safety_stash)
-                            except Exception:
-                                pass
-                            subprocess.run(["git", "rm", "-f", "--cached", rel_path], cwd=repo_root, capture_output=True)
+                            git_cmd(repo_root, "rm", "-f", "--cached", rel_path)
                             full_path.unlink(missing_ok=True)
                             parent = full_path.parent
                             while parent != repo_root and parent.is_dir():
@@ -2864,20 +2456,14 @@ def perform_rollback(
                                 except OSError:
                                     break
                         elif full_path.is_dir():
-                            try:
-                                shutil.copytree(full_path, safety_stash, dirs_exist_ok=True)
-                            except Exception:
-                                pass
-                            subprocess.run(["git", "rm", "-rf", "--cached", rel_path], cwd=repo_root, capture_output=True)
+                            git_cmd(repo_root, "rm", "-rf", "--cached", rel_path)
                             shutil.rmtree(full_path, ignore_errors=True)
                         removed_files.append(rel_path)
 
                 # Reset git history and index to base commit or target_sha
                 reset_target = base_commit or target_sha
                 if current_sha and reset_target and current_sha != reset_target and reset_target != "none":
-                    reset_cmd = ["git", "reset", reset_target]
-                    res = subprocess.run(reset_cmd, cwd=repo_root, capture_output=True, text=True)
-                    if res.returncode == 0:
+                    if git_cmd(repo_root, "reset", reset_target).returncode == 0:
                         git_reset_performed = True
                 elif restored_files or removed_files:
                     git_reset_performed = True
@@ -2922,17 +2508,7 @@ def perform_rollback(
     try:
         def update_rb(entry: Dict[str, Any]) -> None:
             entry["phase"] = canonical_tag
-            entry["evidence"]["audit"] = {
-                "verdict": None,
-                "status": None,
-                "reviewer": None,
-                "findings_count": 0,
-                "critical_or_high_count": 0,
-                "test_evidence_passed": None,
-                "report_path": None,
-                "git_note_oid": None,
-                "snapshot_fingerprint": None,
-            }
+            entry["evidence"]["audit"] = make_default_audit_evidence()
             if canonical_tag == "design":
                 entry["blockers"] = []
                 entry["evidence"]["implementation"]["status"] = "PENDING"
@@ -3190,52 +2766,47 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
     repo_root = Path(args.path).resolve()
 
+    def output_result(payload: Any, text_lines: Optional[Sequence[str]] = None) -> None:
+        if args.format == "json":
+            print(json.dumps(payload, indent=2))
+        elif text_lines is not None:
+            for l in text_lines:
+                print(l)
+
+    def banner(title: str, lines: Sequence[str]) -> List[str]:
+        bar = "═" * 69
+        return [bar, f" {title}", bar, *lines, bar]
+
     if args.set_active_change:
         ledger = load_ledger(repo_root)
         ledger["active_change_id"] = args.set_active_change
         save_ledger(repo_root, ledger)
         set_active_topic(repo_root, args.set_active_change)
-        if args.format == "json":
-            print(json.dumps({"active_change_id": args.set_active_change}, indent=2))
-        else:
-            print(f"Active change set to: {args.set_active_change}")
+        output_result({"active_change_id": args.set_active_change}, [f"Active change set to: {args.set_active_change}"])
         return 0
 
     if args.sync_state:
         synced = sync_ledger_from_workspace(repo_root, target_change_id=args.change)
-        if args.format == "json":
-            print(json.dumps(synced, indent=2))
-        else:
-            print("Successfully synchronized .ship/state.json from workspace artifacts.")
+        output_result(synced, ["Successfully synchronized .ship/state.json from workspace artifacts."])
         return 0
 
     if args.generate_trailers:
         trailers = generate_gate_trailers(repo_root, change_id=args.change)
-        if args.format == "json":
-            print(json.dumps({"trailers": trailers}, indent=2))
-        else:
-            for t in trailers:
-                print(t)
+        output_result({"trailers": trailers}, trailers)
         return 0
 
     if args.sync_notes is not None:
         remote = args.sync_notes or "origin"
         res = sync_git_notes(repo_root, remote=remote)
-        if args.format == "json":
-            print(json.dumps(res, indent=2))
-        else:
-            print(f"Notes sync ({remote}): fetch={res['fetch']}, push={res['push']}")
+        output_result(res, [f"Notes sync ({remote}): fetch={res['fetch']}, push={res['push']}"])
         return 0
 
     if args.record_audit:
         try:
             res = record_audit_to_ledger(repo_root, args.record_audit, change_id=args.change)
-            if args.format == "json":
-                print(json.dumps(res, indent=2))
-            else:
-                verdict = res.get("evidence", {}).get("audit", {}).get("verdict")
-                rev = res.get("revision_counter", 0)
-                print(f"Audit recorded for change '{res.get('change_id')}' (verdict: {verdict}, rev: r{rev})")
+            verdict = res.get("evidence", {}).get("audit", {}).get("verdict")
+            rev = res.get("revision_counter", 0)
+            output_result(res, [f"Audit recorded for change '{res.get('change_id')}' (verdict: {verdict}, rev: r{rev})"])
             return 0
         except Exception as e:
             print(f"Error recording audit: {e}", file=sys.stderr)
@@ -3253,12 +2824,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 val = args.record_tests.lower().strip()
                 tdata = {"passed": val in {"pass", "passed", "true", "1", "ok"}, "command": args.record_tests}
             res = record_test_run_to_ledger(repo_root, tdata, change_id=args.change)
-            if args.format == "json":
-                print(json.dumps(res, indent=2))
-            else:
-                st = res.get("evidence", {}).get("implementation", {}).get("status")
-                rev = res.get("revision_counter", 0)
-                print(f"Test run recorded for change '{res.get('change_id')}' (status: {st}, rev: r{rev})")
+            st = res.get("evidence", {}).get("implementation", {}).get("status")
+            rev = res.get("revision_counter", 0)
+            output_result(res, [f"Test run recorded for change '{res.get('change_id')}' (status: {st}, rev: r{rev})"])
             return 0
         except Exception as e:
             print(f"Error recording tests: {e}", file=sys.stderr)
@@ -3277,18 +2845,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 create_git_tag=args.create_git_tag,
                 telemetry_sink=args.telemetry_sink,
             )
-            if args.format == "json":
-                print(json.dumps(res, indent=2))
-            else:
-                tag_display = f" ({res['tag']})" if res.get("tag") else ""
-                print("═════════════════════════════════════════════════════════════════════")
-                print(f" 🏷️  LIFECYCLE CHECKPOINT CREATED: {res['gate']}")
-                print("═════════════════════════════════════════════════════════════════════")
-                print(f"• Change         : {res.get('change') or res.get('topic')}")
-                print(f"• Git Ref / Tag  : {res['ref']}{tag_display}")
-                print(f"• Snapshot Commit: {res['commit'][:7] if res.get('commit') else 'none'}")
-                print(f"• Fingerprint    : {res['fingerprint'][:12]}...")
-                print("═════════════════════════════════════════════════════════════════════")
+            tag_display = f" ({res['tag']})" if res.get("tag") else ""
+            output_result(res, banner(f"🏷️  LIFECYCLE CHECKPOINT CREATED: {res['gate']}", [
+                f"• Change         : {res.get('change') or res.get('topic')}",
+                f"• Git Ref / Tag  : {res['ref']}{tag_display}",
+                f"• Snapshot Commit: {res['commit'][:7] if res.get('commit') else 'none'}",
+                f"• Fingerprint    : {res['fingerprint'][:12]}...",
+            ]))
             return 0
         except Exception as e:
             print(f"Error creating checkpoint: {e}", file=sys.stderr)
@@ -3303,20 +2866,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 force=args.force,
                 telemetry_sink=args.telemetry_sink,
             )
-            if args.format == "json":
-                print(json.dumps(res, indent=2))
-            else:
-                print("═════════════════════════════════════════════════════════════════════")
-                print(f" 🔄 LIFECYCLE ROLLBACK EXECUTED: {res['target_gate']}")
-                print("═════════════════════════════════════════════════════════════════════")
-                print(f"• Change         : {res.get('change') or res.get('topic')}")
-                print(f"• Target Gate    : {res['target_gate']}")
-                if res.get("backup_directory"):
-                    print(f"• State Backup   : {res['backup_directory']}/")
-                if res.get("reset_tasks_count"):
-                    print(f"• Reset Tasks    : {res['reset_tasks_count']} tasks reverted in tasks.md")
-                print(f"• Status         : {res['message']}")
-                print("═════════════════════════════════════════════════════════════════════")
+            rb_lines = [
+                f"• Change         : {res.get('change') or res.get('topic')}",
+                f"• Target Gate    : {res['target_gate']}",
+            ]
+            if res.get("backup_directory"):
+                rb_lines.append(f"• State Backup   : {res['backup_directory']}/")
+            if res.get("reset_tasks_count"):
+                rb_lines.append(f"• Reset Tasks    : {res['reset_tasks_count']} tasks reverted in tasks.md")
+            rb_lines.append(f"• Status         : {res['message']}")
+            output_result(res, banner(f"🔄 LIFECYCLE ROLLBACK EXECUTED: {res['target_gate']}", rb_lines))
             return 0
         except Exception as e:
             print(f"Error during rollback: {e}", file=sys.stderr)
@@ -3326,19 +2885,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         try:
             change_id = args.archive if args.archive else args.change
             res = apply_and_archive_openspec(repo_root, change=change_id, force=args.force)
-            if args.format == "json":
-                print(json.dumps(res, indent=2))
-            else:
-                print("═════════════════════════════════════════════════════════════════════")
-                print(f" 📦 OPENSPEC APPLIED & ARCHIVED: {res.get('change') or res.get('topic')}")
-                print("═════════════════════════════════════════════════════════════════════")
-                if res["synced_specs"]:
-                    print(f"• Synced Specs   : {', '.join(res['synced_specs'])} -> {res['living_specs_dir']}/")
-                else:
-                    print("• Synced Specs   : None")
-                print(f"• Archived To    : {res['archived_path']}")
-                print("• Lifecycle      : Reset to design (ready for next feature proposal)")
-                print("═════════════════════════════════════════════════════════════════════")
+            specs_str = f"{', '.join(res['synced_specs'])} -> {res['living_specs_dir']}/" if res["synced_specs"] else "None"
+            output_result(res, banner(f"📦 OPENSPEC APPLIED & ARCHIVED: {res.get('change') or res.get('topic')}", [
+                f"• Synced Specs   : {specs_str}",
+                f"• Archived To    : {res['archived_path']}",
+                "• Lifecycle      : Reset to design (ready for next feature proposal)",
+            ]))
             return 0
         except Exception as e:
             print(f"Error archiving OpenSpec package: {e}", file=sys.stderr)
@@ -3366,10 +2918,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 return 2
         return 1
 
-    if args.format == "json":
-        print(json.dumps(data, indent=2))
-    else:
-        print(format_summary(data))
+    output_result(data, [format_summary(data)])
 
     return 0
 
