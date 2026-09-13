@@ -517,47 +517,40 @@ else
         MATCHING_TESTS=()
 
         # 1. Search tracked git files
-        if [[ "$EXT" =~ ^(java|kt)$ ]]; then
-            while IFS= read -r -d '' t; do
-                [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
-            done < <(git ls-files -z "*${STEM}Test.*" "*${STEM}Tests.*" "*${STEM}IT.*" "*Test${STEM}.*" 2>/dev/null || true)
-        elif [[ "$EXT" == "py" ]]; then
-            while IFS= read -r -d '' t; do
-                [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
-            done < <(git ls-files -z "*test_${STEM}.py" "*${STEM}_test.py" "*${STEM}Test.py" 2>/dev/null || true)
-        elif [[ "$EXT" =~ ^(ts|js|jsx|tsx)$ ]]; then
-            while IFS= read -r -d '' t; do
-                [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
-            done < <(git ls-files -z "*${STEM}.spec.*" "*${STEM}.test.*" "*${STEM}_test.*" "*${STEM}Test.*" "*test_${STEM}.*" 2>/dev/null || true)
-        elif [[ "$EXT" == "go" ]]; then
-            while IFS= read -r -d '' t; do
-                [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
-            done < <(git ls-files -z "*${STEM}_test.go" 2>/dev/null || true)
-        elif [[ "$EXT" == "rs" ]]; then
-            while IFS= read -r -d '' t; do
-                [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
-            done < <(git ls-files -z "*${STEM}*test*.rs" "tests/*${STEM}*.rs" 2>/dev/null || true)
-        elif [[ "$EXT" == "cs" ]]; then
-            while IFS= read -r -d '' t; do
-                [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
-            done < <(git ls-files -z "*${STEM}Tests.cs" "*${STEM}Test.cs" 2>/dev/null || true)
-        elif [[ "$EXT" =~ ^(cpp|cc|cxx|c|h|hpp|hxx)$ ]]; then
-            while IFS= read -r -d '' t; do
-                [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
-            done < <(git ls-files -z "*${STEM}_test.*" "*${STEM}Test.*" "*test_${STEM}.*" 2>/dev/null || true)
-        elif [[ "$EXT" == "rb" ]]; then
-            while IFS= read -r -d '' t; do
-                [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
-            done < <(git ls-files -z "*${STEM}_spec.rb" "*${STEM}_test.rb" "*test_${STEM}.rb" 2>/dev/null || true)
-        elif [[ "$EXT" =~ ^(sh|bash|zsh)$ ]]; then
-            while IFS= read -r -d '' t; do
-                [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
-            done < <(git ls-files -z "*test_${STEM}*" "*${STEM}_test*" "*${STEM}Test*" "*${STEM}Tests*" "*${STEM}.test.*" "*${STEM}.spec.*" 2>/dev/null || true)
-        else
-            while IFS= read -r -d '' t; do
-                [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
-            done < <(git ls-files -z "*test_${STEM}*" "*${STEM}_test*" "*${STEM}Test*" "*${STEM}Tests*" "*${STEM}.test.*" "*${STEM}.spec.*" 2>/dev/null || true)
-        fi
+        TEST_GLOBS=()
+        case "$EXT" in
+            java|kt)
+                TEST_GLOBS=("*${STEM}Test.*" "*${STEM}Tests.*" "*${STEM}IT.*" "*Test${STEM}.*")
+                ;;
+            py)
+                TEST_GLOBS=("*test_${STEM}.py" "*${STEM}_test.py" "*${STEM}Test.py")
+                ;;
+            ts|js|jsx|tsx)
+                TEST_GLOBS=("*${STEM}.spec.*" "*${STEM}.test.*" "*${STEM}_test.*" "*${STEM}Test.*" "*test_${STEM}.*")
+                ;;
+            go)
+                TEST_GLOBS=("*${STEM}_test.go")
+                ;;
+            rs)
+                TEST_GLOBS=("*${STEM}*test*.rs" "tests/*${STEM}*.rs")
+                ;;
+            cs)
+                TEST_GLOBS=("*${STEM}Tests.cs" "*${STEM}Test.cs")
+                ;;
+            cpp|cc|cxx|c|h|hpp|hxx)
+                TEST_GLOBS=("*${STEM}_test.*" "*${STEM}Test.*" "*test_${STEM}.*")
+                ;;
+            rb)
+                TEST_GLOBS=("*${STEM}_spec.rb" "*${STEM}_test.rb" "*test_${STEM}.rb")
+                ;;
+            *)
+                TEST_GLOBS=("*test_${STEM}*" "*${STEM}_test*" "*${STEM}Test*" "*${STEM}Tests*" "*${STEM}.test.*" "*${STEM}.spec.*")
+                ;;
+        esac
+
+        while IFS= read -r -d '' t; do
+            [[ -n "$t" ]] && MATCHING_TESTS+=("$t")
+        done < <(git ls-files -z "${TEST_GLOBS[@]}" 2>/dev/null || true)
 
         # 2. Also check untracked added files on disk
         if [[ ${#ADDED_FILES[@]} -gt 0 ]]; then

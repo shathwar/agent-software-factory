@@ -87,7 +87,7 @@ The orchestrator retains spec alignment, general performance (including migratio
 ### Mode E: Dependency & Build (`Production Risk + Compatibility`)
 - **Primary Scrutiny**:
   - Did the dependency bump introduce transitive conflicts or CVE security advisories?
-  - Are new third-party libraries strictly necessary, or does the language standard library already solve the problem (Ponytail / YAGNI)?
+  - Are new third-party libraries strictly necessary, or does the language standard library already solve the problem (Simplify / YAGNI)?
   - License compatibility check (e.g. avoiding viral GPL in proprietary services).
 
 ---

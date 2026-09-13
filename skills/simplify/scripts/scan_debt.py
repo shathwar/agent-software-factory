@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Scan codebases for simplify: and ponytail: technical debt markers and validate syntax.
+"""Scan codebases for simplify: technical debt markers and validate syntax.
 
 Zero external dependencies (Python 3.10+ standard library).
 
 Valid Syntax:
     // simplify: <Shortcut>. Ceiling: <Threshold/Limit>. Upgrade: <Next Architecture>.
-    // ponytail: <Shortcut>. Ceiling: <Threshold/Limit>. Upgrade: <Next Architecture>.
 """
 
 from __future__ import annotations
@@ -38,9 +37,9 @@ IGNORE_EXTENSIONS = {
     ".zip", ".tar", ".gz", ".lock", ".lockb", ".woff", ".woff2", ".ttf", ".eot",
 }
 
-# Regex to find simplify: or ponytail: marker comment line
+# Regex to find simplify: marker comment line
 MARKER_PATTERN = re.compile(
-    r"(?:^\s*(?://|#|/\*|\*|--|<!--|;|%)?|(?<=[\s;])(?://|#|/\*|\*|--|<!--|;|%))\s*(?:simplify|ponytail):\s*(.+)$",
+    r"(?:^\s*(?://|#|/\*|\*|--|<!--|;|%)?|(?<=[\s;])(?://|#|/\*|\*|--|<!--|;|%))\s*simplify:\s*(.+)$",
     re.IGNORECASE,
 )
 
@@ -56,7 +55,7 @@ UPGRADE_PATTERN = re.compile(
 
 
 def parse_debt_marker(raw_text: str, file_path: str, line_number: int) -> Dict[str, Any]:
-    """Parse and validate a single ponytail debt marker line."""
+    """Parse and validate a single simplify debt marker line."""
     match = MARKER_PATTERN.search(raw_text)
     if not match:
         return {}
@@ -141,7 +140,7 @@ def scan_python_file(file_path: Path, rel_path: str) -> Optional[List[Dict[str, 
             for tok in tokens:
                 if tok.type == tokenize.COMMENT:
                     text = tok.string
-                    if any(kw in text.lower() for kw in ("simplify:", "ponytail:")):
+                    if "simplify:" in text.lower():
                         parsed = parse_debt_marker(text, rel_path, tok.start[0])
                         if parsed:
                             markers.append(parsed)
@@ -166,7 +165,7 @@ def scan_file(file_path: Path, base_dir: Path) -> List[Dict[str, Any]]:
         return []
 
     content_lower = content.lower()
-    if not any(kw in content_lower for kw in ("simplify:", "ponytail:")):
+    if "simplify:" not in content_lower:
         return []
 
     try:
@@ -199,7 +198,7 @@ def scan_file(file_path: Path, base_dir: Path) -> List[Dict[str, Any]]:
             if re.match(r"^\s*#{1,6}\s+", line):
                 continue
 
-        if any(kw in line.lower() for kw in ("simplify:", "ponytail:")):
+        if "simplify:" in line.lower():
             parsed = parse_debt_marker(line, rel_path, idx)
             if parsed:
                 markers.append(parsed)
@@ -257,7 +256,7 @@ def format_table(markers: List[Dict[str, Any]], markdown: bool = True) -> str:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Scan codebases for simplify: and ponytail: technical debt markers and validate syntax."
+        description="Scan codebases for simplify: technical debt markers and validate syntax."
     )
     parser.add_argument(
         "paths",

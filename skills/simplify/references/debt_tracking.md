@@ -8,7 +8,7 @@ A guide to tracking deliberate shortcuts, defining operational ceilings, and pre
 
 In high-velocity engineering, building the ultimate distributed, infinitely-scalable solution on day one is premature optimization. However, taking a quick shortcut without documentation is reckless.
 
-The `simplify:` comment strikes the balance (legacy `ponytail:` markers are also supported):
+The `simplify:` comment strikes the balance:
 - **It documents the shortcut explicitly**.
 - **It specifies the operational ceiling** (when this shortcut will break or saturate).
 - **It specifies the concrete upgrade path** (what to do when the ceiling is reached).
@@ -27,8 +27,6 @@ Every `simplify:` comment must include three components:
 ```text
 // simplify: <Shortcut>. Ceiling: <Threshold/Limit>. Upgrade: <Next Architecture>.
 ```
-
-*(Note: `// ponytail: ...` is also recognized by the scanner for backward compatibility).*
 
 ### Examples by Domain
 
@@ -72,7 +70,7 @@ python3 skills/simplify/scripts/scan_debt.py --strict
 Or perform a manual text search:
 
 ```bash
-git grep -n -E "(simplify|ponytail):"
+git grep -n "simplify:"
 ```
 
 ### Organizing the Ledger Report

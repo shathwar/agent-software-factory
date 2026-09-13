@@ -15,6 +15,12 @@ import inspect_lifecycle
 
 
 class TestInspectLifecycle(unittest.TestCase):
+    def _init_git_repo(self, tmppath: Path, branch: str = "main") -> None:
+        subprocess.run(["git", "init", "-b", branch], cwd=tmppath, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+        subprocess.run(["git", "config", "commit.gpgsign", "false"], cwd=tmppath, check=True)
+
     def test_gate1_empty_repo(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             res = inspect_lifecycle.evaluate_repository(Path(tmpdir))
@@ -399,9 +405,7 @@ class TestInspectLifecycle(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             # Initialize git repository
-            subprocess.run(["git", "init"], cwd=tmppath, capture_output=True, check=True)
-            subprocess.run(["git", "config", "user.name", "Tester"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+            self._init_git_repo(tmppath)
 
             # Setup feature
             pkg_dir = tmppath / "openspec" / "changes" / "feature"
@@ -654,9 +658,7 @@ class TestInspectLifecycle(unittest.TestCase):
         """Reproduction for Issue 2: reviewed working tree modifications clear delivery via fingerprint; post-review edits are blocked."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            subprocess.run(["git", "init"], cwd=tmppath, capture_output=True, check=True)
-            subprocess.run(["git", "config", "user.name", "Tester"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+            self._init_git_repo(tmppath)
 
             pkg_dir = tmppath / "openspec" / "changes" / "feature"
             pkg_dir.mkdir(parents=True)
@@ -748,9 +750,7 @@ class TestInspectLifecycle(unittest.TestCase):
         """Reproduction for Issue 1: symbolic/non-hex snapshot commit (like 'HEAD') without fingerprint blocks delivery."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            subprocess.run(["git", "init"], cwd=tmppath, capture_output=True, check=True)
-            subprocess.run(["git", "config", "user.name", "Tester"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+            self._init_git_repo(tmppath)
 
             pkg_dir = tmppath / "openspec" / "changes" / "feature"
             pkg_dir.mkdir(parents=True)
@@ -815,9 +815,7 @@ class TestInspectLifecycle(unittest.TestCase):
         """Reproduction for Issue 2: delivery gate strictly validates nested Judge report contract."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            subprocess.run(["git", "init"], cwd=tmppath, capture_output=True, check=True)
-            subprocess.run(["git", "config", "user.name", "Tester"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+            self._init_git_repo(tmppath)
 
             pkg_dir = tmppath / "openspec" / "changes" / "feature"
             pkg_dir.mkdir(parents=True)
@@ -869,9 +867,7 @@ class TestInspectLifecycle(unittest.TestCase):
         """Reproduction for Issue 3: archive failure rolls back spec changes, and retry recovers without blocking."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            subprocess.run(["git", "init"], cwd=tmppath, capture_output=True, check=True)
-            subprocess.run(["git", "config", "user.name", "Tester"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+            self._init_git_repo(tmppath)
 
             # Living spec: openspec/specs/auth.md
             living_dir = tmppath / "openspec" / "specs"
@@ -934,9 +930,7 @@ class TestInspectLifecycle(unittest.TestCase):
         """Active change written to .ship/state.json must not count as an unreviewed source modification."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
-            subprocess.run(["git", "config", "user.name", "Tester"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.email", "tester@test.com"], cwd=tmppath, check=True)
+            self._init_git_repo(tmppath)
 
             pkg = tmppath / "openspec" / "changes" / "feat"
             pkg.mkdir(parents=True)
@@ -1071,7 +1065,7 @@ class TestInspectLifecycle(unittest.TestCase):
         """In a repo before first commit, modifying a staged file without staging must change fingerprint."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
+            self._init_git_repo(tmppath)
 
             pkg_dir = tmppath / "openspec" / "changes" / "feature"
             pkg_dir.mkdir(parents=True)
@@ -1165,7 +1159,7 @@ class TestInspectLifecycle(unittest.TestCase):
         """In a repo before first commit, an audit report must provide matching snapshot fingerprint and not a fake commit SHA."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
+            self._init_git_repo(tmppath)
 
             pkg_dir = tmppath / "openspec" / "changes" / "feature"
             pkg_dir.mkdir(parents=True)
@@ -1230,7 +1224,7 @@ class TestInspectLifecycle(unittest.TestCase):
         """Retained delivery evidence in .scratch/<change> must not be flagged as an active spike after archiving."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
+            self._init_git_repo(tmppath)
             pkg_dir = tmppath / "openspec" / "changes" / "auth"
             pkg_dir.mkdir(parents=True)
             (pkg_dir / "tasks.md").write_text("- [x] 1. Auth implementation\n")
@@ -1271,9 +1265,7 @@ class TestInspectLifecycle(unittest.TestCase):
         """A report with status: skipped must block delivery and archiving even if verdict is PASS."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            subprocess.run(["git", "init", "-b", "main"], cwd=tmppath, check=True, capture_output=True)
-            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+            self._init_git_repo(tmppath)
 
             pkg_dir = tmppath / "openspec" / "changes" / "feature"
             pkg_dir.mkdir(parents=True)
@@ -1368,9 +1360,7 @@ class TestInspectLifecycle(unittest.TestCase):
         """Verify checkpoint creation and safe rollback with backup."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            subprocess.run(["git", "init"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+            self._init_git_repo(tmppath)
 
             # Setup openspec package
             pkg_dir = tmppath / "openspec" / "changes" / "payment"
@@ -1420,9 +1410,7 @@ class TestInspectLifecycle(unittest.TestCase):
         """Verify rollback restores committed modifications and deletes newly created files."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            subprocess.run(["git", "init"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+            self._init_git_repo(tmppath)
 
             # Setup checkpoint at design
             pkg_dir = tmppath / "openspec" / "changes" / "payment"
@@ -1491,7 +1479,7 @@ class TestInspectLifecycle(unittest.TestCase):
         """Verify checkpoint gracefully handles repository before first commit."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            subprocess.run(["git", "init"], cwd=tmppath, check=True)
+            self._init_git_repo(tmppath)
             chk = inspect_lifecycle.create_checkpoint(tmppath, "design", change="new-feature")
             self.assertEqual(chk["gate"], "design")
             self.assertEqual(chk["commit"], "none")
@@ -1523,9 +1511,7 @@ class TestInspectLifecycle(unittest.TestCase):
         """Verify rollback restores checkpoint state without reverting uncommitted edits made prior to checkpoint."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            subprocess.run(["git", "init"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+            self._init_git_repo(tmppath)
 
             # 1. Initial committed state
             service_file = tmppath / "service.py"
@@ -1564,9 +1550,7 @@ class TestInspectLifecycle(unittest.TestCase):
         """Verify rollback does not delete tracked files that happen to match .gitignore rules."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            subprocess.run(["git", "init"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+            self._init_git_repo(tmppath)
 
             # 1. Commit tracked.cfg and .gitignore matching *.cfg
             (tmppath / ".gitignore").write_text("*.cfg\n")
@@ -1680,9 +1664,7 @@ class TestInspectLifecycle(unittest.TestCase):
         """Filenames enclosed in double quotes by git status porcelain must have quotes stripped."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            subprocess.run(["git", "init", "-b", "main"], cwd=tmppath, check=True, capture_output=True)
-            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+            self._init_git_repo(tmppath)
 
             spaced_file = tmppath / "spaced file.py"
             spaced_file.write_text("x = 1\n")
@@ -1698,9 +1680,7 @@ class TestInspectLifecycle(unittest.TestCase):
         """Rollback must restore original file and remove destination when a file was renamed after checkpoint."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            subprocess.run(["git", "init", "-b", "main"], cwd=tmppath, check=True, capture_output=True)
-            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+            self._init_git_repo(tmppath)
 
             pkg_dir = tmppath / "openspec" / "changes" / "feature"
             pkg_dir.mkdir(parents=True)
@@ -1740,9 +1720,7 @@ class TestInspectLifecycle(unittest.TestCase):
         """Checkpoints record refs/ship/... by default and omit refs/tags/ unless create_git_tag=True."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            subprocess.run(["git", "init"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+            self._init_git_repo(tmppath)
 
             (tmppath / "README.md").write_text("# Test\n")
             subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
@@ -1781,9 +1759,7 @@ class TestInspectLifecycle(unittest.TestCase):
         """Rollback must safely archive newly created untracked directories and files into untracked_removed/."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            subprocess.run(["git", "init"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+            self._init_git_repo(tmppath)
 
             (tmppath / "main.py").write_text("def main(): pass\n")
             subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
@@ -1814,29 +1790,6 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertTrue(safety_dir_file.exists())
             self.assertEqual(safety_file.read_text(), "# precious untracked content\n")
             self.assertEqual(safety_dir_file.read_text(), "def helper(): return 42\n")
-
-    def test_telemetry_sink_emission(self):
-        """Emits structured JSON events to telemetry sink upon lifecycle events."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmppath = Path(tmpdir)
-            subprocess.run(["git", "init"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
-
-            (tmppath / "app.py").write_text("pass\n")
-            subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
-            subprocess.run(["git", "commit", "-m", "Init"], cwd=tmppath, check=True, capture_output=True)
-
-            sink_file = tmppath / ".scratch" / "telemetry_events.jsonl"
-            inspect_lifecycle.create_checkpoint(tmppath, "design", change="metrics", telemetry_sink=str(sink_file))
-            inspect_lifecycle.perform_rollback(tmppath, "design", change="metrics", telemetry_sink=str(sink_file))
-
-            self.assertTrue(sink_file.exists())
-            lines = [json.loads(line) for line in sink_file.read_text().splitlines() if line.strip()]
-            self.assertEqual(len(lines), 2)
-            self.assertEqual(lines[0]["event_type"], "checkpoint_created")
-            self.assertEqual(lines[1]["event_type"], "rollback_executed")
-            self.assertEqual(lines[0]["payload"]["change"], "metrics")
 
     def test_ship_schema_conformance(self):
         """Verify load_ship_config default_config aligns with ship.schema.json structure."""
@@ -1964,9 +1917,7 @@ class TestInspectLifecycle(unittest.TestCase):
         """Structured validation evidence can be attached and retrieved via git notes."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
-            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
+            self._init_git_repo(tmppath)
             (tmppath / "code.py").write_text("print('hello')\n")
             subprocess.run(["git", "add", "code.py"], cwd=tmppath, check=True)
             commit_res = subprocess.run(
@@ -1995,39 +1946,6 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertIn("audit", updated_notes)
             self.assertIn("tests", updated_notes)
             self.assertEqual(updated_notes["tests"]["tests_run"], 42)
-
-    def test_git_notes_sync_configuration(self):
-        """configure_git_notes_sync adds safe tracking fetch refspec and preserves default branch push."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmppath = Path(tmpdir)
-            subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
-            subprocess.run(
-                ["git", "remote", "add", "origin", "git@github.com:example/repo.git"],
-                cwd=tmppath,
-                check=True,
-            )
-
-            res = inspect_lifecycle.configure_git_notes_sync(tmppath, remote="origin")
-            self.assertTrue(res["configured"])
-            self.assertEqual(res["fetch_refspec"], "refs/notes/*:refs/notes/origin/*")
-            self.assertIsNone(res["push_refspec"])
-
-            fetch_cfg = subprocess.run(
-                ["git", "config", "--get-all", "remote.origin.fetch"],
-                cwd=tmppath,
-                capture_output=True,
-                text=True,
-            )
-            self.assertIn("refs/notes/*:refs/notes/origin/*", fetch_cfg.stdout)
-            self.assertNotIn("+refs/notes/*:refs/notes/*", fetch_cfg.stdout)
-
-            push_cfg = subprocess.run(
-                ["git", "config", "--get-all", "remote.origin.push"],
-                cwd=tmppath,
-                capture_output=True,
-                text=True,
-            )
-            self.assertNotIn("refs/notes", push_cfg.stdout)
 
     def test_gate_trailers_generation(self):
         """Commit trailers are generated matching ship.json gates."""
@@ -2184,54 +2102,11 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertIn("Blocked by", res["next_action"])
             self.assertNotEqual(res["state_key"], "DELIVERY_READY")
 
-    def test_notes_fetch_and_push_preserves_branch_push_and_local_evidence(self):
-        """Notes sync fetches into tracking namespace, reconciles divergence, and pushes notes without overwriting local evidence."""
-        with tempfile.TemporaryDirectory() as tmp_remote, tempfile.TemporaryDirectory() as tmp_local:
-            remote_path = Path(tmp_remote)
-            local_path = Path(tmp_local)
-
-            # 1. Bare remote
-            subprocess.run(["git", "init", "--bare"], cwd=remote_path, check=True, capture_output=True)
-
-            # 2. Local repo with commit
-            subprocess.run(["git", "init"], cwd=local_path, check=True, capture_output=True)
-            subprocess.run(["git", "config", "user.name", "Test"], cwd=local_path, check=True)
-            subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=local_path, check=True)
-            (local_path / "README.md").write_text("hello\n")
-            subprocess.run(["git", "add", "."], cwd=local_path, check=True)
-            subprocess.run(["git", "commit", "-m", "initial"], cwd=local_path, check=True)
-            head_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=local_path, text=True).strip()
-            subprocess.run(["git", "remote", "add", "origin", str(remote_path)], cwd=local_path, check=True)
-            subprocess.run(["git", "push", "origin", "HEAD:main"], cwd=local_path, check=True)
-
-            # 3. Attach local note
-            inspect_lifecycle.attach_git_note_evidence(local_path, head_sha, "test_evidence", {"passed": True}, change_id="local_unpushed")
-
-            # 4. Sync notes
-            sync_res = inspect_lifecycle.sync_git_notes(local_path, remote="origin")
-            self.assertEqual(sync_res["push"], "success")
-
-            # 5. Verify local note still intact
-            notes = inspect_lifecycle.read_git_note_evidence(local_path, head_sha, change_id="local_unpushed")
-            self.assertIn("test_evidence", notes)
-            self.assertTrue(notes["test_evidence"]["passed"])
-
-            # 6. Verify default branch push is NOT overridden (remote.origin.push is not set)
-            push_cfg = subprocess.run(
-                ["git", "config", "--get-all", "remote.origin.push"],
-                cwd=local_path,
-                capture_output=True,
-                text=True,
-            )
-            self.assertNotIn("refs/notes", push_cfg.stdout)
-
     def test_notes_evidence_namespaced_by_change_id(self):
         """Different changes attaching evidence to the same commit do not overwrite each other."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
-            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
-            subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmppath, check=True)
+            self._init_git_repo(tmppath)
             (tmppath / "f.txt").write_text("data\n")
             subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
             subprocess.run(["git", "commit", "-m", "commit1"], cwd=tmppath, check=True)

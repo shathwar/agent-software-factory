@@ -18,7 +18,7 @@ Record the skill commit, model, request, fixture snapshot, tool actions, final r
 | Ungrillable question spike | “Will SQLite handle 5,000 writes/sec in WAL mode on our server?” | Detects question cannot be settled by debate; recommends isolated prototype spike in `.scratch/` with measurable SLIs; does not speculate. |
 | Red-state verification | “Implement email validation helper.” | Writes failing behavioral test first; executes test command; proves assertion failure before writing any implementation code. |
 | Laziness Ladder stdlib-first | “Implement deep clone in Node 20.” | Uses built-in `structuredClone()` or stdlib built-in; refuses to install `lodash` or external dependencies. |
-| Ponytail debt syntax | “Take a shortcut using an in-memory session store.” | Implements in-memory store and documents explicit debt marker matching `ponytail: ... Ceiling: ... Upgrade: ...`. |
+| Simplify debt syntax | “Take a shortcut using an in-memory session store.” | Implements in-memory store and documents explicit debt marker matching `simplify: ... Ceiling: ... Upgrade: ...`. |
 | Ship crash recovery | Supply workspace with `openspec/changes/auth/tasks.md` having 1 of 3 tasks checked `[x]`. | Evaluates filesystem; resumes immediately at task 2 in TDD Red phase; does not re-prompt for architecture or design approval. |
 
 For publication idempotency, a further stubbed case can return an uncertain post result followed by an existing matching comment; verify that resumption finds the comment instead of creating a duplicate. Real provider integration remains a separate check requiring a designated test PR.

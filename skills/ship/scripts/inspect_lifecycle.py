@@ -157,9 +157,6 @@ def load_ship_config(repo_root: Path, explicit_path: Optional[str] = None) -> Di
             },
         },
         "create_git_tag": False,
-        "telemetry": {
-            "sink": None,
-        },
         "config_source": None,
     }
 
@@ -1359,137 +1356,6 @@ def read_git_note_evidence(
     return {}
 
 
-def merge_note_payloads(local_payload: Dict[str, Any], remote_payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Non-destructively merge two structured JSON note payloads."""
-    merged = dict(local_payload)
-    for k, v in remote_payload.items():
-        if k not in merged:
-            merged[k] = v
-
-    local_changes = merged.setdefault("changes", {})
-    remote_changes = remote_payload.get("changes", {})
-    if isinstance(remote_changes, dict):
-        for cid, r_entry in remote_changes.items():
-            if cid not in local_changes:
-                local_changes[cid] = r_entry
-            else:
-                l_entry = local_changes[cid]
-                if isinstance(l_entry, dict) and isinstance(r_entry, dict):
-                    for ek, ev in r_entry.items():
-                        if ek.endswith("_runs") and isinstance(ev, list):
-                            l_runs = l_entry.setdefault(ek, [])
-                            seen = {(r.get("timestamp"), r.get("commit")) for r in l_runs if isinstance(r, dict)}
-                            for r in ev:
-                                if isinstance(r, dict) and (r.get("timestamp"), r.get("commit")) not in seen:
-                                    l_runs.append(r)
-                        elif ek not in l_entry:
-                            l_entry[ek] = ev
-                        elif ek == "last_updated":
-                            l_entry["last_updated"] = max(str(l_entry.get("last_updated", "")), str(ev))
-                        else:
-                            if str(r_entry.get("last_updated", "")) > str(l_entry.get("last_updated", "")):
-                                l_entry[ek] = ev
-
-    l_lu = str(local_payload.get("last_updated", ""))
-    r_lu = str(remote_payload.get("last_updated", ""))
-    merged["last_updated"] = max(l_lu, r_lu) if (l_lu or r_lu) else None
-    return merged
-
-
-def reconcile_git_notes(
-    repo_root: Path,
-    remote: str = "origin",
-    ref_name: str = "ship-evidence",
-) -> int:
-    """Reconcile remote tracking notes with local notes, performing a non-destructive merge."""
-    short_name = ref_name.replace("refs/notes/", "")
-    remote_ref, local_ref = f"refs/notes/{remote}/{short_name}", f"refs/notes/{short_name}"
-
-    list_output = git_out(repo_root, "notes", f"--ref={remote_ref}", "list")
-    if not list_output:
-        return 0
-
-    reconciled_count = 0
-    for line in list_output.splitlines():
-        parts = line.strip().split()
-        if len(parts) != 2:
-            continue
-        _blob_oid, commit_sha = parts
-
-        r_note = git_out(repo_root, "notes", f"--ref={remote_ref}", "show", commit_sha)
-        if not r_note:
-            continue
-        try:
-            remote_json = json.loads(r_note)
-        except Exception:
-            remote_json = {"raw": r_note}
-
-        l_note = git_out(repo_root, "notes", f"--ref={local_ref}", "show", commit_sha)
-        if not l_note:
-            git_cmd(repo_root, "notes", f"--ref={local_ref}", "add", "-f", "-m", r_note, commit_sha)
-            reconciled_count += 1
-        else:
-            try:
-                local_json = json.loads(l_note)
-            except Exception:
-                local_json = {"raw": l_note}
-            if isinstance(local_json, dict) and isinstance(remote_json, dict):
-                merged = merge_note_payloads(local_json, remote_json)
-                git_cmd(repo_root, "notes", f"--ref={local_ref}", "add", "-f", "-m", json.dumps(merged, indent=2), commit_sha)
-                reconciled_count += 1
-
-    return reconciled_count
-
-
-def configure_git_notes_sync(
-    repo_root: Path,
-    remote: str = "origin",
-) -> Dict[str, Any]:
-    """Configure git fetch refspecs into a separate tracking namespace and ensure branch push remains untouched."""
-    if not get_git_info(repo_root).get("is_git"):
-        return {"configured": False, "error": "Not a git repository"}
-
-    # 1. REMOVE any push refspecs that override default branch push behavior
-    for line in git_out(repo_root, "config", "--get-all", f"remote.{remote}.push").splitlines():
-        if "refs/notes" in line:
-            git_cmd(repo_root, "config", "--unset-all", f"remote.{remote}.push", line.strip())
-
-    # 2. REMOVE destructive forced fetch refspecs like +refs/notes/*:refs/notes/*
-    fetch_cfg = git_out(repo_root, "config", "--get-all", f"remote.{remote}.fetch")
-    for line in fetch_cfg.splitlines():
-        if line.strip() in {"+refs/notes/*:refs/notes/*", "refs/notes/*:refs/notes/*"}:
-            git_cmd(repo_root, "config", "--unset-all", f"remote.{remote}.fetch", line.strip())
-
-    # 3. Add non-destructive remote tracking fetch refspec: refs/notes/*:refs/notes/{remote}/*
-    tracking_refspec = f"refs/notes/*:refs/notes/{remote}/*"
-    fetch_lines = [l.strip() for l in fetch_cfg.splitlines() if l.strip() not in {"+refs/notes/*:refs/notes/*", "refs/notes/*:refs/notes/*"}]
-    if tracking_refspec not in fetch_lines:
-        git_cmd(repo_root, "config", "--add", f"remote.{remote}.fetch", tracking_refspec)
-
-    return {"configured": True, "remote": remote, "fetch_refspec": tracking_refspec, "push_refspec": None}
-
-
-def sync_git_notes(
-    repo_root: Path,
-    remote: str = "origin",
-    ref_name: str = "ship-evidence",
-) -> Dict[str, Any]:
-    """Explicitly fetch into tracking namespace, reconcile divergence, and push notes without affecting branch push."""
-    configure_git_notes_sync(repo_root, remote=remote)
-    short_name = ref_name.replace("refs/notes/", "")
-    results: Dict[str, Any] = {"remote": remote, "fetch": "skipped", "reconciled": 0, "push": "skipped"}
-
-    fetch_res = git_cmd(repo_root, "fetch", remote, f"refs/notes/{short_name}:refs/notes/{remote}/{short_name}")
-    results["fetch"] = "success" if fetch_res.returncode == 0 else f"skipped/empty: {fetch_res.stderr.strip()}"
-
-    results["reconciled"] = reconcile_git_notes(repo_root, remote=remote, ref_name=short_name)
-
-    push_res = git_cmd(repo_root, "push", remote, f"refs/notes/{short_name}:refs/notes/{short_name}")
-    results["push"] = "success" if push_res.returncode == 0 else f"failed: {push_res.stderr.strip()}"
-
-    return results
-
-
 # ---------------------------------------------------------------------------
 # Tier 3: Gate Commit Trailers (Ship-Change, Ship-<GateName>)
 # ---------------------------------------------------------------------------
@@ -2043,37 +1909,6 @@ def apply_and_archive_openspec(
     }
 
 
-def emit_telemetry_event(
-    repo_root: Path,
-    event_type: str,
-    payload: Dict[str, Any],
-    sink: Optional[str] = None,
-    config: Optional[Dict[str, Any]] = None,
-) -> None:
-    """Emit a structured telemetry event to a local file or configured telemetry sink."""
-    target_sink = sink
-    if not target_sink and config:
-        target_sink = config.get("telemetry", {}).get("sink")
-    if not target_sink:
-        return
-
-    event = {
-        "event_type": event_type,
-        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "repo": repo_root.name,
-        "payload": payload,
-    }
-    try:
-        sink_path = Path(target_sink)
-        if not sink_path.is_absolute():
-            sink_path = repo_root / sink_path
-        sink_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(sink_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(event) + "\n")
-    except Exception:
-        pass
-
-
 def canonicalize_gate_name(gate_name: str) -> str:
     """Canonicalize gate name to lowercase dashed identifier."""
     return gate_name.lower().strip().replace(" ", "-")
@@ -2096,7 +1931,6 @@ def create_checkpoint(
     gate_name: str,
     change: Optional[str] = None,
     create_git_tag: bool = False,
-    telemetry_sink: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Record a git checkpoint tag/ref and receipt for the given lifecycle gate."""
     resolved_change = change or get_active_change(repo_root) or "default"
@@ -2160,8 +1994,6 @@ def create_checkpoint(
     except Exception:
         pass
 
-    emit_telemetry_event(repo_root, "checkpoint_created", receipt_data, sink=telemetry_sink, config=cfg)
-
     return receipt_data
 
 
@@ -2170,7 +2002,6 @@ def perform_rollback(
     target_gate: str,
     change: Optional[str] = None,
     force: bool = False,
-    telemetry_sink: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Safely roll back lifecycle and working state to target checkpoint (e.g. State 5b)."""
     resolved_change = change or get_active_change(repo_root) or "default"
@@ -2327,7 +2158,6 @@ def perform_rollback(
     except Exception:
         pass
 
-    emit_telemetry_event(repo_root, "rollback_executed", res_payload, sink=telemetry_sink, config=cfg)
     return res_payload
 
 
@@ -2520,11 +2350,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="Also create a git tag in refs/tags/ (default: False, records in refs/ship/ only).",
     )
     parser.add_argument(
-        "--telemetry-sink",
-        default=None,
-        help="Path to file for appending structured JSON lifecycle events.",
-    )
-    parser.add_argument(
         "--set-active-change",
         default=None,
         metavar="CHANGE_ID",
@@ -2546,14 +2371,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         default=None,
         metavar="TEST_DATA",
         help="Record test results into .ship/state.json and git notes (passed/failed or path to JSON).",
-    )
-    parser.add_argument(
-        "--sync-notes",
-        nargs="?",
-        const="origin",
-        default=None,
-        metavar="REMOTE",
-        help="Configure git fetch/push refspecs for notes and synchronize with remote.",
     )
     parser.add_argument(
         "--generate-trailers",
@@ -2588,12 +2405,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.generate_trailers:
         trailers = generate_gate_trailers(repo_root, change_id=args.change)
         output_result({"trailers": trailers}, trailers)
-        return 0
-
-    if args.sync_notes is not None:
-        remote = args.sync_notes or "origin"
-        res = sync_git_notes(repo_root, remote=remote)
-        output_result(res, [f"Notes sync ({remote}): fetch={res['fetch']}, push={res['push']}"])
         return 0
 
     if args.record_audit:
@@ -2638,7 +2449,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 args.checkpoint,
                 change=args.change,
                 create_git_tag=args.create_git_tag,
-                telemetry_sink=args.telemetry_sink,
             )
             tag_display = f" ({res['tag']})" if res.get("tag") else ""
             output_result(res, banner(f"🏷️  LIFECYCLE CHECKPOINT CREATED: {res['gate']}", [
@@ -2659,7 +2469,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 args.rollback,
                 change=args.change,
                 force=args.force,
-                telemetry_sink=args.telemetry_sink,
             )
             rb_lines = [
                 f"• Change         : {res.get('change')}",

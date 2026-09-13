@@ -97,7 +97,7 @@
             "max_debt": {
               "type": "integer",
               "minimum": 0,
-              "description": "Maximum tolerated simplify/ponytail technical debt markers."
+              "description": "Maximum tolerated simplify technical debt markers."
             },
             "strict": {
               "type": "boolean",
@@ -158,20 +158,6 @@
     "create_git_tag": {
       "type": "boolean",
       "description": "Whether to create immutable git tags for checkpoints."
-    },
-    "telemetry": {
-      "type": "object",
-      "description": "Telemetry and lifecycle audit log sinks.",
-      "properties": {
-        "sink": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "Path to telemetry sink file or destination."
-        }
-      },
-      "additionalProperties": false
     },
     "config_source": {
       "type": [
