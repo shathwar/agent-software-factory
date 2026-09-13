@@ -16,7 +16,7 @@
 
 1. **Deduplicate**: Group candidates by underlying root cause and fix, tracking sources as `reviewer:FINDING-NNN`.
 2. **Validate Independently**: Open and inspect relevant source lines at the reviewed snapshot. Verify verbatim evidence, reachable trigger, impact, and fix. Agent consensus or high confidence scores are never substitutes for source inspection.
-3. **Reject False Positives**: Reject claims contradicted by caller guards, existing invariants, or lint tools. Exclude pre-existing issues unless explicitly auditing the whole repo. Apply minimum confidence threshold of **0.70**.
+3. **Reject False Positives**: Reject claims contradicted by caller guards, existing invariants, or lint tools. Exclude pre-existing issues unless explicitly reviewing the whole repo. Apply minimum confidence threshold of **0.70**.
 4. **Resolve Conflicts**:
    - **Evidence wins; agents do not vote.** A clean report or PASS from one reviewer is not counter-evidence to another's substantiated defect.
    - For Design vs. Correctness: require a concrete maintenance/cognitive cost and simpler behavior-preserving replacement.

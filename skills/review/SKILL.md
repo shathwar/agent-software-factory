@@ -81,7 +81,7 @@ Review every active stage. Higher stages prioritise impact, not block later chec
 
 ## Executive Summary
 - **Overall Verdict**: [READY TO DEPLOY / CHANGES REQUIRED / HIGH RISK - BLOCKED]
-- **Targeted Review Mode**: [e.g. Standard Code Change / Full Adversarial Audit]
+- **Targeted Review Mode**: [e.g. Standard Code Change / Full Adversarial Review]
 - **Summary**: Concise assessment of changes, architecture, and operational risk.
 
 ## Review Scorecard

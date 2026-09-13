@@ -16,7 +16,7 @@ Instead of evaluating all 10 stages blindly on every diff, the orchestrator insp
 | **Public API & Contract** | `[!] CONTRACT REVIEW`<br>(`*Controller*`, `@RestController`, `@Get`, `@Post`, `routes.py`, `proto`) | **Spec (0)** + **Correctness (1)** + **Contract & Backward Compatibility** + **Failure / Resilience (3)** | Internal Concurrency (unless async routes), DB Migrations | [`production_risk_matrix.md`](./production_risk_matrix.md) |
 | **Dependency & Build** | `[!] DEPENDENCY REVIEW`<br>(`pom.xml`, `package.json`, `requirements.txt`, `go.mod`) | **Production Risk** + **Dependency Compatibility** + **Dependency Simplicity (4)** | Code-level SOLID, Concurrency, Algorithmic performance | [`production_risk_matrix.md`](./production_risk_matrix.md) |
 | **Financial / Precision** | `[!] FINANCIAL / PRECISION REVIEW`<br>(`BigDecimal`, `stopLoss`, `trailing_sl`, `ltp`, `qty`, `pnl`) | **Spec (0)** + **Correctness (1)** + **Concurrency (2)** + **Domain/Presentation Separation** + **Design (4–6, 8–9, scoped to financial logic)** + **Production Risk** | Generic code style, speculative refactoring | [`handbook_foundations.md`](./handbook_foundations.md)<br>[`production_risk_matrix.md`](./production_risk_matrix.md) |
-| **Full Adversarial Audit** | Explicit user prompt: *"do an adversarial review"*, *"full audit"*, *"zero-blindspot review"* | **All applicable stages + Production Risk Matrix** | None (Exhaustive baseline audit) | All Handbooks |
+| **Full Adversarial Review** | Explicit user prompt: *"do an adversarial review"*, *"full review"*, *"zero-blindspot review"* | **All applicable stages + Production Risk Matrix** | None (Exhaustive baseline review) | All Handbooks |
 
 *Note on Stage 0 (Spec Alignment): If an issue key or spec document is detected, Stage 0 is evaluated in all modes. If no spec exists, Stage 0 is marked `[SKIPPED - No Spec Provided]` without blocking technical review.*
 
@@ -44,7 +44,7 @@ Use this table after selecting the active mode. It defines specialist passes for
 | **PUBLIC API** | Correctness | API contracts, serialization, validation, error behavior, and backwards compatibility remain within Correctness. |
 | **DEPENDENCY & BUILD** | Correctness → Design | Correctness: dependency/build compatibility. Design: unnecessary dependencies and dependency complexity only. |
 | **FINANCIAL** | Correctness → Concurrency → Design | Correctness: precision, rounding, financial invariants, and domain/presentation behavior. Concurrency: concurrent updates and duplicate execution. Design: unnecessary complexity and duplication in financial logic. |
-| **FULL ADVERSARIAL AUDIT** | Correctness → Concurrency → Design | All three axes, each within its strict ownership; the orchestrator covers remaining active checks. |
+| **FULL ADVERSARIAL REVIEW** | Correctness → Concurrency → Design | All three axes, each within its strict ownership; the orchestrator covers remaining active checks. |
 
 Arrows list selected agents, not a serial execution order. In multi-agent mode, selected agents work independently in parallel. Mark unselected specialists `SKIPPED - Mode Scope` without launching them.
 
@@ -127,7 +127,7 @@ The orchestrator already knows the active review mode. Never dispatch “review 
 - **Concurrency**: “Find concurrency problems. Review shared state, coordination, and async execution within the assigned scope.”
 - **Design**: “Find unnecessary complexity. Review simplicity and maintenance cost within the assigned scope.”
 
-For example, a standard code change assigns correctness checks to Correctness and complexity checks to Design; Concurrency is skipped. A full audit considers all axes but skips demonstrably inapplicable checks and does not broaden any specialist’s ownership. The Principal handles remaining active checks.
+For example, a standard code change assigns correctness checks to Correctness and complexity checks to Design; Concurrency is skipped. A full review considers all axes but skips demonstrably inapplicable checks and does not broaden any specialist’s ownership. The Principal handles remaining active checks.
 
 Specialists review independently and return the identical [JSON agent output](./finding_schema.md#5-required-agent-output-json): `reviewer`, `status`, `findings`, `coverage`, `questions`, and `routing_notes`. Each finding uses exactly the shared 12-field contract; no specialist-specific schema is allowed. Keep candidate IDs local to each report until adjudication. Missing evidence is a limitation or question, not a fabricated finding. For an incidental out-of-scope concern, return only a routing note with its location and reason, separate from candidate findings. The orchestrator assigns it to one owner based on the root cause; specialists do not investigate or report findings on another axis. Specialists must not edit source files or make final deployment decisions.
 
