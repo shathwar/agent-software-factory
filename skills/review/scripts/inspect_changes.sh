@@ -19,8 +19,17 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     exit 1
 fi
 
-REPO_ROOT=$(git rev-parse --show-toplevel)
-cd "$REPO_ROOT"
+cd "$(git rev-parse --show-toplevel)"
+
+# --- Helper Functions ---
+contains() {
+    local needle="$1"; shift
+    local item
+    for item in ${1+"$@"}; do
+        [[ "$item" == "$needle" ]] && return 0
+    done
+    return 1
+}
 
 # --- 1. Parse Arguments ---
 PRINT_DIFF=true
@@ -31,33 +40,37 @@ MAX_DIFF_LINES=2000
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --base)
-            [[ $# -lt 2 ]] && { echo "Error: --base requires a branch argument." >&2; exit 2; }
-            EXPLICIT_BASE="$2"
-            shift 2
-            ;;
-        --base=*)
-            EXPLICIT_BASE="${1#*=}"
+        --base|--base=*)
+            if [[ "$1" == *=* ]]; then
+                EXPLICIT_BASE="${1#*=}"
+            else
+                [[ $# -lt 2 ]] && { echo "Error: --base requires a branch argument." >&2; exit 2; }
+                EXPLICIT_BASE="$2"
+                shift
+            fi
             [[ -z "$EXPLICIT_BASE" ]] && { echo "Error: --base requires a branch argument." >&2; exit 2; }
             shift
             ;;
-        --scope)
-            [[ $# -lt 2 ]] && { echo "Error: --scope requires a directory argument." >&2; exit 2; }
-            SCOPE_DIR="$2"
-            shift 2
-            ;;
-        --scope=*)
-            SCOPE_DIR="${1#*=}"
+        --scope|--scope=*)
+            if [[ "$1" == *=* ]]; then
+                SCOPE_DIR="${1#*=}"
+            else
+                [[ $# -lt 2 ]] && { echo "Error: --scope requires a directory argument." >&2; exit 2; }
+                SCOPE_DIR="$2"
+                shift
+            fi
             [[ -z "$SCOPE_DIR" ]] && { echo "Error: --scope requires a directory argument." >&2; exit 2; }
             shift
             ;;
-        --max-diff-lines)
-            [[ $# -lt 2 ]] && { echo "Error: --max-diff-lines requires an integer argument." >&2; exit 2; }
-            MAX_DIFF_LINES="$2"
-            shift 2
-            ;;
-        --max-diff-lines=*)
-            MAX_DIFF_LINES="${1#*=}"
+        --max-diff-lines|--max-diff-lines=*)
+            if [[ "$1" == *=* ]]; then
+                MAX_DIFF_LINES="${1#*=}"
+            else
+                [[ $# -lt 2 ]] && { echo "Error: --max-diff-lines requires an integer argument." >&2; exit 2; }
+                MAX_DIFF_LINES="$2"
+                shift
+            fi
+            [[ -z "$MAX_DIFF_LINES" ]] && { echo "Error: --max-diff-lines requires an integer argument." >&2; exit 2; }
             shift
             ;;
         --no-diff)
@@ -108,7 +121,7 @@ fi
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "HEAD")
 
 if [[ -z "$SCOPE_DIR" && -f ".ship.json" ]]; then
-    DETECTED_SCOPE=$(grep -o '"scope"[[:space:]]*:[[:space:]]*"[^"]*"' .ship.json 2>/dev/null | head -n 1 | sed -E 's/.*"scope"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/' || true)
+    DETECTED_SCOPE=$(sed -n -E 's/.*"scope"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' .ship.json 2>/dev/null | head -n 1 || true)
     if [[ -n "$DETECTED_SCOPE" && "$DETECTED_SCOPE" != "." ]]; then
         SCOPE_DIR="$DETECTED_SCOPE"
     fi
@@ -118,27 +131,30 @@ fi
 BASE_BRANCH=""
 BASE_REF=""
 
-if [[ -n "$EXPLICIT_BASE" ]]; then
-    for ref in "refs/heads/$EXPLICIT_BASE" "refs/remotes/origin/$EXPLICIT_BASE" "$EXPLICIT_BASE"; do
+resolve_ref() {
+    local name="$1" ref
+    for ref in "refs/heads/$name" "refs/remotes/origin/$name" "$name"; do
         if git rev-parse --verify "$ref^{commit}" >/dev/null 2>&1; then
-            BASE_BRANCH="$EXPLICIT_BASE"
-            BASE_REF="$ref"
-            break
+            echo "$ref"
+            return 0
         fi
     done
-    if [[ -z "$BASE_REF" ]]; then
+    return 1
+}
+
+if [[ -n "$EXPLICIT_BASE" ]]; then
+    if BASE_REF=$(resolve_ref "$EXPLICIT_BASE"); then
+        BASE_BRANCH="$EXPLICIT_BASE"
+    else
         echo "Error: Base ref not found: $EXPLICIT_BASE" >&2
         exit 2
     fi
 else
     for candidate in main master trunk develop; do
-        for ref in "refs/heads/$candidate" "refs/remotes/origin/$candidate"; do
-            if git rev-parse --verify "$ref^{commit}" >/dev/null 2>&1; then
-                BASE_BRANCH="$candidate"
-                BASE_REF="$ref"
-                break 2
-            fi
-        done
+        if BASE_REF=$(resolve_ref "$candidate"); then
+            BASE_BRANCH="$candidate"
+            break
+        fi
     done
 fi
 
@@ -191,16 +207,9 @@ MODIFIED_FILES=()
 DELETED_FILES=()
 RENAMED_FILES=()
 ALL_CHANGED_FILES=()
-UNTRACKED_FILES=()
 
 add_changed_path() {
-    local existing
-    if [[ ${#ALL_CHANGED_FILES[@]} -gt 0 ]]; then
-        for existing in "${ALL_CHANGED_FILES[@]}"; do
-            [[ "$existing" == "$1" ]] && return 0
-        done
-    fi
-    ALL_CHANGED_FILES+=("$1")
+    contains "$1" ${ALL_CHANGED_FILES[@]+"${ALL_CHANGED_FILES[@]}"} || ALL_CHANGED_FILES+=("$1")
 }
 
 # NUL records preserve spaces, tabs, Unicode, and rename source/destination paths.
@@ -220,9 +229,7 @@ while IFS= read -r -d '' status; do
 done < "$INSPECT_TMP/paths"
 
 if [[ "$MODE" == "WORKING_TREE" || "$MODE" == "BASE_WORKING_TREE" ]]; then
-    git ls-files --others --exclude-standard -z > "$INSPECT_TMP/untracked"
     while IFS= read -r -d '' f; do
-        UNTRACKED_FILES+=("$f")
         ADDED_FILES+=("$f")
         add_changed_path "$f"
         # --no-index returns 1 for a difference; any other failure is an error.
@@ -232,8 +239,9 @@ if [[ "$MODE" == "WORKING_TREE" || "$MODE" == "BASE_WORKING_TREE" ]]; then
             echo "Error: Could not inspect untracked file: $f" >&2
             exit "$result"
         fi
-    done < "$INSPECT_TMP/untracked"
+    done < <(git ls-files --others --exclude-standard -z)
 fi
+
 # Statistics, triggers, and full output all use the same captured patch.
 if [[ -s "$INSPECT_TMP/diff" ]]; then
     git apply --stat < "$INSPECT_TMP/diff" > "$INSPECT_TMP/stat"
@@ -255,7 +263,6 @@ echo ""
 echo "Spec & Requirements Discovery:"
 SPEC_FOUND=false
 
-COMMITS_TO_CHECK=""
 if [[ "$MODE" == "ROOT_COMMIT" ]]; then
     COMMITS_TO_CHECK=$(git log -n 1 --oneline HEAD)
 elif [[ "$MODE" == "WORKING_TREE" ]]; then
@@ -273,26 +280,16 @@ if [[ -n "${ISSUE_REFS// }" ]]; then
 fi
 
 SPEC_FILES=()
-add_spec_file() {
-    local f="$1"
-    [[ -z "$f" ]] && return
-    if [[ ${#SPEC_FILES[@]} -gt 0 ]]; then
-        for existing in "${SPEC_FILES[@]}"; do
-            [[ "$existing" == "$f" ]] && return
-        done
-    fi
-    SPEC_FILES+=("$f")
-}
-
 while IFS= read -r -d '' f; do
-    add_spec_file "$f"
+    contains "$f" ${SPEC_FILES[@]+"${SPEC_FILES[@]}"} || SPEC_FILES+=("$f")
 done < <(git ls-files -z --cached --others --exclude-standard "*spec*.md" "*PRD*.md" "*RFC*.md" "docs/specs/*" "docs/rfcs/*" "docs/adr/*" ".scratch/*" "specs/*" "openspec/*" 2>/dev/null || true)
 
 # Also check untracked or ignored scratch, spec, adr, and openspec directories on disk
 for scratch_dir in .scratch scratch docs/specs specs docs/adr openspec; do
     if [[ -d "$scratch_dir" ]]; then
         while IFS= read -r -d '' sf; do
-            add_spec_file "${sf#./}"
+            clean_sf="${sf#./}"
+            contains "$clean_sf" ${SPEC_FILES[@]+"${SPEC_FILES[@]}"} || SPEC_FILES+=("$clean_sf")
         done < <(find "$scratch_dir" -maxdepth 4 -type f \( -name "*.md" -o -name "*.txt" \) -print0 2>/dev/null || true)
     fi
 done
@@ -315,53 +312,30 @@ echo ""
 echo "Repository Standards & Conventions:"
 STANDARDS_FOUND=false
 
-STANDARDS_DOCS=()
-add_standards_doc() {
-    local f="$1"
-    [[ -z "$f" ]] && return
-    if [[ ${#STANDARDS_DOCS[@]} -gt 0 ]]; then
-        for existing in "${STANDARDS_DOCS[@]}"; do
-            [[ "$existing" == "$f" ]] && return
+report_matching_files() {
+    local header="$1"; shift
+    local found=() f
+    while IFS= read -r -d '' f; do
+        [[ -n "$f" ]] && found+=("$f")
+    done < <(git ls-files -z --cached --others --exclude-standard "$@" 2>/dev/null || true)
+
+    if [[ ${#found[@]} -gt 0 ]]; then
+        echo "  • $header:"
+        for f in "${found[@]}"; do
+            echo "    - $f"
         done
+        return 0
     fi
-    STANDARDS_DOCS+=("$f")
+    return 1
 }
 
-while IFS= read -r -d '' f; do
-    add_standards_doc "$f"
-done < <(git ls-files -z --cached --others --exclude-standard "*CODING_STANDARDS*" "*CONTRIBUTING*" "*STYLEGUIDE*" "docs/standards/*" 2>/dev/null || true)
+report_matching_files "Documented Standards" \
+    "*CODING_STANDARDS*" "*CONTRIBUTING*" "*STYLEGUIDE*" "docs/standards/*" && STANDARDS_FOUND=true
 
-if [[ ${#STANDARDS_DOCS[@]} -gt 0 ]]; then
-    echo "  • Documented Standards:"
-    for doc in "${STANDARDS_DOCS[@]}"; do
-        echo "    - $doc"
-    done
-    STANDARDS_FOUND=true
-fi
-
-LINTER_CONFIGS=()
-add_linter_cfg() {
-    local f="$1"
-    [[ -z "$f" ]] && return
-    if [[ ${#LINTER_CONFIGS[@]} -gt 0 ]]; then
-        for existing in "${LINTER_CONFIGS[@]}"; do
-            [[ "$existing" == "$f" ]] && return
-        done
-    fi
-    LINTER_CONFIGS+=("$f")
-}
-
-while IFS= read -r -d '' f; do
-    add_linter_cfg "$f"
-done < <(git ls-files -z --cached --others --exclude-standard ".eslintrc*" "eslint.config.*" "biome.json" "ruff.toml" ".ruff.toml" "pyproject.toml" ".clang-format" "checkstyle.xml" ".golangci.*" "rustfmt.toml" "mypy.ini" ".pylintrc" ".flake8" "clippy.toml" 2>/dev/null || true)
-
-if [[ ${#LINTER_CONFIGS[@]} -gt 0 ]]; then
-    echo "  • Project Linters / Formatters Configured:"
-    for cfg in "${LINTER_CONFIGS[@]}"; do
-        echo "    - $cfg"
-    done
-    STANDARDS_FOUND=true
-fi
+report_matching_files "Project Linters / Formatters Configured" \
+    ".eslintrc*" "eslint.config.*" "biome.json" "ruff.toml" ".ruff.toml" "pyproject.toml" \
+    ".clang-format" "checkstyle.xml" ".golangci.*" "rustfmt.toml" "mypy.ini" ".pylintrc" \
+    ".flake8" "clippy.toml" && STANDARDS_FOUND=true
 
 if [[ "$STANDARDS_FOUND" == "false" ]]; then
     echo "  • No custom coding standards or linter configs detected (using Fowler Code Smell baseline)."
@@ -371,26 +345,19 @@ echo ""
 # --- 5. Categorized Changed Files ---
 echo "Changed files:"
 
-echo "Added:"
-if [[ ${#ADDED_FILES[@]} -gt 0 ]]; then
-    for f in "${ADDED_FILES[@]}"; do echo "  + $f"; done
-else
-    echo "  (none)"
-fi
+print_category() {
+    local title="$1" prefix="$2"; shift 2
+    echo "$title"
+    if [[ $# -gt 0 ]]; then
+        for f in "$@"; do echo "  $prefix $f"; done
+    else
+        echo "  (none)"
+    fi
+}
 
-echo "Modified:"
-if [[ ${#MODIFIED_FILES[@]} -gt 0 ]]; then
-    for f in "${MODIFIED_FILES[@]}"; do echo "  * $f"; done
-else
-    echo "  (none)"
-fi
-
-echo "Deleted:"
-if [[ ${#DELETED_FILES[@]} -gt 0 ]]; then
-    for f in "${DELETED_FILES[@]}"; do echo "  - $f"; done
-else
-    echo "  (none)"
-fi
+print_category "Added:" "+" ${ADDED_FILES[@]+"${ADDED_FILES[@]}"}
+print_category "Modified:" "*" ${MODIFIED_FILES[@]+"${MODIFIED_FILES[@]}"}
+print_category "Deleted:" "-" ${DELETED_FILES[@]+"${DELETED_FILES[@]}"}
 
 if [[ ${#RENAMED_FILES[@]} -gt 0 ]]; then
     echo "Renamed:"
@@ -408,12 +375,10 @@ echo "Suggested Review Modes:"
 TRIGGERS_COUNT=0
 
 files_match() {
-    local pattern="$1"
-    if [[ ${#ALL_CHANGED_FILES[@]} -gt 0 ]]; then
-        for f in "${ALL_CHANGED_FILES[@]}"; do
-            if [[ "$f" =~ $pattern ]]; then return 0; fi
-        done
-    fi
+    local pattern="$1" f
+    for f in ${ALL_CHANGED_FILES[@]+"${ALL_CHANGED_FILES[@]}"}; do
+        [[ "$f" =~ $pattern ]] && return 0
+    done
     return 1
 }
 
@@ -421,39 +386,37 @@ diff_contains() {
     grep -q -E "$1" "$INSPECT_TMP/diff"
 }
 
-if files_match "(pom\.xml|build\.gradle(\.kts)?|package\.json|package-lock\.json|pnpm-lock\.yaml|bun\.lockb|yarn\.lock|requirements.*\.txt|Pipfile(\.lock)?|poetry\.lock|uv\.lock|go\.(mod|sum)|Cargo\.(toml|lock)|composer\.(json|lock)|Gemfile(\.lock)?)"; then
-    echo "  [!] DEPENDENCY REVIEW: Build / dependency manifests modified (check new deps, versions, CVEs, licenses)"
+emit_trigger() {
+    echo "  [!] $1"
     TRIGGERS_COUNT=$((TRIGGERS_COUNT + 1))
+}
+
+if files_match "(pom\.xml|build\.gradle(\.kts)?|package\.json|package-lock\.json|pnpm-lock\.yaml|bun\.lockb|yarn\.lock|requirements.*\.txt|Pipfile(\.lock)?|poetry\.lock|uv\.lock|go\.(mod|sum)|Cargo\.(toml|lock)|composer\.(json|lock)|Gemfile(\.lock)?)"; then
+    emit_trigger "DEPENDENCY REVIEW: Build / dependency manifests modified (check new deps, versions, CVEs, licenses)"
 fi
 
 if files_match "(application.*\.ya?ml|application.*\.properties|\.env.*|config\.(py|go|ts|js)|settings\.json|Config\.java|docker-compose.*\.ya?ml|Dockerfile|Containerfile|\.dockerignore|values.*\.ya?ml|tsconfig.*\.json)"; then
-    echo "  [!] CONFIG REVIEW: Application configuration modified (verify default values, env var overrides, secrets safety)"
-    TRIGGERS_COUNT=$((TRIGGERS_COUNT + 1))
+    emit_trigger "CONFIG REVIEW: Application configuration modified (verify default values, env var overrides, secrets safety)"
 fi
 
 if files_match "(db/migration/|migrations/|V[0-9]+__.*\.sql|schema\.prisma|alembic/|alembic\.ini|drizzle/|drizzle\.config\.)"; then
-    echo "  [!] MIGRATION REVIEW: Database migrations / SQL changed (check Flyway checksums, query index coverage, table lock hazards)"
-    TRIGGERS_COUNT=$((TRIGGERS_COUNT + 1))
+    emit_trigger "MIGRATION REVIEW: Database migrations / SQL changed (check Flyway checksums, query index coverage, table lock hazards)"
 fi
 
 if diff_contains "\b(synchronized|ReentrantLock|Lock|ConcurrentHashMap|AtomicReference|AtomicBoolean|AtomicInteger|AsyncKeyedLock|asyncio\.(Lock|Semaphore)|Mutex|RWMutex|Semaphore|CountDownLatch|threading\.(Lock|RLock|Semaphore)|sync\.(Mutex|RWMutex|WaitGroup)|tokio::sync|std::sync::Mutex|pthread_mutex|StateFlow|SharedFlow)\b|<-chan|chan<-"; then
-    echo "  [!] CONCURRENCY REVIEW: Mutexes, locks, or atomic collections in diff (scrutinize deadlock, reentrancy, double release, atomicity)"
-    TRIGGERS_COUNT=$((TRIGGERS_COUNT + 1))
+    emit_trigger "CONCURRENCY REVIEW: Mutexes, locks, or atomic collections in diff (scrutinize deadlock, reentrancy, double release, atomicity)"
 fi
 
 if diff_contains "\b(Executor|ThreadPoolExecutor|ProcessPoolExecutor|CompletableFuture|VirtualThread|Thread\.start|run_in_threadpool|asyncio\.(create_task|gather|run|to_thread|as_completed)|BackgroundTasks|goroutine|\bgo [a-zA-Z0-9_]+|tokio::spawn|Task\.Run|Promise\.(all|allSettled)|chan [a-zA-Z0-9_]+|Dispatchers\.(IO|Default))\b"; then
-    echo "  [!] THREAD / ASYNC LIFECYCLE REVIEW: Background tasks, thread pools, or async tasks (check unhandled errors, task cancellation, carrier pinning)"
-    TRIGGERS_COUNT=$((TRIGGERS_COUNT + 1))
+    emit_trigger "THREAD / ASYNC LIFECYCLE REVIEW: Background tasks, thread pools, or async tasks (check unhandled errors, task cancellation, carrier pinning)"
 fi
 
 if files_match "(Controller|Resource|Endpoint|routes|api/|\.proto|openapi.*\.ya?ml|swagger.*\.json|schema\.graphql.*|\.graphqls?)" || diff_contains "(@RestController|@Controller|@Get|@Post|@Put|@Delete|@Patch|@Path|@app\.(get|post|put|delete|patch)|router\.(get|post|put|delete|patch)|r\.(GET|POST|PUT|DELETE|PATCH)|fastify\.(get|post|put|delete)|publicProcedure|router\.(query|mutation)|@Query|@Mutation)"; then
-    echo "  [!] CONTRACT REVIEW: API controllers / routing modified (check backwards compatibility, status codes, query params, schema serialization)"
-    TRIGGERS_COUNT=$((TRIGGERS_COUNT + 1))
+    emit_trigger "CONTRACT REVIEW: API controllers / routing modified (check backwards compatibility, status codes, query params, schema serialization)"
 fi
 
 if diff_contains "\b(BigDecimal|Decimal|stopLoss|trailing_sl|entryPrice|orderPrice|tradedPrice|ltp|premium|lotSize|qty|pnl|cents|balance|ledger|subtotal|currency)\b"; then
-    echo "  [!] FINANCIAL / PRECISION REVIEW: Pricing, stop-loss, or quantity logic modified (verify float safety, division by zero, domain separation)"
-    TRIGGERS_COUNT=$((TRIGGERS_COUNT + 1))
+    emit_trigger "FINANCIAL / PRECISION REVIEW: Pricing, stop-loss, or quantity logic modified (verify float safety, division by zero, domain separation)"
 fi
 
 if [[ "$TRIGGERS_COUNT" -eq 0 ]]; then
@@ -497,14 +460,9 @@ is_test_or_doc_file() {
     return 1
 }
 
-if [[ ${#ALL_CHANGED_FILES[@]} -gt 0 ]]; then
-    for f in "${ALL_CHANGED_FILES[@]}"; do
-        if is_test_or_doc_file "$f"; then
-            continue
-        fi
-        PROD_FILES+=("$f")
-    done
-fi
+for f in ${ALL_CHANGED_FILES[@]+"${ALL_CHANGED_FILES[@]}"}; do
+    is_test_or_doc_file "$f" || PROD_FILES+=("$f")
+done
 
 if [[ ${#PROD_FILES[@]} -eq 0 ]]; then
     echo "  (No production source files changed)"
@@ -557,16 +515,8 @@ else
             shopt -s nocasematch
             local_test_pattern="(^|/)(test_${STEM}|Test${STEM}|${STEM}(Tests?|IT|_test|\.spec|\.test|_spec))\.[a-zA-Z0-9]+$"
             for added in "${ADDED_FILES[@]}"; do
-                if [[ "$added" != "$prod" ]] && [[ "$added" =~ $local_test_pattern ]]; then
-                    ALREADY_FOUND=false
-                    if [[ ${#MATCHING_TESTS[@]} -gt 0 ]]; then
-                        for existing in "${MATCHING_TESTS[@]}"; do
-                            if [[ "$existing" == "$added" ]]; then ALREADY_FOUND=true; break; fi
-                        done
-                    fi
-                    if [[ "$ALREADY_FOUND" == "false" ]]; then
-                        MATCHING_TESTS+=("$added")
-                    fi
+                if [[ "$added" != "$prod" && "$added" =~ $local_test_pattern ]]; then
+                    contains "$added" ${MATCHING_TESTS[@]+"${MATCHING_TESTS[@]}"} || MATCHING_TESTS+=("$added")
                 fi
             done
             shopt -u nocasematch
@@ -577,17 +527,7 @@ else
             echo "                 -> No matching test file found (e.g. ${STEM}Test, test_${STEM}, or ${STEM}_test)!"
         else
             for test_file in "${MATCHING_TESTS[@]}"; do
-                IS_IN_DIFF=false
-                if [[ ${#ALL_CHANGED_FILES[@]} -gt 0 ]]; then
-                    for changed in "${ALL_CHANGED_FILES[@]}"; do
-                        if [[ "$changed" == "$test_file" ]]; then
-                            IS_IN_DIFF=true
-                            break
-                        fi
-                    done
-                fi
-
-                if [[ "$IS_IN_DIFF" == "true" ]]; then
+                if contains "$test_file" ${ALL_CHANGED_FILES[@]+"${ALL_CHANGED_FILES[@]}"}; then
                     echo "  [UPDATED TEST] $prod"
                     echo "                 -> $test_file (modified / added in this change)"
                 else
