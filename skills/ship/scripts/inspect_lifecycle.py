@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Inspect repository state against the 4-gate engineering lifecycle.
+"""Inspect repository state against the engineering lifecycle.
 
 Zero-dependency script (Python 3.10+ standard library).
 
 Evaluates filesystem indicators to determine active gate:
-- GATE 1: SPECIFICATION & DESIGN (design / spike)
-- GATE 2: IMPLEMENTATION (tdd + simplify)
-- GATE 3: ADVERSARIAL AUDIT (audit loop)
-- GATE 4: READY TO SHIP (delivery & PR sign-off)
+- design: Specification & Architecture (design / spike)
+- implementation: Test-First Implementation (tdd + simplify)
+- audit: Adversarial Review & Adjudication (audit loop)
+- delivery: Ready to Ship (delivery & PR sign-off)
 """
 
 from __future__ import annotations
@@ -1271,7 +1271,7 @@ def create_empty_change_entry(change_id: str) -> Dict[str, Any]:
     """Create a default ChangeState entry according to the lifecycle schema."""
     return {
         "change_id": change_id,
-        "phase": "gate-1-design",
+        "phase": "design",
         "task_status": {
             "total": 0,
             "completed": 0,
@@ -1371,7 +1371,7 @@ def sync_ledger_from_workspace(repo_root: Path, target_change_id: Optional[str] 
 
         # Do not demote already archived changes
         if entry.get("evidence", {}).get("delivery", {}).get("status") == "ARCHIVED":
-            entry["phase"] = "gate-4-delivery"
+            entry["phase"] = "delivery"
             continue
 
         matched_pkg = next((p for p in packages if p["change"] == change or p.get("topic") == change), None)
@@ -1424,12 +1424,12 @@ def sync_ledger_from_workspace(repo_root: Path, target_change_id: Optional[str] 
 
         blockers: List[str] = list(existing_test_blockers)
         if spikes:
-            entry["phase"] = "gate-1b-spike"
+            entry["phase"] = "spike"
             blockers.append(f"Spike active in {spikes[0]}")
         elif not matched_pkg or matched_pkg["total_tasks"] == 0:
-            entry["phase"] = "gate-1-design"
+            entry["phase"] = "design"
         elif matched_pkg["pending_tasks"] > 0 or any(b.startswith("Tests:") for b in blockers):
-            entry["phase"] = "gate-2-impl"
+            entry["phase"] = "implementation"
         else:
             audit_ev = entry["evidence"]["audit"]
             crit = audit_ev.get("critical_or_high_count", 0)
@@ -1440,9 +1440,9 @@ def sync_ledger_from_workspace(repo_root: Path, target_change_id: Optional[str] 
                 blockers.append(f"Audit verdict is {verd}")
 
             if audit_ev.get("verdict") in {"PASS", "APPROVED"} and crit == 0 and not blockers:
-                entry["phase"] = "gate-4-delivery"
+                entry["phase"] = "delivery"
             else:
-                entry["phase"] = "gate-3-audit"
+                entry["phase"] = "audit"
 
         entry["blockers"] = blockers
         if entry.get("revision_counter", 0) == 0:
@@ -1869,7 +1869,13 @@ def generate_gate_trailers(
         status = design_ev.get("status", "ACCEPTED")
         trailers.append(f"Ship-Design: {adr_name} ({status})")
     elif "design" in gates_cfg:
-        trailers.append(f"Ship-Design: {change_entry.get('phase', 'gate-1-design')}")
+        cur_phase = change_entry.get("phase", "design")
+        if cur_phase in {"implementation", "audit", "delivery"}:
+            trailers.append("Ship-Design: PASSED")
+        elif cur_phase == "spike":
+            trailers.append("Ship-Design: SPIKE")
+        else:
+            trailers.append("Ship-Design: IN_PROGRESS")
 
     # 2. Gate: Spike
     spike_ev = evidence.get("spike", {})
@@ -1920,9 +1926,9 @@ def generate_gate_trailers(
     if has_test_failures or blockers:
         if deliv_status == "ARCHIVED":
             trailers.append("Ship-Delivery: ARCHIVED")
-        elif change_entry.get("phase") == "gate-4-delivery" or deliv_status == "READY":
+        elif change_entry.get("phase") == "delivery" or deliv_status == "READY":
             trailers.append("Ship-Delivery: BLOCKED")
-    elif change_entry.get("phase") == "gate-4-delivery" or deliv_status in {"READY", "ARCHIVED"}:
+    elif change_entry.get("phase") == "delivery" or deliv_status in {"READY", "ARCHIVED"}:
         trailers.append(f"Ship-Delivery: {deliv_status if deliv_status != 'PENDING' else 'READY'}")
 
     return trailers
@@ -1970,7 +1976,9 @@ def record_audit_to_ledger(
         entry["blockers"] = blockers
 
         if ev.get("verdict") in {"PASS", "APPROVED"} and crit == 0 and not blockers:
-            entry["phase"] = "gate-4-delivery"
+            entry["phase"] = "delivery"
+        else:
+            entry["phase"] = "audit"
 
     return mutate_change_state(repo_root, cid, updater)
 
@@ -2017,7 +2025,7 @@ def determine_lifecycle_state(
     if spikes:
         spike_name = spikes[0]
         return (
-            "GATE 1b: EMPIRICAL SPIKE ACTIVE",
+            "spike",
             "SPIKE_ACTIVE",
             f"Complete empirical spike in '{spike_name}'. Deliver verdict to settle design frontier.",
         )
@@ -2028,15 +2036,15 @@ def determine_lifecycle_state(
         arch_path = active_change.get("evidence", {}).get("delivery", {}).get("archived_path")
         path_str = f" in '{arch_path}'" if arch_path else ""
         return (
-            "GATE 4: READY TO SHIP",
+            "delivery",
             "ARCHIVED",
             f"Change '{cid}' has been delivered and archived{path_str}.",
         )
 
-    # If no OpenSpec packages and no ADRs, we are at Gate 1
+    # If no OpenSpec packages and no ADRs, we are at design gate
     if not openspec_packages and not adrs:
         return (
-            "GATE 1: SPECIFICATION & DESIGN",
+            "design",
             "INITIAL_PROPOSAL",
             "Run '/design' or '/ship <change>'. Explore workspace facts and present Frontier Rounds.",
         )
@@ -2047,7 +2055,7 @@ def determine_lifecycle_state(
         pkg_change_name = active_pkg.get("change") or active_pkg.get("topic")
         if not active_pkg["has_tasks"] or active_pkg["total_tasks"] == 0:
             return (
-                "GATE 1: SPECIFICATION & DESIGN",
+                "design",
                 "SPEC_UNFINISHED",
                 f"Compile tasks.md and specs/ for '{pkg_change_name}'. Seek user confirmation to proceed.",
             )
@@ -2055,14 +2063,14 @@ def determine_lifecycle_state(
         if active_pkg["pending_tasks"] > 0:
             next_task_str = f" Next: '{active_pkg['next_task']}'." if active_pkg["next_task"] else ""
             return (
-                "GATE 2: IMPLEMENTATION (TDD + SIMPLIFY)",
+                "implementation",
                 "TDD_ACTIVE",
                 f"Implement pending tasks ({active_pkg['completed_tasks']}/{active_pkg['total_tasks']} tasks complete).{next_task_str} Run Red-Green-Refactor.",
             )
 
         # All tasks completed!
         if active_pkg["pending_tasks"] == 0 and active_pkg["total_tasks"] > 0:
-            # Check authoritative ledger evidence & blockers before advancing beyond Gate 2
+            # Check authoritative ledger evidence & blockers before advancing beyond implementation gate
             if active_change:
                 impl_ev = active_change.get("evidence", {}).get("implementation", {})
                 blockers = active_change.get("blockers", [])
@@ -2070,14 +2078,14 @@ def determine_lifecycle_state(
                 if impl_ev.get("tests_passed") is False or impl_ev.get("status") == "FAILED" or test_blockers:
                     reason = test_blockers[0] if test_blockers else f"{impl_ev.get('failed_count', 1)} test(s) failing"
                     return (
-                        "GATE 2: IMPLEMENTATION (TDD + SIMPLIFY)",
+                        "implementation",
                         "TDD_ACTIVE",
                         f"Blocked by failing tests recorded in ledger ({reason}). Run Red-Green-Refactor to fix failing tests before advancing.",
                     )
 
             if not audit_report:
                 return (
-                    "GATE 3: ADVERSARIAL AUDIT",
+                    "audit",
                     "AUDIT_ACTIVE",
                     "All implementation tasks marked complete. Run 'audit' in review-loop mode against base branch.",
                 )
@@ -2086,7 +2094,7 @@ def determine_lifecycle_state(
             if audit_report.get("is_envelope") and not audit_report.get("judge_report_valid"):
                 err_msg = "; ".join(audit_report.get("judge_report_errors", ["Malformed Judge report structure"]))
                 return (
-                    "GATE 3: ADVERSARIAL AUDIT",
+                    "audit",
                     "AUDIT_ACTIVE",
                     f"Judge report in delivery envelope is malformed: {err_msg}. Re-run review to produce a valid Judge report.",
                 )
@@ -2095,7 +2103,7 @@ def determine_lifecycle_state(
             if not audit_report.get("is_judge"):
                 reviewer_name = audit_report.get("reviewer", "unknown")
                 return (
-                    "GATE 3: ADVERSARIAL AUDIT",
+                    "audit",
                     "AUDIT_ACTIVE",
                     f"Audit report is from '{reviewer_name}', not Judge. Requires explicit Judge adjudication before shipping.",
                 )
@@ -2104,7 +2112,7 @@ def determine_lifecycle_state(
             crit_count = audit_report.get("critical_or_high_count", 0)
             if crit_count > 0:
                 return (
-                    "GATE 3: ADVERSARIAL AUDIT",
+                    "audit",
                     "AUDIT_ACTIVE",
                     f"Audit has {crit_count} unresolved CRITICAL/HIGH finding(s). Must remediate defects before shipping.",
                 )
@@ -2117,13 +2125,13 @@ def determine_lifecycle_state(
             # Reject any explicit FAIL or non-pass verdict immediately
             if verdict in {"FAIL", "FAILED", "REJECTED"}:
                 return (
-                    "GATE 3: ADVERSARIAL AUDIT",
+                    "audit",
                     "AUDIT_ACTIVE",
                     f"Audit verdict '{verdict}' is rejected. Remediate findings or re-run review.",
                 )
             if status in {"fail", "failed", "rejected", "incomplete", "skipped"}:
                 return (
-                    "GATE 3: ADVERSARIAL AUDIT",
+                    "audit",
                     "AUDIT_ACTIVE",
                     f"Audit status '{status}' is not complete/passing. Complete review and remediate findings.",
                 )
@@ -2131,7 +2139,7 @@ def determine_lifecycle_state(
             verdict_ok = verdict in {"PASS", "APPROVED"} or (verdict == "" and status in {"complete", "pass", "approved"} and findings_count == 0)
             if not verdict_ok:
                 return (
-                    "GATE 3: ADVERSARIAL AUDIT",
+                    "audit",
                     "AUDIT_ACTIVE",
                     f"Audit verdict '{verdict or status}' is not PASS. Remediate findings or re-run review.",
                 )
@@ -2139,7 +2147,7 @@ def determine_lifecycle_state(
             # 5. Require explicit verified passing test evidence
             if not audit_report.get("test_evidence_passed"):
                 return (
-                    "GATE 3: ADVERSARIAL AUDIT",
+                    "audit",
                     "AUDIT_ACTIVE",
                     "Audit report lacks verified test evidence. Run test suite and record passing test results.",
                 )
@@ -2149,13 +2157,13 @@ def determine_lifecycle_state(
             pkg_change = active_pkg.get("change") or active_pkg.get("topic")
             if not report_change:
                 return (
-                    "GATE 3: ADVERSARIAL AUDIT",
+                    "audit",
                     "AUDIT_ACTIVE",
                     f"Audit approval lacks 'change'. Requires exact match with active package '{pkg_change}' before shipping.",
                 )
             if report_change != pkg_change:
                 return (
-                    "GATE 3: ADVERSARIAL AUDIT",
+                    "audit",
                     "AUDIT_ACTIVE",
                     f"Audit approval is for change '{report_change}', but active package is '{pkg_change}'. Requires audit approval for '{pkg_change}' before shipping.",
                 )
@@ -2165,7 +2173,7 @@ def determine_lifecycle_state(
                 err_msg = "; ".join(audit_report.get("judge_report_errors", ["Malformed Judge report structure"]))
                 env_text = " in delivery envelope" if audit_report.get("is_envelope") else ""
                 return (
-                    "GATE 3: ADVERSARIAL AUDIT",
+                    "audit",
                     "AUDIT_ACTIVE",
                     f"Judge report{env_text} is malformed: {err_msg}. Re-run review to produce a valid Judge report.",
                 )
@@ -2180,7 +2188,7 @@ def determine_lifecycle_state(
                 if current_commit:
                     if not snapshot_sha and not snapshot_fingerprint:
                         return (
-                            "GATE 3: ADVERSARIAL AUDIT",
+                            "audit",
                             "AUDIT_ACTIVE",
                             "Audit report lacks commit snapshot SHA or tree fingerprint. Audit must be bound to reviewed snapshot.",
                         )
@@ -2190,13 +2198,13 @@ def determine_lifecycle_state(
                             # Symbolic ref like 'HEAD' requires a matching working-tree fingerprint
                             if not snapshot_fingerprint or (current_fingerprint and snapshot_fingerprint != current_fingerprint):
                                 return (
-                                    "GATE 3: ADVERSARIAL AUDIT",
+                                    "audit",
                                     "AUDIT_ACTIVE",
                                     f"Audit snapshot commit '{snapshot_sha}' is symbolic or unresolved. Must be a resolved, immutable commit SHA or accompanied by a matching working-tree fingerprint.",
                                 )
                         elif not current_commit.startswith(snapshot_sha) and not snapshot_sha.startswith(current_commit):
                             return (
-                                "GATE 3: ADVERSARIAL AUDIT",
+                                "audit",
                                 "AUDIT_ACTIVE",
                                 f"Audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'. Re-run audit on current code.",
                             )
@@ -2204,13 +2212,13 @@ def determine_lifecycle_state(
                     # Git repository before first commit
                     if not snapshot_fingerprint:
                         return (
-                            "GATE 3: ADVERSARIAL AUDIT",
+                            "audit",
                             "AUDIT_ACTIVE",
                             "Audit report in repository before first commit lacks working-tree fingerprint. Audit must be bound to reviewed snapshot fingerprint.",
                         )
                     if snapshot_sha and snapshot_sha != "none":
                         return (
-                            "GATE 3: ADVERSARIAL AUDIT",
+                            "audit",
                             "AUDIT_ACTIVE",
                             f"Audit report snapshot commit '{snapshot_sha}' does not exist (repository has no commits yet). Re-run audit on current code.",
                         )
@@ -2219,7 +2227,7 @@ def determine_lifecycle_state(
             if snapshot_fingerprint:
                 if not current_fingerprint or snapshot_fingerprint != current_fingerprint:
                     return (
-                        "GATE 3: ADVERSARIAL AUDIT",
+                        "audit",
                         "AUDIT_ACTIVE",
                         "Working tree has been modified since review (fingerprint mismatch). Re-run adversarial audit on current code before shipping.",
                     )
@@ -2231,7 +2239,7 @@ def determine_lifecycle_state(
                     if len(modified_sources) > 3:
                         mod_str += f" (+{len(modified_sources)-3} more)"
                     return (
-                        "GATE 3: ADVERSARIAL AUDIT",
+                        "audit",
                         "AUDIT_ACTIVE",
                         f"Working tree has unreviewed source modifications ({mod_str}). Re-run adversarial audit on current code before shipping.",
                     )
@@ -2243,39 +2251,39 @@ def determine_lifecycle_state(
                     test_b = [b for b in blockers if b.startswith("Tests:")]
                     if test_b:
                         return (
-                            "GATE 2: IMPLEMENTATION (TDD + SIMPLIFY)",
+                            "implementation",
                             "TDD_ACTIVE",
                             f"Blocked by test failure in ledger: {test_b[0]}. Run Red-Green-Refactor.",
                         )
                     return (
-                        "GATE 3: ADVERSARIAL AUDIT",
+                        "audit",
                         "AUDIT_ACTIVE",
                         f"Blocked by active ledger blockers: {'; '.join(blockers)}. Remediate findings before shipping.",
                     )
                 impl_ev = active_change.get("evidence", {}).get("implementation", {})
                 if impl_ev.get("tests_passed") is False or impl_ev.get("status") == "FAILED":
                     return (
-                        "GATE 2: IMPLEMENTATION (TDD + SIMPLIFY)",
+                        "implementation",
                         "TDD_ACTIVE",
                         "Blocked by failing test evidence in ledger. Run Red-Green-Refactor.",
                     )
                 audit_ev = active_change.get("evidence", {}).get("audit", {})
                 if audit_ev.get("verdict") in {"FAIL", "FAILED", "REJECTED"}:
                     return (
-                        "GATE 3: ADVERSARIAL AUDIT",
+                        "audit",
                         "AUDIT_ACTIVE",
                         f"Audit verdict recorded in ledger is '{audit_ev.get('verdict')}'. Remediate findings or re-run review.",
                     )
                 if audit_ev.get("critical_or_high_count", 0) > 0:
                     return (
-                        "GATE 3: ADVERSARIAL AUDIT",
+                        "audit",
                         "AUDIT_ACTIVE",
                         f"Ledger records {audit_ev['critical_or_high_count']} unresolved CRITICAL/HIGH finding(s). Remediate defects before shipping.",
                     )
 
             # All checks pass
             return (
-                "GATE 4: READY TO SHIP",
+                "delivery",
                 "DELIVERY_READY",
                 f"All tasks complete, tests verified green, and Judge audit PASSED. Ready to deliver Delivery Walkthrough. Run 'python3 skills/ship/scripts/inspect_lifecycle.py --archive' to sync living specs and archive '{pkg_change}'.",
             )
@@ -2284,12 +2292,12 @@ def determine_lifecycle_state(
     has_accepted = any(a.get("status") in {"ACCEPTED", "APPROVED"} for a in adrs)
     if has_accepted:
         return (
-            "GATE 1: SPECIFICATION & DESIGN",
+            "design",
             "ADR_ACCEPTED",
             "ADR accepted. Compile OpenSpec change package (specs/ and tasks.md) or confirm with user to begin TDD.",
         )
     return (
-        "GATE 1: SPECIFICATION & DESIGN",
+        "design",
         "ADR_PROPOSED",
         "ADR proposed. Grill design frontier and seek user acceptance before compiling OpenSpec or beginning TDD.",
     )
@@ -2482,7 +2490,7 @@ def apply_and_archive_openspec(
         trailers = generate_gate_trailers(repo_root, change_id=change_name)
         try:
             def update_delivery(entry: Dict[str, Any]) -> None:
-                entry["phase"] = "gate-4-delivery"
+                entry["phase"] = "delivery"
                 entry["evidence"]["delivery"]["status"] = "ARCHIVED"
                 entry["evidence"]["delivery"]["archived_path"] = str(dest_archive.relative_to(repo_root))
                 entry["evidence"]["delivery"]["trailers"] = trailers
@@ -2548,6 +2556,22 @@ def emit_telemetry_event(
         pass
 
 
+def canonicalize_gate_name(gate_name: str) -> str:
+    """Map gate names and legacy aliases to canonical gate names defined in ship.json."""
+    canonical = gate_name.lower().strip()
+    if canonical in {"1", "gate1", "gate-1", "spec", "gate-1-spec", "design", "gate-1-design"}:
+        return "design"
+    elif canonical in {"2", "gate2", "gate-2", "impl", "gate-2-impl", "tdd", "implementation"}:
+        return "implementation"
+    elif canonical in {"3", "gate3", "gate-3", "audit", "gate-3-audit"}:
+        return "audit"
+    elif canonical in {"4", "gate4", "gate-4", "delivery", "gate-4-delivery"}:
+        return "delivery"
+    elif canonical in {"spike", "1b", "gate-1b", "gate-1b-spike"}:
+        return "spike"
+    return canonical.replace(" ", "-")
+
+
 def create_checkpoint(
     repo_root: Path,
     gate_name: str,
@@ -2562,17 +2586,7 @@ def create_checkpoint(
     cfg = load_ship_config(repo_root)
     allow_git_tag = create_git_tag or cfg.get("create_git_tag", False)
 
-    canonical = gate_name.lower().strip()
-    if canonical in {"1", "gate1", "gate-1", "spec", "gate-1-spec"}:
-        canonical_tag = "gate-1-spec"
-    elif canonical in {"2", "gate2", "gate-2", "impl", "gate-2-impl", "tdd"}:
-        canonical_tag = "gate-2-impl"
-    elif canonical in {"3", "gate3", "gate-3", "audit", "gate-3-audit"}:
-        canonical_tag = "gate-3-audit"
-    elif canonical in {"4", "gate4", "gate-4", "delivery", "gate-4-delivery"}:
-        canonical_tag = "gate-4-delivery"
-    else:
-        canonical_tag = canonical.replace(" ", "-")
+    canonical_tag = canonicalize_gate_name(gate_name)
 
     ref_name = f"refs/ship/{resolved_change}/{canonical_tag}"
     tag_name = f"ship/{resolved_change}/{canonical_tag}"
@@ -2671,13 +2685,7 @@ def perform_rollback(
 ) -> Dict[str, Any]:
     """Safely roll back lifecycle and working state to target checkpoint (e.g. State 5b)."""
     resolved_change = change or topic or get_active_change(repo_root) or "default"
-    canonical = target_gate.lower().strip()
-    if canonical in {"1", "gate1", "gate-1", "spec", "gate-1-spec"}:
-        canonical_tag = "gate-1-spec"
-    elif canonical in {"2", "gate2", "gate-2", "impl", "gate-2-impl", "tdd"}:
-        canonical_tag = "gate-2-impl"
-    else:
-        canonical_tag = canonical.replace(" ", "-")
+    canonical_tag = canonicalize_gate_name(target_gate)
 
     git_info = get_git_info(repo_root)
     cfg = load_ship_config(repo_root)
@@ -2685,6 +2693,16 @@ def perform_rollback(
     backup_dir = repo_root / ".scratch" / f"rollback_{timestamp_str}"
 
     chk_file = repo_root / ".scratch" / "checkpoints" / f"{resolved_change}_{canonical_tag}.json"
+    if not chk_file.exists():
+        if canonical_tag == "design":
+            legacy_chk = repo_root / ".scratch" / "checkpoints" / f"{resolved_change}_gate-1-spec.json"
+            if legacy_chk.exists():
+                chk_file = legacy_chk
+        elif canonical_tag == "implementation":
+            legacy_chk = repo_root / ".scratch" / "checkpoints" / f"{resolved_change}_gate-2-impl.json"
+            if legacy_chk.exists():
+                chk_file = legacy_chk
+
     target_tag = f"ship/{resolved_change}/{canonical_tag}"
     target_ref = f"refs/ship/{resolved_change}/{canonical_tag}"
     checkpoint_info: Optional[Dict[str, Any]] = None
@@ -2866,11 +2884,11 @@ def perform_rollback(
             except Exception:
                 pass
 
-    # Reset tasks in tasks.md for Gate 1 spec amendment
+    # Reset tasks in tasks.md for design spec amendment
     pkg_dir = repo_root / "openspec" / "changes" / resolved_change
     tasks_file = pkg_dir / "tasks.md"
     reset_tasks_count = 0
-    if tasks_file.exists() and canonical_tag == "gate-1-spec":
+    if tasks_file.exists() and canonical_tag == "design":
         tasks_content = tasks_file.read_text(encoding="utf-8", errors="replace")
         new_lines = []
         for line in tasks_content.splitlines():
@@ -2915,7 +2933,7 @@ def perform_rollback(
                 "git_note_oid": None,
                 "snapshot_fingerprint": None,
             }
-            if canonical_tag == "gate-1-spec":
+            if canonical_tag == "design":
                 entry["blockers"] = []
                 entry["evidence"]["implementation"]["status"] = "PENDING"
                 entry["evidence"]["implementation"]["tests_passed"] = None
@@ -2979,7 +2997,7 @@ def format_summary(data: Dict[str, Any]) -> str:
     """Format evaluation data for human/agent reading."""
     lines = []
     lines.append("═════════════════════════════════════════════════════════════════════")
-    lines.append(f" 🚀 LIFECYCLE STATE: {data['gate']}")
+    lines.append(f" 🚀 LIFECYCLE STATE: {data['gate'].upper()}")
     lines.append("═════════════════════════════════════════════════════════════════════")
     lines.append(f"• Internal State : {data['state_key']}")
     if data.get("active_change"):
@@ -3057,7 +3075,7 @@ def format_summary(data: Dict[str, Any]) -> str:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Inspect and evaluate repository against the 4-gate engineering lifecycle."
+        description="Inspect and evaluate repository against the engineering lifecycle."
     )
     parser.add_argument(
         "--path",
@@ -3085,13 +3103,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "--checkpoint",
         default=None,
         metavar="GATE",
-        help="Record a git ref and receipt checkpoint for GATE (e.g. gate-1-spec, gate-2-impl).",
+        help="Record a git ref and receipt checkpoint for gate (e.g. design, implementation).",
     )
     parser.add_argument(
         "--rollback",
         default=None,
         metavar="GATE",
-        help="Safely rollback working state to GATE checkpoint (e.g. gate-1-spec for State 5b).",
+        help="Safely rollback working state to gate checkpoint (e.g. design for State 5b).",
     )
     parser.add_argument(
         "--status-check",
@@ -3319,7 +3337,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 else:
                     print("• Synced Specs   : None")
                 print(f"• Archived To    : {res['archived_path']}")
-                print("• Lifecycle      : Reset to Gate 1 (ready for next feature proposal)")
+                print("• Lifecycle      : Reset to design (ready for next feature proposal)")
                 print("═════════════════════════════════════════════════════════════════════")
             return 0
         except Exception as e:

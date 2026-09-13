@@ -7,7 +7,7 @@ A repository of production-grade engineering skills for AI agents, covering the 
                                        │
                                        ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                 GATE 1: SPECIFICATION & DESIGN (design)                      │
+│                 DESIGN: SPECIFICATION & ARCHITECTURE (design)               │
 │   • Persona: Senior Principal Systems Architect                             │
 │   • Model: Design Tree & Frontier Algorithm (Round-based batching)          │
 │   • Output: Architecture Decision Record (ADR) & OpenSpec Change Package    │
@@ -23,7 +23,7 @@ A repository of production-grade engineering skills for AI agents, covering the 
                        │ (Verdict returned)            │
                        ▼                               ▼ (User Approves Spec)
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│          GATE 2: IMPLEMENTATION (tdd + simplify)                            │
+│          IMPLEMENTATION: TEST-FIRST DEVELOPMENT (tdd + simplify)            │
 │   • Test Driver: Writes failing behavioral test (Red Phase)                 │
 │   • Simplify Implementer: Climbs Laziness Ladder, stdlib-first (Green)      │
 │   • Code Refactorer: Simplifies under green; adds simplify: debt markers    │
@@ -33,7 +33,7 @@ A repository of production-grade engineering skills for AI agents, covering the 
                                        │
                                        ▼ (Code & Tests Complete)
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│          GATE 3: AUDIT & AUTO-FIX (audit)                                   │
+│          AUDIT: ADVERSARIAL REVIEW & AUTO-FIX (audit)                       │
 │   • Stage 0: Spec Alignment (Verifies code directly against ADR/Spec)       │
 │   • Stages 1–9: Correctness, Concurrency, Failure, Craftsmanship, SOLID     │
 │   • Review Loop: Auto-fixes critical findings & proves zero regressions     │
@@ -41,7 +41,7 @@ A repository of production-grade engineering skills for AI agents, covering the 
                                        │
                                        ▼ (Judge Issues PASS)
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                 GATE 4: DELIVERY & PR SIGN-OFF                              │
+│                 DELIVERY: PR SIGN-OFF & ARCHIVING                           │
 │   • Final test suite verification run                                       │
 │   • Delivery Walkthrough Report & PR summary ready for review               │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -98,7 +98,7 @@ Give your agent [ship SKILL.md](./skills/ship/SKILL.md) and feature request: `/s
   - Standard RFC 5133 commit trailers (`Ship-Change`, `Ship-<Gate>`, `--generate-trailers`).
 - **Re-Entrant State Machine**: Filesystem (`openspec/`, `tasks.md`, `docs/adr/`) is persistent state machine. Resumes exact active phase instantly.
 - **Repository Manifest (`.ship.json`)**: Clean domain schema validated by [`ship.schema.json`](./skills/ship/references/ship.schema.json). Configures custom test commands (`gates.implementation.test`).
-- **Git Checkpoints & Safe Rollback**: Records private refs (`--checkpoint gate-1-spec`) and safely backs up broken code on architectural revisions (`--rollback gate-1-spec`).
+- **Git Checkpoints & Safe Rollback**: Records private refs (`--checkpoint design`) and safely backs up broken code on architectural revisions (`--rollback design`).
 - **Lifecycle Inspector**: Run `python3 skills/ship/scripts/inspect_lifecycle.py` to evaluate repository state across all 4 gates deterministically.
 - **Headless CI & GitHub Actions**: Run headlessly in CI with issue-based approvals via [Headless CI Guide](./skills/ship/references/headless_ci_guide.md).
 - **Agent Roster**: Led by [Lifecycle Orchestrator](./skills/ship/agents/lifecycle_orchestrator.md).

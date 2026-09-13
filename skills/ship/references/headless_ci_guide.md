@@ -6,15 +6,15 @@ A production guide for running the **Ship Lifecycle Engine** headlessly in CI/CD
 
 ## 1. The Headless Problem & Solution
 
-In standard interactive sessions, `/ship` prompts the engineer for approval at **Gate 1 (Specification Checkpoint)**. In enterprise teams with multiple squads, running long-running features inside a local IDE chat is inconvenient.
+In standard interactive sessions, `/ship` prompts the engineer for approval at **design (Specification Checkpoint)**. In enterprise teams with multiple squads, running long-running features inside a local IDE chat is inconvenient.
 
-The headless workflow decouples the 4 gates into asynchronous CI steps:
+The headless workflow decouples the lifecycle gates into asynchronous CI steps:
 
 ```text
                1. Engineer files Issue: "/ship Add Stripe Webhook Idempotency"
                                       │
                                       ▼
-                      GitHub Action triggers Gate 1
+                      GitHub Action triggers design gate
                                       │
                                       ▼
                2. Agent compiles ADR & OpenSpec Change Package
@@ -24,7 +24,7 @@ The headless workflow decouples the 4 gates into asynchronous CI steps:
                    Tech Lead labels: "ship:approved"
                                       │
                                       ▼
-                      GitHub Action triggers Gate 2 & 3
+                      GitHub Action triggers implementation & audit gates
                   • TDD: Red-Green-Refactor tasks.md
                   • Simplify: stdlib-first anti-bloat
                   • Adversarial Review: Judge PASS audit
@@ -112,7 +112,7 @@ permissions:
   issues: write
 
 jobs:
-  gate1_spec:
+  design_spec:
     # Security: Restrict execution to organization members/collaborators to prevent DoS and runner exhaustion
     if: >
       github.event_name == 'issues' &&
@@ -145,15 +145,15 @@ jobs:
               f.write(f"CHANGE={change}\n")
           '
 
-      - name: Run Gate 1 Agent (Design & Specification)
+      - name: Run Design Agent (Specification & Architecture)
         env:
           ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
-          echo "Executing Gate 1 agent runner for change: $CHANGE"
+          echo "Executing Design agent runner for change: $CHANGE"
           # 1. Execute agent runner harness with design skill prompt
           # e.g., agy run --skill design "Design spec for: $CHANGE based on $ISSUE_BODY"
-          # 2. Record and assert Gate 1 Checkpoint
-          python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint gate-1-spec --change "$CHANGE"
+          # 2. Record and assert Design Checkpoint
+          python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint design --change "$CHANGE"
 
       - name: Post Spec Comment
         uses: actions/github-script@v7
@@ -166,7 +166,7 @@ jobs:
               body: `### 📋 Specification Ready for Review\n\nPlease review the generated ADR and OpenSpec package for \`${process.env.TOPIC}\`. When approved, label this issue with \`ship:approved\` to proceed to implementation.`
             });
 
-  gate2_and_3_implementation:
+  implementation_and_audit:
     if: >
       github.event_name == 'issues' &&
       github.event.action == 'labeled' &&
@@ -184,15 +184,15 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Verify Gate 1 Checkpoint Status
+      - name: Verify Design Checkpoint Status
         run: |
           python3 skills/ship/scripts/inspect_lifecycle.py --format json
 
-      - name: Run Gate 2 (TDD Implementation) & Gate 3 (Code Audit)
+      - name: Run Implementation (TDD) & Audit (Code Review)
         run: |
           # 1. Execute agent runner harness for TDD tasks
           # e.g., agy run --skill tdd "Execute tasks in active openspec"
-          python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint gate-2-impl
+          python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint implementation
 
           # 2. Execute agent runner harness for Audit loop
           # e.g., agy run --skill audit "Review changes in review-loop mode"
@@ -209,7 +209,7 @@ jobs:
             
             ### Delivery Walkthrough
             - Automated Implementation via Ship Engine
-            - Verified against Gate 1 ADR & OpenSpec
+            - Verified against ADR & OpenSpec
             - Adversarial Review Judge verdict: **PASS**
           branch: "ship/${{ github.event.issue.number }}"
 ```
@@ -222,7 +222,7 @@ jobs:
 |---|---|
 | `python3 skills/ship/scripts/inspect_lifecycle.py --status-check` | Exits `0` if ready for delivery, `1` if blocked, `2` if rollback required. Use in CI branch protection. |
 | `python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint <gate>` | Records immutable internal git refs (`refs/ship/...`) and JSON receipts in `.scratch/`. |
-| `python3 skills/ship/scripts/inspect_lifecycle.py --rollback gate-1-spec` | Safely archives untracked/modified edits to `.scratch/backups/` and resets `tasks.md` for revision. |
+| `python3 skills/ship/scripts/inspect_lifecycle.py --rollback design` | Safely archives untracked/modified edits to `.scratch/backups/` and resets `tasks.md` for revision. |
 | `python3 skills/ship/scripts/inspect_lifecycle.py --archive <change>` | Syncs delta specs into `openspec/specs/` and archives completed change packages. |
 | `python3 skills/ship/scripts/inspect_lifecycle.py --generate-trailers` | Emits RFC 5133 Git commit trailers mapping to `.ship.json` gates. |
 | `python3 skills/ship/scripts/inspect_lifecycle.py --sync-notes [remote]` | Configures notes fetch/push refspecs and synchronizes `refs/notes/ship-evidence`. |

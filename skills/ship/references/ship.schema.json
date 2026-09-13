@@ -41,7 +41,7 @@
       "properties": {
         "design": {
           "type": "object",
-          "description": "Gate 1 (Specification & Design) settings.",
+          "description": "Design gate (Specification & Design) settings.",
           "properties": {
             "adr_dir": {
               "type": "string",
@@ -56,7 +56,7 @@
         },
         "spike": {
           "type": "object",
-          "description": "Gate 1b (Empirical Prototypes & Benchmarks) settings.",
+          "description": "Spike gate (Empirical Prototypes & Benchmarks) settings.",
           "properties": {
             "timeout": {
               "type": "number",
@@ -73,7 +73,7 @@
         },
         "implementation": {
           "type": "object",
-          "description": "Gate 2 (Implementation & TDD) commands and rules.",
+          "description": "Implementation gate (Implementation & TDD) commands and rules.",
           "properties": {
             "test": {
               "type": "string",
@@ -92,7 +92,7 @@
         },
         "simplify": {
           "type": "object",
-          "description": "Gate 2 (Simplification & Laziness Ladder) debt controls.",
+          "description": "Simplify gate (Simplification & Laziness Ladder) debt controls.",
           "properties": {
             "max_debt": {
               "type": "integer",
@@ -108,7 +108,7 @@
         },
         "audit": {
           "type": "object",
-          "description": "Gate 3 (Adversarial Review) parameters.",
+          "description": "Audit gate (Adversarial Review) parameters.",
           "properties": {
             "base_branch": {
               "type": "string",
@@ -131,7 +131,7 @@
         },
         "delivery": {
           "type": "object",
-          "description": "Gate 4 (Ready to Ship & Archiving) controls.",
+          "description": "Delivery gate (Ready to Ship & Archiving) controls.",
           "properties": {
             "target_branch": {
               "type": "string",

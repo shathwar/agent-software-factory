@@ -18,7 +18,7 @@ class TestInspectLifecycle(unittest.TestCase):
     def test_gate1_empty_repo(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             res = inspect_lifecycle.evaluate_repository(Path(tmpdir))
-            self.assertEqual(res["gate"], "GATE 1: SPECIFICATION & DESIGN")
+            self.assertEqual(res["gate"], "design")
             self.assertEqual(res["state_key"], "INITIAL_PROPOSAL")
             self.assertIn("Run '/design'", res["next_action"])
 
@@ -29,7 +29,7 @@ class TestInspectLifecycle(unittest.TestCase):
             spike_dir.mkdir(parents=True)
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 1b: EMPIRICAL SPIKE ACTIVE")
+            self.assertEqual(res["gate"], "spike")
             self.assertEqual(res["state_key"], "SPIKE_ACTIVE")
             self.assertIn("spike_redis_perf", res["next_action"])
 
@@ -41,7 +41,7 @@ class TestInspectLifecycle(unittest.TestCase):
             (adr_dir / "ADR-0001-events.md").write_text("# ADR\n**Status**: ACCEPTED\n")
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 1: SPECIFICATION & DESIGN")
+            self.assertEqual(res["gate"], "design")
             self.assertEqual(res["state_key"], "ADR_ACCEPTED")
             self.assertEqual(len(res["adrs"]), 1)
             self.assertEqual(res["adrs"][0]["status"], "ACCEPTED")
@@ -54,7 +54,7 @@ class TestInspectLifecycle(unittest.TestCase):
             (adr_dir / "ADR-0001-events.md").write_text("# ADR\n**Status**: PROPOSED\n")
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 1: SPECIFICATION & DESIGN")
+            self.assertEqual(res["gate"], "design")
             self.assertEqual(res["state_key"], "ADR_PROPOSED")
             self.assertIn("seek user acceptance", res["next_action"])
 
@@ -77,7 +77,7 @@ class TestInspectLifecycle(unittest.TestCase):
             )
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 2: IMPLEMENTATION (TDD + SIMPLIFY)")
+            self.assertEqual(res["gate"], "implementation")
             self.assertEqual(res["state_key"], "TDD_ACTIVE")
             self.assertIn("1/3 tasks complete", res["next_action"])
             self.assertIn("2. Handle retries with jitter", res["next_action"])
@@ -94,7 +94,7 @@ class TestInspectLifecycle(unittest.TestCase):
             )
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res["gate"], "audit")
             self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
             self.assertIn("review-loop mode", res["next_action"])
 
@@ -124,7 +124,7 @@ class TestInspectLifecycle(unittest.TestCase):
             )
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 4: READY TO SHIP")
+            self.assertEqual(res["gate"], "delivery")
             self.assertEqual(res["state_key"], "DELIVERY_READY")
             self.assertIn("Delivery Walkthrough", res["next_action"])
 
@@ -146,7 +146,7 @@ class TestInspectLifecycle(unittest.TestCase):
             )
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res["gate"], "audit")
             self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
             self.assertIn("unresolved CRITICAL/HIGH finding(s)", res["next_action"])
 
@@ -168,7 +168,7 @@ class TestInspectLifecycle(unittest.TestCase):
             )
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res["gate"], "audit")
             self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
             self.assertIn("Requires explicit Judge adjudication", res["next_action"])
 
@@ -190,7 +190,7 @@ class TestInspectLifecycle(unittest.TestCase):
             )
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res["gate"], "audit")
             self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
             self.assertIn("lacks verified test evidence", res["next_action"])
 
@@ -200,7 +200,7 @@ class TestInspectLifecycle(unittest.TestCase):
             run = subprocess.run(cmd, capture_output=True, text=True)
             self.assertEqual(run.returncode, 0)
             data = json.loads(run.stdout)
-            self.assertEqual(data["gate"], "GATE 1: SPECIFICATION & DESIGN")
+            self.assertEqual(data["gate"], "design")
             self.assertEqual(data["state_key"], "INITIAL_PROPOSAL")
 
     def test_apply_and_archive_openspec(self):
@@ -232,9 +232,9 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertIn("billing", archived_items[0].name)
             self.assertTrue((archived_items[0] / "proposal.md").exists())
 
-            # Verify lifecycle state reset to Gate 1
+            # Verify lifecycle state reset to design gate
             eval_data = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(eval_data["gate"], "GATE 1: SPECIFICATION & DESIGN")
+            self.assertEqual(eval_data["gate"], "design")
             self.assertEqual(eval_data["state_key"], "INITIAL_PROPOSAL")
             self.assertEqual(len(eval_data["openspec_archived"]), 1)
             self.assertEqual(len(eval_data["openspec_living_specs"]), 1)
@@ -320,7 +320,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 })
             )
             res_fail = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res_fail["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res_fail["gate"], "audit")
             self.assertEqual(res_fail["state_key"], "AUDIT_ACTIVE")
             self.assertIn("rejected", res_fail["next_action"])
 
@@ -335,7 +335,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 })
             )
             res_bad_tests = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res_bad_tests["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res_bad_tests["gate"], "audit")
             self.assertEqual(res_bad_tests["state_key"], "AUDIT_ACTIVE")
             self.assertIn("lacks verified test evidence", res_bad_tests["next_action"])
 
@@ -376,7 +376,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # evaluate_repository must select 'z-current' in TDD_ACTIVE, NOT 'a-old' in AUDIT_ACTIVE
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 2: IMPLEMENTATION (TDD + SIMPLIFY)")
+            self.assertEqual(res["gate"], "implementation")
             self.assertEqual(res["state_key"], "TDD_ACTIVE")
             self.assertEqual(res["openspec_packages"][0]["topic"], "z-current")
 
@@ -435,7 +435,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # Initially clean: DELIVERY_READY
             res_clean = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res_clean["gate"], "GATE 4: READY TO SHIP")
+            self.assertEqual(res_clean["gate"], "delivery")
             self.assertEqual(res_clean["state_key"], "DELIVERY_READY")
 
             # Now modify implementation to raise an exception
@@ -443,7 +443,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # Must revoke DELIVERY_READY and demand re-audit
             res_dirty = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res_dirty["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res_dirty["gate"], "audit")
             self.assertEqual(res_dirty["state_key"], "AUDIT_ACTIVE")
             self.assertIn("unreviewed source modifications", res_dirty["next_action"])
 
@@ -489,7 +489,7 @@ class TestInspectLifecycle(unittest.TestCase):
             (scratch_dir / "delivery_evidence.json").write_text(json.dumps(envelope))
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 4: READY TO SHIP")
+            self.assertEqual(res["gate"], "delivery")
             self.assertEqual(res["state_key"], "DELIVERY_READY")
             self.assertTrue(res["audit_report"]["is_envelope"])
 
@@ -633,7 +633,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # Delivery check must reject because envelope topic is 'auth', but active package is 'billing'
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res["gate"], "audit")
             self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
             self.assertTrue(
                 "Audit approval is for change 'auth'" in res["next_action"]
@@ -653,7 +653,7 @@ class TestInspectLifecycle(unittest.TestCase):
             envelope["topic"] = "billing"
             (scratch_dir / "delivery_evidence.json").write_text(json.dumps(envelope))
             res_ok = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res_ok["gate"], "GATE 4: READY TO SHIP")
+            self.assertEqual(res_ok["gate"], "delivery")
             self.assertEqual(res_ok["state_key"], "DELIVERY_READY")
 
     def test_reviewed_working_tree_fingerprint_clears_delivery_and_detects_subsequent_changes(self):
@@ -699,7 +699,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # The reviewed working tree changes must clear delivery!
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 4: READY TO SHIP")
+            self.assertEqual(res["gate"], "delivery")
             self.assertEqual(res["state_key"], "DELIVERY_READY")
 
             # Post-review modification: change service.py
@@ -707,7 +707,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # Fingerprint mismatch must revoke DELIVERY_READY
             res_modified = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res_modified["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res_modified["gate"], "audit")
             self.assertEqual(res_modified["state_key"], "AUDIT_ACTIVE")
             self.assertIn("fingerprint mismatch", res_modified["next_action"])
 
@@ -790,7 +790,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # Symbolic HEAD without fingerprint MUST NOT produce DELIVERY_READY
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res["gate"], "audit")
             self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
             self.assertIn("symbolic or unresolved", res["next_action"])
 
@@ -804,7 +804,7 @@ class TestInspectLifecycle(unittest.TestCase):
             envelope["snapshot"]["commit"] = head_commit
             (scratch_dir / "delivery_evidence.json").write_text(json.dumps(envelope))
             res_resolved = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res_resolved["gate"], "GATE 4: READY TO SHIP")
+            self.assertEqual(res_resolved["gate"], "delivery")
             self.assertEqual(res_resolved["state_key"], "DELIVERY_READY")
 
             # Subsequent commit (regression) invalidates the immutable SHA approval
@@ -813,7 +813,7 @@ class TestInspectLifecycle(unittest.TestCase):
             subprocess.run(["git", "commit", "-m", "Regression"], cwd=tmppath, check=True)
 
             res_regression = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res_regression["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res_regression["gate"], "audit")
             self.assertEqual(res_regression["state_key"], "AUDIT_ACTIVE")
             self.assertIn("does not match current commit", res_regression["next_action"])
 
@@ -848,7 +848,7 @@ class TestInspectLifecycle(unittest.TestCase):
             (scratch_dir / "delivery_evidence.json").write_text(json.dumps(malformed_envelope))
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res["gate"], "audit")
             self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
             self.assertIn("Judge report in delivery envelope is malformed", res["next_action"])
 
@@ -868,7 +868,7 @@ class TestInspectLifecycle(unittest.TestCase):
             }
             (scratch_dir / "delivery_evidence.json").write_text(json.dumps(malformed_envelope))
             res_valid = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res_valid["gate"], "GATE 4: READY TO SHIP")
+            self.assertEqual(res_valid["gate"], "delivery")
             self.assertEqual(res_valid["state_key"], "DELIVERY_READY")
 
     def test_archive_failure_rolls_back_specs_and_allows_resumable_recovery(self):
@@ -972,7 +972,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # Must remain DELIVERY_READY (not revoked to AUDIT_ACTIVE due to openspec/.active)
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 4: READY TO SHIP")
+            self.assertEqual(res["gate"], "delivery")
             self.assertEqual(res["state_key"], "DELIVERY_READY")
 
             # Must archive cleanly without error about openspec/.active
@@ -1110,7 +1110,7 @@ class TestInspectLifecycle(unittest.TestCase):
             }))
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res["gate"], "audit")
             self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
             self.assertTrue(
                 "Audit approval lacks 'change'" in res["next_action"]
@@ -1155,7 +1155,7 @@ class TestInspectLifecycle(unittest.TestCase):
             }))
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res["gate"], "audit")
             self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
             self.assertIn("Judge report in delivery envelope is malformed", res["next_action"])
             self.assertIn("Envelope is missing required 'judge_report' object", res["next_action"])
@@ -1196,7 +1196,7 @@ class TestInspectLifecycle(unittest.TestCase):
             }))
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res["gate"], "audit")
             self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
             self.assertTrue(
                 "lacks working-tree fingerprint" in res["next_action"]
@@ -1228,7 +1228,7 @@ class TestInspectLifecycle(unittest.TestCase):
             }))
 
             res2 = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res2["gate"], "GATE 4: READY TO SHIP")
+            self.assertEqual(res2["gate"], "delivery")
             self.assertEqual(res2["state_key"], "DELIVERY_READY")
 
     def test_archiving_package_does_not_create_phantom_active_spike(self):
@@ -1260,7 +1260,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # Starts at DELIVERY_READY
             res_ready = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res_ready["gate"], "GATE 4: READY TO SHIP")
+            self.assertEqual(res_ready["gate"], "delivery")
             self.assertEqual(res_ready["state_key"], "DELIVERY_READY")
 
             # Successfully archive auth
@@ -1270,7 +1270,7 @@ class TestInspectLifecycle(unittest.TestCase):
             res_after = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertNotEqual(res_after["state_key"], "SPIKE_ACTIVE")
             self.assertEqual(len(res_after["active_spikes"]), 0)
-            self.assertEqual(res_after["gate"], "GATE 1: SPECIFICATION & DESIGN")
+            self.assertEqual(res_after["gate"], "design")
 
     def test_skipped_judge_review_blocks_delivery_and_archive(self):
         """A report with status: skipped must block delivery and archiving even if verdict is PASS."""
@@ -1312,7 +1312,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # Delivery evaluation must reject skipped status
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "GATE 3: ADVERSARIAL AUDIT")
+            self.assertEqual(res["gate"], "audit")
             self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
             self.assertIn("not complete", res["next_action"])
 
@@ -1389,22 +1389,22 @@ gates:
             subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
             subprocess.run(["git", "commit", "-m", "Initial spec commit"], cwd=tmppath, check=True)
 
-            # Create checkpoint for gate-1
-            chk = inspect_lifecycle.create_checkpoint(tmppath, "gate-1-spec", topic="payment")
-            self.assertEqual(chk["gate"], "gate-1-spec")
+            # Create checkpoint for design
+            chk = inspect_lifecycle.create_checkpoint(tmppath, "design", topic="payment")
+            self.assertEqual(chk["gate"], "design")
             self.assertEqual(chk["topic"], "payment")
             self.assertTrue(chk["ref_created"])
-            chk_file = tmppath / ".scratch" / "checkpoints" / "payment_gate-1-spec.json"
+            chk_file = tmppath / ".scratch" / "checkpoints" / "payment_design.json"
             self.assertTrue(chk_file.exists())
 
-            # Now simulate partial dirty edits in gate 2
+            # Now simulate partial dirty edits in implementation
             service_file.write_text("def pay(): return 'broken'\n")
             tasks_file.write_text("- [x] Task 1: Setup stripe\n- [x] Task 2: Webhooks\n")
 
-            # Perform rollback to gate-1-spec
-            rb = inspect_lifecycle.perform_rollback(tmppath, "gate-1-spec", topic="payment")
+            # Perform rollback to design
+            rb = inspect_lifecycle.perform_rollback(tmppath, "design", topic="payment")
             self.assertEqual(rb["status"], "success")
-            self.assertEqual(rb["target_gate"], "gate-1-spec")
+            self.assertEqual(rb["target_gate"], "design")
             self.assertEqual(rb["reset_tasks_count"], 2)
 
             # Verify tasks.md tasks were reset to unchecked
@@ -1430,7 +1430,7 @@ gates:
             subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
             subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
 
-            # Setup checkpoint at gate-1-spec
+            # Setup checkpoint at design
             pkg_dir = tmppath / "openspec" / "changes" / "payment"
             pkg_dir.mkdir(parents=True)
             tasks_file = pkg_dir / "tasks.md"
@@ -1440,17 +1440,17 @@ gates:
             subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
             subprocess.run(["git", "commit", "-m", "Initial checkpoint commit"], cwd=tmppath, check=True)
 
-            inspect_lifecycle.create_checkpoint(tmppath, "gate-1-spec", topic="payment")
+            inspect_lifecycle.create_checkpoint(tmppath, "design", topic="payment")
 
-            # Commit a broken implementation and an additional file in gate 2
+            # Commit a broken implementation and an additional file in implementation
             service_file.write_text("def pay(): raise RuntimeError('broken')\n")
             extra_file = tmppath / "extra.py"
             extra_file.write_text("def extra(): pass\n")
             subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
-            subprocess.run(["git", "commit", "-m", "Broken gate 2 implementation"], cwd=tmppath, check=True)
+            subprocess.run(["git", "commit", "-m", "Broken implementation"], cwd=tmppath, check=True)
 
-            # Perform rollback to gate-1-spec
-            rb = inspect_lifecycle.perform_rollback(tmppath, "gate-1-spec", topic="payment")
+            # Perform rollback to design
+            rb = inspect_lifecycle.perform_rollback(tmppath, "design", topic="payment")
             self.assertEqual(rb["status"], "success")
             self.assertIn("service.py", rb["restored_files"])
             self.assertIn("extra.py", rb["removed_files"])
@@ -1495,17 +1495,17 @@ gates:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             subprocess.run(["git", "init"], cwd=tmppath, check=True)
-            chk = inspect_lifecycle.create_checkpoint(tmppath, "gate-1-spec", topic="new-feature")
-            self.assertEqual(chk["gate"], "gate-1-spec")
+            chk = inspect_lifecycle.create_checkpoint(tmppath, "design", topic="new-feature")
+            self.assertEqual(chk["gate"], "design")
             self.assertEqual(chk["commit"], "none")
             self.assertFalse(chk["ref_created"])
-            self.assertTrue((tmppath / ".scratch" / "checkpoints" / "new-feature_gate-1-spec.json").exists())
+            self.assertTrue((tmppath / ".scratch" / "checkpoints" / "new-feature_design.json").exists())
 
     def test_status_check_exit_codes(self):
         """Verify --status-check exit code returns: 0 for ready, 1 for in-progress, 2 for audit rejection."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            # Empty repo -> Gate 1 -> status_check exit code 1 (in-progress)
+            # Empty repo -> design -> status_check exit code 1 (in-progress)
             code = inspect_lifecycle.main(["--path", str(tmppath), "--status-check"])
             self.assertEqual(code, 1)
 
@@ -1542,18 +1542,18 @@ gates:
             unrelated_file.write_text("unrelated pre-checkpoint edit\n")
 
             # 3. Checkpoint created
-            chk = inspect_lifecycle.create_checkpoint(tmppath, "gate-1-spec", topic="payment")
+            chk = inspect_lifecycle.create_checkpoint(tmppath, "design", topic="payment")
             self.assertTrue(chk["ref_created"])
             self.assertIn("snapshot_commit", chk)
 
-            # 4. User changes implementation in gate 2 and modifies unrelated file again
+            # 4. User changes implementation in implementation gate and modifies unrelated file again
             service_file.write_text("def pay(): raise RuntimeError('broken')\n")
             unrelated_file.write_text("unrelated post-checkpoint modification\n")
-            new_gate2_file = tmppath / "gate2_temp.py"
-            new_gate2_file.write_text("temp = 1\n")
+            new_impl_file = tmppath / "impl_temp.py"
+            new_impl_file.write_text("temp = 1\n")
 
-            # 5. Perform rollback to gate-1-spec
-            rb = inspect_lifecycle.perform_rollback(tmppath, "gate-1-spec", topic="payment")
+            # 5. Perform rollback to design
+            rb = inspect_lifecycle.perform_rollback(tmppath, "design", topic="payment")
             self.assertEqual(rb["status"], "success")
 
             # 6. Verify unrelated file reverted to CHECKPOINT content (not initial commit content!)
@@ -1561,7 +1561,7 @@ gates:
             # Verify service.py reverted to its checkpoint state
             self.assertEqual(service_file.read_text(), "def pay(): pass\n")
             # Verify new file created after checkpoint was removed
-            self.assertFalse(new_gate2_file.exists())
+            self.assertFalse(new_impl_file.exists())
 
     def test_rollback_preserves_tracked_files_matching_gitignore(self):
         """Verify rollback does not delete tracked files that happen to match .gitignore rules."""
@@ -1583,14 +1583,14 @@ gates:
             subprocess.run(["git", "commit", "-m", "Initial commit with tracked.cfg"], cwd=tmppath, check=True)
 
             # 2. Create checkpoint
-            chk = inspect_lifecycle.create_checkpoint(tmppath, "gate-1-spec", topic="payment")
+            chk = inspect_lifecycle.create_checkpoint(tmppath, "design", topic="payment")
             self.assertTrue(chk["ref_created"])
 
-            # 3. User modifies service.py in gate 2
+            # 3. User modifies service.py in implementation gate
             service_file.write_text("def pay(): raise RuntimeError('broken')\n")
 
             # 4. Perform rollback
-            rb = inspect_lifecycle.perform_rollback(tmppath, "gate-1-spec", topic="payment")
+            rb = inspect_lifecycle.perform_rollback(tmppath, "design", topic="payment")
             self.assertEqual(rb["status"], "success")
 
             # 5. Verify tracked.cfg is NOT deleted!
@@ -1613,7 +1613,7 @@ gates:
             # Create a checkpoint file under .scratch/checkpoints
             chk_dir = scratch_dir / "checkpoints"
             chk_dir.mkdir()
-            (chk_dir / "feature_gate-1-spec.json").write_text(json.dumps({"topic": "feature", "gate": "gate-1-spec"}))
+            (chk_dir / "feature_design.json").write_text(json.dumps({"topic": "feature", "gate": "design"}))
 
             # Create a rollback backup directory
             rollback_dir = scratch_dir / "rollback_20260912_120000"
@@ -1630,7 +1630,7 @@ gates:
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertNotEqual(res["state_key"], "SPIKE_ACTIVE")
-            self.assertEqual(res["gate"], "GATE 2: IMPLEMENTATION (TDD + SIMPLIFY)")
+            self.assertEqual(res["gate"], "implementation")
 
     def test_audit_report_json_recognized_as_evidence_dir(self):
         """Directory with report.json containing reviewer or judge_report must not be treated as a spike."""
@@ -1714,9 +1714,9 @@ gates:
             subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
             subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=tmppath, check=True, capture_output=True)
 
-            # Create checkpoint for Gate 2
-            chk = inspect_lifecycle.create_checkpoint(tmppath, gate_name="gate-2-impl", topic="feature")
-            self.assertEqual(chk["gate"], "gate-2-impl")
+            # Create checkpoint for Implementation
+            chk = inspect_lifecycle.create_checkpoint(tmppath, gate_name="implementation", topic="feature")
+            self.assertEqual(chk["gate"], "implementation")
 
             # Rename file using git mv
             subprocess.run(["git", "mv", "original.py", "renamed.py"], cwd=tmppath, check=True)
@@ -1724,7 +1724,7 @@ gates:
             self.assertTrue((tmppath / "renamed.py").exists())
 
             # Perform rollback
-            rb = inspect_lifecycle.perform_rollback(tmppath, target_gate="gate-2-impl", topic="feature")
+            rb = inspect_lifecycle.perform_rollback(tmppath, target_gate="implementation", topic="feature")
             self.assertEqual(rb["status"], "success")
             self.assertIn("original.py", rb["restored_files"])
             self.assertIn("renamed.py", rb["removed_files"])
@@ -1752,30 +1752,30 @@ gates:
             subprocess.run(["git", "commit", "-m", "Init"], cwd=tmppath, check=True, capture_output=True)
 
             # 1. Default: records to refs/ship/... but NOT to refs/tags/
-            chk = inspect_lifecycle.create_checkpoint(tmppath, "gate-1-spec", topic="auth")
+            chk = inspect_lifecycle.create_checkpoint(tmppath, "design", topic="auth")
             self.assertTrue(chk["ref_created"])
             self.assertFalse(chk["tag_created"])
             self.assertIsNone(chk["tag"])
 
             ref_check = subprocess.run(
-                ["git", "rev-parse", "--verify", "refs/ship/auth/gate-1-spec"],
+                ["git", "rev-parse", "--verify", "refs/ship/auth/design"],
                 cwd=tmppath, capture_output=True, text=True
             )
             self.assertEqual(ref_check.returncode, 0)
 
             tag_check = subprocess.run(
-                ["git", "rev-parse", "--verify", "refs/tags/ship/auth/gate-1-spec"],
+                ["git", "rev-parse", "--verify", "refs/tags/ship/auth/design"],
                 cwd=tmppath, capture_output=True, text=True
             )
             self.assertNotEqual(tag_check.returncode, 0)
 
             # 2. With create_git_tag=True: explicitly permits git tag in refs/tags/
-            chk_tagged = inspect_lifecycle.create_checkpoint(tmppath, "gate-1-spec", topic="auth", create_git_tag=True)
+            chk_tagged = inspect_lifecycle.create_checkpoint(tmppath, "design", topic="auth", create_git_tag=True)
             self.assertTrue(chk_tagged["tag_created"])
             self.assertIsNotNone(chk_tagged["tag"])
 
             tag_check2 = subprocess.run(
-                ["git", "rev-parse", "--verify", "refs/tags/ship/auth/gate-1-spec"],
+                ["git", "rev-parse", "--verify", "refs/tags/ship/auth/design"],
                 cwd=tmppath, capture_output=True, text=True
             )
             self.assertEqual(tag_check2.returncode, 0)
@@ -1793,7 +1793,7 @@ gates:
             subprocess.run(["git", "commit", "-m", "Base"], cwd=tmppath, check=True, capture_output=True)
 
             # Checkpoint
-            inspect_lifecycle.create_checkpoint(tmppath, "gate-1-spec", topic="data-safety")
+            inspect_lifecycle.create_checkpoint(tmppath, "design", topic="data-safety")
 
             # Create new untracked file and new untracked directory
             (tmppath / "new_file.py").write_text("# precious untracked content\n")
@@ -1802,7 +1802,7 @@ gates:
             (new_dir / "module.py").write_text("def helper(): return 42\n")
 
             # Perform rollback
-            rb = inspect_lifecycle.perform_rollback(tmppath, "gate-1-spec", topic="data-safety")
+            rb = inspect_lifecycle.perform_rollback(tmppath, "design", topic="data-safety")
             self.assertEqual(rb["status"], "success")
 
             # Verify working tree no longer has new files
@@ -1831,8 +1831,8 @@ gates:
             subprocess.run(["git", "commit", "-m", "Init"], cwd=tmppath, check=True, capture_output=True)
 
             sink_file = tmppath / ".scratch" / "telemetry_events.jsonl"
-            inspect_lifecycle.create_checkpoint(tmppath, "gate-1-spec", topic="metrics", telemetry_sink=str(sink_file))
-            inspect_lifecycle.perform_rollback(tmppath, "gate-1-spec", topic="metrics", telemetry_sink=str(sink_file))
+            inspect_lifecycle.create_checkpoint(tmppath, "design", topic="metrics", telemetry_sink=str(sink_file))
+            inspect_lifecycle.perform_rollback(tmppath, "design", topic="metrics", telemetry_sink=str(sink_file))
 
             self.assertTrue(sink_file.exists())
             lines = [json.loads(line) for line in sink_file.read_text().splitlines() if line.strip()]
@@ -1878,7 +1878,7 @@ gates:
                 tmppath,
                 "change-alpha",
                 lambda entry: entry.update({
-                    "phase": "gate-2-impl",
+                    "phase": "implementation",
                     "blockers": ["1 failing test in test_alpha.py"],
                 })
             )
@@ -1887,7 +1887,7 @@ gates:
                 tmppath,
                 "change-beta",
                 lambda entry: entry.update({
-                    "phase": "gate-3-audit",
+                    "phase": "audit",
                     "blockers": [],
                 })
             )
@@ -1895,9 +1895,9 @@ gates:
             ledger = inspect_lifecycle.load_ledger(tmppath, auto_sync=False)
             self.assertIn("change-alpha", ledger["changes"])
             self.assertIn("change-beta", ledger["changes"])
-            self.assertEqual(ledger["changes"]["change-alpha"]["phase"], "gate-2-impl")
+            self.assertEqual(ledger["changes"]["change-alpha"]["phase"], "implementation")
             self.assertEqual(ledger["changes"]["change-alpha"]["blockers"], ["1 failing test in test_alpha.py"])
-            self.assertEqual(ledger["changes"]["change-beta"]["phase"], "gate-3-audit")
+            self.assertEqual(ledger["changes"]["change-beta"]["phase"], "audit")
             self.assertEqual(ledger["changes"]["change-beta"]["blockers"], [])
             self.assertEqual(ledger["active_change_id"], "change-beta")
 
@@ -1906,12 +1906,12 @@ gates:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             entry1 = inspect_lifecycle.mutate_change_state(
-                tmppath, "topic-a", lambda e: e.update({"phase": "gate-1-design"})
+                tmppath, "topic-a", lambda e: e.update({"phase": "design"})
             )
             self.assertEqual(entry1["revision_counter"], 1)
 
             entry2 = inspect_lifecycle.mutate_change_state(
-                tmppath, "topic-a", lambda e: e.update({"phase": "gate-2-impl"})
+                tmppath, "topic-a", lambda e: e.update({"phase": "implementation"})
             )
             self.assertEqual(entry2["revision_counter"], 2)
 
@@ -1957,7 +1957,7 @@ gates:
             self.assertTrue((tmppath / ".ship" / "state.json").exists())
             self.assertIn("billing", ledger["changes"])
             billing = ledger["changes"]["billing"]
-            self.assertEqual(billing["phase"], "gate-2-impl")
+            self.assertEqual(billing["phase"], "implementation")
             self.assertEqual(billing["task_status"]["total"], 2)
             self.assertEqual(billing["task_status"]["completed"], 1)
             self.assertEqual(billing["task_status"]["pending"], 1)
@@ -2040,7 +2040,7 @@ gates:
                 tmppath,
                 "auth-v2",
                 lambda entry: entry.update({
-                    "phase": "gate-4-delivery",
+                    "phase": "delivery",
                     "task_status": {"total": 3, "completed": 3, "pending": 0},
                     "evidence": {
                         "design": {"adr": "docs/adr/ADR-0002-auth.md", "status": "ACCEPTED"},
@@ -2142,7 +2142,7 @@ gates:
 
             def worker(cid: str) -> None:
                 def updater(entry: dict) -> None:
-                    entry["phase"] = "gate-2-impl"
+                    entry["phase"] = "implementation"
                     entry["task_status"]["total"] = 5
                 inspect_lifecycle.mutate_change_state(tmppath, cid, updater)
 
@@ -2152,7 +2152,7 @@ gates:
             ledger = inspect_lifecycle.load_ledger(tmppath, auto_sync=False)
             for cid in change_ids:
                 self.assertIn(cid, ledger["changes"], f"Change {cid} was clobbered by concurrent writes!")
-                self.assertEqual(ledger["changes"][cid]["phase"], "gate-2-impl")
+                self.assertEqual(ledger["changes"][cid]["phase"], "implementation")
 
     def test_ledger_blockers_and_failed_tests_prevent_delivery_ready(self):
         """Even with all tasks complete and audit report present, failing tests in ledger block DELIVERY_READY."""
@@ -2182,7 +2182,7 @@ gates:
             )
 
             res = inspect_lifecycle.evaluate_repository(tmppath, target_change="orders")
-            self.assertEqual(res["gate"], "GATE 2: IMPLEMENTATION (TDD + SIMPLIFY)")
+            self.assertEqual(res["gate"], "implementation")
             self.assertEqual(res["state_key"], "TDD_ACTIVE")
             self.assertIn("Blocked by", res["next_action"])
             self.assertNotEqual(res["state_key"], "DELIVERY_READY")
@@ -2268,7 +2268,7 @@ gates:
                 tmppath,
                 "billing",
                 lambda entry: entry.update({
-                    "phase": "gate-2-impl",
+                    "phase": "implementation",
                     "task_status": {"total": 4, "completed": 4, "pending": 0},
                     "blockers": ["Tests: 1 test(s) failing"],
                     "evidence": {
@@ -2306,7 +2306,7 @@ gates:
 
             # Evaluating archived change reports ARCHIVED state
             eval_res = inspect_lifecycle.evaluate_repository(tmppath, target_change="notifications")
-            self.assertEqual(eval_res["gate"], "GATE 4: READY TO SHIP")
+            self.assertEqual(eval_res["gate"], "delivery")
             self.assertEqual(eval_res["state_key"], "ARCHIVED")
             self.assertIn("notifications", eval_res["next_action"])
 
@@ -2345,7 +2345,7 @@ gates:
             self.assertIn("Tests: 2 test(s) failing", str(ctx.exception))
 
     def test_sync_ledger_preserves_archived_changes(self):
-        """sync_ledger_from_workspace does not reset archived changes back to gate-1-design."""
+        """sync_ledger_from_workspace does not reset archived changes back to design."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             pkg = tmppath / "openspec" / "changes" / "search"
@@ -2357,18 +2357,18 @@ gates:
             # Re-sync ledger
             synced = inspect_lifecycle.sync_ledger_from_workspace(tmppath)
             search_entry = synced["changes"]["search"]
-            self.assertEqual(search_entry["phase"], "gate-4-delivery")
+            self.assertEqual(search_entry["phase"], "delivery")
             self.assertEqual(search_entry["evidence"]["delivery"]["status"], "ARCHIVED")
 
     def test_rollback_clears_obsolete_audit_blockers(self):
-        """Rolling back to gate-2-impl clears obsolete Audit blockers."""
+        """Rolling back to implementation clears obsolete Audit blockers."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             inspect_lifecycle.mutate_change_state(
                 tmppath,
                 "auth",
                 lambda entry: entry.update({
-                    "phase": "gate-3-audit",
+                    "phase": "audit",
                     "blockers": ["Audit: 2 unresolved CRITICAL/HIGH finding(s)", "Tests: 1 test(s) failing"],
                     "evidence": {
                         "audit": {"verdict": "FAIL"},
@@ -2380,16 +2380,16 @@ gates:
             # Create mock checkpoint
             chk_dir = tmppath / ".scratch" / "checkpoints"
             chk_dir.mkdir(parents=True)
-            (chk_dir / "auth_gate-2-impl.json").write_text(json.dumps({
-                "gate": "gate-2-impl",
+            (chk_dir / "auth_implementation.json").write_text(json.dumps({
+                "gate": "implementation",
                 "timestamp": "2026-09-13T00:00:00Z",
                 "files": {},
             }))
 
-            inspect_lifecycle.perform_rollback(tmppath, target_gate="gate-2-impl", change="auth")
+            inspect_lifecycle.perform_rollback(tmppath, target_gate="implementation", change="auth")
             ledger = inspect_lifecycle.load_ledger(tmppath, auto_sync=False)
             auth_entry = ledger["changes"]["auth"]
-            self.assertEqual(auth_entry["phase"], "gate-2-impl")
+            self.assertEqual(auth_entry["phase"], "implementation")
             self.assertNotIn("Audit: 2 unresolved CRITICAL/HIGH finding(s)", auth_entry["blockers"])
             self.assertIn("Tests: 1 test(s) failing", auth_entry["blockers"])
 

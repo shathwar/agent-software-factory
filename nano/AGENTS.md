@@ -57,7 +57,7 @@ Universal high-density engineering instructions for AI coding agents. Grounded i
 ---
 
 ## 6. Delivery Lifecycle (`ship`)
-- **4 Deterministic Gates**: Gate 1 (Spec & ADR) ➔ Gate 2 (TDD Implementation) ➔ Gate 3 (Code Audit) ➔ Gate 4 (Delivery).
-- **Git Checkpoints & Rollback**: Tag refs at `gate-1-spec` and `gate-2-impl`. Safe rollback to `gate-1-spec` if invariants break during audit.
+- **Deterministic Gates**: Design (Spec & ADR) ➔ Implementation (TDD + Simplify) ➔ Audit (Adversarial Code Audit) ➔ Delivery.
+- **Git Checkpoints & Rollback**: Tag refs at `design` and `implementation`. Safe rollback to `design` if invariants break during audit.
 - **Tri-Tier State**: Authoritative ledger `.ship/state.json`, deep commit evidence in Git notes (`refs/notes/ship-evidence`), RFC 5133 commit trailers (`Ship-Change`, `Ship-<Gate>`).
 - **Context Boundary Isolation**: Orchestrate each gate in an isolated subagent turn to prevent context degradation.

@@ -122,23 +122,23 @@ When the feature implementation is complete, [`audit`](../../audit/SKILL.md) aut
 OpenSpec distinguishes between **in-flight change packages** (`openspec/changes/`), **living system specifications** (`openspec/specs/`), and **historical records** (`openspec/archive/`):
 
 ```text
-1. Propose & Design (Gate 1)
+1. Propose & Design (design gate)
    openspec/changes/<feature>/ (proposal.md, specs/*.md, tasks.md)
         │
-        ▼ 2. Implement & Audit (Gates 2 & 3)
+        ▼ 2. Implement & Audit (implementation & audit gates)
    Execute tasks.md (- [x]) ➔ Code Audit (Judge PASS)
         │
-        ▼ 3. Apply & Archive (Gate 4 Delivery)
+        ▼ 3. Apply & Archive (delivery gate)
    Sync specs:    openspec/changes/<feature>/specs/*.md ➔ openspec/specs/
    Move package:  openspec/changes/<feature>/           ➔ openspec/archive/<YYYY-MM-DD>-<feature>/
 ```
 
 ### Automation via Tooling
-Upon Gate 4 delivery sign-off, run:
+Upon delivery sign-off, run:
 ```bash
 python3 skills/ship/scripts/inspect_lifecycle.py --archive
 ```
 This automatically:
 1. Syncs all delta specification files into `openspec/specs/` (the cumulative living truth of the system).
 2. Archives the completed change directory to `openspec/archive/<YYYY-MM-DD>-<feature>/`.
-3. Cleans `openspec/changes/`, resetting the lifecycle state machine to Gate 1 ready for the next feature proposal.
+3. Cleans `openspec/changes/`, resetting the lifecycle state machine to the design gate ready for the next feature proposal.
