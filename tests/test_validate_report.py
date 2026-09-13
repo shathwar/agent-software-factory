@@ -8,7 +8,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "skills/audit/scripts/validate_report.py"
+SCRIPT = ROOT / "skills/review/scripts/validate_report.py"
 spec = importlib.util.spec_from_file_location("validate_report", SCRIPT)
 validator = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(validator)
@@ -92,7 +92,7 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(validator.validate_report(data), [])
 
     def test_schema_json_alignment(self):
-        schema_path = ROOT / "skills/audit/references/agent_report.schema.json"
+        schema_path = ROOT / "skills/review/references/agent_report.schema.json"
         with open(schema_path, "r", encoding="utf-8") as f:
             schema = json.load(f)
         self.assertEqual(set(schema["required"]), validator.TOP_REQUIRED)

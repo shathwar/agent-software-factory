@@ -10,7 +10,7 @@ NANO_DIR = ROOT / "nano"
 
 EXPECTED_FILES = [
     "AGENTS.md",
-    "audit.nano.md",
+    "review.nano.md",
     "simplify.nano.md",
     "tdd.nano.md",
     "design.nano.md",

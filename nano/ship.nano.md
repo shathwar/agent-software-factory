@@ -13,9 +13,9 @@
    - Deep modules, standard library first, zero unrequested abstractions.
    - Honor `.ship.json` (`gates.implementation.test`).
    - Checkpoint: Record Git ref/receipt `implementation`.
-3. **Audit (`audit`)**:
+3. **Review (`review`)**:
    - Spec alignment against ADR & OpenSpec.
-   - 10-stage audit (correctness, concurrency, resilience, DDIA/Release It!).
+   - 10-stage review (correctness, concurrency, resilience, DDIA/Release It!).
    - Bounded review-loop auto-fixes defects (max 3 rounds).
    - Rollback Guard: If architectural invariant breaks, rollback to `design`.
    - Judge issues PASS verdict.
@@ -27,5 +27,5 @@
 ## Hard Rules
 - Context Isolation: Run gates via isolated subagents to prevent context rot.
 - Multi-Change Isolation: Support parallel changes via `--change <id>` in `.ship/state.json`.
-- Rollback Guard: On invariant violation in audit, rollback code cleanly to `design`.
+- Rollback Guard: On invariant violation in review, rollback code cleanly to `design`.
 - Manifest Support: Honors repository `.ship.json`.

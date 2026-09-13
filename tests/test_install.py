@@ -34,7 +34,7 @@ class TestInstallScript(unittest.TestCase):
     def test_list_skills(self):
         res = self.run_installer("--list")
         self.assertIn("Available skills", res.stdout)
-        self.assertIn("audit", res.stdout)
+        self.assertIn("review", res.stdout)
         self.assertIn("ship", res.stdout)
         self.assertIn("simplify", res.stdout)
         self.assertIn("spike", res.stdout)
@@ -54,7 +54,7 @@ class TestInstallScript(unittest.TestCase):
         self.assertTrue(dest_dir.is_dir())
 
         # Verify symlinks
-        installed = [p for p in dest_dir.iterdir() if p.name in {"ship", "audit"}]
+        installed = [p for p in dest_dir.iterdir() if p.name in {"ship", "review"}]
         self.assertTrue(len(installed) >= 2)
         for p in installed:
             self.assertTrue(p.is_symlink())
@@ -67,7 +67,7 @@ class TestInstallScript(unittest.TestCase):
         self.assertTrue(dest_dir.is_dir())
 
         # Verify copied directories are real directories, not symlinks
-        installed = [p for p in dest_dir.iterdir() if p.name in {"ship", "audit"}]
+        installed = [p for p in dest_dir.iterdir() if p.name in {"ship", "review"}]
         self.assertTrue(len(installed) >= 2)
         for p in installed:
             self.assertFalse(p.is_symlink())

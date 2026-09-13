@@ -2,7 +2,7 @@
 
 This document defines the OpenSpec specification format supported by `/design`. When selected at the confirmation gate, the skill generates an executable OpenSpec change package under `openspec/changes/<change-name>/`.
 
-This package complements the Architecture Decision Record (ADR) by providing **formal behavioral requirements (RFC 2119 `SHALL`)**, **executable Gherkin scenarios (`WHEN/THEN`)**, and a **decomposed task list (`tasks.md`)** for implementation agents and [`audit`](../../audit/SKILL.md) Stage 0 verification.
+This package complements the Architecture Decision Record (ADR) by providing **formal behavioral requirements (RFC 2119 `SHALL`)**, **executable Gherkin scenarios (`WHEN/THEN`)**, and a **decomposed task list (`tasks.md`)** for implementation agents and [`review`](../../review/SKILL.md) Stage 0 verification.
 
 ---
 
@@ -108,9 +108,9 @@ The system SHALL [formal statement of requirement using RFC 2119 keyword SHALL /
 
 ---
 
-## 3. Integration with `audit`
+## 3. Integration with `review`
 
-When the feature implementation is complete, [`audit`](../../audit/SKILL.md) automatically inspects `openspec/changes/<change-name>/specs/`:
+When the feature implementation is complete, [`review`](../../review/SKILL.md) automatically inspects `openspec/changes/<change-name>/specs/`:
 1. **Missing Requirements**: If any `SHALL` statement or `Scenario` in `specs/` is not implemented in code, it is flagged as a **`[HIGH] SpecAlignment` defect**.
 2. **Scope Creep**: If code introduces capabilities or APIs not specified in `proposal.md`, it is flagged as **`[MEDIUM] SpecAlignment (Scope Creep)`**.
 3. **Behavioral Divergence**: If code behaves differently than the `WHEN/THEN` outcome, it is flagged as a **`[CRITICAL] Correctness / SpecAlignment` defect**.

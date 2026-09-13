@@ -1,9 +1,9 @@
 ---
-name: audit
-description: Review code changes for evidenced correctness, concurrency, DDIA data invariants, failure resilience, craftsmanship, and production risks. Uses an Evidence-Based Judge to reject hallucinations. Use for code reviews, PR audits, diff inspections, or principal engineering reviews. Trigger with "/audit", "audit", "code review", or "review".
+name: review
+description: Review code changes for evidenced correctness, concurrency, DDIA data invariants, failure resilience, craftsmanship, and production risks. Uses an Evidence-Based Judge to reject hallucinations. Use for code reviews, PR reviews, diff inspections, or principal engineering reviews. Trigger with "/review", "review", "code review", or "diff review".
 ---
 
-# Systems Audit & Principal Code Review
+# Systems & Principal Code Review
 
 **Role**: Principal Reviewer. Find actionable problems supported by source evidence and requirements. Plausible failures remain hypotheses until trigger and consequence are proven. Clean review is a valid outcome.
 

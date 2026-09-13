@@ -180,7 +180,7 @@ To prevent contaminating the specialist and Judge report contract with lifecycle
 
 ### Envelope Contract Guarantees
 1. **Separation of Concerns**: The Judge produces an unadulterated 6-field report compliant with `validate_report.py`.
-2. **Snapshot Binding**: The `snapshot` object binds the verdict to the reviewed Git commit, tree hash, and deterministic `working_tree_fingerprint` (SHA-256 of HEAD commit, working tree diff, and untracked files). This allows uncommitted implementation edits reviewed during the audit gate to clear delivery while ensuring subsequent unreviewed modifications invalidate approval.
+2. **Snapshot Binding**: The `snapshot` object binds the verdict to the reviewed Git commit, tree hash, and deterministic `working_tree_fingerprint` (SHA-256 of HEAD commit, working tree diff, and untracked files). This allows uncommitted implementation edits reviewed during the review gate to clear delivery while ensuring subsequent unreviewed modifications invalidate approval.
 3. **Structured Test Evidence**: Test results must include verifiable execution metrics (`exit_code: 0`, `tests_run > 0`, `failures: 0`).
 
 ---
@@ -190,7 +190,7 @@ To prevent contaminating the specialist and Judge report contract with lifecycle
 For a mechanical check before adjudication, use [validate_report.py](../scripts/validate_report.py) with standard Python 3.10+ (zero external dependencies):
 
 ```bash
-python3 /path/to/skills/audit/scripts/validate_report.py report.json
+python3 /path/to/skills/review/scripts/validate_report.py report.json
 ```
 
 The [JSON Schema](./agent_report.schema.json) checks fields, types, enums, and bounds. The script also rejects duplicate IDs/JSON keys, non-finite confidence, reversed line ranges, and non-relative paths. It accepts raw JSON or one enclosing JSON code fence; use `-` to read stdin. Exit 0 means the structure is valid, not that the evidence is true, the coverage is complete, or repairs are authorised. If this optional helper is unavailable, perform the same contract checks directly and preserve malformed/incomplete coverage.

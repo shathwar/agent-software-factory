@@ -24,10 +24,10 @@ The headless workflow decouples the lifecycle gates into asynchronous CI steps:
                    Tech Lead labels: "ship:approved"
                                       │
                                       ▼
-                      GitHub Action triggers implementation & audit gates
-                  • TDD: Red-Green-Refactor tasks.md
-                  • Simplify: stdlib-first anti-bloat
-                  • Adversarial Review: Judge PASS audit
+                       GitHub Action triggers implementation & review gates
+                   • TDD: Red-Green-Refactor tasks.md
+                   • Simplify: stdlib-first anti-bloat
+                   • Adversarial Review: Judge PASS review
                                        │
                                        ▼
                 3. Action opens Pull Request with:
@@ -77,7 +77,7 @@ Every repository or monorepo service can include a `.ship.json` at its root or s
       "max_debt": 0,
       "strict": true
     },
-    "audit": {
+    "review": {
       "base_branch": "main",
       "reviewers": ["correctness", "concurrency", "design", "judge"],
       "max_iterations": 3
@@ -163,7 +163,7 @@ jobs:
               body: `### 📋 Specification Ready for Review\n\nPlease review the generated ADR and OpenSpec package for \`${process.env.TOPIC}\`. When approved, label this issue with \`ship:approved\` to proceed to implementation.`
             });
 
-  implementation_and_audit:
+  implementation_and_review:
     if: >
       github.event_name == 'issues' &&
       github.event.action == 'labeled' &&
@@ -185,14 +185,14 @@ jobs:
         run: |
           python3 skills/ship/scripts/inspect_lifecycle.py --format json
 
-      - name: Run Implementation (TDD) & Audit (Code Review)
+      - name: Run Implementation (TDD) & Review (Code Review)
         run: |
           # 1. Execute agent runner harness for TDD tasks
           # e.g., agy run --skill tdd "Execute tasks in active openspec"
           python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint implementation
 
-          # 2. Execute agent runner harness for Audit loop
-          # e.g., agy run --skill audit "Review changes in review-loop mode"
+          # 2. Execute agent runner harness for Review loop
+          # e.g., agy run --skill review "Review changes in review-loop mode"
 
           # 3. Assert full delivery status
           python3 skills/ship/scripts/inspect_lifecycle.py --status-check

@@ -1,6 +1,6 @@
 # Architecture Decision Record (ADR) Template
 
-This document defines the canonical specification format produced at the conclusion of a `/design` session. This ADR serves as the immutable ground truth for implementation and acts as the direct specification input for [`audit`](../../audit/SKILL.md) Stage 0 (Spec Alignment).
+This document defines the canonical specification format produced at the conclusion of a `/design` session. This ADR serves as the immutable ground truth for implementation and acts as the direct specification input for [`review`](../../review/SKILL.md) Stage 0 (Spec Alignment).
 
 ---
 

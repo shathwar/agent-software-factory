@@ -6,7 +6,7 @@ Zero-dependency script (Python 3.10+ standard library).
 Evaluates filesystem indicators to determine active gate:
 - design: Specification & Architecture (design / spike)
 - implementation: Test-First Implementation (tdd + simplify)
-- audit: Adversarial Review & Adjudication (audit loop)
+- review: Adversarial Review & Adjudication (review loop)
 - delivery: Ready to Ship (delivery & PR sign-off)
 """
 
@@ -144,7 +144,7 @@ def load_ship_config(repo_root: Path, explicit_path: Optional[str] = None) -> Di
                 "max_debt": 0,
                 "strict": True,
             },
-            "audit": {
+            "review": {
                 "base_branch": "main",
                 "reviewers": ["correctness", "concurrency", "design", "judge"],
                 "max_iterations": 3,
@@ -715,8 +715,8 @@ NON_SPIKE_SCRATCH_DIRS = {
 
 
 def is_evidence_dir(dir_path: Path) -> bool:
-    """Distinguish audit and delivery evidence directories from empirical spikes independently of package location."""
-    for evidence_name in ("delivery_evidence.json", "review_report.json", "audit_report.json"):
+    """Distinguish review and delivery evidence directories from empirical spikes independently of package location."""
+    for evidence_name in ("delivery_evidence.json", "review_report.json"):
         if (dir_path / evidence_name).exists():
             return True
     report_file = dir_path / "report.json"
@@ -882,8 +882,8 @@ def validate_judge_report_contract(report: Any, allow_delivery_keys: bool = Fals
     return errors
 
 
-def parse_audit_report_file(p: Path, repo_root: Path) -> Dict[str, Any]:
-    """Parse and validate an audit report file or delivery evidence envelope."""
+def parse_review_report_file(p: Path, repo_root: Path) -> Dict[str, Any]:
+    """Parse and validate a review report file or delivery evidence envelope."""
     def make_err_report(err: str) -> Dict[str, Any]:
         return {
             "path": str(p.relative_to(repo_root)),
@@ -973,12 +973,12 @@ def parse_audit_report_file(p: Path, repo_root: Path) -> Dict[str, Any]:
     }
 
 
-def inspect_audit_reports(
+def inspect_review_reports(
     repo_root: Path,
     change: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     target = change
-    report_names = ("delivery_evidence.json", "review_report.json", "audit_report.json")
+    report_names = ("delivery_evidence.json", "review_report.json")
     candidate_paths: List[Path] = []
     if target:
         for name in report_names:
@@ -997,7 +997,7 @@ def inspect_audit_reports(
 
     for p in candidate_paths:
         if p.exists():
-            return parse_audit_report_file(p, repo_root)
+            return parse_review_report_file(p, repo_root)
 
     return None
 
@@ -1035,8 +1035,8 @@ def ensure_gitignore_has_ship(repo_root: Path) -> None:
         _append_ignore_entry(gitignore)
 
 
-def make_default_audit_evidence() -> Dict[str, Any]:
-    """Default audit evidence structure."""
+def make_default_review_evidence() -> Dict[str, Any]:
+    """Default review evidence structure."""
     return {
         "verdict": None,
         "status": None,
@@ -1062,7 +1062,7 @@ def make_default_evidence() -> Dict[str, Any]:
             "evidence_ref": None,
         },
         "simplify": {"status": "PENDING", "debt_count": 0},
-        "audit": make_default_audit_evidence(),
+        "review": make_default_review_evidence(),
         "delivery": {
             "status": "PENDING",
             "archived_path": None,
@@ -1115,7 +1115,7 @@ def save_ledger(repo_root: Path, ledger: Dict[str, Any]) -> None:
 
 
 def sync_ledger_from_workspace(repo_root: Path, target_change_id: Optional[str] = None) -> Dict[str, Any]:
-    """Reconcile and self-heal .ship/state.json from disk artifacts (OpenSpec, ADRs, Spikes, Audits)."""
+    """Reconcile and self-heal .ship/state.json from disk artifacts (OpenSpec, ADRs, Spikes, Reviews)."""
     ledger_path = get_ledger_path(repo_root)
     loaded = read_json_file(ledger_path)
     existing: Dict[str, Any] = loaded if isinstance(loaded, dict) and "changes" in loaded else {}
@@ -1165,17 +1165,17 @@ def sync_ledger_from_workspace(repo_root: Path, target_change_id: Optional[str] 
             if entry["evidence"]["spike"].get("status") == "ACTIVE":
                 entry["evidence"]["spike"]["status"] = "PASSED"
 
-        audit = inspect_audit_reports(repo_root, change=change)
-        if audit:
-            verdict = audit.get("verdict") or audit.get("status")
-            entry["evidence"]["audit"]["verdict"] = verdict
-            entry["evidence"]["audit"]["status"] = audit.get("status")
-            entry["evidence"]["audit"]["reviewer"] = audit.get("reviewer")
-            entry["evidence"]["audit"]["findings_count"] = audit.get("findings_count", 0)
-            entry["evidence"]["audit"]["critical_or_high_count"] = audit.get("critical_or_high_count", 0)
-            entry["evidence"]["audit"]["test_evidence_passed"] = audit.get("test_evidence_passed")
-            entry["evidence"]["audit"]["report_path"] = audit.get("path") or audit.get("report_file")
-            entry["evidence"]["audit"]["snapshot_fingerprint"] = audit.get("snapshot_fingerprint")
+        review = inspect_review_reports(repo_root, change=change)
+        if review:
+            verdict = review.get("verdict") or review.get("status")
+            entry["evidence"]["review"]["verdict"] = verdict
+            entry["evidence"]["review"]["status"] = review.get("status")
+            entry["evidence"]["review"]["reviewer"] = review.get("reviewer")
+            entry["evidence"]["review"]["findings_count"] = review.get("findings_count", 0)
+            entry["evidence"]["review"]["critical_or_high_count"] = review.get("critical_or_high_count", 0)
+            entry["evidence"]["review"]["test_evidence_passed"] = review.get("test_evidence_passed")
+            entry["evidence"]["review"]["report_path"] = review.get("path") or review.get("report_file")
+            entry["evidence"]["review"]["snapshot_fingerprint"] = review.get("snapshot_fingerprint")
 
         chk_dir = repo_root / ".scratch" / "checkpoints"
         if chk_dir.exists():
@@ -1201,18 +1201,18 @@ def sync_ledger_from_workspace(repo_root: Path, target_change_id: Optional[str] 
         elif matched_pkg["pending_tasks"] > 0 or any(b.startswith("Tests:") for b in blockers):
             entry["phase"] = "implementation"
         else:
-            audit_ev = entry["evidence"]["audit"]
-            crit = audit_ev.get("critical_or_high_count", 0)
-            verd = audit_ev.get("verdict", "")
+            review_ev = entry["evidence"]["review"]
+            crit = review_ev.get("critical_or_high_count", 0)
+            verd = review_ev.get("verdict", "")
             if crit > 0:
-                blockers.append(f"Audit has {crit} unresolved CRITICAL/HIGH finding(s)")
+                blockers.append(f"Review has {crit} unresolved CRITICAL/HIGH finding(s)")
             if verd in {"FAIL", "FAILED", "REJECTED"}:
-                blockers.append(f"Audit verdict is {verd}")
+                blockers.append(f"Review verdict is {verd}")
 
-            if audit_ev.get("verdict") in {"PASS", "APPROVED"} and crit == 0 and not blockers:
+            if review_ev.get("verdict") in {"PASS", "APPROVED"} and crit == 0 and not blockers:
                 entry["phase"] = "delivery"
             else:
-                entry["phase"] = "audit"
+                entry["phase"] = "review"
 
         entry["blockers"] = blockers
         if entry.get("revision_counter", 0) == 0:
@@ -1382,7 +1382,7 @@ def generate_gate_trailers(
         trailers.append(f"Ship-Design: {adr_name} ({status})")
     elif "design" in gates_cfg:
         cur_phase = change_entry.get("phase", "design")
-        if cur_phase in {"implementation", "audit", "delivery"}:
+        if cur_phase in {"implementation", "review", "delivery"}:
             trailers.append("Ship-Design: PASSED")
         elif cur_phase == "spike":
             trailers.append("Ship-Design: SPIKE")
@@ -1423,14 +1423,14 @@ def generate_gate_trailers(
     debt_cnt = simp_ev.get("debt_count", 0)
     trailers.append(f"Ship-Simplify: DEBT-{debt_cnt}")
 
-    # 5. Gate: Audit
-    audit_ev = evidence.get("audit", {})
-    verdict = audit_ev.get("verdict")
-    reviewer = audit_ev.get("reviewer") or "judge"
+    # 5. Gate: Review
+    review_ev = evidence.get("review", {})
+    verdict = review_ev.get("verdict")
+    reviewer = review_ev.get("reviewer") or "judge"
     if verdict:
-        trailers.append(f"Ship-Audit: {verdict} (by {reviewer})")
+        trailers.append(f"Ship-Review: {verdict} (by {reviewer})")
     else:
-        trailers.append("Ship-Audit: PENDING")
+        trailers.append("Ship-Review: PENDING")
 
     # 6. Gate: Delivery
     deliv_ev = evidence.get("delivery", {})
@@ -1446,24 +1446,24 @@ def generate_gate_trailers(
     return trailers
 
 
-def record_audit_to_ledger(
+def record_review_to_ledger(
     repo_root: Path,
     report_path_or_dict: Any,
     change_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Record Judge audit verdict to ledger and attach evidence note to commit."""
+    """Record Judge review verdict to ledger and attach evidence note to commit."""
     if isinstance(report_path_or_dict, (str, Path)):
         p = Path(report_path_or_dict)
         if not p.is_absolute():
             p = repo_root / p
-        report = parse_audit_report_file(p, repo_root)
+        report = parse_review_report_file(p, repo_root)
     else:
         report = report_path_or_dict
 
     cid = change_id or report.get("change") or get_active_change(repo_root) or "default"
 
     def updater(entry: Dict[str, Any]) -> None:
-        ev = entry["evidence"]["audit"]
+        ev = entry["evidence"]["review"]
         ev["verdict"] = report.get("verdict")
         ev["status"] = report.get("status")
         ev["reviewer"] = report.get("reviewer")
@@ -1476,21 +1476,21 @@ def record_audit_to_ledger(
         git_info = get_git_info(repo_root)
         commit = git_info.get("commit")
         if commit:
-            note_oid = attach_git_note_evidence(repo_root, commit, "audit_report", report, change_id=cid)
+            note_oid = attach_git_note_evidence(repo_root, commit, "review_report", report, change_id=cid)
             ev["git_note_oid"] = note_oid
 
-        blockers = [b for b in entry.get("blockers", []) if not b.startswith("Audit:")]
+        blockers = [b for b in entry.get("blockers", []) if not b.startswith("Review:")]
         crit = ev.get("critical_or_high_count", 0)
         if crit > 0:
-            blockers.append(f"Audit: {crit} unresolved CRITICAL/HIGH finding(s)")
+            blockers.append(f"Review: {crit} unresolved CRITICAL/HIGH finding(s)")
         if ev.get("verdict") in {"FAIL", "FAILED", "REJECTED"}:
-            blockers.append(f"Audit: verdict is {ev.get('verdict')}")
+            blockers.append(f"Review: verdict is {ev.get('verdict')}")
         entry["blockers"] = blockers
 
         if ev.get("verdict") in {"PASS", "APPROVED"} and crit == 0 and not blockers:
             entry["phase"] = "delivery"
         else:
-            entry["phase"] = "audit"
+            entry["phase"] = "review"
 
     return mutate_change_state(repo_root, cid, updater)
 
@@ -1524,82 +1524,82 @@ def record_test_run_to_ledger(
     return mutate_change_state(repo_root, cid, updater)
 
 
-def validate_audit_approval(
-    audit_report: Dict[str, Any],
+def validate_review_approval(
+    review_report: Dict[str, Any],
     change_name: str,
     git_info: Dict[str, Any],
     package_spec_names: Optional[Set[str]] = None,
 ) -> Optional[str]:
-    """Verify that an audit report strictly satisfies delivery/archive requirements. Returns error string or None."""
+    """Verify that a review report strictly satisfies delivery/archive requirements. Returns error string or None."""
     # 1. Judge report contract check for envelopes
-    if audit_report.get("is_envelope") and not audit_report.get("judge_report_valid"):
-        err_msg = "; ".join(audit_report.get("judge_report_errors", ["Malformed Judge report structure"]))
+    if review_report.get("is_envelope") and not review_report.get("judge_report_valid"):
+        err_msg = "; ".join(review_report.get("judge_report_errors", ["Malformed Judge report structure"]))
         return f"Judge report in delivery envelope is malformed: {err_msg}. Re-run review to produce a valid Judge report."
 
     # 2. Reviewer must be Judge
-    if not audit_report.get("is_judge"):
-        return f"Audit report is from '{audit_report.get('reviewer', 'unknown')}', not Judge. Requires explicit Judge adjudication before shipping."
+    if not review_report.get("is_judge"):
+        return f"Review report is from '{review_report.get('reviewer', 'unknown')}', not Judge. Requires explicit Judge adjudication before shipping."
 
     # 3. Must not contain unresolved CRITICAL or HIGH findings
-    crit_count = audit_report.get("critical_or_high_count", 0)
+    crit_count = review_report.get("critical_or_high_count", 0)
     if crit_count > 0:
-        return f"Audit has {crit_count} unresolved CRITICAL/HIGH finding(s). Must remediate defects before shipping."
+        return f"Review has {crit_count} unresolved CRITICAL/HIGH finding(s). Must remediate defects before shipping."
 
     # 4. Must have explicit passing verdict and clean findings
-    verdict = audit_report.get("verdict", "")
-    status = audit_report.get("status", "")
-    findings_count = audit_report.get("findings_count", 0)
+    verdict = review_report.get("verdict", "")
+    status = review_report.get("status", "")
+    findings_count = review_report.get("findings_count", 0)
 
     if verdict in {"FAIL", "FAILED", "REJECTED"}:
-        return f"Audit verdict '{verdict}' is rejected. Remediate findings or re-run review."
+        return f"Review verdict '{verdict}' is rejected. Remediate findings or re-run review."
     if status in {"fail", "failed", "rejected", "incomplete", "skipped"}:
-        return f"Audit status '{status}' is not complete/passing (requires 'complete'). Remediate findings."
+        return f"Review status '{status}' is not complete/passing (requires 'complete'). Remediate findings."
     if not (verdict in {"PASS", "APPROVED"} or (verdict == "" and status in {"complete", "pass", "approved"} and findings_count == 0)):
-        return f"Audit verdict '{verdict or status}' is not PASS. Remediate findings or re-run review."
+        return f"Review verdict '{verdict or status}' is not PASS. Remediate findings or re-run review."
 
     # 5. Require explicit verified passing test evidence
-    if not audit_report.get("test_evidence_passed"):
-        return "Audit report lacks verified test evidence. Run test suite and record passing test results."
+    if not review_report.get("test_evidence_passed"):
+        return "Review report lacks verified test evidence. Run test suite and record passing test results."
 
     # 6. Package / Change exact match check
-    report_change = audit_report.get("change")
+    report_change = review_report.get("change")
     if not report_change:
-        return f"Audit approval lacks 'change'. Requires exact match with active package '{change_name}' before shipping."
+        return f"Review approval lacks 'change'. Requires exact match with active package '{change_name}' before shipping."
     if report_change != change_name:
-        return f"Audit approval is for change '{report_change}', but active package is '{change_name}'. Requires audit approval for '{change_name}' before shipping."
+        return f"Review approval is for change '{report_change}', but active package is '{change_name}'. Requires review approval for '{change_name}' before shipping."
 
     # 7. Judge report contract check for non-envelopes
-    if not audit_report.get("judge_report_valid"):
-        err_msg = "; ".join(audit_report.get("judge_report_errors", ["Malformed Judge report structure"]))
-        env_text = " in delivery envelope" if audit_report.get("is_envelope") else ""
+    if not review_report.get("judge_report_valid"):
+        err_msg = "; ".join(review_report.get("judge_report_errors", ["Malformed Judge report structure"]))
+        env_text = " in delivery envelope" if review_report.get("is_envelope") else ""
         return f"Judge report{env_text} is malformed: {err_msg}. Re-run review to produce a valid Judge report."
 
     # 7. Snapshot binding check
-    snapshot_sha = audit_report.get("snapshot_sha")
-    snapshot_fingerprint = audit_report.get("snapshot_fingerprint")
+    snapshot_sha = review_report.get("snapshot_sha")
+    snapshot_fingerprint = review_report.get("snapshot_fingerprint")
     current_commit = git_info.get("commit")
     current_fingerprint = git_info.get("working_tree_fingerprint")
 
     if git_info.get("is_git"):
         if current_commit:
             if not snapshot_sha and not snapshot_fingerprint:
-                return "Audit report lacks commit snapshot SHA or tree fingerprint. Audit must be bound to reviewed snapshot."
+                return "Review report lacks commit snapshot SHA or tree fingerprint. Review must be bound to reviewed snapshot."
             if snapshot_sha:
                 if not bool(re.match(r"^[0-9a-f]{7,40}$", snapshot_sha, re.IGNORECASE)):
                     if not snapshot_fingerprint or (current_fingerprint and snapshot_fingerprint != current_fingerprint):
-                        return f"Audit snapshot commit '{snapshot_sha}' is symbolic or unresolved. Must be a resolved, immutable commit SHA or accompanied by a matching working-tree fingerprint."
+                        return f"Review snapshot commit '{snapshot_sha}' is symbolic or unresolved. Must be a resolved, immutable commit SHA or accompanied by a matching working-tree fingerprint."
                 elif not current_commit.startswith(snapshot_sha) and not snapshot_sha.startswith(current_commit):
-                    return f"Audit snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'. Re-run audit on current code."
+                    return f"Review snapshot '{snapshot_sha[:7]}' does not match current commit '{current_commit[:7]}'. Re-run review on current code."
         else:
             if not snapshot_fingerprint:
-                return "Audit report in repository before first commit lacks working-tree fingerprint. Audit must be bound to reviewed snapshot fingerprint."
+                return "Review report in repository before first commit lacks working-tree fingerprint. Review must be bound to reviewed snapshot fingerprint."
             if snapshot_sha and snapshot_sha != "none":
-                return f"Audit report snapshot commit '{snapshot_sha}' does not exist (repository has no commits yet). Re-run audit on current code."
+                return f"Review report snapshot commit '{snapshot_sha}' does not exist (repository has no commits yet). Re-run review on current code."
 
     # 8. Working tree consistency check
     if snapshot_fingerprint:
         if not current_fingerprint or snapshot_fingerprint != current_fingerprint:
-            return "Working tree has been modified since review (fingerprint mismatch). Re-run adversarial audit on current code before shipping."
+            return "Working tree has been modified since review (fingerprint mismatch). Re-run adversarial review on current code before shipping."
     else:
         modified_sources = git_info.get("modified_source_files", [])
         if package_spec_names is not None:
@@ -1609,25 +1609,25 @@ def validate_audit_approval(
             ]
         if modified_sources:
             mod_str = ", ".join(modified_sources[:3]) + (f" (+{len(modified_sources)-3} more)" if len(modified_sources) > 3 else "")
-            return f"Working tree has unreviewed source modifications ({mod_str}). Re-run adversarial audit on current code before shipping."
+            return f"Working tree has unreviewed source modifications ({mod_str}). Re-run adversarial review on current code before shipping."
 
     return None
 
 
 def validate_delivery_readiness(
-    audit_report: Dict[str, Any],
+    review_report: Dict[str, Any],
     active_pkg: Dict[str, Any],
     git_info: Dict[str, Any],
     active_change: Optional[Dict[str, Any]],
 ) -> Tuple[str, str, str]:
-    """Validate that audit and ledger requirements are met before advancing to delivery."""
-    def audit_blocked(reason: str) -> Tuple[str, str, str]:
-        return ("audit", "AUDIT_ACTIVE", reason)
+    """Validate that review and ledger requirements are met before advancing to delivery."""
+    def review_blocked(reason: str) -> Tuple[str, str, str]:
+        return ("review", "REVIEW_ACTIVE", reason)
 
     pkg_change = active_pkg.get("change", "")
-    err = validate_audit_approval(audit_report, pkg_change, git_info)
+    err = validate_review_approval(review_report, pkg_change, git_info)
     if err:
-        return audit_blocked(err)
+        return review_blocked(err)
 
     # 9. Ledger readiness validation
     if active_change:
@@ -1636,20 +1636,20 @@ def validate_delivery_readiness(
             test_b = [b for b in blockers if b.startswith("Tests:")]
             if test_b:
                 return ("implementation", "TDD_ACTIVE", f"Blocked by test failure in ledger: {test_b[0]}. Run Red-Green-Refactor.")
-            return audit_blocked(f"Blocked by active ledger blockers: {'; '.join(blockers)}. Remediate findings before shipping.")
+            return review_blocked(f"Blocked by active ledger blockers: {'; '.join(blockers)}. Remediate findings before shipping.")
         impl_ev = active_change.get("evidence", {}).get("implementation", {})
         if impl_ev.get("tests_passed") is False or impl_ev.get("status") == "FAILED":
             return ("implementation", "TDD_ACTIVE", "Blocked by failing test evidence in ledger. Run Red-Green-Refactor.")
-        audit_ev = active_change.get("evidence", {}).get("audit", {})
-        if audit_ev.get("verdict") in {"FAIL", "FAILED", "REJECTED"}:
-            return audit_blocked(f"Audit verdict recorded in ledger is '{audit_ev.get('verdict')}'. Remediate findings or re-run review.")
-        if audit_ev.get("critical_or_high_count", 0) > 0:
-            return audit_blocked(f"Ledger records {audit_ev['critical_or_high_count']} unresolved CRITICAL/HIGH finding(s). Remediate defects before shipping.")
+        review_ev = active_change.get("evidence", {}).get("review", {})
+        if review_ev.get("verdict") in {"FAIL", "FAILED", "REJECTED"}:
+            return review_blocked(f"Review verdict recorded in ledger is '{review_ev.get('verdict')}'. Remediate findings or re-run review.")
+        if review_ev.get("critical_or_high_count", 0) > 0:
+            return review_blocked(f"Ledger records {review_ev['critical_or_high_count']} unresolved CRITICAL/HIGH finding(s). Remediate defects before shipping.")
 
     return (
         "delivery",
         "DELIVERY_READY",
-        f"All tasks complete, tests verified green, and Judge audit PASSED. Ready to deliver Delivery Walkthrough. Run 'python3 skills/ship/scripts/inspect_lifecycle.py --archive' to sync living specs and archive '{pkg_change}'.",
+        f"All tasks complete, tests verified green, and Judge review PASSED. Ready to deliver Delivery Walkthrough. Run 'python3 skills/ship/scripts/inspect_lifecycle.py --archive' to sync living specs and archive '{pkg_change}'.",
     )
 
 
@@ -1658,7 +1658,7 @@ def determine_lifecycle_state(
     adrs: List[Dict[str, Any]],
     openspec_packages: List[Dict[str, Any]],
     spikes: List[str],
-    audit_report: Optional[Dict[str, Any]],
+    review_report: Optional[Dict[str, Any]],
     active_change: Optional[Dict[str, Any]] = None,
 ) -> Tuple[str, str, str]:
     """Determine the active gate, status label, and recommended next action."""
@@ -1724,14 +1724,14 @@ def determine_lifecycle_state(
                         f"Blocked by failing tests recorded in ledger ({reason}). Run Red-Green-Refactor to fix failing tests before advancing.",
                     )
 
-            if not audit_report:
+            if not review_report:
                 return (
-                    "audit",
-                    "AUDIT_ACTIVE",
-                    "All implementation tasks marked complete. Run 'audit' in review-loop mode against base branch.",
+                    "review",
+                    "REVIEW_ACTIVE",
+                    "All implementation tasks marked complete. Run 'review' in review-loop mode against base branch.",
                 )
 
-            return validate_delivery_readiness(audit_report, active_pkg, git_info, active_change)
+            return validate_delivery_readiness(review_report, active_pkg, git_info, active_change)
 
     # Only ADRs exist
     has_accepted = any(a.get("status") in {"ACCEPTED", "APPROVED"} for a in adrs)
@@ -1808,18 +1808,18 @@ def apply_and_archive_openspec(
                     f"Cannot archive '{change_name}': {failed_cnt} test(s) failing recorded in ledger. Fix tests before archiving or use --force."
                 )
 
-        # 3. Audit report / Delivery Evidence check
-        audit_report = inspect_audit_reports(repo_root, change=change_name)
-        if not audit_report:
-            raise RuntimeError(f"Cannot archive '{change_name}': no passing audit report found (or delivery evidence in .scratch/).")
+        # 3. Review report / Delivery Evidence check
+        review_report = inspect_review_reports(repo_root, change=change_name)
+        if not review_report:
+            raise RuntimeError(f"Cannot archive '{change_name}': no passing review report found (or delivery evidence in .scratch/).")
 
         source_specs_dir = change_dir / "specs"
         package_spec_names = {s.name for s in source_specs_dir.glob("*.md")} if source_specs_dir.exists() else set()
         git_info = get_git_info(repo_root)
 
-        audit_err = validate_audit_approval(audit_report, change_name, git_info, package_spec_names=package_spec_names)
-        if audit_err:
-            msg = audit_err if audit_err.startswith("Judge report") else (audit_err[:1].lower() + audit_err[1:])
+        review_err = validate_review_approval(review_report, change_name, git_info, package_spec_names=package_spec_names)
+        if review_err:
+            msg = review_err if review_err.startswith("Judge report") else (review_err[:1].lower() + review_err[1:])
             raise RuntimeError(f"Cannot archive '{change_name}': {msg}")
 
     synced_specs = []
@@ -2140,13 +2140,13 @@ def perform_rollback(
     try:
         def update_rb(entry: Dict[str, Any]) -> None:
             entry["phase"] = canonical_tag
-            entry["evidence"]["audit"] = make_default_audit_evidence()
+            entry["evidence"]["review"] = make_default_review_evidence()
             if canonical_tag == "design":
                 entry["blockers"] = []
                 entry["evidence"]["implementation"]["status"] = "PENDING"
                 entry["evidence"]["implementation"]["tests_passed"] = None
             else:
-                entry["blockers"] = [b for b in entry.get("blockers", []) if not b.startswith("Audit:")]
+                entry["blockers"] = [b for b in entry.get("blockers", []) if not b.startswith("Review:")]
         mutate_change_state(repo_root, resolved_change, update_rb)
     except Exception:
         pass
@@ -2169,14 +2169,14 @@ def evaluate_repository(
     living_specs = inspect_living_specs(repo_root)
     spikes = inspect_spikes(repo_root)
     active_pkg_change = openspec_packages[0]["change"] if openspec_packages else None
-    audit_report = inspect_audit_reports(repo_root, change=resolved_target or active_pkg_change)
+    review_report = inspect_review_reports(repo_root, change=resolved_target or active_pkg_change)
 
     resolved_change = resolved_target or get_active_change(repo_root) or active_pkg_change
     ledger = load_ledger(repo_root, auto_sync=True)
     active_change = ledger.get("changes", {}).get(resolved_change) if resolved_change else None
 
     gate, state_key, next_action = determine_lifecycle_state(
-        git_info, adrs, openspec_packages, spikes, audit_report, active_change=active_change
+        git_info, adrs, openspec_packages, spikes, review_report, active_change=active_change
     )
 
     return {
@@ -2191,7 +2191,7 @@ def evaluate_repository(
         "openspec_archived": archived_packages,
         "openspec_living_specs": living_specs,
         "active_spikes": spikes,
-        "audit_report": audit_report,
+        "review_report": review_report,
         "config": config,
         "ledger": ledger,
         "active_change": active_change,
@@ -2256,13 +2256,13 @@ def format_summary(data: Dict[str, Any]) -> str:
     if spikes:
         lines.append(f"• Active Spikes  : {', '.join(spikes)}")
 
-    report = data["audit_report"]
+    report = data["review_report"]
     if report:
         env_str = " [Envelope]" if report.get("is_envelope") else ""
         verdict_str = f" verdict={report.get('verdict') or report.get('status')}"
         ev_str = f" tests={'passed' if report.get('test_evidence_passed') else 'failed/missing'}"
         crit_str = f" critical/high={report.get('critical_or_high_count')}"
-        lines.append(f"• Audit Report   : {report['path']}{env_str} (by {report['reviewer']},{verdict_str},{ev_str},{crit_str})")
+        lines.append(f"• Review Report   : {report['path']}{env_str} (by {report['reviewer']},{verdict_str},{ev_str},{crit_str})")
 
     if data.get("config", {}).get("config_source"):
         cfg = data["config"]
@@ -2330,7 +2330,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Force archive even if audit report or task completion checks fail.",
+        help="Force archive even if review report or task completion checks fail.",
     )
     parser.add_argument(
         "--fingerprint",
@@ -2354,10 +2354,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="Force re-synchronize .ship/state.json from workspace artifacts.",
     )
     parser.add_argument(
-        "--record-audit",
+        "--record-review",
         default=None,
         metavar="REPORT_JSON",
-        help="Record an audit report JSON into .ship/state.json and git notes.",
+        help="Record a review report JSON into .ship/state.json and git notes.",
     )
     parser.add_argument(
         "--record-tests",
@@ -2400,15 +2400,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         output_result({"trailers": trailers}, trailers)
         return 0
 
-    if args.record_audit:
+    if args.record_review:
         try:
-            res = record_audit_to_ledger(repo_root, args.record_audit, change_id=args.change)
-            verdict = res.get("evidence", {}).get("audit", {}).get("verdict")
+            res = record_review_to_ledger(repo_root, args.record_review, change_id=args.change)
+            verdict = res.get("evidence", {}).get("review", {}).get("verdict")
             rev = res.get("revision_counter", 0)
-            output_result(res, [f"Audit recorded for change '{res.get('change_id')}' (verdict: {verdict}, rev: r{rev})"])
+            output_result(res, [f"Review recorded for change '{res.get('change_id')}' (verdict: {verdict}, rev: r{rev})"])
             return 0
         except Exception as e:
-            print(f"Error recording audit: {e}", file=sys.stderr)
+            print(f"Error recording review: {e}", file=sys.stderr)
             return 1
 
     if args.record_tests:
@@ -2501,7 +2501,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.status_check:
         state_key = data.get("state_key")
-        report = data.get("audit_report")
+        report = data.get("review_report")
         if state_key == "DELIVERY_READY":
             return 0
         if report:

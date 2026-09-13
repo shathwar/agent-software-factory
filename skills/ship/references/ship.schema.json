@@ -106,9 +106,9 @@
           },
           "additionalProperties": false
         },
-        "audit": {
+        "review": {
           "type": "object",
-          "description": "Audit gate (Adversarial Review) parameters.",
+          "description": "Review gate (Adversarial Review) parameters.",
           "properties": {
             "base_branch": {
               "type": "string",

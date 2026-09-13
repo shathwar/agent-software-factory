@@ -9,7 +9,7 @@ import unittest
 
 SCRIPT = Path(os.environ.get("INSPECTOR_SCRIPT", str(
     Path(__file__).resolve().parents[1]
-    / "skills/audit/scripts/inspect_changes.sh"
+    / "skills/review/scripts/inspect_changes.sh"
 )))
 
 

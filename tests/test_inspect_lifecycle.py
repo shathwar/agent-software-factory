@@ -88,7 +88,7 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertIn("1/3 tasks complete", res["next_action"])
             self.assertIn("2. Handle retries with jitter", res["next_action"])
 
-    def test_gate3_audit_active_when_tasks_done(self):
+    def test_gate3_review_active_when_tasks_done(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             pkg_dir = tmppath / "openspec" / "changes" / "webhooks"
@@ -100,11 +100,11 @@ class TestInspectLifecycle(unittest.TestCase):
             )
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "audit")
-            self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
+            self.assertEqual(res["gate"], "review")
+            self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
             self.assertIn("review-loop mode", res["next_action"])
 
-    def test_gate4_ready_to_ship_with_passed_audit(self):
+    def test_gate4_ready_to_ship_with_passed_review(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             pkg_dir = tmppath / "openspec" / "changes" / "webhooks"
@@ -152,8 +152,8 @@ class TestInspectLifecycle(unittest.TestCase):
             )
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "audit")
-            self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
+            self.assertEqual(res["gate"], "review")
+            self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
             self.assertIn("unresolved CRITICAL/HIGH finding(s)", res["next_action"])
 
     def test_gate3_specialist_report_prevents_ship(self):
@@ -174,8 +174,8 @@ class TestInspectLifecycle(unittest.TestCase):
             )
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "audit")
-            self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
+            self.assertEqual(res["gate"], "review")
+            self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
             self.assertIn("Requires explicit Judge adjudication", res["next_action"])
 
     def test_gate3_missing_test_evidence_prevents_ship(self):
@@ -196,8 +196,8 @@ class TestInspectLifecycle(unittest.TestCase):
             )
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "audit")
-            self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
+            self.assertEqual(res["gate"], "review")
+            self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
             self.assertIn("lacks verified test evidence", res["next_action"])
 
     def test_cli_json(self):
@@ -219,7 +219,7 @@ class TestInspectLifecycle(unittest.TestCase):
             (pkg_dir / "tasks.md").write_text("- [x] 1. Done\n")
             (specs_dir / "invoices.md").write_text("# Invoice Spec\n")
 
-            # With force=True to bypass audit requirement in unit test
+            # With force=True to bypass review requirement in unit test
             res = inspect_lifecycle.apply_and_archive_openspec(tmppath, "billing", force=True)
             self.assertEqual(res["change"], "billing")
             self.assertIn("invoices.md", res["synced_specs"])
@@ -326,8 +326,8 @@ class TestInspectLifecycle(unittest.TestCase):
                 })
             )
             res_fail = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res_fail["gate"], "audit")
-            self.assertEqual(res_fail["state_key"], "AUDIT_ACTIVE")
+            self.assertEqual(res_fail["gate"], "review")
+            self.assertEqual(res_fail["state_key"], "REVIEW_ACTIVE")
             self.assertIn("rejected", res_fail["next_action"])
 
             # Case B: verdict: PASS, but test evidence has exit_code: 1
@@ -341,11 +341,11 @@ class TestInspectLifecycle(unittest.TestCase):
                 })
             )
             res_bad_tests = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res_bad_tests["gate"], "audit")
-            self.assertEqual(res_bad_tests["state_key"], "AUDIT_ACTIVE")
+            self.assertEqual(res_bad_tests["gate"], "review")
+            self.assertEqual(res_bad_tests["state_key"], "REVIEW_ACTIVE")
             self.assertIn("lacks verified test evidence", res_bad_tests["next_action"])
 
-    def test_archive_blocked_when_tasks_pending_or_audit_missing(self):
+    def test_archive_blocked_when_tasks_pending_or_review_missing(self):
         """Reproduction for Issue 3: archiving must validate package completion before mutating."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
@@ -358,11 +358,11 @@ class TestInspectLifecycle(unittest.TestCase):
                 inspect_lifecycle.apply_and_archive_openspec(tmppath, "unfinished")
             self.assertIn("pending tasks in tasks.md", str(ctx.exception))
 
-            # 2. Completed tasks without passing audit must block archiving
+            # 2. Completed tasks without passing review must block archiving
             (pkg_dir / "tasks.md").write_text("- [x] 1. Finished task\n")
             with self.assertRaises(RuntimeError) as ctx:
                 inspect_lifecycle.apply_and_archive_openspec(tmppath, "unfinished")
-            self.assertIn("no passing audit report found", str(ctx.exception))
+            self.assertIn("no passing review report found", str(ctx.exception))
 
     def test_resume_selects_active_change_and_ignores_completed_spikes(self):
         """Reproduction for Issue 4: prioritize in-progress packages and ignore completed spikes."""
@@ -380,7 +380,7 @@ class TestInspectLifecycle(unittest.TestCase):
             curr_pkg.mkdir(parents=True)
             (curr_pkg / "tasks.md").write_text("- [ ] 1. Task in progress\n")
 
-            # evaluate_repository must select 'z-current' in TDD_ACTIVE, NOT 'a-old' in AUDIT_ACTIVE
+            # evaluate_repository must select 'z-current' in TDD_ACTIVE, NOT 'a-old' in REVIEW_ACTIVE
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "implementation")
             self.assertEqual(res["state_key"], "TDD_ACTIVE")
@@ -445,10 +445,10 @@ class TestInspectLifecycle(unittest.TestCase):
             # Now modify implementation to raise an exception
             src_file.write_text("def run(): raise RuntimeError('unreviewed crash')\n")
 
-            # Must revoke DELIVERY_READY and demand re-audit
+            # Must revoke DELIVERY_READY and demand re-review
             res_dirty = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res_dirty["gate"], "audit")
-            self.assertEqual(res_dirty["state_key"], "AUDIT_ACTIVE")
+            self.assertEqual(res_dirty["gate"], "review")
+            self.assertEqual(res_dirty["state_key"], "REVIEW_ACTIVE")
             self.assertIn("unreviewed source modifications", res_dirty["next_action"])
 
     def test_delivery_evidence_envelope_clears_gate_while_judge_report_passes_schema(self):
@@ -472,7 +472,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 "routing_notes": [],
             }
             # Verify validate_report.py accepts this report
-            validate_script = ROOT / "skills" / "audit" / "scripts" / "validate_report.py"
+            validate_script = ROOT / "skills" / "review" / "scripts" / "validate_report.py"
             val_proc = subprocess.run(
                 [sys.executable, str(validate_script), "-"],
                 input=json.dumps(canonical_judge_report),
@@ -495,7 +495,7 @@ class TestInspectLifecycle(unittest.TestCase):
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "delivery")
             self.assertEqual(res["state_key"], "DELIVERY_READY")
-            self.assertTrue(res["audit_report"]["is_envelope"])
+            self.assertTrue(res["review_report"]["is_envelope"])
 
     def test_strict_test_evidence_classification(self):
         """Reproduction for Issue 3: test evidence parsing must reject 'not passed' and 0 tests, and accept 0 failures."""
@@ -637,15 +637,15 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # Delivery check must reject because envelope change is 'auth', but active package is 'billing'
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "audit")
-            self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
-            self.assertIn("Audit approval is for change 'auth'", res["next_action"])
+            self.assertEqual(res["gate"], "review")
+            self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
+            self.assertIn("Review approval is for change 'auth'", res["next_action"])
             self.assertIn("billing", res["next_action"])
 
             # Archive must raise RuntimeError
             with self.assertRaises(RuntimeError) as ctx:
                 inspect_lifecycle.apply_and_archive_openspec(tmppath, change="billing")
-            self.assertIn("audit approval is for change 'auth'", str(ctx.exception))
+            self.assertIn("review approval is for change 'auth'", str(ctx.exception))
 
             # Matching change 'billing' clears gate
             envelope["change"] = "billing"
@@ -703,8 +703,8 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # Fingerprint mismatch must revoke DELIVERY_READY
             res_modified = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res_modified["gate"], "audit")
-            self.assertEqual(res_modified["state_key"], "AUDIT_ACTIVE")
+            self.assertEqual(res_modified["gate"], "review")
+            self.assertEqual(res_modified["state_key"], "REVIEW_ACTIVE")
             self.assertIn("fingerprint mismatch", res_modified["next_action"])
 
             # Archive must also be blocked by fingerprint mismatch
@@ -784,8 +784,8 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # Symbolic HEAD without fingerprint MUST NOT produce DELIVERY_READY
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "audit")
-            self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
+            self.assertEqual(res["gate"], "review")
+            self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
             self.assertIn("symbolic or unresolved", res["next_action"])
 
             # Archive must also reject symbolic commit
@@ -807,8 +807,8 @@ class TestInspectLifecycle(unittest.TestCase):
             subprocess.run(["git", "commit", "-m", "Regression"], cwd=tmppath, check=True)
 
             res_regression = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res_regression["gate"], "audit")
-            self.assertEqual(res_regression["state_key"], "AUDIT_ACTIVE")
+            self.assertEqual(res_regression["gate"], "review")
+            self.assertEqual(res_regression["state_key"], "REVIEW_ACTIVE")
             self.assertIn("does not match current commit", res_regression["next_action"])
 
     def test_malformed_nested_judge_report_blocks_delivery(self):
@@ -840,8 +840,8 @@ class TestInspectLifecycle(unittest.TestCase):
             (scratch_dir / "delivery_evidence.json").write_text(json.dumps(malformed_envelope))
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "audit")
-            self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
+            self.assertEqual(res["gate"], "review")
+            self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
             self.assertIn("Judge report in delivery envelope is malformed", res["next_action"])
 
             # Archive must also reject malformed judge report
@@ -1100,10 +1100,10 @@ class TestInspectLifecycle(unittest.TestCase):
             }))
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "audit")
-            self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
+            self.assertEqual(res["gate"], "review")
+            self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
             self.assertTrue(
-                "Audit approval lacks 'change'" in res["next_action"]
+                "Review approval lacks 'change'" in res["next_action"]
                 or "Judge report is malformed" in res["next_action"]
             )
 
@@ -1144,8 +1144,8 @@ class TestInspectLifecycle(unittest.TestCase):
             }))
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "audit")
-            self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
+            self.assertEqual(res["gate"], "review")
+            self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
             self.assertIn("Judge report in delivery envelope is malformed", res["next_action"])
             self.assertIn("Envelope is missing required 'judge_report' object", res["next_action"])
 
@@ -1156,7 +1156,7 @@ class TestInspectLifecycle(unittest.TestCase):
         self.assertEqual(inspect_lifecycle.normalize_req_title("**[REQ-003] User Authentication**"), "user authentication")
 
     def test_pre_commit_repo_requires_working_tree_fingerprint(self):
-        """In a repo before first commit, an audit report must provide matching snapshot fingerprint and not a fake commit SHA."""
+        """In a repo before first commit, a review report must provide matching snapshot fingerprint and not a fake commit SHA."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             self._init_git_repo(tmppath)
@@ -1185,8 +1185,8 @@ class TestInspectLifecycle(unittest.TestCase):
             }))
 
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "audit")
-            self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
+            self.assertEqual(res["gate"], "review")
+            self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
             self.assertTrue(
                 "lacks working-tree fingerprint" in res["next_action"]
                 or "does not exist (repository has no commits yet)" in res["next_action"]
@@ -1299,8 +1299,8 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # Delivery evaluation must reject skipped status
             res = inspect_lifecycle.evaluate_repository(tmppath)
-            self.assertEqual(res["gate"], "audit")
-            self.assertEqual(res["state_key"], "AUDIT_ACTIVE")
+            self.assertEqual(res["gate"], "review")
+            self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
             self.assertIn("not complete", res["next_action"])
 
             # Archive must also reject skipped status
@@ -1317,7 +1317,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 "gates": {
                     "implementation": {"test": "pnpm test"},
                     "simplify": {"max_debt": 2},
-                    "audit": {"max_iterations": 5},
+                    "review": {"max_iterations": 5},
                 },
             }
             (tmppath / ".ship.json").write_text(json.dumps(config_data))
@@ -1328,7 +1328,7 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(cfg["project"]["scope"], "services/billing")
             self.assertEqual(cfg["gates"]["implementation"]["test"], "pnpm test")
             self.assertEqual(cfg["gates"]["simplify"]["max_debt"], 2)
-            self.assertEqual(cfg["gates"]["audit"]["max_iterations"], 5)
+            self.assertEqual(cfg["gates"]["review"]["max_iterations"], 5)
 
             # Check format_summary displays config
             eval_data = inspect_lifecycle.evaluate_repository(tmppath)
@@ -1344,7 +1344,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 "project": {"name": "auth-service"},
                 "gates": {
                     "implementation": {"test": "pytest -q"},
-                    "audit": {"max_iterations": 4},
+                    "review": {"max_iterations": 4},
                 },
             })
             custom_file = tmppath / "custom.ship.json"
@@ -1354,7 +1354,7 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(cfg["config_source"], "custom.ship.json")
             self.assertEqual(cfg["project"]["name"], "auth-service")
             self.assertEqual(cfg["gates"]["implementation"]["test"], "pytest -q")
-            self.assertEqual(cfg["gates"]["audit"]["max_iterations"], 4)
+            self.assertEqual(cfg["gates"]["review"]["max_iterations"], 4)
 
     def test_create_checkpoint_and_rollback(self):
         """Verify checkpoint creation and safe rollback with backup."""
@@ -1456,7 +1456,7 @@ class TestInspectLifecycle(unittest.TestCase):
             json_content = json.dumps({
                 "project": {"name": "billing"},
                 "gates": {
-                    "audit": {
+                    "review": {
                         "max_iterations": 3,
                         "critical_paths": ["services/billing/core", "services/billing/api"],
                     },
@@ -1469,9 +1469,9 @@ class TestInspectLifecycle(unittest.TestCase):
             parsed = inspect_lifecycle.load_ship_config(tmppath)
             self.assertEqual(parsed["project"]["name"], "billing")
             self.assertEqual(parsed["gates"]["implementation"]["test"], "pytest -q")
-            self.assertEqual(parsed["gates"]["audit"]["max_iterations"], 3)
+            self.assertEqual(parsed["gates"]["review"]["max_iterations"], 3)
             self.assertEqual(
-                parsed["gates"]["audit"]["critical_paths"],
+                parsed["gates"]["review"]["critical_paths"],
                 ["services/billing/core", "services/billing/api"],
             )
 
@@ -1487,14 +1487,14 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertTrue((tmppath / ".scratch" / "checkpoints" / "new-feature_design.json").exists())
 
     def test_status_check_exit_codes(self):
-        """Verify --status-check exit code returns: 0 for ready, 1 for in-progress, 2 for audit rejection."""
+        """Verify --status-check exit code returns: 0 for ready, 1 for in-progress, 2 for review rejection."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             # Empty repo -> design -> status_check exit code 1 (in-progress)
             code = inspect_lifecycle.main(["--path", str(tmppath), "--status-check"])
             self.assertEqual(code, 1)
 
-            # Add failing audit report -> status_check exit code 2 (remediation/rollback)
+            # Add failing review report -> status_check exit code 2 (remediation/rollback)
             scratch_dir = tmppath / ".scratch"
             scratch_dir.mkdir()
             report_data = {
@@ -1503,7 +1503,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 "verdict": "FAIL",
                 "critical_or_high_count": 1,
             }
-            (scratch_dir / "audit_report.json").write_text(json.dumps(report_data))
+            (scratch_dir / "review_report.json").write_text(json.dumps(report_data))
             code = inspect_lifecycle.main(["--path", str(tmppath), "--status-check"])
             self.assertEqual(code, 2)
 
@@ -1601,10 +1601,10 @@ class TestInspectLifecycle(unittest.TestCase):
             rollback_dir.mkdir()
             (rollback_dir / "dummy.py").write_text("dummy = 1\n")
 
-            # Create an audit evidence dir with audit_report.json
+            # Create a review evidence dir with review_report.json
             evidence_dir = scratch_dir / "old-evidence"
             evidence_dir.mkdir()
-            (evidence_dir / "audit_report.json").write_text(json.dumps({"status": "complete"}))
+            (evidence_dir / "review_report.json").write_text(json.dumps({"status": "complete"}))
 
             spikes = inspect_lifecycle.inspect_spikes(tmppath)
             self.assertEqual(spikes, [])
@@ -1613,7 +1613,7 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertNotEqual(res["state_key"], "SPIKE_ACTIVE")
             self.assertEqual(res["gate"], "implementation")
 
-    def test_audit_report_json_recognized_as_evidence_dir(self):
+    def test_review_report_json_recognized_as_evidence_dir(self):
         """Directory with report.json containing reviewer or judge_report must not be treated as a spike."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
@@ -1635,8 +1635,8 @@ class TestInspectLifecycle(unittest.TestCase):
             spikes = inspect_lifecycle.inspect_spikes(tmppath)
             self.assertEqual(spikes, [])
 
-    def test_change_suffixed_audit_and_review_reports_discovered(self):
-        """inspect_audit_reports must discover .scratch/review_report_<change>.json and audit_report_<change>.json."""
+    def test_change_suffixed_review_reports_discovered(self):
+        """inspect_review_reports must discover .scratch/review_report_<change>.json."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             scratch_dir = tmppath / ".scratch"
@@ -1655,7 +1655,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 "test_evidence": True,
             }))
 
-            rep = inspect_lifecycle.inspect_audit_reports(tmppath, change="billing")
+            rep = inspect_lifecycle.inspect_review_reports(tmppath, change="billing")
             self.assertIsNotNone(rep)
             self.assertEqual(rep["change"], "billing")
             self.assertTrue(rep["test_evidence_passed"])
@@ -1801,7 +1801,7 @@ class TestInspectLifecycle(unittest.TestCase):
             cfg = inspect_lifecycle.load_ship_config(Path(tmpdir))
 
             # Validate top-level keys
-            expected_gates = {"design", "spike", "implementation", "simplify", "audit", "delivery"}
+            expected_gates = {"design", "spike", "implementation", "simplify", "review", "delivery"}
             self.assertEqual(set(cfg["gates"].keys()), expected_gates)
 
             # Check implementation gate commands
@@ -1809,10 +1809,10 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertIn("typecheck", cfg["gates"]["implementation"])
             self.assertIn("lint", cfg["gates"]["implementation"])
 
-            # Check audit gate properties
-            self.assertIn("base_branch", cfg["gates"]["audit"])
-            self.assertIn("reviewers", cfg["gates"]["audit"])
-            self.assertIn("max_iterations", cfg["gates"]["audit"])
+            # Check review gate properties
+            self.assertIn("base_branch", cfg["gates"]["review"])
+            self.assertIn("reviewers", cfg["gates"]["review"])
+            self.assertIn("max_iterations", cfg["gates"]["review"])
 
             # Check delivery gate properties
             self.assertIn("clean_worktree", cfg["gates"]["delivery"])
@@ -1837,7 +1837,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 tmppath,
                 "change-beta",
                 lambda entry: entry.update({
-                    "phase": "audit",
+                    "phase": "review",
                     "blockers": [],
                 })
             )
@@ -1847,7 +1847,7 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertIn("change-beta", ledger["changes"])
             self.assertEqual(ledger["changes"]["change-alpha"]["phase"], "implementation")
             self.assertEqual(ledger["changes"]["change-alpha"]["blockers"], ["1 failing test in test_alpha.py"])
-            self.assertEqual(ledger["changes"]["change-beta"]["phase"], "audit")
+            self.assertEqual(ledger["changes"]["change-beta"]["phase"], "review")
             self.assertEqual(ledger["changes"]["change-beta"]["blockers"], [])
             self.assertEqual(ledger["active_change_id"], "change-beta")
 
@@ -1927,15 +1927,15 @@ class TestInspectLifecycle(unittest.TestCase):
                 ["git", "rev-parse", "HEAD"], cwd=tmppath, check=True, capture_output=True, text=True
             ).stdout.strip()
 
-            # Attach audit evidence
-            audit_data = {"verdict": "PASS", "reviewer": "judge", "findings_count": 0}
-            oid = inspect_lifecycle.attach_git_note_evidence(tmppath, head_sha, "audit", audit_data)
+            # Attach review evidence
+            review_data = {"verdict": "PASS", "reviewer": "judge", "findings_count": 0}
+            oid = inspect_lifecycle.attach_git_note_evidence(tmppath, head_sha, "review", review_data)
             self.assertIsNotNone(oid)
 
             # Retrieve evidence
             notes = inspect_lifecycle.read_git_note_evidence(tmppath, head_sha)
-            self.assertIn("audit", notes)
-            self.assertEqual(notes["audit"]["verdict"], "PASS")
+            self.assertIn("review", notes)
+            self.assertEqual(notes["review"]["verdict"], "PASS")
 
             # Attach additional test evidence to the same commit
             test_data = {"passed": True, "tests_run": 42}
@@ -1943,7 +1943,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # Both should coexist in the note
             updated_notes = inspect_lifecycle.read_git_note_evidence(tmppath, head_sha)
-            self.assertIn("audit", updated_notes)
+            self.assertIn("review", updated_notes)
             self.assertIn("tests", updated_notes)
             self.assertEqual(updated_notes["tests"]["tests_run"], 42)
 
@@ -1962,7 +1962,7 @@ class TestInspectLifecycle(unittest.TestCase):
                         "spike": {"status": "PASSED", "verdict": "latency < 20ms"},
                         "implementation": {"status": "PASSED"},
                         "simplify": {"debt_count": 0},
-                        "audit": {"verdict": "PASS", "reviewer": "judge"},
+                        "review": {"verdict": "PASS", "reviewer": "judge"},
                         "delivery": {"status": "READY"},
                     }
                 })
@@ -1976,7 +1976,7 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertIn("Ship-Spike: PASSED (latency < 20ms)", trailer_text)
             self.assertIn("Ship-Implementation: PASSED (3/3 tasks)", trailer_text)
             self.assertIn("Ship-Simplify: DEBT-0", trailer_text)
-            self.assertIn("Ship-Audit: PASS (by judge)", trailer_text)
+            self.assertIn("Ship-Review: PASS (by judge)", trailer_text)
             self.assertIn("Ship-Delivery: READY", trailer_text)
 
     def test_cli_ledger_and_trailers(self):
@@ -2024,8 +2024,8 @@ class TestInspectLifecycle(unittest.TestCase):
             inspect_lifecycle.clear_active_change(tmppath, "user-profile")
             self.assertIsNone(inspect_lifecycle.get_active_change(tmppath))
 
-    def test_audit_report_path_recorded_in_ledger(self):
-        """Verify audit report path is correctly recorded in state.json evidence."""
+    def test_review_report_path_recorded_in_ledger(self):
+        """Verify review report path is correctly recorded in state.json evidence."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             scratch = tmppath / ".scratch"
@@ -2040,13 +2040,13 @@ class TestInspectLifecycle(unittest.TestCase):
                 "test_evidence": True,
             }))
 
-            entry = inspect_lifecycle.record_audit_to_ledger(tmppath, report_file, change_id="payments")
-            self.assertEqual(entry["evidence"]["audit"]["report_path"], ".scratch/review_report.json")
-            self.assertEqual(entry["evidence"]["audit"]["verdict"], "PASS")
+            entry = inspect_lifecycle.record_review_to_ledger(tmppath, report_file, change_id="payments")
+            self.assertEqual(entry["evidence"]["review"]["report_path"], ".scratch/review_report.json")
+            self.assertEqual(entry["evidence"]["review"]["verdict"], "PASS")
 
             # Also verify self-healing sync populates report_path
             synced = inspect_lifecycle.sync_ledger_from_workspace(tmppath, target_change_id="payments")
-            self.assertEqual(synced["changes"]["payments"]["evidence"]["audit"]["report_path"], ".scratch/review_report.json")
+            self.assertEqual(synced["changes"]["payments"]["evidence"]["review"]["report_path"], ".scratch/review_report.json")
 
     def test_concurrent_ledger_mutations_preserve_all_changes(self):
         """Concurrent mutations to distinct change IDs must not clobber each other (flock protection)."""
@@ -2070,7 +2070,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 self.assertEqual(ledger["changes"][cid]["phase"], "implementation")
 
     def test_ledger_blockers_and_failed_tests_prevent_delivery_ready(self):
-        """Even with all tasks complete and audit report present, failing tests in ledger block DELIVERY_READY."""
+        """Even with all tasks complete and review report present, failing tests in ledger block DELIVERY_READY."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             pkg_dir = tmppath / "openspec" / "changes" / "orders"
@@ -2232,18 +2232,18 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(search_entry["phase"], "delivery")
             self.assertEqual(search_entry["evidence"]["delivery"]["status"], "ARCHIVED")
 
-    def test_rollback_clears_obsolete_audit_blockers(self):
-        """Rolling back to implementation clears obsolete Audit blockers."""
+    def test_rollback_clears_obsolete_review_blockers(self):
+        """Rolling back to implementation clears obsolete Review blockers."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             inspect_lifecycle.mutate_change_state(
                 tmppath,
                 "auth",
                 lambda entry: entry.update({
-                    "phase": "audit",
-                    "blockers": ["Audit: 2 unresolved CRITICAL/HIGH finding(s)", "Tests: 1 test(s) failing"],
+                    "phase": "review",
+                    "blockers": ["Review: 2 unresolved CRITICAL/HIGH finding(s)", "Tests: 1 test(s) failing"],
                     "evidence": {
-                        "audit": {"verdict": "FAIL"},
+                        "review": {"verdict": "FAIL"},
                         "implementation": {"status": "PASSED"},
                     }
                 })
@@ -2262,7 +2262,7 @@ class TestInspectLifecycle(unittest.TestCase):
             ledger = inspect_lifecycle.load_ledger(tmppath, auto_sync=False)
             auth_entry = ledger["changes"]["auth"]
             self.assertEqual(auth_entry["phase"], "implementation")
-            self.assertNotIn("Audit: 2 unresolved CRITICAL/HIGH finding(s)", auth_entry["blockers"])
+            self.assertNotIn("Review: 2 unresolved CRITICAL/HIGH finding(s)", auth_entry["blockers"])
             self.assertIn("Tests: 1 test(s) failing", auth_entry["blockers"])
 
 

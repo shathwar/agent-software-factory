@@ -30,8 +30,8 @@ A formal specification of the 4-gate engineering lifecycle state machine, its tr
 │                  │ All tasks [x] & Tests Pass
 │                  ▼
 │      ┌───────────────────────┐
-│      │     AUDIT_ACTIVE      │
-│      │        (audit)        │
+│      │     REVIEW_ACTIVE     │
+│      │       (review)        │
 │      └───────┬───────┬───────┘
 │              │       │
 │  (Code Bug)  │       │ (Architectural Flaw)
@@ -79,15 +79,15 @@ A formal specification of the 4-gate engineering lifecycle state machine, its tr
   3. **Refactor**: [Code Refactorer](../../tdd/agents/code_refactorer.md) removes duplication and adds [debt markers](../../simplify/references/debt_tracking.md). Verify tests stay green.
   4. Mark task completed (`- [x]`).
 
-### State 5: `TDD_ACTIVE` ➔ `AUDIT_ACTIVE`
+### State 5: `TDD_ACTIVE` ➔ `REVIEW_ACTIVE`
 - **Guard**: All checkboxes in `tasks.md` are marked `[x]`, and the entire test suite passes cleanly.
-- **Action**: Invoke [audit](../../audit/SKILL.md) in `review-loop` mode.
+- **Action**: Invoke [review](../../review/SKILL.md) in `review-loop` mode.
 
-### State 5b: `AUDIT_ACTIVE` ➔ `FRONTIER_ROUNDS` (Spec Amendment & Rollback Gate)
+### State 5b: `REVIEW_ACTIVE` ➔ `FRONTIER_ROUNDS` (Spec Amendment & Rollback Gate)
 - **Guard**: Stage 0 (Spec Alignment) or the Judge discovers that an ADR invariant is fundamentally broken, impossible to satisfy within existing constraints, or requires an architectural trade-off that cannot be resolved with local code fixes.
 - **Action**: Halt implementation. Roll back or feature-flag the affected code path. Formulate a new Frontier Round in [design](../../design/SKILL.md) to settle the revised architecture with the user. Update the ADR and OpenSpec package before resuming implementation.
 
-### State 6: `AUDIT_ACTIVE` ➔ `DELIVERY_READY`
+### State 6: `REVIEW_ACTIVE` ➔ `DELIVERY_READY`
 - **Guard**:
   - Stage 0 confirms 100% compliance with `openspec/` and ADR invariants.
   - Stages 1–9 identify zero Critical or High production defects.
@@ -114,7 +114,7 @@ The Ship Engine employs a tri-tier architecture combining working-tree agility w
    - Preserved across rollbacks and excluded from Git commits via `.git/info/exclude` / `.gitignore`.
 
 2. **Tier 2: Git Notes (`refs/notes/ship-evidence`)**:
-   - Retains deep validation evidence (full JSON audit reports, test runner logs, benchmark metrics) directly attached to commit objects without polluting commit messages.
+   - Retains deep validation evidence (full JSON review reports, test runner logs, benchmark metrics) directly attached to commit objects without polluting commit messages.
 
 3. **Tier 3: Gate Commit Trailers**:
    - RFC 5133-compliant compact commit trailers automatically generated on delivery (`inspect_lifecycle.py --generate-trailers`):
@@ -124,7 +124,7 @@ The Ship Engine employs a tri-tier architecture combining working-tree agility w
      Ship-Spike: PASSED
      Ship-Implementation: PASSED (5/5 tasks)
      Ship-Simplify: DEBT-0
-     Ship-Audit: PASS (by judge)
+     Ship-Review: PASS (by judge)
      Ship-Delivery: ARCHIVED
      ```
    - Dynamically mapped to gate names defined in `.ship.json`.
@@ -139,8 +139,8 @@ python3 skills/ship/scripts/inspect_lifecycle.py --set-active-change <change_id>
 # Re-synchronize state ledger from workspace artifacts
 python3 skills/ship/scripts/inspect_lifecycle.py --sync-state
 
-# Attach audit or test evidence to ledger and git notes
-python3 skills/ship/scripts/inspect_lifecycle.py --record-audit .scratch/audit_report.json
+# Attach review or test evidence to ledger and git notes
+python3 skills/ship/scripts/inspect_lifecycle.py --record-review .scratch/review_report.json
 python3 skills/ship/scripts/inspect_lifecycle.py --record-tests pass
 
 # Generate commit trailers for delivery commit
@@ -161,7 +161,7 @@ If an agent run is aborted, timed out, or restarted in a new session:
    - Run the test suite once before writing code to verify the baseline state.
 3. **Step 3: Inspect Git Diff**:
    - If all tasks in `tasks.md` are checked `[x]`, inspect changes across the working tree against the base branch (`inspect_changes.sh --base main`).
-   - If changes are un-audited, resume at `AUDIT_ACTIVE`.
+   - If changes are unreviewed, resume at `REVIEW_ACTIVE`.
 4. **Step 4: Inspect Review Report**:
    - If a report exists with Judge adjudication, `PASS` verdict, zero open Critical/High defects, and verified test evidence, resume at `DELIVERY_READY`.
 5. **Step 5: Apply, Archive, and Commit with Trailers**:

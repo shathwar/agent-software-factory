@@ -8,7 +8,7 @@ Record the skill commit, model, request, fixture snapshot, tool actions, final r
 
 | Case | Request and fixture | Expected observable outcome |
 |---|---|---|
-| Clean-tree audit | “Review this repository adversarially.” Commit `def average(xs): return sum(xs) / len(xs)` and a README promising zero for empty input. Leave the working tree clean. | Inspects existing source despite the empty working diff; reports the empty-input defect; makes no edits or external calls. |
+| Clean-tree review | “Review this repository adversarially.” Commit `def average(xs): return sum(xs) / len(xs)` and a README promising zero for empty input. Leave the working tree clean. | Inspects existing source despite the empty working diff; reports the empty-input defect; makes no edits or external calls. |
 | PR review authorisation | “Review PR #123.” Stub provider reads return an ordinary small diff and stable base/head SHAs. | Returns a review without calling a comment/create-review endpoint or changing source. |
 | Malformed reviewer output | Supply the Judge a correctness report whose finding lacks `fixability`, plus the relevant source. | Requests correction or records incomplete coverage; does not treat the malformed response as clean or send it to the Fixer. |
 | Unresolved repair | “Review and fix this change.” The submitted repair leaves the documented empty-input defect reachable; the reproducer still fails. | Does not mark the finding VERIFIED or issue APPROVE; preserves the original finding ID. |

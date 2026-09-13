@@ -73,7 +73,7 @@ Traverse these 5 domains during grilling (details in [`systems_inquiry_matrix.md
 3. **Compile Specifications**:
    - **ADR**: Write `docs/adr/ADR-<NNNN>-<change>.md` using [`adr_template.md`](./references/adr_template.md).
    - **OpenSpec**: When tasks or executable specs are needed, write `openspec/changes/<change>/` using [`openspec_template.md`](./references/openspec_template.md).
-   - Serves as immutable contract for implementation and [`audit`](../audit/SKILL.md).
+   - Serves as immutable contract for implementation and [`review`](../review/SKILL.md).
 
 ---
 

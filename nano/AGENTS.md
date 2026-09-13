@@ -39,7 +39,7 @@ Universal high-density engineering instructions for AI coding agents. Grounded i
 
 ---
 
-## 5. Systems Code Audit (`audit`)
+## 5. Systems Code Review (`review`)
 - **Evidence Requirement**: Plausible bugs remain hypotheses until exact file, line, and trigger path are proven.
 - **The Judge**: Every reported finding must be adjudicated against source code. Reject hallucinations.
 - **10-Stage Hierarchy**:
@@ -57,7 +57,7 @@ Universal high-density engineering instructions for AI coding agents. Grounded i
 ---
 
 ## 6. Delivery Lifecycle (`ship`)
-- **Deterministic Gates**: Design (Spec & ADR) ➔ Implementation (TDD + Simplify) ➔ Audit (Adversarial Code Audit) ➔ Delivery.
-- **Git Checkpoints & Rollback**: Tag refs at `design` and `implementation`. Safe rollback to `design` if invariants break during audit.
+- **Deterministic Gates**: Design (Spec & ADR) ➔ Implementation (TDD + Simplify) ➔ Review (Adversarial Code Review) ➔ Delivery.
+- **Git Checkpoints & Rollback**: Tag refs at `design` and `implementation`. Safe rollback to `design` if invariants break during review.
 - **Tri-Tier State**: Authoritative ledger `.ship/state.json`, deep commit evidence in Git notes (`refs/notes/ship-evidence`), RFC 5133 commit trailers (`Ship-Change`, `Ship-<Gate>`).
 - **Context Boundary Isolation**: Orchestrate each gate in an isolated subagent turn to prevent context degradation.

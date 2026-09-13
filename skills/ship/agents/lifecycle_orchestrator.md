@@ -6,7 +6,7 @@
 
 ## 1. Strict Scope & Context Isolation Law
 
-- **Pure Dispatcher Role**: The orchestrator coordinates transitions and verifies receipts. It NEVER writes implementation code, tests, or code review audits directly in the main orchestrator conversation context.
+- **Pure Dispatcher Role**: The orchestrator coordinates transitions and verifies receipts. It NEVER writes implementation code, tests, or adversarial reviews directly in the main orchestrator conversation context.
 - **Context Boundary Law**: To prevent prompt dilution and instruction drift, each gate MUST be dispatched to an isolated subagent. Only structured boundary artifacts (ADR paths, task lists, test runner receipts, Judge reports) are passed between gates.
 - **Persistent State Machine**: The filesystem (`openspec/`, `tasks.md`, `docs/adr/`, `.scratch/`) acts as the state machine. Orient with `python3 skills/ship/scripts/inspect_lifecycle.py` at session start.
 
@@ -26,9 +26,9 @@
    - Enforce config from `.ship.json` (if present) for explicit `gates.implementation.test`.
    - On completion of all tasks and green test run, record checkpoint: `python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint implementation`.
 
-3. **Audit (Adversarial Audit & Auto-Fix)**:
-   - Dispatch isolated `audit` subagent in `review-loop` mode.
-   - Stage 0 verifies code against OpenSpec/ADR; Stages 1–9 audit concurrency, correctness, and failure modes.
+3. **Review (Adversarial Review & Auto-Fix)**:
+   - Dispatch isolated `review` subagent in `review-loop` mode.
+   - Stage 0 verifies code against OpenSpec/ADR; Stages 1–9 review concurrency, correctness, and failure modes.
    - If ADR invariants fundamentally broken, execute rollback:
      `python3 skills/ship/scripts/inspect_lifecycle.py --rollback design`
      and re-open Frontier Rounds in design.
@@ -47,5 +47,5 @@
 Deliver to user:
 - **Feature Summary**: Built and verified changes.
 - **Specification Artifacts**: ADR and OpenSpec links.
-- **Audit Bill of Health**: Official Judge PASS verdict.
+- **Review Bill of Health**: Official Judge PASS verdict.
 - **Git Handoff**: Formatted commit trailers (`Ship-Change`, `Ship-<Gate>`) and push offer.

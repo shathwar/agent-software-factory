@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Complete autonomous engineering lifecycle orchestrator. Chains design, spike, tdd, simplify, and audit into a single, unified workflow with explicit phase transition gates. Takes an idea or feature request from initial architectural design to tested, simplified, and production-audited code ready to ship. Use for "/ship", "ship", "/lifecycle", "lifecycle", "full engineering lifecycle", or "build and review this feature".
+description: Complete autonomous engineering lifecycle orchestrator. Chains design, spike, tdd, simplify, and review into a single, unified workflow with explicit phase transition gates. Takes an idea or feature request from initial architectural design to tested, simplified, and production-reviewed code ready to ship. Use for "/ship", "ship", "/lifecycle", "lifecycle", "full engineering lifecycle", or "build and review this feature".
 ---
 
 # The Ship Engine: Autonomous Engineering Lifecycle Orchestrator
@@ -12,12 +12,12 @@ description: Complete autonomous engineering lifecycle orchestrator. Chains desi
 
 <hard_constraints>
 - Re-Entrant State: Inspect filesystem state (`inspect_lifecycle.py`) first. Resume cleanly; never re-run finished gates.
-- Context Boundary Isolation: To prevent token accumulation and instruction drift, orchestrate each gate via an isolated subagent. Never mix design architecture Q&A, implementation loops, and audit reviews in a single prompt context.
+- Context Boundary Isolation: To prevent token accumulation and instruction drift, orchestrate each gate via an isolated subagent. Never mix design architecture Q&A, implementation loops, and code reviews in a single prompt context.
 - Design Checkpoint: Record `inspect_lifecycle.py --checkpoint design`. NEVER proceed to implementation without explicit user confirmation of the ADR/OpenSpec package.
 - Test-First Law: In implementation, every task MUST follow strict Red-Green-Refactor with failing behavioral tests before code. Enforce `.ship.json` test commands when present.
-- Terminal Receipts: Gate transitions (implementation ➔ audit and audit ➔ delivery) REQUIRE pasting the raw terminal test runner output (exit code, test count, duration). Unsubstantiated claims of "tests pass" are rejected.
-- Rollback Guard: If Stage 0 or Judge in audit detects a broken architectural invariant, execute `inspect_lifecycle.py --rollback design` and return to design.
-- Audit Clearance: Delivery REQUIRES an explicit PASS report from the audit Judge, zero open CRITICAL/HIGH defects, and verified test evidence bound to current code.
+- Terminal Receipts: Gate transitions (implementation ➔ review and review ➔ delivery) REQUIRE pasting the raw terminal test runner output (exit code, test count, duration). Unsubstantiated claims of "tests pass" are rejected.
+- Rollback Guard: If Stage 0 or Judge in review detects a broken architectural invariant, execute `inspect_lifecycle.py --rollback design` and return to design.
+- Review Clearance: Delivery REQUIRES an explicit PASS report from the review Judge, zero open CRITICAL/HIGH defects, and verified test evidence bound to current code.
 </hard_constraints>
 
 ---
@@ -41,7 +41,7 @@ Implementation: Test-First Development (tdd + simplify)
   • Check off tasks (- [x]) under green test protection
       │
       ▼ (All tasks complete & tests pass)
-Audit: Systems Audit & Auto-Fix (audit)
+Review: Adversarial Review & Auto-Fix (review)
   • Stage 0: Spec alignment against ADR & OpenSpec
   • Stages 1–9: Concurrency, correctness, chaos, craftsmanship
   • Review-Loop: Fix defects & prove zero regressions
@@ -64,7 +64,7 @@ The filesystem is the persistent state machine. Orient with `python3 skills/ship
 | **Design** | No `openspec/changes/<change>/` or `docs/adr/`. | Launch [`design`](../design/SKILL.md). Discover facts, present Frontier Rounds. |
 | **Spike** | Design frontier hits ungrillable question. | Launch [`spike`](../spike/SKILL.md) in `.scratch/`. Report verdict. |
 | **Implementation** | `tasks.md` exists with unchecked `[ ]` tasks. | Launch [`tdd`](../tdd/SKILL.md). Resume at first unchecked task. |
-| **Audit** | All tasks `[x]`, no clean review report. | Launch [`audit`](../audit/SKILL.md) in `review-loop` mode. |
+| **Review** | All tasks `[x]`, no clean review report. | Launch [`review`](../review/SKILL.md) in `review-loop` mode. |
 | **Delivery** | All tasks `[x]`, all tests pass, Judge `PASS`. | Compile Delivery Walkthrough and prepare git commit. |
 
 ---
@@ -87,22 +87,22 @@ Iterate sequentially through `openspec/changes/<change>/tasks.md`:
 4. Mark task completed `- [x]` and repeat.
 5. Checkpoint implementation: `python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint implementation`.
 
-### Audit: Code Verification
+### Review: Code Verification
 1. Inspect implementation changes across the working tree (staged, unstaged, and untracked) against the base branch:
-   - Resolve `inspect_changes.sh` from the installed skill directory (`${SKILLS_DIR:-$HOME/.gemini/config/skills}/audit/scripts/inspect_changes.sh`) or local workspace path.
+   - Resolve `inspect_changes.sh` from the installed skill directory (`${SKILLS_DIR:-$HOME/.gemini/config/skills}/review/scripts/inspect_changes.sh`) or local workspace path.
    - Execute `bash <resolved_path>/inspect_changes.sh --base <base-branch>` (default: `main`). Never restrict to `main...HEAD` as that omits uncommitted working-tree implementation edits.
-2. Launch [`audit`](../audit/SKILL.md) in `review-loop` mode.
-3. Stage 0 verifies code against OpenSpec/ADR; Stages 1–9 audit concurrency, chaos, correctness.
+2. Launch [`review`](../review/SKILL.md) in `review-loop` mode.
+3. Stage 0 verifies code against OpenSpec/ADR; Stages 1–9 review concurrency, chaos, correctness.
 4. Auto-fix defects under green test protection until Judge issues an explicit `PASS` report. Package `.scratch/delivery_evidence.json` (Delivery Evidence Envelope) bundling the Judge report, verified test runner evidence, and reviewed commit/tree snapshot.
 5. **Rollback Guard**: If ADR invariant is fundamentally broken, execute `python3 skills/ship/scripts/inspect_lifecycle.py --rollback design` and re-open Frontier Round in design.
 
 ### Delivery: Sign-Off & Handoff
 1. Verify gate status: `python3 skills/ship/scripts/inspect_lifecycle.py --status-check`.
 2. Run full test suite.
-3. Deliver Walkthrough: changes summary, ADR links, audit scorecard, `scan_debt.py` ledger.
+3. Deliver Walkthrough: changes summary, ADR links, review scorecard, `scan_debt.py` ledger.
 4. Apply & Archive OpenSpec: Sync delta specs to `openspec/specs/` and move completed package to `openspec/archive/<YYYY-MM-DD>-<change>/` via `python3 ${SKILLS_DIR:-$HOME/.gemini/config/skills}/ship/scripts/inspect_lifecycle.py --archive [change]`.
 5. Attach Git Notes & Commit Trailers:
-   - Deep validation evidence (audit reports, test logs) is attached to the commit object via Git notes (`refs/notes/ship-evidence`).
+   - Deep validation evidence (review reports, test logs) is attached to the commit object via Git notes (`refs/notes/ship-evidence`).
    - Format standard RFC 5133 commit trailers using `python3 inspect_lifecycle.py --generate-trailers` (`Ship-Change: <change>`, `Ship-<GateName>: <status>`).
 
 ---
@@ -122,4 +122,4 @@ Iterate sequentially through `openspec/changes/<change>/tasks.md`:
 - [Spike Engine (`spike`)](../spike/SKILL.md): Throwaway spike methodology.
 - [TDD Engine (`tdd`)](../tdd/SKILL.md): Red-Green-Refactor implementation.
 - [Simplify Engine (`simplify`)](../simplify/SKILL.md): Laziness Ladder and debt markers.
-- [Audit Engine (`audit`)](../audit/SKILL.md): 10-stage systems code audit.
+- [Review Engine (`review`)](../review/SKILL.md): 10-stage systems code review.
