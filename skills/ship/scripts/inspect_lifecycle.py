@@ -2369,10 +2369,6 @@ def perform_rollback(
     backup_dir = repo_root / ".scratch" / f"rollback_{timestamp_str}"
 
     chk_file = repo_root / ".scratch" / "checkpoints" / f"{resolved_change}_{canonical_tag}.json"
-    if not chk_file.exists():
-        legacy = "gate-1-spec" if canonical_tag == "design" else ("gate-2-impl" if canonical_tag == "implementation" else "")
-        if legacy and (repo_root / ".scratch" / "checkpoints" / f"{resolved_change}_{legacy}.json").exists():
-            chk_file = repo_root / ".scratch" / "checkpoints" / f"{resolved_change}_{legacy}.json"
 
     target_tag = f"ship/{resolved_change}/{canonical_tag}"
     target_ref = f"refs/ship/{resolved_change}/{canonical_tag}"
@@ -2581,10 +2577,8 @@ def format_summary(data: Dict[str, Any]) -> str:
         lines.append(f"• Change ID      : {ac.get('change_id')} (rev: r{ac.get('revision_counter', 0)}, phase: {ac.get('phase')})")
         if ac.get("blockers"):
             lines.append(f"  └─ Blockers    : {', '.join(ac['blockers'])}")
-    elif data.get("target_change"):
-        lines.append(f"• Active Change  : {data['target_change']}")
-    elif data.get("target_topic"):
-        lines.append(f"• Active Change  : {data['target_topic']}")
+    elif data.get("target_change") or data.get("target_topic"):
+        lines.append(f"• Active Change  : {data.get('target_change') or data.get('target_topic')}")
 
     git = data["git"]
     if git["is_git"]:
