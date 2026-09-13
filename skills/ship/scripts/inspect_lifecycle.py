@@ -14,7 +14,12 @@ from __future__ import annotations
 
 import argparse
 from collections import OrderedDict
+from contextlib import contextmanager
 import datetime
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
 import hashlib
 import json
 import math
@@ -417,6 +422,42 @@ def get_active_change(repo_root: Path) -> Optional[str]:
 get_active_topic = get_active_change
 
 
+@contextmanager
+def ledger_lock(repo_root: Path, timeout_sec: float = 10.0):
+    """File lock around .ship/state.json mutations to prevent concurrent write clobbering."""
+    ship_dir = repo_root / ".ship"
+    ship_dir.mkdir(parents=True, exist_ok=True)
+    lock_file = ship_dir / "state.lock"
+
+    fd = os.open(str(lock_file), os.O_RDWR | os.O_CREAT, 0o666)
+    locked = False
+    try:
+        if fcntl:
+            start_time = time.time()
+            while True:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    locked = True
+                    break
+                except (BlockingIOError, IOError, OSError):
+                    if time.time() - start_time >= timeout_sec:
+                        fcntl.flock(fd, fcntl.LOCK_EX)
+                        locked = True
+                        break
+                    time.sleep(0.01)
+        yield
+    finally:
+        if locked and fcntl:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            except Exception:
+                pass
+        try:
+            os.close(fd)
+        except Exception:
+            pass
+
+
 def set_active_change(repo_root: Path, change: str) -> None:
     """Persist active change to openspec/.active and .ship/state.json."""
     active_file = repo_root / "openspec" / ".active"
@@ -424,12 +465,14 @@ def set_active_change(repo_root: Path, change: str) -> None:
     active_file.write_text(change.strip() + "\n", encoding="utf-8")
     state_file = repo_root / ".ship" / "state.json"
     if state_file.exists():
-        try:
-            data = json.loads(state_file.read_text(encoding="utf-8"))
-            data["active_change_id"] = change.strip()
-            state_file.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-        except Exception:
-            pass
+        with ledger_lock(repo_root):
+            try:
+                data = json.loads(state_file.read_text(encoding="utf-8"))
+                data["active_change_id"] = change.strip()
+                state_file.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            except Exception:
+                pass
+
 
 set_active_topic = set_active_change
 
@@ -449,13 +492,15 @@ def clear_active_change(repo_root: Path, change: Optional[str] = None) -> None:
             pass
     state_file = repo_root / ".ship" / "state.json"
     if state_file.exists():
-        try:
-            data = json.loads(state_file.read_text(encoding="utf-8"))
-            if change is None or data.get("active_change_id") == (change.strip() if change else None):
-                data["active_change_id"] = None
-                state_file.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-        except Exception:
-            pass
+        with ledger_lock(repo_root):
+            try:
+                data = json.loads(state_file.read_text(encoding="utf-8"))
+                if change is None or data.get("active_change_id") == (change.strip() if change else None):
+                    data["active_change_id"] = None
+                    state_file.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            except Exception:
+                pass
+
 
 clear_active_topic = clear_active_change
 
@@ -1345,13 +1390,20 @@ def sync_ledger_from_workspace(repo_root: Path, target_change_id: Optional[str] 
                 except Exception:
                     pass
 
-        blockers: List[str] = []
+        existing_test_blockers = [b for b in entry.get("blockers", []) if b.startswith("Tests:")]
+        if entry.get("evidence", {}).get("implementation", {}).get("tests_passed") is False:
+            failed_cnt = entry["evidence"]["implementation"].get("failed_count", 1)
+            t_blocker = f"Tests: {failed_cnt} test(s) failing"
+            if t_blocker not in existing_test_blockers:
+                existing_test_blockers.append(t_blocker)
+
+        blockers: List[str] = list(existing_test_blockers)
         if spikes:
             entry["phase"] = "gate-1b-spike"
             blockers.append(f"Spike active in {spikes[0]}")
         elif not matched_pkg or matched_pkg["total_tasks"] == 0:
             entry["phase"] = "gate-1-design"
-        elif matched_pkg["pending_tasks"] > 0:
+        elif matched_pkg["pending_tasks"] > 0 or any(b.startswith("Tests:") for b in blockers):
             entry["phase"] = "gate-2-impl"
         else:
             audit_ev = entry["evidence"]["audit"]
@@ -1362,7 +1414,7 @@ def sync_ledger_from_workspace(repo_root: Path, target_change_id: Optional[str] 
             if verd in {"FAIL", "FAILED", "REJECTED"}:
                 blockers.append(f"Audit verdict is {verd}")
 
-            if audit_ev.get("verdict") in {"PASS", "APPROVED"} and crit == 0:
+            if audit_ev.get("verdict") in {"PASS", "APPROVED"} and crit == 0 and not blockers:
                 entry["phase"] = "gate-4-delivery"
             else:
                 entry["phase"] = "gate-3-audit"
@@ -1406,17 +1458,21 @@ def mutate_change_state(
     change_id: str,
     updater: Any,
 ) -> Dict[str, Any]:
-    """Safely mutate a specific change in .ship/state.json and increment revision counter."""
-    ledger = load_ledger(repo_root, auto_sync=True)
-    changes = ledger.setdefault("changes", {})
-    if change_id not in changes:
-        changes[change_id] = create_empty_change_entry(change_id)
-    entry = changes[change_id]
-    updater(entry)
-    entry["revision_counter"] = entry.get("revision_counter", 0) + 1
-    ledger["active_change_id"] = change_id
-    save_ledger(repo_root, ledger)
-    return entry
+    """Safely mutate a specific change in .ship/state.json with file locking and increment revision counter."""
+    with ledger_lock(repo_root):
+        ledger = load_ledger(repo_root, auto_sync=False)
+        ledger_path = get_ledger_path(repo_root)
+        if not ledger.get("changes") and not ledger_path.exists():
+            ledger = sync_ledger_from_workspace(repo_root)
+        changes = ledger.setdefault("changes", {})
+        if change_id not in changes:
+            changes[change_id] = create_empty_change_entry(change_id)
+        entry = changes[change_id]
+        updater(entry)
+        entry["revision_counter"] = entry.get("revision_counter", 0) + 1
+        ledger["active_change_id"] = change_id
+        save_ledger(repo_root, ledger)
+        return entry
 
 
 # ---------------------------------------------------------------------------
@@ -1432,8 +1488,9 @@ def attach_git_note_evidence(
     evidence_type: str,
     data: Dict[str, Any],
     ref: str = GIT_NOTES_REF,
+    change_id: Optional[str] = None,
 ) -> Optional[str]:
-    """Attach structured JSON validation evidence to a commit object via git notes."""
+    """Attach structured JSON validation evidence to a commit object via git notes, namespaced by change ID."""
     git_info = get_git_info(repo_root)
     if not git_info.get("is_git") or not commit_sha:
         return None
@@ -1463,8 +1520,32 @@ def attach_git_note_evidence(
         except Exception:
             existing_evidence = {"raw_previous_note": read_res.stdout.strip()}
 
+    cid = change_id or data.get("change") or data.get("topic") or get_active_change(repo_root) or "default"
+    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    fingerprint = compute_working_tree_fingerprint(repo_root)
+
+    changes = existing_evidence.setdefault("changes", {})
+    change_entry = changes.setdefault(cid, {})
+
+    runs_key = f"{evidence_type}_runs"
+    runs = change_entry.setdefault(runs_key, [])
+    run_record = {
+        "timestamp": now_iso,
+        "commit": resolved_sha,
+        "fingerprint": fingerprint,
+        "change_id": cid,
+        "evidence_type": evidence_type,
+        "data": data,
+    }
+    runs.append(run_record)
+
+    change_entry[evidence_type] = data
+    change_entry["last_updated"] = now_iso
+
+    # Maintain top-level evidence_type for backwards compatibility
     existing_evidence[evidence_type] = data
-    existing_evidence["last_updated"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    existing_evidence["last_change_id"] = cid
+    existing_evidence["last_updated"] = now_iso
 
     note_payload = json.dumps(existing_evidence, indent=2)
     add_res = subprocess.run(
@@ -1482,6 +1563,7 @@ def read_git_note_evidence(
     repo_root: Path,
     commit_sha: str,
     ref: str = GIT_NOTES_REF,
+    change_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Read and parse structured JSON evidence from git notes on a commit."""
     git_info = get_git_info(repo_root)
@@ -1498,54 +1580,184 @@ def read_git_note_evidence(
         try:
             data = json.loads(res.stdout)
             if isinstance(data, dict):
+                if change_id:
+                    change_data = data.get("changes", {}).get(change_id)
+                    if change_data is not None:
+                        return change_data
                 return data
         except Exception:
             return {"raw": res.stdout.strip()}
     return {}
 
 
-def configure_git_notes_sync(
+def merge_note_payloads(local_payload: Dict[str, Any], remote_payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Non-destructively merge two structured JSON note payloads."""
+    merged = dict(local_payload)
+    for k, v in remote_payload.items():
+        if k not in merged:
+            merged[k] = v
+
+    local_changes = merged.setdefault("changes", {})
+    remote_changes = remote_payload.get("changes", {})
+    if isinstance(remote_changes, dict):
+        for cid, r_entry in remote_changes.items():
+            if cid not in local_changes:
+                local_changes[cid] = r_entry
+            else:
+                l_entry = local_changes[cid]
+                if isinstance(l_entry, dict) and isinstance(r_entry, dict):
+                    for ek, ev in r_entry.items():
+                        if ek.endswith("_runs") and isinstance(ev, list):
+                            l_runs = l_entry.setdefault(ek, [])
+                            seen = {(r.get("timestamp"), r.get("commit")) for r in l_runs if isinstance(r, dict)}
+                            for r in ev:
+                                if isinstance(r, dict) and (r.get("timestamp"), r.get("commit")) not in seen:
+                                    l_runs.append(r)
+                        elif ek not in l_entry:
+                            l_entry[ek] = ev
+                        elif ek == "last_updated":
+                            l_entry["last_updated"] = max(str(l_entry.get("last_updated", "")), str(ev))
+                        else:
+                            if str(r_entry.get("last_updated", "")) > str(l_entry.get("last_updated", "")):
+                                l_entry[ek] = ev
+
+    l_lu = str(local_payload.get("last_updated", ""))
+    r_lu = str(remote_payload.get("last_updated", ""))
+    merged["last_updated"] = max(l_lu, r_lu) if (l_lu or r_lu) else None
+    return merged
+
+
+def reconcile_git_notes(
     repo_root: Path,
     remote: str = "origin",
-) -> Dict[str, Any]:
-    """Configure git fetch and push refspecs for notes so standard sync carries refs/notes/*."""
-    git_info = get_git_info(repo_root)
-    if not git_info.get("is_git"):
-        return {"configured": False, "error": "Not a git repository"}
+    ref_name: str = "ship-evidence",
+) -> int:
+    """Reconcile remote tracking notes with local notes, performing a non-destructive merge."""
+    short_name = ref_name.replace("refs/notes/", "")
+    remote_ref = f"refs/notes/{remote}/{short_name}"
+    local_ref = f"refs/notes/{short_name}"
 
-    fetch_refspec = "+refs/notes/*:refs/notes/*"
-    push_refspec = "refs/notes/*:refs/notes/*"
-
-    fetch_cfg = subprocess.run(
-        ["git", "config", "--get-all", f"remote.{remote}.fetch"],
+    list_res = subprocess.run(
+        ["git", "notes", f"--ref={remote_ref}", "list"],
         cwd=repo_root,
         capture_output=True,
         text=True,
     )
-    fetch_lines = [l.strip() for l in fetch_cfg.stdout.splitlines()]
-    if fetch_refspec not in fetch_lines:
-        try:
-            subprocess.run(
-                ["git", "config", "--add", f"remote.{remote}.fetch", fetch_refspec],
-                cwd=repo_root,
-                check=True,
-            )
-        except Exception:
-            pass
+    if list_res.returncode != 0 or not list_res.stdout.strip():
+        return 0
 
+    reconciled_count = 0
+    for line in list_res.stdout.splitlines():
+        parts = line.strip().split()
+        if len(parts) != 2:
+            continue
+        _blob_oid, commit_sha = parts
+
+        r_show = subprocess.run(
+            ["git", "notes", f"--ref={remote_ref}", "show", commit_sha],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+        )
+        if r_show.returncode != 0 or not r_show.stdout.strip():
+            continue
+
+        remote_json = {}
+        try:
+            remote_json = json.loads(r_show.stdout)
+        except Exception:
+            remote_json = {"raw": r_show.stdout.strip()}
+
+        l_show = subprocess.run(
+            ["git", "notes", f"--ref={local_ref}", "show", commit_sha],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+        )
+
+        if l_show.returncode != 0 or not l_show.stdout.strip():
+            note_content = r_show.stdout.strip()
+            subprocess.run(
+                ["git", "notes", f"--ref={local_ref}", "add", "-f", "-m", note_content, commit_sha],
+                cwd=repo_root,
+                capture_output=True,
+            )
+            reconciled_count += 1
+        else:
+            local_json = {}
+            try:
+                local_json = json.loads(l_show.stdout)
+            except Exception:
+                local_json = {"raw": l_show.stdout.strip()}
+
+            if isinstance(local_json, dict) and isinstance(remote_json, dict):
+                merged = merge_note_payloads(local_json, remote_json)
+                merged_str = json.dumps(merged, indent=2)
+                subprocess.run(
+                    ["git", "notes", f"--ref={local_ref}", "add", "-f", "-m", merged_str, commit_sha],
+                    cwd=repo_root,
+                    capture_output=True,
+                )
+                reconciled_count += 1
+
+    return reconciled_count
+
+
+def configure_git_notes_sync(
+    repo_root: Path,
+    remote: str = "origin",
+) -> Dict[str, Any]:
+    """Configure git fetch refspecs into a separate tracking namespace and ensure branch push remains untouched."""
+    git_info = get_git_info(repo_root)
+    if not git_info.get("is_git"):
+        return {"configured": False, "error": "Not a git repository"}
+
+    # 1. REMOVE any push refspecs that override default branch push behavior
     push_cfg = subprocess.run(
         ["git", "config", "--get-all", f"remote.{remote}.push"],
         cwd=repo_root,
         capture_output=True,
         text=True,
     )
-    push_lines = [l.strip() for l in push_cfg.stdout.splitlines()]
-    if push_refspec not in push_lines:
+    for line in push_cfg.stdout.splitlines():
+        if "refs/notes" in line:
+            try:
+                subprocess.run(
+                    ["git", "config", "--unset-all", f"remote.{remote}.push", line.strip()],
+                    cwd=repo_root,
+                    capture_output=True,
+                )
+            except Exception:
+                pass
+
+    # 2. REMOVE destructive forced fetch refspecs like +refs/notes/*:refs/notes/*
+    fetch_cfg = subprocess.run(
+        ["git", "config", "--get-all", f"remote.{remote}.fetch"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    for line in fetch_cfg.stdout.splitlines():
+        if line.strip() in {"+refs/notes/*:refs/notes/*", "refs/notes/*:refs/notes/*"}:
+            try:
+                subprocess.run(
+                    ["git", "config", "--unset-all", f"remote.{remote}.fetch", line.strip()],
+                    cwd=repo_root,
+                    capture_output=True,
+                )
+            except Exception:
+                pass
+
+    # 3. Add non-destructive remote tracking fetch refspec: refs/notes/*:refs/notes/{remote}/*
+    tracking_refspec = f"refs/notes/*:refs/notes/{remote}/*"
+    fetch_lines = [l.strip() for l in fetch_cfg.stdout.splitlines() if l.strip() not in {"+refs/notes/*:refs/notes/*", "refs/notes/*:refs/notes/*"}]
+    if tracking_refspec not in fetch_lines:
         try:
             subprocess.run(
-                ["git", "config", "--add", f"remote.{remote}.push", push_refspec],
+                ["git", "config", "--add", f"remote.{remote}.fetch", tracking_refspec],
                 cwd=repo_root,
                 check=True,
+                capture_output=True,
             )
         except Exception:
             pass
@@ -1553,33 +1765,46 @@ def configure_git_notes_sync(
     return {
         "configured": True,
         "remote": remote,
-        "fetch_refspec": fetch_refspec,
-        "push_refspec": push_refspec,
+        "fetch_refspec": tracking_refspec,
+        "push_refspec": None,
     }
 
 
 def sync_git_notes(
     repo_root: Path,
     remote: str = "origin",
+    ref_name: str = "ship-evidence",
 ) -> Dict[str, Any]:
-    """Explicitly fetch and push notes between local and remote repository."""
+    """Explicitly fetch into tracking namespace, reconcile divergence, and push notes without affecting branch push."""
     configure_git_notes_sync(repo_root, remote=remote)
-    results = {"remote": remote, "fetch": "skipped", "push": "skipped"}
+    short_name = ref_name.replace("refs/notes/", "")
+    results: Dict[str, Any] = {"remote": remote, "fetch": "skipped", "reconciled": 0, "push": "skipped"}
+
     fetch_res = subprocess.run(
-        ["git", "fetch", remote, "refs/notes/*:refs/notes/*"],
+        ["git", "fetch", remote, f"refs/notes/{short_name}:refs/notes/{remote}/{short_name}"],
         cwd=repo_root,
         capture_output=True,
         text=True,
     )
-    results["fetch"] = "success" if fetch_res.returncode == 0 else f"failed: {fetch_res.stderr.strip()}"
+    if fetch_res.returncode == 0:
+        results["fetch"] = "success"
+    else:
+        results["fetch"] = f"skipped/empty: {fetch_res.stderr.strip()}"
+
+    reconciled_cnt = reconcile_git_notes(repo_root, remote=remote, ref_name=short_name)
+    results["reconciled"] = reconciled_cnt
 
     push_res = subprocess.run(
-        ["git", "push", remote, "refs/notes/*"],
+        ["git", "push", remote, f"refs/notes/{short_name}:refs/notes/{short_name}"],
         cwd=repo_root,
         capture_output=True,
         text=True,
     )
-    results["push"] = "success" if push_res.returncode == 0 else f"failed: {push_res.stderr.strip()}"
+    if push_res.returncode == 0:
+        results["push"] = "success"
+    else:
+        results["push"] = f"failed: {push_res.stderr.strip()}"
+
     return results
 
 
@@ -1627,11 +1852,22 @@ def generate_gate_trailers(
     # 3. Gate: Implementation
     impl_ev = evidence.get("implementation", {})
     tasks = change_entry.get("task_status", {})
+    blockers = change_entry.get("blockers", [])
+    has_test_failures = (
+        impl_ev.get("tests_passed") is False
+        or impl_ev.get("status") == "FAILED"
+        or any(b.startswith("Tests:") for b in blockers)
+    )
+
     if tasks.get("total", 0) > 0:
-        if tasks.get("pending", 0) == 0:
+        if has_test_failures:
+            trailers.append(f"Ship-Implementation: FAILED ({tasks['completed']}/{tasks['total']} tasks)")
+        elif tasks.get("pending", 0) == 0:
             trailers.append(f"Ship-Implementation: PASSED ({tasks['completed']}/{tasks['total']} tasks)")
         else:
             trailers.append(f"Ship-Implementation: IN_PROGRESS ({tasks['completed']}/{tasks['total']} tasks)")
+    elif has_test_failures:
+        trailers.append("Ship-Implementation: FAILED")
     elif impl_ev.get("status") and impl_ev.get("status") != "PENDING":
         trailers.append(f"Ship-Implementation: {impl_ev['status']}")
 
@@ -1652,8 +1888,13 @@ def generate_gate_trailers(
     # 6. Gate: Delivery
     deliv_ev = evidence.get("delivery", {})
     deliv_status = deliv_ev.get("status", "PENDING")
-    if change_entry.get("phase") == "gate-4-delivery" or deliv_status in {"READY", "ARCHIVED"}:
-        trailers.append(f"Ship-Delivery: {deliv_status}")
+    if has_test_failures or blockers:
+        if deliv_status == "ARCHIVED":
+            trailers.append("Ship-Delivery: ARCHIVED")
+        elif change_entry.get("phase") == "gate-4-delivery" or deliv_status == "READY":
+            trailers.append("Ship-Delivery: BLOCKED")
+    elif change_entry.get("phase") == "gate-4-delivery" or deliv_status in {"READY", "ARCHIVED"}:
+        trailers.append(f"Ship-Delivery: {deliv_status if deliv_status != 'PENDING' else 'READY'}")
 
     return trailers
 
@@ -1688,7 +1929,7 @@ def record_audit_to_ledger(
         git_info = get_git_info(repo_root)
         commit = git_info.get("commit")
         if commit:
-            note_oid = attach_git_note_evidence(repo_root, commit, "audit_report", report)
+            note_oid = attach_git_note_evidence(repo_root, commit, "audit_report", report, change_id=cid)
             ev["git_note_oid"] = note_oid
 
         blockers = [b for b in entry.get("blockers", []) if not b.startswith("Audit:")]
@@ -1723,7 +1964,7 @@ def record_test_run_to_ledger(
         git_info = get_git_info(repo_root)
         commit = git_info.get("commit")
         if commit:
-            attach_git_note_evidence(repo_root, commit, "test_evidence", test_summary)
+            attach_git_note_evidence(repo_root, commit, "test_evidence", test_summary, change_id=cid)
             impl["evidence_ref"] = GIT_NOTES_REF
 
         blockers = [b for b in entry.get("blockers", []) if not b.startswith("Tests:")]
@@ -1740,6 +1981,7 @@ def determine_lifecycle_state(
     openspec_packages: List[Dict[str, Any]],
     spikes: List[str],
     audit_report: Optional[Dict[str, Any]],
+    active_change: Optional[Dict[str, Any]] = None,
 ) -> Tuple[str, str, str]:
     """Determine the active gate, status label, and recommended next action."""
     # Check for active spikes
@@ -1780,6 +2022,19 @@ def determine_lifecycle_state(
 
         # All tasks completed!
         if active_pkg["pending_tasks"] == 0 and active_pkg["total_tasks"] > 0:
+            # Check authoritative ledger evidence & blockers before advancing beyond Gate 2
+            if active_change:
+                impl_ev = active_change.get("evidence", {}).get("implementation", {})
+                blockers = active_change.get("blockers", [])
+                test_blockers = [b for b in blockers if b.startswith("Tests:")]
+                if impl_ev.get("tests_passed") is False or impl_ev.get("status") == "FAILED" or test_blockers:
+                    reason = test_blockers[0] if test_blockers else f"{impl_ev.get('failed_count', 1)} test(s) failing"
+                    return (
+                        "GATE 2: IMPLEMENTATION (TDD + SIMPLIFY)",
+                        "TDD_ACTIVE",
+                        f"Blocked by failing tests recorded in ledger ({reason}). Run Red-Green-Refactor to fix failing tests before advancing.",
+                    )
+
             if not audit_report:
                 return (
                     "GATE 3: ADVERSARIAL AUDIT",
@@ -1939,6 +2194,43 @@ def determine_lifecycle_state(
                         "GATE 3: ADVERSARIAL AUDIT",
                         "AUDIT_ACTIVE",
                         f"Working tree has unreviewed source modifications ({mod_str}). Re-run adversarial audit on current code before shipping.",
+                    )
+
+            # Ledger readiness validation
+            if active_change:
+                blockers = active_change.get("blockers", [])
+                if blockers:
+                    test_b = [b for b in blockers if b.startswith("Tests:")]
+                    if test_b:
+                        return (
+                            "GATE 2: IMPLEMENTATION (TDD + SIMPLIFY)",
+                            "TDD_ACTIVE",
+                            f"Blocked by test failure in ledger: {test_b[0]}. Run Red-Green-Refactor.",
+                        )
+                    return (
+                        "GATE 3: ADVERSARIAL AUDIT",
+                        "AUDIT_ACTIVE",
+                        f"Blocked by active ledger blockers: {'; '.join(blockers)}. Remediate findings before shipping.",
+                    )
+                impl_ev = active_change.get("evidence", {}).get("implementation", {})
+                if impl_ev.get("tests_passed") is False or impl_ev.get("status") == "FAILED":
+                    return (
+                        "GATE 2: IMPLEMENTATION (TDD + SIMPLIFY)",
+                        "TDD_ACTIVE",
+                        "Blocked by failing test evidence in ledger. Run Red-Green-Refactor.",
+                    )
+                audit_ev = active_change.get("evidence", {}).get("audit", {})
+                if audit_ev.get("verdict") in {"FAIL", "FAILED", "REJECTED"}:
+                    return (
+                        "GATE 3: ADVERSARIAL AUDIT",
+                        "AUDIT_ACTIVE",
+                        f"Audit verdict recorded in ledger is '{audit_ev.get('verdict')}'. Remediate findings or re-run review.",
+                    )
+                if audit_ev.get("critical_or_high_count", 0) > 0:
+                    return (
+                        "GATE 3: ADVERSARIAL AUDIT",
+                        "AUDIT_ACTIVE",
+                        f"Ledger records {audit_ev['critical_or_high_count']} unresolved CRITICAL/HIGH finding(s). Remediate defects before shipping.",
                     )
 
             # All checks pass
@@ -2593,13 +2885,13 @@ def evaluate_repository(
     active_pkg_change = openspec_packages[0]["change"] if openspec_packages else None
     audit_report = inspect_audit_reports(repo_root, change=resolved_target or active_pkg_change)
 
-    gate, state_key, next_action = determine_lifecycle_state(
-        git_info, adrs, openspec_packages, spikes, audit_report
-    )
-
     resolved_change = resolved_target or get_active_change(repo_root) or active_pkg_change
     ledger = load_ledger(repo_root, auto_sync=True)
     active_change = ledger.get("changes", {}).get(resolved_change) if resolved_change else None
+
+    gate, state_key, next_action = determine_lifecycle_state(
+        git_info, adrs, openspec_packages, spikes, audit_report, active_change=active_change
+    )
 
     return {
         "repo_root": str(repo_root),

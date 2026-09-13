@@ -2000,7 +2000,7 @@ gates:
             self.assertEqual(updated_notes["tests"]["tests_run"], 42)
 
     def test_git_notes_sync_configuration(self):
-        """configure_git_notes_sync adds fetch and push refspecs for notes."""
+        """configure_git_notes_sync adds safe tracking fetch refspec and preserves default branch push."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
@@ -2012,6 +2012,8 @@ gates:
 
             res = inspect_lifecycle.configure_git_notes_sync(tmppath, remote="origin")
             self.assertTrue(res["configured"])
+            self.assertEqual(res["fetch_refspec"], "refs/notes/*:refs/notes/origin/*")
+            self.assertIsNone(res["push_refspec"])
 
             fetch_cfg = subprocess.run(
                 ["git", "config", "--get-all", "remote.origin.fetch"],
@@ -2019,7 +2021,8 @@ gates:
                 capture_output=True,
                 text=True,
             )
-            self.assertIn("+refs/notes/*:refs/notes/*", fetch_cfg.stdout)
+            self.assertIn("refs/notes/*:refs/notes/origin/*", fetch_cfg.stdout)
+            self.assertNotIn("+refs/notes/*:refs/notes/*", fetch_cfg.stdout)
 
             push_cfg = subprocess.run(
                 ["git", "config", "--get-all", "remote.origin.push"],
@@ -2027,7 +2030,7 @@ gates:
                 capture_output=True,
                 text=True,
             )
-            self.assertIn("refs/notes/*:refs/notes/*", push_cfg.stdout)
+            self.assertNotIn("refs/notes", push_cfg.stdout)
 
     def test_gate_trailers_generation(self):
         """Commit trailers are generated matching ship.json gates."""
@@ -2129,6 +2132,158 @@ gates:
             # Also verify self-healing sync populates report_path
             synced = inspect_lifecycle.sync_ledger_from_workspace(tmppath, target_change_id="payments")
             self.assertEqual(synced["changes"]["payments"]["evidence"]["audit"]["report_path"], ".scratch/review_report.json")
+
+    def test_concurrent_ledger_mutations_preserve_all_changes(self):
+        """Concurrent mutations to distinct change IDs must not clobber each other (flock protection)."""
+        import concurrent.futures
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            change_ids = [f"change-{i}" for i in range(10)]
+
+            def worker(cid: str) -> None:
+                def updater(entry: dict) -> None:
+                    entry["phase"] = "gate-2-impl"
+                    entry["task_status"]["total"] = 5
+                inspect_lifecycle.mutate_change_state(tmppath, cid, updater)
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                list(executor.map(worker, change_ids))
+
+            ledger = inspect_lifecycle.load_ledger(tmppath, auto_sync=False)
+            for cid in change_ids:
+                self.assertIn(cid, ledger["changes"], f"Change {cid} was clobbered by concurrent writes!")
+                self.assertEqual(ledger["changes"][cid]["phase"], "gate-2-impl")
+
+    def test_ledger_blockers_and_failed_tests_prevent_delivery_ready(self):
+        """Even with all tasks complete and audit report present, failing tests in ledger block DELIVERY_READY."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            pkg_dir = tmppath / "openspec" / "changes" / "orders"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "tasks.md").write_text("- [x] 1. Task complete\n")
+
+            scratch = tmppath / ".scratch"
+            scratch.mkdir(parents=True)
+            report_file = scratch / "review_report.json"
+            report_file.write_text(json.dumps({
+                "reviewer": "judge",
+                "status": "complete",
+                "verdict": "PASS",
+                "change": "orders",
+                "findings": [],
+                "tests_passed": True,
+            }))
+
+            # Record a failed test in the ledger
+            inspect_lifecycle.record_test_run_to_ledger(
+                tmppath,
+                {"passed": False, "failed_count": 1, "command": "pytest"},
+                change_id="orders",
+            )
+
+            res = inspect_lifecycle.evaluate_repository(tmppath, target_change="orders")
+            self.assertEqual(res["gate"], "GATE 2: IMPLEMENTATION (TDD + SIMPLIFY)")
+            self.assertEqual(res["state_key"], "TDD_ACTIVE")
+            self.assertIn("Blocked by", res["next_action"])
+            self.assertNotEqual(res["state_key"], "DELIVERY_READY")
+
+    def test_notes_fetch_and_push_preserves_branch_push_and_local_evidence(self):
+        """Notes sync fetches into tracking namespace, reconciles divergence, and pushes notes without overwriting local evidence."""
+        with tempfile.TemporaryDirectory() as tmp_remote, tempfile.TemporaryDirectory() as tmp_local:
+            remote_path = Path(tmp_remote)
+            local_path = Path(tmp_local)
+
+            # 1. Bare remote
+            subprocess.run(["git", "init", "--bare"], cwd=remote_path, check=True, capture_output=True)
+
+            # 2. Local repo with commit
+            subprocess.run(["git", "init"], cwd=local_path, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=local_path, check=True)
+            subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=local_path, check=True)
+            (local_path / "README.md").write_text("hello\n")
+            subprocess.run(["git", "add", "."], cwd=local_path, check=True)
+            subprocess.run(["git", "commit", "-m", "initial"], cwd=local_path, check=True)
+            head_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=local_path, text=True).strip()
+            subprocess.run(["git", "remote", "add", "origin", str(remote_path)], cwd=local_path, check=True)
+            subprocess.run(["git", "push", "origin", "HEAD:main"], cwd=local_path, check=True)
+
+            # 3. Attach local note
+            inspect_lifecycle.attach_git_note_evidence(local_path, head_sha, "test_evidence", {"passed": True}, change_id="local_unpushed")
+
+            # 4. Sync notes
+            sync_res = inspect_lifecycle.sync_git_notes(local_path, remote="origin")
+            self.assertEqual(sync_res["push"], "success")
+
+            # 5. Verify local note still intact
+            notes = inspect_lifecycle.read_git_note_evidence(local_path, head_sha, change_id="local_unpushed")
+            self.assertIn("test_evidence", notes)
+            self.assertTrue(notes["test_evidence"]["passed"])
+
+            # 6. Verify default branch push is NOT overridden (remote.origin.push is not set)
+            push_cfg = subprocess.run(
+                ["git", "config", "--get-all", "remote.origin.push"],
+                cwd=local_path,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotIn("refs/notes", push_cfg.stdout)
+
+    def test_notes_evidence_namespaced_by_change_id(self):
+        """Different changes attaching evidence to the same commit do not overwrite each other."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
+            subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmppath, check=True)
+            (tmppath / "f.txt").write_text("data\n")
+            subprocess.run(["git", "add", "."], cwd=tmppath, check=True)
+            subprocess.run(["git", "commit", "-m", "commit1"], cwd=tmppath, check=True)
+            head_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=tmppath, text=True).strip()
+
+            inspect_lifecycle.attach_git_note_evidence(
+                tmppath, head_sha, "test_evidence", {"passed": True, "suite": "alpha_suite"}, change_id="alpha"
+            )
+            inspect_lifecycle.attach_git_note_evidence(
+                tmppath, head_sha, "test_evidence", {"passed": False, "suite": "beta_suite"}, change_id="beta"
+            )
+
+            # Read back for alpha
+            alpha_notes = inspect_lifecycle.read_git_note_evidence(tmppath, head_sha, change_id="alpha")
+            self.assertEqual(alpha_notes["test_evidence"]["suite"], "alpha_suite")
+            self.assertTrue(alpha_notes["test_evidence"]["passed"])
+            self.assertEqual(len(alpha_notes["test_evidence_runs"]), 1)
+            self.assertEqual(alpha_notes["test_evidence_runs"][0]["commit"], head_sha)
+
+            # Read back for beta
+            beta_notes = inspect_lifecycle.read_git_note_evidence(tmppath, head_sha, change_id="beta")
+            self.assertEqual(beta_notes["test_evidence"]["suite"], "beta_suite")
+            self.assertFalse(beta_notes["test_evidence"]["passed"])
+            self.assertEqual(len(beta_notes["test_evidence_runs"]), 1)
+
+    def test_trailers_reflect_failed_tests_despite_completed_tasks(self):
+        """When tasks are complete but tests failed, commit trailer emits FAILED instead of PASSED."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            inspect_lifecycle.mutate_change_state(
+                tmppath,
+                "billing",
+                lambda entry: entry.update({
+                    "phase": "gate-2-impl",
+                    "task_status": {"total": 4, "completed": 4, "pending": 0},
+                    "blockers": ["Tests: 1 test(s) failing"],
+                    "evidence": {
+                        "implementation": {"status": "FAILED", "tests_passed": False, "failed_count": 1},
+                        "delivery": {"status": "READY"},
+                    }
+                })
+            )
+
+            trailers = inspect_lifecycle.generate_gate_trailers(tmppath, change_id="billing")
+            trailer_text = "\n".join(trailers)
+            self.assertIn("Ship-Implementation: FAILED (4/4 tasks)", trailer_text)
+            self.assertNotIn("Ship-Implementation: PASSED", trailer_text)
+            self.assertIn("Ship-Delivery: BLOCKED", trailer_text)
+            self.assertNotIn("Ship-Delivery: READY", trailer_text)
 
 
 if __name__ == "__main__":
