@@ -121,6 +121,8 @@ class LifecycleEngine:
         config_path: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Perform a full lifecycle evaluation of the repository."""
+        with self.ledger.lock(repo_root):
+            pass  # Recover interrupted archives before inspecting workspace or Git state.
         config = self.config_manager.load(repo_root, explicit_path=config_path)
         git_info = self.vcs.get_info(repo_root)
         adrs = self.spec_repo.inspect_adrs(repo_root)
@@ -203,7 +205,7 @@ class LifecycleEngine:
                 get_git_info_fn=self.vcs.get_info,
             ),
             mutate_change_fn=lambda r, cid, upd, set_active=False: self.ledger.mutate_change(
-                r, cid, upd, set_active=set_active, sync_fn=self.sync_ledger
+                r, cid, upd, set_active=set_active
             ),
             get_active_fn=self.ledger.get_active_change,
         )

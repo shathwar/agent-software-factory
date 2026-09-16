@@ -126,7 +126,7 @@ class GitClient:
             info["modified_count"] = sum(1 for l in status_lines if not l.startswith("??"))
             info["untracked_count"] = sum(1 for l in status_lines if l.startswith("??"))
 
-            ignored_prefixes = (".scratch/", "scratch/", "openspec/archive/", "openspec/.", ".gemini/", ".git/")
+            ignored_prefixes = (".scratch/", "scratch/", ".ship/", "openspec/archive/", "openspec/.", ".gemini/", ".git/")
             modified_sources = []
             for l in status_lines:
                 filename = l[3:].strip()

@@ -11,6 +11,7 @@ import functools
 from typing import Any, Callable, Dict, List, Optional
 
 from .trailers import canonicalize_gate_name
+from .paths import repository_path, resolve_change_path, validate_change_id
 
 
 def _backup_path(src: Path, dest: Path) -> None:
@@ -44,8 +45,7 @@ class CheckpointManager:
     @staticmethod
     def _validate_names(change: str, gate: str) -> None:
         for name in (change, gate):
-            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name) or ".." in name:
-                raise ValueError("Checkpoint change and gate must be simple identifiers without path separators")
+            validate_change_id(name)
 
     @_locked_recovery
     def create_checkpoint(
@@ -62,6 +62,7 @@ class CheckpointManager:
 
         canonical_tag = canonicalize_gate_name(gate_name)
         self._validate_names(resolved_change, canonical_tag)
+        resolve_change_path(repo_root, resolved_change)
         ref_name = f"refs/ship/{resolved_change}/{canonical_tag}"
         tag_name = f"ship/{resolved_change}/{canonical_tag}"
         commit_sha = git_info.get("commit")
@@ -97,9 +98,9 @@ class CheckpointManager:
             except Exception as exc:
                 raise RuntimeError("Checkpoint reference could not be saved") from exc
 
-        chk_dir = repo_root / ".scratch" / "checkpoints"
+        chk_dir = repository_path(repo_root, ".scratch/checkpoints")
         chk_dir.mkdir(parents=True, exist_ok=True)
-        receipt_file = chk_dir / f"{resolved_change}_{canonical_tag}.json"
+        receipt_file = repository_path(repo_root, f".scratch/checkpoints/{resolved_change}_{canonical_tag}.json")
         receipt_data = {
             "change": resolved_change,
             "gate": canonical_tag,
@@ -136,12 +137,13 @@ class CheckpointManager:
         resolved_change = change or self.ledger.get_active_change(repo_root) or "default"
         canonical_tag = canonicalize_gate_name(target_gate)
         self._validate_names(resolved_change, canonical_tag)
+        resolve_change_path(repo_root, resolved_change)
 
         git_info = self.vcs.get_info(repo_root)
         timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        backup_dir = repo_root / ".scratch" / f"rollback_{timestamp_str}"
+        backup_dir = repository_path(repo_root, f".scratch/rollback_{timestamp_str}")
 
-        chk_file = repo_root / ".scratch" / "checkpoints" / f"{resolved_change}_{canonical_tag}.json"
+        chk_file = repository_path(repo_root, f".scratch/checkpoints/{resolved_change}_{canonical_tag}.json")
         target_tag = f"ship/{resolved_change}/{canonical_tag}"
         target_ref = f"refs/ship/{resolved_change}/{canonical_tag}"
 
@@ -259,8 +261,8 @@ class CheckpointManager:
                 except Exception as exc:
                     raise RuntimeError(f"Rollback failed; ledger unchanged. Backups are in {backup_dir}") from exc
 
-        pkg_dir = repo_root / "openspec" / "changes" / resolved_change
-        tasks_file = pkg_dir / "tasks.md"
+        pkg_dir = resolve_change_path(repo_root, resolved_change)
+        tasks_file = repository_path(repo_root, f"openspec/changes/{resolved_change}/tasks.md")
         reset_tasks_count = 0
         if tasks_file.exists() and canonical_tag == "design":
             tasks_content = tasks_file.read_text(encoding="utf-8", errors="replace")

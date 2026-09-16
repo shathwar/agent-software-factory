@@ -94,122 +94,41 @@ Every repository or monorepo service can include a `.ship.json` at its root or s
 
 ---
 
-## 4. Reference Secure GitHub Action Workflow (`.github/workflows/ship_headless.yml`)
+## 4. Headless integration contract (not a runnable workflow)
 
-```yaml
-name: Autonomous Ship Lifecycle
+This repository does **not** ship a complete headless agent runner or a ready-to-use
+issue-triggered GitHub Actions workflow. The earlier example omitted persistence
+between design and implementation runs; copying it would lose the approved work.
+Use the following contract when integrating your organisation's runner.
 
-on:
-  issues:
-    types: [opened, labeled]
+1. **Persist the design result.** Create an issue-specific branch and commit the ADR
+   and OpenSpec package. Publish its exact commit SHA. Persist the checkpoint receipt,
+   checkpoint Git objects/private refs, and `.ship/state.json` in access-controlled
+   storage. Ordinary branch pushes do not carry `refs/ship/*` or Git notes, and the
+   local ledger is ignored by Git. Do not post “specification ready” until all required
+   artifacts have been saved successfully.
+2. **Bind approval to that result.** Record the issue ID, change ID, branch, design
+   commit SHA, artifact/run ID, and approver identity. Verify the approver's current
+   repository permissions through the hosting API. A label alone must not approve
+   a later revision of the design or work from another issue.
+3. **Restore before implementation.** Check out the approved SHA on the issue's branch,
+   restore the matching ledger and checkpoint data, and verify that receipt commit
+   objects exist. Reject missing or mismatched state. Pass `--change <change-id>` to
+   lifecycle commands instead of relying on a fresh runner's active-change pointer.
+4. **Run the configured harness.** Install the pinned skill release and run design,
+   implementation, and review through your chosen agent runner. The inspector checks
+   state; it does not execute those agent stages. Persist failed/interrupted runs so
+   another runner can resume them without reconstructing approval from checkboxes.
+5. **Serialize delivery.** Use per-repository/per-branch CI concurrency controls in
+   addition to local ledger locking. Run `--status-check --change <change-id>`, archive
+   the change, persist the updated ledger, commit the final files, and publish evidence
+   with an explicit Git-notes fetch/merge/push policy. Validate the final delivery
+   snapshot before opening the PR; avoid force-overwriting another runner's notes.
 
-permissions:
-  contents: write
-  pull-requests: write
-  issues: write
-
-jobs:
-  design_spec:
-    # Security: Restrict execution to organization members/collaborators to prevent DoS and runner exhaustion
-    if: >
-      github.event_name == 'issues' &&
-      github.event.action == 'opened' &&
-      startsWith(github.event.issue.body, '/ship') &&
-      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      # Security: Sanitize title to prevent shell injection (FINDING-001)
-      - name: Sanitize Change ID
-        env:
-          RAW_TITLE: ${{ github.event.issue.title }}
-        run: |
-          python3 -c '
-          import os, re, sys
-          raw = os.environ.get("RAW_TITLE", "")
-          change = re.sub(r"[^a-zA-Z0-9_-]+", "-", raw).strip("-").lower()[:50]
-          if not change:
-              print("Invalid change title: must contain alphanumeric characters", file=sys.stderr)
-              sys.exit(1)
-          with open(os.environ["GITHUB_ENV"], "a") as f:
-              f.write(f"CHANGE={change}\n")
-          '
-
-      - name: Run Design Agent (Specification & Architecture)
-        env:
-          ISSUE_BODY: ${{ github.event.issue.body }}
-        run: |
-          echo "Executing Design agent runner for change: $CHANGE"
-          # 1. Execute agent runner harness with design skill prompt
-          # e.g., agy run --skill design "Design spec for: $CHANGE based on $ISSUE_BODY"
-          # 2. Record and assert Design Checkpoint
-          python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint design --change "$CHANGE"
-
-      - name: Post Spec Comment
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `### 📋 Specification Ready for Review\n\nPlease review the generated ADR and OpenSpec package for \`${process.env.TOPIC}\`. When approved, label this issue with \`ship:approved\` to proceed to implementation.`
-            });
-
-  implementation_and_review:
-    if: >
-      github.event_name == 'issues' &&
-      github.event.action == 'labeled' &&
-      github.event.label.name == 'ship:approved' &&
-      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.sender.author_association)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Verify Design Checkpoint Status
-        run: |
-          python3 skills/ship/scripts/inspect_lifecycle.py --format json
-
-      - name: Run Implementation (TDD) & Review (Code Review)
-        run: |
-          # 1. Execute agent runner harness for TDD tasks
-          # e.g., agy run --skill tdd "Execute tasks in active openspec"
-          python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint implementation
-
-          # 2. Execute agent runner harness for Review loop
-          # e.g., agy run --skill review "Review changes in review-loop mode"
-
-          # 3. Assert full delivery status
-          python3 skills/ship/scripts/inspect_lifecycle.py --status-check
-
-      - name: Open Pull Request
-        uses: peter-evans/create-pull-request@v6
-        with:
-          title: "feat: ${{ github.event.issue.title }}"
-          body: |
-            Closes #${{ github.event.issue.number }}
-            
-            ### Delivery Walkthrough
-            - Automated Implementation via Ship Engine
-            - Verified against ADR & OpenSpec
-            - Adversarial Review Judge verdict: **PASS**
-          branch: "ship/${{ github.event.issue.number }}"
-```
+Use minimal job permissions, separate trusted approval handling from untrusted issue
+text, and keep human PR review enabled during the pilot. Validate a full run across
+**two separate runners**, including artifact loss, expired approval, an interrupted
+implementation, and evidence-publication failure, before enabling autonomous delivery.
 
 ---
 
@@ -248,3 +167,27 @@ Do not automate that move or treat inferred state as restored approval evidence.
 Evidence recording fails if its Git note cannot be saved; fix the Git write error
 and retry before considering the ledger updated. Checkpoint snapshot failures also
 return an error rather than substituting HEAD for uncommitted work.
+
+
+### Archive restart recovery and path boundaries
+
+Archive runs under the ledger lock and writes `.ship/archive-transaction.json`
+before changing specs or moving the package. The journal holds an operation ID,
+original spec bytes, the prior ledger bytes, destination paths, and progress markers.
+Spec writes and ledger writes use atomic replacement; writes and directory updates
+are flushed to disk. Archive requires source and destination on the same filesystem.
+
+An `archive_operation_id` in the final ledger record is the commit decision. On the
+next state operation or repository evaluation, an interrupted operation without that
+marker is rolled back; a committed operation is verified and its journal removed.
+Recovery can itself be interrupted and retried. Missing, corrupt, or contradictory
+recovery data stops further operations and preserves the journal. Changes made outside
+the interrupted transaction are not overwritten automatically. Keep the journal and
+backups while reconciling such a failure; do not delete them merely to unblock a run.
+
+Change IDs are identifiers such as `payments-v2`, never filesystem paths. Archive,
+inspection, checkpoint, rollback, and active-change selection reject absolute paths,
+separators, traversal, and unsafe managed symlinks. `--force` can bypass workflow
+approval requirements but cannot bypass these filesystem boundaries. These checks
+assume a trusted checkout; do not allow an untrusted local process to replace paths
+while the runner operates.

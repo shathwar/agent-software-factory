@@ -2,12 +2,16 @@
 
 from collections import OrderedDict
 import datetime
+import functools
 import json
 from pathlib import Path
 import re
 import shutil
-import time
+import uuid
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+
+from .paths import repository_path, resolve_change_path, validate_change_id
+from .transactions import atomic_write, begin_archive, record_archive_progress, recover_archive, sync_directory
 
 REMOVAL_TITLE_MARKER = re.compile(
     r"(?:\s*[\[\(]\s*(?:STATUS:\s*)?(?:REMOVED|DELETED)\s*[\]\)]|\s*--\s*(?:STATUS:\s*)?(?:REMOVED|DELETED)\b|\s*\bSTATUS:\s*(?:REMOVED|DELETED)\b)",
@@ -119,6 +123,16 @@ def merge_spec_requirements(living_content: str, delta_content: str) -> str:
     return "\n\n".join(result).strip() + "\n"
 
 
+def _locked_workspace(method):
+    @functools.wraps(method)
+    def run(self, repo_root, *args, **kwargs):
+        from .ledger import FileLedgerStore
+        with FileLedgerStore.lock(repo_root):
+            FileLedgerStore.load(repo_root, auto_sync=False)
+            return method(self, repo_root, *args, **kwargs)
+    return run
+
+
 class OpenSpecRepository:
     """Manages discovery and manipulation of OpenSpec change packages, ADRs, and living specs."""
 
@@ -142,6 +156,7 @@ class OpenSpecRepository:
             })
         return adrs
 
+    @_locked_workspace
     def inspect_openspec(
         self,
         repo_root: Path,
@@ -150,9 +165,9 @@ class OpenSpecRepository:
         clear_active_fn: Optional[Callable[[Path], Any]] = None,
     ) -> List[Dict[str, Any]]:
         """Scan openspec/changes/ for active change packages and parse tasks.md."""
-        resolved_target = target_change
-        changes_dir = repo_root / "openspec" / "changes"
-        archive_dir = repo_root / "openspec" / "archive"
+        resolved_target = validate_change_id(target_change) if target_change is not None else None
+        changes_dir = repository_path(repo_root, "openspec/changes")
+        archive_dir = repository_path(repo_root, "openspec/archive")
         packages = []
 
         def target_is_archived(target: str) -> bool:
@@ -177,7 +192,7 @@ class OpenSpecRepository:
             return packages
 
         if resolved_target:
-            target_dir = changes_dir / resolved_target
+            target_dir = resolve_change_path(repo_root, resolved_target)
             if not target_dir.exists() or not target_dir.is_dir():
                 if target_is_archived(resolved_target):
                     return packages
@@ -187,16 +202,19 @@ class OpenSpecRepository:
 
         active_persisted = resolved_target or (get_active_fn(repo_root) if get_active_fn else None)
         if active_persisted and not resolved_target:
-            if not (changes_dir / active_persisted).is_dir():
+            if not (resolve_change_path(repo_root, active_persisted)).is_dir():
                 if clear_active_fn:
                     clear_active_fn(repo_root)
                 active_persisted = None
 
         for change_dir in changes_dir.iterdir():
-            if not change_dir.is_dir() or change_dir.name.startswith("."):
+            if change_dir.name.startswith("."):
+                continue
+            change_dir = resolve_change_path(repo_root, change_dir.name)
+            if not change_dir.is_dir():
                 continue
 
-            tasks_file = change_dir / "tasks.md"
+            tasks_file = repository_path(repo_root, str((change_dir / "tasks.md").relative_to(repo_root)))
             tasks_found = False
             total_tasks = 0
             completed_tasks = 0
@@ -250,7 +268,7 @@ class OpenSpecRepository:
 
     def inspect_archived_openspec(self, repo_root: Path) -> List[Dict[str, Any]]:
         """Scan openspec/archive/ for completed historical change packages."""
-        archive_dir = repo_root / "openspec" / "archive"
+        archive_dir = repository_path(repo_root, "openspec/archive")
         archived = []
         if not archive_dir.exists():
             return archived
@@ -265,7 +283,7 @@ class OpenSpecRepository:
 
     def inspect_living_specs(self, repo_root: Path) -> List[Dict[str, Any]]:
         """Scan openspec/specs/ for living cumulative system specifications."""
-        specs_dir = repo_root / "openspec" / "specs"
+        specs_dir = repository_path(repo_root, "openspec/specs")
         specs = []
         if not specs_dir.exists():
             return specs
@@ -277,6 +295,7 @@ class OpenSpecRepository:
             })
         return specs
 
+    @_locked_workspace
     def archive_change(
         self,
         repo_root: Path,
@@ -287,16 +306,16 @@ class OpenSpecRepository:
         validate_review_fn: Optional[Callable[..., Any]] = None,
         get_git_info_fn: Optional[Callable[[Path], Dict[str, Any]]] = None,
         clear_active_fn: Optional[Callable[[Path, Optional[str]], Any]] = None,
-        generate_trailers_fn: Optional[Callable[..., str]] = None,
+        generate_trailers_fn: Optional[Callable[..., List[str]]] = None,
         mutate_change_fn: Optional[Callable[..., Any]] = None,
         get_active_fn: Optional[Callable[[Path], Optional[str]]] = None,
     ) -> Dict[str, Any]:
         """Sync delta specs from changes to openspec/specs/, then move change package to openspec/archive/."""
-        changes_dir = repo_root / "openspec" / "changes"
+        changes_dir = repository_path(repo_root, "openspec/changes")
         if not changes_dir.exists():
             raise FileNotFoundError(f"No openspec/changes directory found at {changes_dir}")
 
-        resolved_target = change
+        resolved_target = validate_change_id(change) if change is not None else None
         if not resolved_target and load_ledger_fn:
             try:
                 ledger = load_ledger_fn(repo_root, auto_sync=False)
@@ -310,8 +329,8 @@ class OpenSpecRepository:
             except Exception:
                 pass
 
-        if resolved_target and (changes_dir / resolved_target).is_dir():
-            change_dir = changes_dir / resolved_target
+        if resolved_target and (resolve_change_path(repo_root, resolved_target)).is_dir():
+            change_dir = resolve_change_path(repo_root, resolved_target)
         elif resolved_target and change:
             raise FileNotFoundError(f"OpenSpec change directory '{resolved_target}' not found under {changes_dir}")
         else:
@@ -327,7 +346,7 @@ class OpenSpecRepository:
         change_name = change_dir.name
 
         if not force:
-            tasks_file = change_dir / "tasks.md"
+            tasks_file = repository_path(repo_root, str((change_dir / "tasks.md").relative_to(repo_root)))
             if not tasks_file.exists():
                 raise RuntimeError(f"Cannot archive '{change_name}': tasks.md does not exist.")
             content = tasks_file.read_text(encoding="utf-8", errors="replace")
@@ -366,7 +385,7 @@ class OpenSpecRepository:
                 if not review_report:
                     raise RuntimeError(f"Cannot archive '{change_name}': no passing review report found (or delivery evidence in .scratch/).")
 
-                source_specs_dir = change_dir / "specs"
+                source_specs_dir = repository_path(repo_root, str((change_dir / "specs").relative_to(repo_root)))
                 package_spec_names = {s.name for s in source_specs_dir.glob("*.md")} if source_specs_dir.exists() else set()
                 git_info = get_git_info_fn(repo_root)
 
@@ -376,72 +395,78 @@ class OpenSpecRepository:
                     raise RuntimeError(f"Cannot archive '{change_name}': {msg}")
 
         synced_specs = []
-        living_specs_dir = repo_root / "openspec" / "specs"
-        source_specs_dir = change_dir / "specs"
+        living_specs_dir = repository_path(repo_root, "openspec/specs")
+        source_specs_dir = repository_path(repo_root, str((change_dir / "specs").relative_to(repo_root)))
 
-        prepared_updates: Dict[Path, Tuple[Optional[str], str]] = {}
+        prepared_updates: Dict[Path, Tuple[Optional[bytes], str]] = {}
         if source_specs_dir.exists() and source_specs_dir.is_dir():
             for spec_file in sorted(source_specs_dir.glob("*.md")):
-                dest_spec = living_specs_dir / spec_file.name
+                spec_file = repository_path(repo_root, str(spec_file.relative_to(repo_root)))
+                dest_spec = repository_path(repo_root, f"openspec/specs/{spec_file.name}")
                 delta_text = spec_file.read_text(encoding="utf-8", errors="replace")
                 if dest_spec.exists():
-                    living_text = dest_spec.read_text(encoding="utf-8", errors="replace")
-                    merged_text = merge_spec_requirements(living_text, delta_text)
-                    prepared_updates[dest_spec] = (living_text, merged_text)
+                    original_bytes = dest_spec.read_bytes()
+                    merged_text = merge_spec_requirements(original_bytes.decode("utf-8", errors="replace"), delta_text)
+                    prepared_updates[dest_spec] = (original_bytes, merged_text)
                 else:
                     prepared_updates[dest_spec] = (None, delta_text)
 
         date_str = datetime.date.today().strftime("%Y-%m-%d")
-        archive_dir = repo_root / "openspec" / "archive"
+        archive_dir = repository_path(repo_root, "openspec/archive")
         archive_dir.mkdir(parents=True, exist_ok=True)
+        sync_directory(archive_dir.parent)
+        if change_dir.stat().st_dev != archive_dir.stat().st_dev:
+            raise ValueError("Archive source and destination must be on the same filesystem")
 
         dest_archive = archive_dir / f"{date_str}-{change_name}"
         if dest_archive.exists():
-            dest_archive = archive_dir / f"{date_str}-{change_name}-{int(time.time())}"
+            dest_archive = archive_dir / f"{date_str}-{change_name}-{uuid.uuid4().hex}"
 
-        applied_mutations: Dict[Path, Optional[str]] = {}
-        package_moved = False
-        trailers = ""
+        # Validate/generate evidence before moving the reviewed files.
+        trailers = generate_trailers_fn(repo_root, change_id=change_name) if generate_trailers_fn else []
+        trailers = [t for t in trailers if not t.startswith("Ship-Delivery:")]
+        trailers.append("Ship-Delivery: ARCHIVED")
+        operation_id = uuid.uuid4().hex
+        begin_archive(repo_root, operation_id, change_name, dest_archive, prepared_updates)
         try:
             living_specs_dir.mkdir(parents=True, exist_ok=True)
+            sync_directory(living_specs_dir.parent)
             for dest_spec, (original_text, new_text) in prepared_updates.items():
-                applied_mutations[dest_spec] = original_text
-                dest_spec.write_text(new_text, encoding="utf-8")
+                atomic_write(dest_spec, new_text.encode("utf-8"), tag=operation_id)
                 synced_specs.append(dest_spec.name)
 
+            record_archive_progress(repo_root, "specs_written")
             shutil.move(str(change_dir), str(dest_archive))
-            package_moved = True
-            if clear_active_fn:
-                clear_active_fn(repo_root, change_name)
-
-            if generate_trailers_fn:
-                trailers = generate_trailers_fn(repo_root, change_id=change_name)
+            sync_directory(change_dir.parent)
+            sync_directory(dest_archive.parent)
+            record_archive_progress(repo_root, "package_moved")
             if mutate_change_fn:
-                try:
-                    def update_delivery(entry: Dict[str, Any]) -> None:
-                        entry["phase"] = "delivery"
-                        entry["evidence"]["delivery"]["status"] = "ARCHIVED"
-                        entry["evidence"]["delivery"]["archived_path"] = str(dest_archive.relative_to(repo_root))
-                        entry["evidence"]["delivery"]["trailers"] = trailers
-                    mutate_change_fn(repo_root, change_name, update_delivery, set_active=False)
-                except Exception:
-                    pass
+                def update_delivery(entry: Dict[str, Any]) -> None:
+                    entry["phase"] = "delivery"
+                    entry["evidence"]["delivery"]["status"] = "ARCHIVED"
+                    entry["evidence"]["delivery"]["archive_operation_id"] = operation_id
+                    entry["evidence"]["delivery"]["archived_path"] = str(dest_archive.relative_to(repo_root))
+                    entry["evidence"]["delivery"]["trailers"] = trailers
+                # This final atomic write also clears the active pointer. No ledger
+                # mutation occurs before filesystem changes can be rolled back.
+                mutate_change_fn(repo_root, change_name, update_delivery, set_active=False)
+            else:
+                from .ledger import FileLedgerStore
+                def commit_archive(entry):
+                    entry["phase"] = "delivery"
+                    entry["evidence"]["delivery"].update(status="ARCHIVED", archive_operation_id=operation_id,
+                                                       archived_path=str(dest_archive.relative_to(repo_root)), trailers=trailers)
+                FileLedgerStore.mutate_change(repo_root, change_name, commit_archive, set_active=False)
+            recover_archive(repo_root)
 
         except Exception as err:
-            for dest_spec, original_text in applied_mutations.items():
-                try:
-                    if original_text is None:
-                        dest_spec.unlink(missing_ok=True)
-                    else:
-                        dest_spec.write_text(original_text, encoding="utf-8")
-                except Exception:
-                    pass
-            if package_moved and dest_archive.exists() and not change_dir.exists():
-                try:
-                    shutil.move(str(dest_archive), str(change_dir))
-                except Exception:
-                    pass
-            raise RuntimeError(f"Archive failed during execution; rolled back living spec updates: {err}") from err
+            try:
+                outcome = recover_archive(repo_root)
+            except Exception as recovery_err:
+                raise RuntimeError(f"Archive failed: {err}; recovery incomplete: {recovery_err}") from err
+            if outcome == "committed":
+                raise RuntimeError(f"Archive committed but finalization failed: {err}") from err
+            raise RuntimeError(f"Archive failed during execution; restored package and living specs: {err}") from err
 
         return {
             "change": change_name,

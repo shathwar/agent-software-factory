@@ -2858,6 +2858,126 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual((root / ".ship/state.json").read_bytes(), before)
 
 
+    def _archive_workspace(self, root, changes):
+        living = root / "openspec/specs/shared.md"
+        living.parent.mkdir(parents=True)
+        living.write_text("### Requirement: Base\nBase behavior\n")
+        for cid in changes:
+            pkg = root / "openspec/changes" / cid
+            (pkg / "specs").mkdir(parents=True)
+            (pkg / "tasks.md").write_text("- [x] Done\n")
+            (pkg / "specs/shared.md").write_text(f"### Requirement: {cid}\n{cid} behavior\n")
+            report = root / ".scratch" / cid / "review_report.json"
+            report.parent.mkdir(parents=True)
+            report.write_text(json.dumps({
+                "change": cid, "reviewer": "judge", "status": "complete", "verdict": "PASS",
+                "findings": [], "coverage": ["Checked"], "questions": [], "routing_notes": [],
+                "test_evidence": True,
+            }))
+        inspect_lifecycle.sync_ledger_from_workspace(root)
+        return living
+
+    def test_concurrent_archives_preserve_both_spec_updates(self):
+        import threading
+        from concurrent.futures import ThreadPoolExecutor
+        from lifecycle import specs
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            living = self._archive_workspace(root, ["alpha", "beta"])
+            first_merging = threading.Event()
+            release_first = threading.Event()
+            second_started = threading.Event()
+            second_finished = threading.Event()
+            original = specs.merge_spec_requirements
+            def controlled_merge(old, delta):
+                if "alpha behavior" in delta:
+                    first_merging.set()
+                    if not release_first.wait(5):
+                        raise RuntimeError("test timed out waiting for release")
+                return original(old, delta)
+            def archive_beta():
+                second_started.set()
+                try:
+                    return inspect_lifecycle.apply_and_archive_openspec(root, "beta")
+                finally:
+                    second_finished.set()
+            with patch.object(specs, "merge_spec_requirements", controlled_merge), ThreadPoolExecutor(2) as pool:
+                alpha = pool.submit(inspect_lifecycle.apply_and_archive_openspec, root, "alpha")
+                try:
+                    self.assertTrue(first_merging.wait(5))
+                    beta = pool.submit(archive_beta)
+                    self.assertTrue(second_started.wait(5))
+                    self.assertFalse(second_finished.wait(0.2), "second archive bypassed the transaction lock")
+                finally:
+                    release_first.set()
+                alpha.result(timeout=5)
+                beta.result(timeout=5)
+            text = living.read_text()
+            self.assertIn("alpha behavior", text)
+            self.assertIn("beta behavior", text)
+            state = inspect_lifecycle.load_ledger(root)
+            for cid in ("alpha", "beta"):
+                self.assertEqual(state["changes"][cid]["evidence"]["delivery"]["status"], "ARCHIVED")
+                self.assertFalse((root / "openspec/changes" / cid).exists())
+
+    def test_archive_ledger_failure_restores_files_and_active_pointer(self):
+        from lifecycle.ledger import FileLedgerStore
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            living = self._archive_workspace(root, ["alpha"])
+            new_spec = root / "openspec/changes/alpha/specs/new.md"
+            new_spec.write_text("### Requirement: New\nNew behavior\n")
+            inspect_lifecycle.set_active_change(root, "alpha")
+            state = root / ".ship/state.json"
+            before_state = state.read_bytes()
+            living.write_bytes(living.read_bytes().replace(b"\n", b"\r\n"))
+            before_spec = living.read_bytes()
+            with patch.object(FileLedgerStore, "save", side_effect=OSError("disk full")):
+                with self.assertRaisesRegex(RuntimeError, "Archive failed.*disk full"):
+                    inspect_lifecycle.apply_and_archive_openspec(root, "alpha")
+            self.assertEqual(state.read_bytes(), before_state)
+            self.assertEqual(living.read_bytes(), before_spec)
+            self.assertTrue(new_spec.exists())
+            self.assertFalse((root / "openspec/specs/new.md").exists())
+            self.assertEqual(list((root / "openspec/archive").iterdir()), [])
+            # Retry succeeds once persistence is available.
+            result = inspect_lifecycle.apply_and_archive_openspec(root, "alpha")
+            self.assertTrue((root / result["archived_path"]).is_dir())
+            self.assertIsNone(inspect_lifecycle.get_active_change(root))
+            self.assertIn("Ship-Delivery: ARCHIVED", result["trailers"])
+
+    def test_archive_reports_incomplete_recovery(self):
+        from lifecycle import specs
+        from lifecycle.ledger import FileLedgerStore
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self._archive_workspace(root, ["alpha"])
+            original_move = specs.shutil.move
+            calls = []
+            def fail_recovery(src, dst):
+                calls.append((src, dst))
+                if len(calls) > 1:
+                    raise OSError("cannot restore package")
+                return original_move(src, dst)
+            with patch.object(FileLedgerStore, "save", side_effect=OSError("disk full")), patch.object(specs.shutil, "move", fail_recovery):
+                with self.assertRaisesRegex(RuntimeError, "recovery incomplete.*cannot restore package"):
+                    inspect_lifecycle.apply_and_archive_openspec(root, "alpha")
+
+
+    def test_archive_without_ledger_has_one_final_state_write(self):
+        from lifecycle.ledger import FileLedgerStore
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self._archive_workspace(root, ["alpha"])
+            (root / ".ship/state.json").unlink()
+            with patch.object(FileLedgerStore, "save", wraps=FileLedgerStore.save) as save:
+                inspect_lifecycle.apply_and_archive_openspec(root, "alpha")
+            self.assertEqual(save.call_count, 1)
+            state = inspect_lifecycle.load_ledger(root)
+            self.assertEqual(set(state["changes"]), {"alpha"})
+            self.assertEqual(state["changes"]["alpha"]["evidence"]["delivery"]["status"], "ARCHIVED")
+
+
 if __name__ == "__main__":
     unittest.main()
 

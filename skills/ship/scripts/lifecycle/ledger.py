@@ -11,6 +11,8 @@ from typing import Any, Callable, Dict, List, Optional
 
 from .evidence import validate_review_approval
 from .vcs import GitClient
+from .paths import repository_path, validate_change_id
+from .transactions import recover_archive, sync_directory
 
 try:
     import fcntl
@@ -143,14 +145,15 @@ class FileLedgerStore:
 
     @staticmethod
     def get_ledger_path(repo_root: Path) -> Path:
-        return repo_root / ".ship" / "state.json"
+        return repository_path(repo_root, ".ship/state.json")
 
     @classmethod
     @contextmanager
     def lock(cls, repo_root: Path, timeout_sec: float = 10.0):
-        ship_dir = repo_root / ".ship"
+        ship_dir = repository_path(repo_root, ".ship")
         ship_dir.mkdir(parents=True, exist_ok=True)
-        lock_file = (ship_dir / "state.lock").resolve()
+        sync_directory(repo_root)
+        lock_file = repository_path(repo_root, ".ship/state.lock").resolve()
         lock_key = str(lock_file)
 
         if not hasattr(_tls, "locks"):
@@ -182,6 +185,7 @@ class FileLedgerStore:
                             break
                         time.sleep(0.01)
             _tls.locks[lock_key] = 1
+            recover_archive(repo_root)
             yield
         finally:
             _tls.locks[lock_key] = 0
@@ -197,33 +201,36 @@ class FileLedgerStore:
 
     @classmethod
     def get_active_change(cls, repo_root: Path) -> Optional[str]:
-        ledger_data = read_ledger_file(cls.get_ledger_path(repo_root))
-        if isinstance(ledger_data, dict) and ledger_data.get("active_change_id"):
-            return ledger_data["active_change_id"]
-        return None
+        with cls.lock(repo_root):
+            ledger_data = read_ledger_file(cls.get_ledger_path(repo_root))
+            if isinstance(ledger_data, dict) and ledger_data.get("active_change_id"):
+                return validate_change_id(ledger_data["active_change_id"])
+            return None
 
     @classmethod
     def save(cls, repo_root: Path, ledger: Dict[str, Any]) -> None:
-        read_ledger_file(cls.get_ledger_path(repo_root))
-        ship_dir = repo_root / ".ship"
-        ship_dir.mkdir(parents=True, exist_ok=True)
-        ensure_gitignore_has_ship(repo_root)
-        ledger_path = cls.get_ledger_path(repo_root)
+        with cls.lock(repo_root):
+            read_ledger_file(cls.get_ledger_path(repo_root))
+            ship_dir = repository_path(repo_root, ".ship")
+            ship_dir.mkdir(parents=True, exist_ok=True)
+            ensure_gitignore_has_ship(repo_root)
+            ledger_path = cls.get_ledger_path(repo_root)
 
-        temp_fd, temp_path = tempfile.mkstemp(prefix="state_", suffix=".json.tmp", dir=str(ship_dir))
-        try:
-            with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
-                json.dump(ledger, f, indent=2)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(temp_path, ledger_path)
-        except Exception:
-            if os.path.exists(temp_path):
-                try:
-                    os.remove(temp_path)
-                except Exception:
-                    pass
-            raise
+            temp_fd, temp_path = tempfile.mkstemp(prefix="state_", suffix=".json.tmp", dir=str(ship_dir))
+            try:
+                with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
+                    json.dump(ledger, f, indent=2)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(temp_path, ledger_path)
+                sync_directory(ledger_path.parent)
+            except Exception:
+                if os.path.exists(temp_path):
+                    try:
+                        os.remove(temp_path)
+                    except Exception:
+                        pass
+                raise
 
     @classmethod
     def sync_from_workspace(
@@ -235,6 +242,8 @@ class FileLedgerStore:
         inspect_spikes_fn: Optional[Callable[[Path], List[str]]] = None,
         inspect_review_fn: Optional[Callable[..., Optional[Dict[str, Any]]]] = None,
     ) -> Dict[str, Any]:
+        if target_change_id is not None:
+            validate_change_id(target_change_id)
         with cls.lock(repo_root):
             ledger_path = cls.get_ledger_path(repo_root)
             loaded = read_ledger_file(ledger_path)
@@ -415,13 +424,14 @@ class FileLedgerStore:
         auto_sync: bool = True,
         sync_fn: Optional[Callable[[Path], Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
-        ledger_path = cls.get_ledger_path(repo_root)
-        data = read_ledger_file(ledger_path)
-        if isinstance(data, dict) and "changes" in data:
-            return data
-        if auto_sync and sync_fn:
-            return sync_fn(repo_root)
-        return {"version": 1, "active_change_id": None, "changes": {}}
+        with cls.lock(repo_root):
+            ledger_path = cls.get_ledger_path(repo_root)
+            data = read_ledger_file(ledger_path)
+            if isinstance(data, dict) and "changes" in data:
+                return data
+            if auto_sync and sync_fn:
+                return sync_fn(repo_root)
+            return {"version": 1, "active_change_id": None, "changes": {}}
 
     @classmethod
     def mutate_change(
@@ -432,6 +442,7 @@ class FileLedgerStore:
         set_active: bool = True,
         sync_fn: Optional[Callable[[Path], Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
+        validate_change_id(change_id)
         with cls.lock(repo_root):
             ledger = cls.load(repo_root, auto_sync=False)
             ledger_path = cls.get_ledger_path(repo_root)
@@ -457,6 +468,7 @@ class FileLedgerStore:
         change: str,
         sync_fn: Optional[Callable[[Path], Dict[str, Any]]] = None,
     ) -> None:
+        validate_change_id(change)
         with cls.lock(repo_root):
             ledger = cls.load(repo_root, auto_sync=False)
             ledger_path = cls.get_ledger_path(repo_root)
