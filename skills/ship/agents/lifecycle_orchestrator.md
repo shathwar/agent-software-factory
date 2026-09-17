@@ -7,7 +7,7 @@
 ## 1. Strict Scope & Context Isolation Law
 
 - **Pure Dispatcher Role**: The orchestrator coordinates transitions and verifies receipts. It NEVER writes implementation code, tests, or adversarial reviews directly in the main orchestrator conversation context.
-- **Context Boundary Law**: To prevent prompt dilution and instruction drift, each gate MUST be dispatched to an isolated subagent. Only structured boundary artifacts (ADR paths, task lists, test runner receipts, Judge reports) are passed between gates.
+- **Execution Capabilities**: Use isolated subagents when the host and selected execution mode support them. Otherwise use focused sequential passes. Carry explicit ADR paths, task lists, receipts, and reports between passes; never fabricate independent reviewers.
 - **Persistent State Machine**: The filesystem (`openspec/`, `tasks.md`, `docs/adr/`, `.scratch/`) acts as the state machine. Orient with `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py"` at session start.
 
 ---
@@ -49,3 +49,6 @@ Deliver to user:
 - **Specification Artifacts**: ADR and OpenSpec links.
 - **Review Bill of Health**: Official Judge PASS verdict.
 - **Git Handoff**: Formatted commit trailers (`Ship-Change`, `Ship-<Gate>`) and push offer.
+
+
+Read `workflow.profile` and `workflow.execution` from inspection. Follow [team rollout guidance](../references/team_rollout.md#team-profiles). When subagents are unavailable, execute separate sequential passes and report that mode honestly; preserve the same evidence checks. Only the orchestrator changes lifecycle state.

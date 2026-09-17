@@ -1,25 +1,36 @@
 """Phase Gate Evaluators for the Ship Lifecycle Engine."""
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Set
 
 from .evidence import validate_review_approval, implementation_failed
-from .models import GateResult, GateStatus
 
 
 def validate_delivery_readiness(
-    review_report: Dict[str, Any],
+    review_report: Optional[Dict[str, Any]],
     active_pkg: Dict[str, Any],
     git_info: Dict[str, Any],
     active_change: Optional[Dict[str, Any]],
+    design_error: Optional[str] = None,
+    package_spec_names: Optional[Set[str]] = None,
+    spikes: Optional[List[str]] = None,
 ) -> Tuple[str, str, str]:
     """Validate that review and ledger requirements are met before advancing to delivery."""
     def review_blocked(reason: str) -> Tuple[str, str, str]:
         return ("review", "REVIEW_ACTIVE", reason)
 
+    if spikes:
+        return ("spike", "SPIKE_ACTIVE", f"Complete empirical spike in '{spikes[0]}'.")
+
     pkg_change = active_pkg.get("change", "")
-    err = validate_review_approval(review_report, pkg_change, git_info)
-    if err:
-        return review_blocked(err)
+    if not active_pkg.get("has_tasks", True):
+        return ("design", "SPEC_UNFINISHED", "tasks.md does not exist. Compile tasks.md and specs/ before implementation.")
+    if active_pkg.get("total_tasks", 0) == 0:
+        return ("design", "SPEC_UNFINISHED", "tasks.md contains no tasks. Compile tasks.md and specs/ before implementation.")
+    design_blockers = [b for b in (active_change or {}).get("blockers", []) if b.startswith("Design:")]
+    if design_error or design_blockers:
+        return ("design", "DESIGN_APPROVAL_REQUIRED", design_error or design_blockers[0])
+    if active_pkg.get("pending_tasks", 0) > 0:
+        return ("implementation", "TDD_ACTIVE", f"Implement pending tasks ({active_pkg['completed_tasks']}/{active_pkg['total_tasks']} tasks complete): pending tasks in tasks.md. Next: '{active_pkg.get('next_task')}'. Run Red-Green-Refactor.")
 
     if active_change:
         blockers = active_change.get("blockers", [])
@@ -37,10 +48,16 @@ def validate_delivery_readiness(
         if review_ev.get("critical_or_high_count", 0) > 0:
             return review_blocked(f"Ledger records {review_ev['critical_or_high_count']} unresolved CRITICAL/HIGH finding(s). Remediate defects before shipping.")
 
+    if not review_report:
+        return review_blocked("no passing review report found. Run 'review' in review-loop mode against base branch.")
+    err = validate_review_approval(review_report, pkg_change, git_info, package_spec_names=package_spec_names)
+    if err:
+        return review_blocked(err)
+
     return (
         "delivery",
         "DELIVERY_READY",
-        f"All tasks complete, tests verified green, and Judge review PASSED. Ready to deliver Delivery Walkthrough. Run 'python3 skills/ship/scripts/inspect_lifecycle.py --archive' to sync living specs and archive '{pkg_change}'.",
+        f"All tasks complete, tests verified green, and Judge review PASSED. Ready to deliver Delivery Walkthrough. Run the installed inspect_lifecycle.py with --archive to sync living specs and archive '{pkg_change}'.",
     )
 
 
@@ -79,48 +96,7 @@ def determine_lifecycle_state(
         )
 
     if openspec_packages:
-        active_pkg = openspec_packages[0]
-        pkg_change_name = active_pkg.get("change")
-        if not active_pkg["has_tasks"] or active_pkg["total_tasks"] == 0:
-            return (
-                "design",
-                "SPEC_UNFINISHED",
-                f"Compile tasks.md and specs/ for '{pkg_change_name}'. Seek user confirmation to proceed.",
-            )
-
-        design_blockers = [b for b in (active_change or {}).get("blockers", []) if b.startswith("Design:")]
-        if design_blockers:
-            return ("design", "DESIGN_APPROVAL_REQUIRED", design_blockers[0])
-
-        if active_pkg["pending_tasks"] > 0:
-            next_task_str = f" Next: '{active_pkg['next_task']}'." if active_pkg["next_task"] else ""
-            return (
-                "implementation",
-                "TDD_ACTIVE",
-                f"Implement pending tasks ({active_pkg['completed_tasks']}/{active_pkg['total_tasks']} tasks complete).{next_task_str} Run Red-Green-Refactor.",
-            )
-
-        if active_pkg["pending_tasks"] == 0 and active_pkg["total_tasks"] > 0:
-            if active_change:
-                impl_ev = active_change.get("evidence", {}).get("implementation", {})
-                blockers = active_change.get("blockers", [])
-                test_blockers = [b for b in blockers if b.startswith("Tests:")]
-                if implementation_failed(impl_ev) or test_blockers:
-                    reason = test_blockers[0] if test_blockers else f"{impl_ev.get('failed_count', 1)} test(s) failing"
-                    return (
-                        "implementation",
-                        "TDD_ACTIVE",
-                        f"Blocked by failing tests recorded in ledger ({reason}). Run Red-Green-Refactor to fix failing tests before advancing.",
-                    )
-
-            if not review_report:
-                return (
-                    "review",
-                    "REVIEW_ACTIVE",
-                    "All implementation tasks marked complete. Run 'review' in review-loop mode against base branch.",
-                )
-
-            return validate_delivery_readiness(review_report, active_pkg, git_info, active_change)
+        return validate_delivery_readiness(review_report, openspec_packages[0], git_info, active_change)
 
     has_accepted = any(a.get("status") in {"ACCEPTED", "APPROVED"} for a in adrs)
     if has_accepted:

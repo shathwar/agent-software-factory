@@ -378,6 +378,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--approve-design", metavar="SHA256", help="Record external approval of this design digest; requires --change and --approved-by.")
     parser.add_argument("--approved-by", help="Identity supplied by the approving user or trusted host.")
 
+    parser.add_argument("--doctor", action="store_true", help="Check the local installation and workspace without modifying them.")
+    parser.add_argument("--migrate-state", action="store_true", help="Back up and migrate a supported legacy versionless ledger to v1.")
+    parser.add_argument("--version", action="store_true", help="Print the installed suite version.")
+
     args = parser.parse_args(argv)
     repo_root = Path(args.path).resolve()
 
@@ -391,6 +395,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     def banner(title: str, lines: Sequence[str]) -> List[str]:
         bar = "═" * 69
         return [bar, f" {title}", bar, *lines, bar]
+
+    if args.version:
+        print((Path(__file__).resolve().parent.parent / "VERSION").read_text().strip())
+        return 0
+    if args.doctor:
+        from lifecycle.operations import doctor
+        result = doctor(repo_root)
+        output_result(result, [f"Ship {result['version']}"] + [f"{'OK' if c['ok'] else 'FAIL'} {c['name']}: {c['detail']}" for c in result['checks']])
+        return 0 if result["ok"] else 1
+    if args.migrate_state:
+        from lifecycle.operations import migrate_state
+        try:
+            result = migrate_state(repo_root)
+            output_result(result, [json.dumps(result)])
+            return 0
+        except (ValueError, OSError) as exc:
+            print(f"State migration failed: {exc}", file=sys.stderr)
+            return 1
 
     try:
         load_ship_config(repo_root, explicit_path=args.config)

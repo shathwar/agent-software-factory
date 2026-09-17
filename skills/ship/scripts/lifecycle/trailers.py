@@ -3,7 +3,8 @@
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from .evidence import validate_review_approval, validate_review_snapshot, validate_design_approval, implementation_failed
+from .evidence import validate_review_approval, validate_review_snapshot, validate_design_approval, implementation_failed, inspect_spikes
+from .gates import validate_delivery_readiness
 
 
 def canonicalize_gate_name(gate_name: str) -> str:
@@ -71,7 +72,11 @@ class CommitTrailerGenerator:
 
         # 3. Gate: Implementation
         impl_ev = evidence.get("implementation", {})
-        tasks = change_entry.get("task_status", {})
+        from .specs import OpenSpecRepository
+        from .paths import resolve_change_path
+        packages = OpenSpecRepository().inspect_openspec(repo_root, target_change=cid) if resolve_change_path(repo_root, cid).is_dir() else []
+        package = packages[0] if packages else {"change": cid, "has_tasks": False, "total_tasks": 0, "pending_tasks": 0}
+        tasks = {"total": package["total_tasks"], "completed": package.get("completed_tasks", 0), "pending": package["pending_tasks"]}
         blockers = change_entry.get("blockers", [])
         has_test_failures = implementation_failed(impl_ev) or any(b.startswith("Tests:") for b in blockers)
 
@@ -123,15 +128,8 @@ class CommitTrailerGenerator:
         else:
             trailers.append("Ship-Review: PENDING")
 
-        # 6. Gate: Delivery
-        deliv_ev = evidence.get("delivery", {})
-        deliv_status = deliv_ev.get("status", "PENDING")
-        if has_test_failures or blockers or approval_error or design_error:
-            if deliv_status == "ARCHIVED":
-                trailers.append("Ship-Delivery: ARCHIVED")
-            elif change_entry.get("phase") == "delivery" or deliv_status == "READY" or approval_error or design_error:
-                trailers.append("Ship-Delivery: BLOCKED")
-        elif change_entry.get("phase") == "delivery" or deliv_status in {"READY", "ARCHIVED"}:
-            trailers.append(f"Ship-Delivery: {deliv_status if deliv_status != 'PENDING' else 'READY'}")
+        # 6. Gate: Delivery uses the same decision as inspection and archive.
+        decision = validate_delivery_readiness(review_ev, package, git_info, change_entry, design_error=design_error, spikes=inspect_spikes(repo_root))
+        trailers.append("Ship-Delivery: " + ("READY" if decision[1] == "DELIVERY_READY" else "BLOCKED"))
 
         return trailers

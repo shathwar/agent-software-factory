@@ -25,6 +25,8 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 
 ## 1. Orchestrator Execution Flow
 
+If the host lacks subagent support, run the review perspectives sequentially with separate findings, then perform Judge adjudication. State that execution was sequential; do not claim independent agents.
+
 Select action mode:
 - **`review`** *(Default)*: Review only. Return judged report without edits or posting.
 - **`review-pr`**: Review + PR Comment. Post judged report to PR without changing branch.

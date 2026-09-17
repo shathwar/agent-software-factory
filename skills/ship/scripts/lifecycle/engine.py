@@ -201,7 +201,6 @@ class LifecycleEngine:
             force=force,
             load_ledger_fn=lambda r, auto_sync=False: self.ledger.load(r, auto_sync=auto_sync),
             inspect_review_fn=inspect_review_reports,
-            validate_review_fn=validate_review_approval,
             get_git_info_fn=self.vcs.get_info,
             clear_active_fn=self.ledger.clear_active_change,
             generate_trailers_fn=lambda r, change_id=None: CommitTrailerGenerator.generate(

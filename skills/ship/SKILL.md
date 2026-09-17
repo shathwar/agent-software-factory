@@ -15,7 +15,8 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 
 <hard_constraints>
 - Re-Entrant State: Inspect filesystem state (`inspect_lifecycle.py`) first. Resume cleanly; never re-run finished gates.
-- Context Boundary Isolation: To prevent token accumulation and instruction drift, orchestrate each gate via an isolated subagent. Never mix design architecture Q&A, implementation loops, and code reviews in a single prompt context.
+- Execution Capabilities: Honor `workflow.execution`. Use isolated subagents when available; otherwise run focused sequential passes with separate findings and Judge adjudication. Disclose the actual execution mode. Missing subagents must not stop local work or weaken gate requirements.
+- Git Restrictions: Checkpoints and Git notes create internal commit objects. Respect explicit no-Git-mutation restrictions; use local evidence and disclose skipped checkpoint/note capabilities as described in [team rollout](./references/team_rollout.md#git-mutation-restrictions).
 - Design Checkpoint: Record `inspect_lifecycle.py --checkpoint design`. NEVER proceed to implementation without explicit user confirmation of the ADR/OpenSpec package.
 - Test-First Law: In implementation, every task MUST follow strict Red-Green-Refactor with failing behavioral tests before code. Enforce `.ship.json` test commands when present.
 - Terminal Receipts: Gate transitions (implementation ➔ review and review ➔ delivery) REQUIRE pasting the raw terminal test runner output (exit code, test count, duration). Unsubstantiated claims of "tests pass" are rejected.
@@ -74,6 +75,8 @@ The filesystem is the persistent state machine. Orient with `python3 "$SKILLS_DI
 
 ## 3. Execution Protocol
 
+Read `workflow.profile` and `workflow.execution` from inspection output. Apply the [team profile and host capability rules](./references/team_rollout.md#team-profiles). Use repository test commands and conventions; do not invent an independent approval service.
+
 ### Design: Specification & Architecture
 1. Discover facts autonomously from source files. Never ask code-discoverable questions.
 2. Present Frontier Rounds: `❓ Q[N]` with `➡️ Recommended Stance`.
@@ -126,3 +129,5 @@ Iterate sequentially through `openspec/changes/<change>/tasks.md`:
 - [TDD Engine (`tdd`)](../tdd/SKILL.md): Red-Green-Refactor implementation.
 - [Simplify Engine (`simplify`)](../simplify/SKILL.md): Laziness Ladder and debt markers.
 - [Review Engine (`review`)](../review/SKILL.md): 10-stage systems code review.
+
+- [Local team rollout](./references/team_rollout.md): Doctor, profiles, supported environments, pinned upgrades, state migration, and pilot scenarios.

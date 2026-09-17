@@ -1,6 +1,6 @@
 # Skills
 
-A repository of production-grade engineering skills for AI agents, covering the complete lifecycle from architectural design to post-implementation code review:
+A repository of local-first engineering skills for AI agents, covering the complete lifecycle from architectural design to post-implementation code review:
 
 ```text
                      USER REQUEST: /ship "<Feature Idea>"
@@ -438,3 +438,8 @@ Evaluate active engineering lifecycle state with:
 python3 skills/ship/scripts/inspect_lifecycle.py
 ```
 
+
+
+## Team rollout
+
+The current suite is a local-first pilot candidate. See [local team rollout](skills/ship/references/team_rollout.md) for `--doctor`, workflow profiles, host capability fallbacks, pinned installations, backed-up ledger migration, and agent evaluation scenarios. CI is optional. Complete the pilot before describing an organization-wide deployment as validated.

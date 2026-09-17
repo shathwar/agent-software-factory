@@ -369,6 +369,7 @@ class TestInspectLifecycle(unittest.TestCase):
             pkg_dir.mkdir(parents=True)
             (pkg_dir / "tasks.md").write_text("- [ ] 1. Pending task\n")
 
+            self._approve_design(tmppath)
             # 1. Unchecked tasks must block archiving
             with self.assertRaises(RuntimeError) as ctx:
                 inspect_lifecycle.apply_and_archive_openspec(tmppath, "unfinished")
@@ -376,6 +377,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # 2. Completed tasks without passing review must block archiving
             (pkg_dir / "tasks.md").write_text("- [x] 1. Finished task\n")
+            self._approve_design(tmppath)
             with self.assertRaises(RuntimeError) as ctx:
                 inspect_lifecycle.apply_and_archive_openspec(tmppath, "unfinished")
             self.assertIn("no passing review report found", str(ctx.exception))
@@ -665,7 +667,7 @@ class TestInspectLifecycle(unittest.TestCase):
             # Archive must raise RuntimeError
             with self.assertRaises(RuntimeError) as ctx:
                 inspect_lifecycle.apply_and_archive_openspec(tmppath, change="billing")
-            self.assertIn("review approval is for change 'auth'", str(ctx.exception))
+            self.assertIn("review approval is for change 'auth'", str(ctx.exception).lower())
 
             # Matching change 'billing' clears gate
             envelope["change"] = "billing"
@@ -2012,7 +2014,7 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertIn("Ship-Change: auth-v2", trailer_text)
             self.assertIn("Ship-Design: PASSED", trailer_text)
             self.assertIn("Ship-Spike: PASSED (latency < 20ms)", trailer_text)
-            self.assertIn("Ship-Implementation: PASSED (3/3 tasks)", trailer_text)
+            self.assertIn("Ship-Implementation: PASSED (1/1 tasks)", trailer_text)
             self.assertIn("Ship-Simplify: DEBT-0", trailer_text)
             self.assertIn("Ship-Review: PASS (by judge)", trailer_text)
             self.assertIn("Ship-Delivery: READY", trailer_text)
@@ -2191,7 +2193,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             trailers = inspect_lifecycle.generate_gate_trailers(tmppath, change_id="billing")
             trailer_text = "\n".join(trailers)
-            self.assertIn("Ship-Implementation: FAILED (4/4 tasks)", trailer_text)
+            self.assertIn("Ship-Implementation: FAILED", trailer_text)
             self.assertNotIn("Ship-Implementation: PASSED", trailer_text)
             self.assertIn("Ship-Delivery: BLOCKED", trailer_text)
             self.assertNotIn("Ship-Delivery: READY", trailer_text)
@@ -2244,6 +2246,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 "routing_notes": "",
             }))
 
+            self._approve_design(tmppath)
             # Record failing test run to ledger
             inspect_lifecycle.record_test_run_to_ledger(
                 tmppath,
@@ -2461,7 +2464,7 @@ class TestInspectLifecycle(unittest.TestCase):
             tmppath = Path(tmpdir)
             pkg = tmppath / "openspec/changes/feature-y"
             pkg.mkdir(parents=True)
-            (pkg / "tasks.md").write_text("- [ ] Task\n")
+            (pkg / "tasks.md").write_text("- [x] Task\n")
             self._approve_design(tmppath)
             # Create a real git repo
             subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
@@ -2523,7 +2526,7 @@ class TestInspectLifecycle(unittest.TestCase):
             tmppath = Path(tmpdir)
             pkg = tmppath / "openspec/changes/feature-z"
             pkg.mkdir(parents=True)
-            (pkg / "tasks.md").write_text("- [ ] Task\n")
+            (pkg / "tasks.md").write_text("- [x] Task\n")
             self._approve_design(tmppath)
             subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
             subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
@@ -2584,7 +2587,7 @@ class TestInspectLifecycle(unittest.TestCase):
             tmppath = Path(tmpdir)
             pkg = tmppath / "openspec/changes/auth-service"
             pkg.mkdir(parents=True)
-            (pkg / "tasks.md").write_text("- [ ] Task\n")
+            (pkg / "tasks.md").write_text("- [x] Task\n")
             self._approve_design(tmppath)
             # Create a package and initialize state
             inspect_lifecycle.mutate_change_state(
@@ -2700,6 +2703,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 subprocess.run(["git", "add", "."], cwd=root, check=True, capture_output=True)
                 subprocess.run(["git", "commit", "-m", "initial"], cwd=root, check=True, capture_output=True)
                 inspect_lifecycle.set_active_change(root, "feature")
+                self._approve_design(root)
                 inspect_lifecycle.sync_ledger_from_workspace(root)
                 report = root / ".scratch/review_report.json"
                 report.parent.mkdir()

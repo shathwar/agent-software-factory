@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from .evidence import (
     validate_review_approval, is_test_evidence_passing, implementation_failed,
-    design_fingerprint, validate_design_approval,
+    design_fingerprint, validate_design_approval, inspect_spikes,
 )
 from .vcs import GitClient
 from .paths import repository_path, validate_change_id
@@ -373,35 +373,24 @@ class FileLedgerStore:
                 if design_error:
                     blockers.append(f"Design: {design_error}")
 
-                if design_error:
-                    entry["phase"] = "design"
-                elif spikes:
-                    entry["phase"] = "spike"
+                review_ev = entry["evidence"]["review"]
+                if review_ev.get("critical_or_high_count", 0) > 0:
+                    blockers.append(f"Review: {review_ev['critical_or_high_count']} unresolved CRITICAL/HIGH finding(s)")
+                if review_ev.get("verdict") in {"FAIL", "FAILED", "REJECTED"}:
+                    blockers.append(f"Review: verdict is {review_ev['verdict']}")
+                if spikes:
                     blockers.append(f"Spike active in {spikes[0]}")
-                elif not matched_pkg or matched_pkg["total_tasks"] == 0:
-                    entry["phase"] = "design"
-                elif matched_pkg["pending_tasks"] > 0 or any(b.startswith("Tests:") for b in blockers):
-                    entry["phase"] = "implementation"
-                else:
-                    review_ev = entry["evidence"]["review"]
-                    crit = review_ev.get("critical_or_high_count", 0)
-                    verd = review_ev.get("verdict", "")
-                    if crit > 0:
-                        blockers.append(f"Review: {crit} unresolved CRITICAL/HIGH finding(s)")
-                    if verd in {"FAIL", "FAILED", "REJECTED"}:
-                        blockers.append(f"Review: verdict is {verd}")
-
-                    approval_error = validate_review_approval(review_ev, change, GitClient().get_info(repo_root))
-                    if not approval_error and not blockers:
-                        entry["phase"] = "delivery"
-                    else:
-                        entry["phase"] = "review"
 
                 deduped_blockers: List[str] = []
                 for b in blockers:
                     if b not in deduped_blockers:
                         deduped_blockers.append(b)
                 entry["blockers"] = deduped_blockers
+                from .gates import determine_lifecycle_state
+                entry["phase"] = determine_lifecycle_state(
+                    GitClient().get_info(repo_root), adrs, [matched_pkg] if matched_pkg else [],
+                    spikes, review_ev, active_change=entry,
+                )[0]
 
                 new_entry_snapshot = json.dumps({
                     "phase": entry.get("phase"),
@@ -548,10 +537,12 @@ class FileLedgerStore:
             blockers[:] = [b for b in blockers if not b.startswith("Design:")]
             if design_error:
                 blockers.append(f"Design: {design_error}")
-            if not approval_error and not blockers:
-                entry["phase"] = "delivery"
-            else:
-                entry["phase"] = "review"
+            from .gates import validate_delivery_readiness
+            from .specs import OpenSpecRepository
+            from .paths import resolve_change_path
+            packages = OpenSpecRepository().inspect_openspec(repo_root, target_change=cid) if resolve_change_path(repo_root, cid).is_dir() else []
+            package = packages[0] if packages else {"change": cid, "has_tasks": False, "total_tasks": 0}
+            entry["phase"] = validate_delivery_readiness(ev, package, git_info, entry, design_error=design_error, spikes=inspect_spikes(repo_root))[0]
 
         return cls.mutate_change(repo_root, cid, updater, sync_fn=sync_fn)
 

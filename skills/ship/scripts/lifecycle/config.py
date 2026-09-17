@@ -13,6 +13,7 @@ class ShipConfigManager:
     def get_default_config() -> Dict[str, Any]:
         return {
             "version": 1,
+            "workflow": {"profile": "standard", "execution": "auto"},
             "project": {
                 "name": "",
                 "root": ".",
@@ -79,6 +80,8 @@ class ShipConfigManager:
                     raise ValueError(f"{path} must be {' or '.join(allowed)}")
                 if type(value) is float and not math.isfinite(value):
                     raise ValueError(f"{path} must be finite")
+                if "enum" in schema and value not in schema["enum"]:
+                    raise ValueError(f"{path} must be one of {schema['enum']}")
                 if "minimum" in schema and value < schema["minimum"]:
                     raise ValueError(f"{path} must be at least {schema['minimum']}")
                 if isinstance(value, dict):
@@ -93,6 +96,12 @@ class ShipConfigManager:
                 elif isinstance(value, list):
                     for item in value:
                         validate(item, schema["items"], path)
+
+            profile = loaded.get("workflow", {}).get("profile", "standard") if isinstance(loaded.get("workflow", {}), dict) else None
+            if profile == "small-fix":
+                default_config["gates"]["review"]["reviewers"] = ["correctness", "judge"]
+            if profile not in ("standard", "small-fix", "high-risk"):
+                raise ValueError("workflow.profile must be small-fix, standard, or high-risk")
 
             def deep_merge(target: Dict[str, Any], source: Dict[str, Any]) -> None:
                 for k, v in source.items():

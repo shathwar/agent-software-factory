@@ -176,6 +176,28 @@
     "config_error": {
       "type": "string",
       "description": "Error message encountered when loading config file."
+    },
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "type": "string",
+          "enum": [
+            "small-fix",
+            "standard",
+            "high-risk"
+          ]
+        },
+        "execution": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "sequential",
+            "parallel"
+          ]
+        }
+      }
     }
   },
   "additionalProperties": false

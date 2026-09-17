@@ -10,7 +10,7 @@ import shutil
 import uuid
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-from .evidence import validate_design_approval, implementation_failed
+from .evidence import validate_design_approval
 from .paths import repository_path, resolve_change_path, validate_change_id
 from .transactions import atomic_write, begin_archive, record_archive_progress, recover_archive, sync_directory
 
@@ -304,7 +304,6 @@ class OpenSpecRepository:
         force: bool = False,
         load_ledger_fn: Optional[Callable[..., Dict[str, Any]]] = None,
         inspect_review_fn: Optional[Callable[..., Any]] = None,
-        validate_review_fn: Optional[Callable[..., Any]] = None,
         get_git_info_fn: Optional[Callable[[Path], Dict[str, Any]]] = None,
         clear_active_fn: Optional[Callable[[Path, Optional[str]], Any]] = None,
         generate_trailers_fn: Optional[Callable[..., List[str]]] = None,
@@ -347,60 +346,23 @@ class OpenSpecRepository:
         change_name = change_dir.name
 
         if not force:
-            tasks_file = repository_path(repo_root, str((change_dir / "tasks.md").relative_to(repo_root)))
-            if not tasks_file.exists():
-                raise RuntimeError(f"Cannot archive '{change_name}': tasks.md does not exist.")
-            content = tasks_file.read_text(encoding="utf-8", errors="replace")
-            has_pending = False
-            has_tasks = False
-            for line in content.splitlines():
-                s = line.strip()
-                if s.startswith("- [ ]") or s.startswith("* [ ]"):
-                    has_pending = True
-                    has_tasks = True
-                elif s.startswith(("- [x]", "- [X]", "* [x]", "* [X]")):
-                    has_tasks = True
-            if not has_tasks:
-                raise RuntimeError(f"Cannot archive '{change_name}': tasks.md contains no tasks.")
-            if has_pending:
-                raise RuntimeError(f"Cannot archive '{change_name}': package has pending tasks in tasks.md. Complete all tasks before archiving or use --force.")
-
-            if load_ledger_fn:
-                ledger = load_ledger_fn(repo_root, auto_sync=False)
-                change_entry = ledger.get("changes", {}).get(change_name)
-                if change_entry:
-                    blockers = change_entry.get("blockers", [])
-                    if blockers:
-                        raise RuntimeError(
-                            f"Cannot archive '{change_name}': active ledger blockers ({'; '.join(blockers)}). Remediate blockers before archiving or use --force."
-                        )
-                    impl_ev = change_entry.get("evidence", {}).get("implementation", {})
-                    if implementation_failed(impl_ev):
-                        failed_cnt = impl_ev.get("failed_count", 1)
-                        raise RuntimeError(
-                            f"Cannot archive '{change_name}': {failed_cnt} test(s) failing recorded in ledger. Fix tests before archiving or use --force."
-                        )
-
-            if inspect_review_fn and validate_review_fn and get_git_info_fn:
-                review_report = inspect_review_fn(repo_root, change=change_name)
-                if not review_report:
-                    raise RuntimeError(f"Cannot archive '{change_name}': no passing review report found (or delivery evidence in .scratch/).")
-
-                source_specs_dir = repository_path(repo_root, str((change_dir / "specs").relative_to(repo_root)))
-                package_spec_names = {s.name for s in source_specs_dir.glob("*.md")} if source_specs_dir.exists() else set()
-                git_info = get_git_info_fn(repo_root)
-
-                review_err = validate_review_fn(review_report, change_name, git_info, package_spec_names=package_spec_names)
-                if review_err:
-                    msg = review_err if review_err.startswith("Judge report") else (review_err[:1].lower() + review_err[1:])
-                    raise RuntimeError(f"Cannot archive '{change_name}': {msg}")
-
-        if not force:
+            from .gates import validate_delivery_readiness
             from .ledger import FileLedgerStore
-            current = FileLedgerStore.load(repo_root, auto_sync=False).get("changes", {}).get(change_name)
-            design_error = validate_design_approval(repo_root, change_name, current)
-            if design_error:
-                raise RuntimeError(f"Cannot archive '{change_name}': {design_error}")
+            from .evidence import inspect_review_reports, inspect_spikes
+            from .vcs import GitClient
+            current = (load_ledger_fn(repo_root, auto_sync=False) if load_ledger_fn else FileLedgerStore.load(repo_root, auto_sync=False)).get("changes", {}).get(change_name)
+            packages = self.inspect_openspec(repo_root, target_change=change_name)
+            report = (inspect_review_fn or inspect_review_reports)(repo_root, change=change_name)
+            git_info = (get_git_info_fn or GitClient().get_info)(repo_root)
+            specs = repository_path(repo_root, str((change_dir / "specs").relative_to(repo_root)))
+            decision = validate_delivery_readiness(
+                report, packages[0], git_info, current,
+                design_error=validate_design_approval(repo_root, change_name, current),
+                package_spec_names={path.name for path in specs.glob("*.md")},
+                spikes=inspect_spikes(repo_root),
+            )
+            if decision[1] != "DELIVERY_READY":
+                raise RuntimeError(f"Cannot archive '{change_name}': {decision[2]}")
 
         synced_specs = []
         living_specs_dir = repository_path(repo_root, "openspec/specs")
