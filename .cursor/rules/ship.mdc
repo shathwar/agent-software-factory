@@ -1,0 +1,16 @@
+---
+description: Engineering lifecycle rules and deterministic state machine enforcement
+globs: *
+alwaysApply: true
+---
+
+# Engineering Lifecycle Rules
+
+This project uses the **Ship Engineering Lifecycle Engine**. Follow these rules for all engineering tasks:
+
+## Core Directives
+1. **Zero Conversational Filler**: Never say "Certainly", "I'd be happy to", or provide conversational preamble. Start directly with code, state inspection, or test execution.
+2. **Re-Entrant State**: The filesystem is the persistent state machine. Before doing work, inspect state via `python3 skills/ship/scripts/inspect_lifecycle.py` (or the installed skill path).
+3. **Iron Law of Test-First**: Writing new production code without a failing test is forbidden. Run tests and observe the assertion failure before implementing.
+4. **In-Flight Doubt Check**: Before declaring non-trivial logic complete (concurrency, boundary crossings, state mutations), run an adversarial doubt check to uncover unstated assumptions and edge cases.
+5. **Adversarial Review**: Code changes require a clean review with zero unhandled CRITICAL or HIGH defects before delivery.

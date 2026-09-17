@@ -1,0 +1,17 @@
+{
+  "name": "skills",
+  "version": "0.2.0-rc.1",
+  "description": "Deterministic engineering lifecycle skills for AI coding agents: design, spike, tdd, simplify, review, and ship.",
+  "author": {
+    "name": "Sumanth",
+    "url": "https://github.com/shathwar"
+  },
+  "homepage": "https://github.com/shathwar/skills",
+  "repository": "https://github.com/shathwar/skills",
+  "license": "MIT",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Engineering Lifecycle Skills",
+    "shortDescription": "Full lifecycle engineering orchestrator with deterministic gates and adversarial reviews"
+  }
+}

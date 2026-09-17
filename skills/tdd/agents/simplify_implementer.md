@@ -17,6 +17,7 @@
 2. **Laziness Ladder**: Reuse existing helpers ➔ stdlib built-ins ➔ installed packages. Zero new dependencies.
 3. **Hardcoding Allowed**: Hardcode return values if it validates the pipeline before triangulation.
 4. **Verify Green**: Run test runner. Ensure test passes without breaking existing tests.
+5. **Doubt Check on Non-Trivial Logic**: If implementation touches concurrency, boundary crossings, or state mutations, execute an in-flight Doubt Check ([`doubt_cycle.md`](../references/doubt_cycle.md)) before handoff.
 
 ---
 

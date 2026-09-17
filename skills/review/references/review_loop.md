@@ -68,6 +68,27 @@ Every transition records its reason, evidence, iteration, and source snapshot. M
 
 Uncertain candidates remain OPEN with the unresolved question recorded. A failed Fixer attempt leaves a finding CONFIRMED, not REJECTED: rejecting a patch does not disprove the defect. Unavailable post-fix verification leaves it FIXED but unverified. A new regression caused by a fix gets its own OPEN entry; it cannot go directly to the Fixer.
 
+### Frozen Classification & Fold Outcomes
+
+In repair passes, finding classifications are **strictly frozen**:
+- **Zero Severity Downgrades**: Neither the Fixer nor the orchestrator may downgrade `CRITICAL` or `HIGH` to `LOW`, reclassify an in-scope finding as "known issue", or dismiss it as "acceptable risk."
+- **Zero Silent Drops**: Confirmed findings must be resolved or explicitly disputed; they cannot be omitted from subsequent reports.
+
+Every confirmed finding processed in a repair round must produce one of four strictly evidenced outcomes:
+
+1. **`FOLDED <commit_sha>`**:
+   - The root cause is repaired in code under green test protection.
+   - The test suite runs and passes.
+   - An atomic commit is recorded and its commit SHA is pasted into the repair report.
+2. **`DISPUTED <reason>`**:
+   - Concrete code-level counter-evidence is provided proving the finding is an invalid defect or an intentional tradeoff.
+   - Escalates immediately to the human user for adjudication (`HUMAN_DECISION`).
+3. **`BLOCKED <missing_input>`**:
+   - The fix cannot proceed due to an external limitation (e.g. missing credentials, network access, or environmental dependency).
+4. **`REPLAN <phase>`**:
+   - The defect reveals an architectural gap too large for an inline repair (> 150 lines or requiring schema/contract refactoring).
+   - Routes to design/planning for a dedicated implementation phase rather than a hasty patch.
+
 ## Round execution
 
 1. **REVIEWING:** In round one, run the selected review passes on the requested change. In later rounds, carry forward the validated post-fix reports and inspect only changed evidence or affected scope. Keep independent discovery passes free of other reviewers' initial conclusions.

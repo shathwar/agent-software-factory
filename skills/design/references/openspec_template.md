@@ -62,6 +62,19 @@ The system SHALL [formal statement of requirement using RFC 2119 keyword SHALL /
 - **WHEN** [Error, network timeout, or invalid input occurs]
 - **THEN** [Expected containment, error code, or fallback behavior]
 - **AND** [State remains consistent with zero data corruption]
+
+## Capability Closure (from capability_closure.md)
+
+### Role Access Matrix
+| Capability | Admin | User | Guest |
+|---|:---:|:---:|:---:|
+| Create / Update | ALLOW | ALLOW | DENY |
+| Delete | ALLOW | DENY | DENY |
+
+### Domain Expectation Sweep
+- [x] **In-Scope**: [Concrete domain guarantee]
+- [ ] **Out-of-Scope**: [Explicitly excluded behavior]
+- [ ] **Deferred**: [Scheduled for future iteration]
 ```
 
 ---

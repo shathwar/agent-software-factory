@@ -85,8 +85,9 @@ Specification ➔ 🔴 RED (test_driver) ➔ 🟢 GREEN (simplify_implementer) �
 1. **Pick Atomic Requirement**: Take next unchecked task from `tasks.md` or next acceptance scenario (`WHEN / THEN`).
 2. **🔴 Phase 1 (Red)**: Write single isolated test using Arrange-Act-Assert. Run test runner. Confirm failure with failure trace.
 3. **🟢 Phase 2 (Green)**: Write minimum production code to satisfy test. Run test runner. Confirm green.
-4. **🔵 Phase 3 (Refactor)**: Remove duplication, improve naming. Verify tests remain 100% green.
-5. **Advance**: Check off task `- [x]` in `tasks.md`.
+4. **🧐 Phase 3 (Doubt Check)**: For non-trivial logic (branching, concurrency, boundary crossing, data mutation), run the [In-Flight Doubt Cycle](./references/doubt_cycle.md). Isolate diff + contract, strip reasoning, and probe for unstated assumptions or unhandled edge cases. Convert any discovered gaps into failing tests before advancing.
+5. **🔵 Phase 4 (Refactor)**: Remove duplication, improve naming. Verify tests remain 100% green.
+6. **Advance**: Check off task `- [x]` in `tasks.md`.
 
 ---
 
@@ -120,3 +121,4 @@ python3 "$SKILLS_DIR/tdd/scripts/verify_tdd.py" --trim-receipt test_run.log
 
 - [TDD Patterns & Testability (`tdd_patterns.md`)](./references/tdd_patterns.md): AAA patterns, Dual-Speed testing, fakes vs stubs vs mocks, characterization tests.
 - [Testing Anti-Patterns Catalog (`anti_patterns.md`)](./references/anti_patterns.md): Common agent testing failures, hollow mock smells, and brittle assertions.
+- [In-Flight Doubt Cycle (`doubt_cycle.md`)](./references/doubt_cycle.md): 5-step adversarial verification protocol to cross-examine non-trivial decisions during implementation.

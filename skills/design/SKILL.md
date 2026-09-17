@@ -72,7 +72,7 @@ Traverse these 5 domains during grilling (details in [`systems_inquiry_matrix.md
 ## 4. Session Lifecycle & Confirmation Gate
 
 1. **Iterate Rounds**: Update tree, recompute frontier, batch next round.
-2. **Confirmation Gate**: Stop when frontier is empty. Present executive synthesis of decisions: *"Does this capture our shared architectural understanding?"*
+2. **Capability Closure & Confirmation Gate**: Verify the [Capability Closure Checklists](./references/capability_closure.md) (Entity lifecycle CRUD, subsystem integration, role matrix, and expectation sweep). Present executive synthesis of decisions: *"Does this capture our shared architectural understanding?"*
 3. **Compile Specifications**:
    - **ADR**: Write `docs/adr/ADR-<NNNN>-<change>.md` using [`adr_template.md`](./references/adr_template.md).
    - **OpenSpec**: When tasks or executable specs are needed, write `openspec/changes/<change>/` using [`openspec_template.md`](./references/openspec_template.md).
@@ -84,5 +84,6 @@ Traverse these 5 domains during grilling (details in [`systems_inquiry_matrix.md
 
 - [Interview Protocol & Frontier Rules (`interview_protocol.md`)](./references/interview_protocol.md): Computing frontier and managing round state.
 - [Systems Inquiry Matrix (`systems_inquiry_matrix.md`)](./references/systems_inquiry_matrix.md): Checklists across all 5 systems domains.
+- [Capability Closure Checklists (`capability_closure.md`)](./references/capability_closure.md): Entity lifecycle CRUD, subsystem integration, role matrix, and expectation sweep.
 - [Architecture Decision Record Template (`adr_template.md`)](./references/adr_template.md): Standard contract format for ADRs.
 - [OpenSpec Change Package Template (`openspec_template.md`)](./references/openspec_template.md): Schema for `proposal.md`, `specs/`, and `tasks.md`.

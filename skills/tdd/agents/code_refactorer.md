@@ -19,6 +19,7 @@
    // simplify: <Shortcut>. Ceiling: <Threshold/Limit>. Upgrade: <Next Architecture>.
    ```
 3. **Continuous Green**: Re-run full test suite. Verify zero regressions.
+4. **Doubt Invariant**: Ensure refactoring introduces no unstated assumptions or hidden coupling ([`doubt_cycle.md`](../references/doubt_cycle.md)).
 
 ---
 

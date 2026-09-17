@@ -93,9 +93,12 @@ Evaluate every proposed fix before reporting as `fixed`:
 
 ---
 
-## 7. Handoff Contract
+## 7. Handoff Contract (Fold Outcomes)
 
-Return one result per assigned finding ID:
-- **Status**: `fixed` (passed Safety Gate), `blocked` (needs human decision), or `not_fixed`.
-- **Details**: Changed files, why fix is smallest safe change, test commands and outcomes.
-- **Safety Gate Results**: Explicit ACCEPT / REJECT status with supporting evidence.
+Return exactly one evidenced outcome per assigned finding ID:
+- **`FOLDED <commit_sha>`**: Passed Fix Safety Gate, all tests green, committed to git, and commit SHA recorded.
+- **`DISPUTED <reason>`**: Finding contested with concrete technical counter-evidence; escalated to user for human decision.
+- **`BLOCKED <missing_input>`**: Environmental blocker, missing credentials, or external API limitation.
+- **`REPLAN <phase>`**: Defect reveals an architectural gap too large for an inline patch (> 150 lines or schema change).
+
+Never downgrade finding severity or silently omit a confirmed finding.

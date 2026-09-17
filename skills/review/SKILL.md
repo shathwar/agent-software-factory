@@ -21,6 +21,14 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 - Repair Ceiling: In `review-loop`, NEVER exceed 3 repair iterations. Halt immediately on unexpected test regressions.
 </hard_constraints>
 
+<turn_contract>
+Verify before ending the turn:
+✓ 1. Mode Signals Inspected: Executed `inspect_changes.sh` or evaluated explicit prompt signals.
+✓ 2. Independent Adjudication: All findings evaluated by the Judge; zero unadjudicated raw reviewer output returned.
+✓ 3. Frozen Classification Enforced: In `review-loop`, every finding produced an explicit outcome (`FOLDED <sha>`, `DISPUTED <reason>`, `BLOCKED <missing>`, or `REPLAN <phase>`); zero silent downgrades or dropped issues.
+✓ 4. Complete Findings Schema: Every finding adheres to the exact 12-field schema contract.
+</turn_contract>
+
 ---
 
 ## 1. Orchestrator Execution Flow
@@ -65,6 +73,9 @@ Review every active stage. Higher stages prioritise impact, not block later chec
 - [Craftsmanship Handbook (`handbook_craftsmanship.md`)](./references/handbook_craftsmanship.md): Stages 4–7 checklists.
 - [Architecture Handbook (`handbook_architecture.md`)](./references/handbook_architecture.md): Stages 8–9 checklists.
 - [Production Risk Matrix (`production_risk_matrix.md`)](./references/production_risk_matrix.md): Migration safety, contract drift, blast radius.
+- [Security Hardening Handbook (`handbook_security.md`)](./references/handbook_security.md): OWASP Top 10, injection, secrets leakage, dependency auditing.
+- [Web Performance Handbook (`handbook_webperf.md`)](./references/handbook_webperf.md): Core Web Vitals (LCP, CLS, INP), bundle budgets, render waterfalls.
+- [Architectural Invariants Contract (`architectural_invariants.md`)](./references/architectural_invariants.md): Protocol for evaluating codebase-level invariants and rules.
 
 ---
 

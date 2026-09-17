@@ -24,6 +24,14 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 - Review Clearance: Delivery REQUIRES an explicit PASS report from the review Judge, zero open CRITICAL/HIGH defects, and verified test evidence bound to current code.
 </hard_constraints>
 
+<turn_contract>
+Verify before ending the turn:
+✓ 1. Re-entrant State Checked: Inspected `inspect_lifecycle.py` before executing or advancing.
+✓ 2. Receipts Pasted: Terminal receipts (command, exit code, test count, duration) pasted for any test or gate execution.
+✓ 3. Ledger Synchronized: Gate transitions, design approvals, or evidence records committed to `.ship/state.json`.
+✓ 4. Zero Unsubstantiated Claims: No phase marked complete without verifiable filesystem or command evidence.
+</turn_contract>
+
 ---
 
 ## 1. The Engineering Lifecycle Pipeline

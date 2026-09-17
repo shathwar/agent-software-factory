@@ -46,3 +46,11 @@ A checklist for evaluating operational impact, deployment safety, and blast radi
 - **Telemetry & Observability**:
   - Are metrics incremented on both success and failure branches?
   - Are critical operations logged at `INFO` or `WARN`/`ERROR` with contextual identifiers (`orderId`, `userId`, `symbol`)?
+
+---
+
+## 4. Architectural Invariants Preservation
+
+- **Repository Contract (`ARCHITECTURAL_INVARIANTS.md`)**:
+  - If the repository root contains `ARCHITECTURAL_INVARIANTS.md`, verify that the proposed changes strictly adhere to all declared invariants (see [architectural_invariants.md](./architectural_invariants.md)).
+  - Any unapproved breach of an invariant is an automatic `CRITICAL` or `HIGH` finding in category `ProductionRisk`.

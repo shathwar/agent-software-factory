@@ -78,9 +78,9 @@ Teams can adopt skills incrementally without changing their entire workflow:
 
 | Skill Name | Command / Trigger | Lifecycle Stage | Description |
 |---|---|---|---|
-| [**`review`**](./skills/review/SKILL.md) | `/review`, `"review"`, `"adversarial review"` | Post-implementation | **Recommended Pilot**. 10-stage systems review across correctness, concurrency, failure modes, and production risk. |
+| [**`review`**](./skills/review/SKILL.md) | `/review`, `"review"`, `"adversarial review"` | Post-implementation | **Recommended Pilot**. 10-stage systems review covering correctness, concurrency, security hardening, web performance, and production risk. |
 | [**`simplify`**](./skills/simplify/SKILL.md) | `/simplify`, `"simplify"`, `"lazy senior dev"` | Simplicity & Anti-Bloat | Forces the simplest working solution: YAGNI, standard library first, zero unrequested abstractions. |
-| [**`tdd`**](./skills/tdd/SKILL.md) | `/tdd`, `"tdd"`, `"red-green-refactor"` | Implementation | Dual-speed TDD engine (fast fakes & ephemeral DBs), legacy characterization wrapping, and `verify_tdd.py` CI auditor. |
+| [**`tdd`**](./skills/tdd/SKILL.md) | `/tdd`, `"tdd"`, `"red-green-refactor"` | Implementation | Dual-speed TDD engine (fast fakes & ephemeral DBs), legacy characterization wrapping, in-flight Doubt Cycle, and `verify_tdd.py` CI auditor. |
 | [**`design`**](./skills/design/SKILL.md) | `/design`, `"design"`, `"grill me on this design"` | Pre-implementation | Relentlessly stress-tests architectures and plans using frontier rounds. Compiles an ADR & OpenSpec. |
 | [**`spike`**](./skills/spike/SKILL.md) | `/spike`, `"spike"`, `"throwaway spike"` | Empirical Validation | Rapid disposable spikes with automated statistical benchmarking (`run_spike.py`), ephemeral Docker sandboxes, and ADR bridge. |
 | [**`ship`**](./skills/ship/SKILL.md) | `/ship`, `"ship"`, `/lifecycle` | Full Lifecycle Orchestrator | **Battle-Ready**. Chains all 5 skills into an autonomous pipeline with 4 transition gates, git checkpoints, and rollbacks. |
@@ -356,6 +356,22 @@ To install skills into your environment's skill directory (defaults to `~/.gemin
 ```bash
 ./scripts/install.sh
 ```
+
+### Multi-Agent & Cross-IDE Installation
+
+Install into any AI agent or IDE with native manifests or one-command installers:
+
+- **Vercel Skills CLI (70+ Agents)**:
+  ```bash
+  npx skills add shathwar/skills
+  ```
+- **OpenAI Codex**: Native plugin manifest configured in [`.codex-plugin/plugin.json`](./.codex-plugin/plugin.json).
+- **Cursor IDE**: Project-wide lifecycle rule ready in [`.cursor/rules/ship.mdc`](./.cursor/rules/ship.mdc).
+- **GitHub Copilot**: Context instructions ready in [`.github/copilot-instructions.md`](./.github/copilot-instructions.md).
+- **Claude Code**:
+  ```bash
+  ./scripts/install.sh --target-claude
+  ```
 
 ### Safety & Team Customisation Flags
 The installer defaults to preserving existing non-symlink directories to avoid overwriting team configurations:
