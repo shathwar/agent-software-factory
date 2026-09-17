@@ -3223,6 +3223,40 @@ class TestInspectLifecycle(unittest.TestCase):
             with self.assertRaises(ValueError):
                 inspect_lifecycle.load_ledger(root)
 
+    def test_utility_scratch_dirs_not_flagged_as_active_spikes(self):
+        """Utility directories like velocity, sessions, reports must not be treated as active spikes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            for utility_name in ["velocity", "sessions", "reports"]:
+                d = root / ".scratch" / utility_name
+                d.mkdir(parents=True)
+                (d / "data.json").write_text("{}")
+            spikes = inspect_lifecycle.inspect_spikes(root)
+            self.assertEqual(spikes, [])
+
+    def test_ensure_gitignore_has_ship_fallback_on_exclude_error(self):
+        """If writing to .git/info/exclude fails, ensure_gitignore_has_ship falls back to .gitignore."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            info_dir = root / ".git" / "info"
+            info_dir.mkdir(parents=True)
+            exclude_file = info_dir / "exclude"
+            # Create exclude as a directory or non-writable path to trigger OS exception on open("a")
+            exclude_file.mkdir()  # IsADirectoryError when opened as file
+            inspect_lifecycle.ensure_gitignore_has_ship(root)
+            gitignore = root / ".gitignore"
+            self.assertTrue(gitignore.exists())
+            self.assertIn(".ship/", gitignore.read_text())
+
+    def test_resolve_skill_name(self):
+        """Delivery gate activity maps to ship orchestrator skill."""
+        self.assertEqual(inspect_lifecycle.resolve_skill_name("delivery"), "ship")
+        self.assertEqual(inspect_lifecycle.resolve_skill_name("review"), "review")
+        self.assertEqual(inspect_lifecycle.resolve_skill_name("design"), "design")
+        self.assertEqual(inspect_lifecycle.resolve_skill_name("tdd"), "tdd")
+        self.assertEqual(inspect_lifecycle.resolve_skill_name("simplify"), "simplify")
+        self.assertEqual(inspect_lifecycle.resolve_skill_name("spike"), "spike")
+
 
 if __name__ == "__main__":
     unittest.main()

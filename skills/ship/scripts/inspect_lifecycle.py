@@ -43,6 +43,7 @@ from lifecycle import (
     normalize_req_title,
     parse_requirements_doc,
     record_turn_to_ledger,
+    resolve_skill_name,
     validate_delivery_readiness,
     validate_judge_report_contract,
     validate_review_approval,

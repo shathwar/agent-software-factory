@@ -72,7 +72,7 @@ def read_ledger_file(path: Path) -> Optional[Dict[str, Any]]:
 
 def ensure_gitignore_has_ship(repo_root: Path) -> None:
     """Ensure .ship/ is ignored in git without creating unwanted untracked working-tree files."""
-    def _append_ignore_entry(target: Path) -> None:
+    def _append_ignore_entry(target: Path) -> bool:
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
             content = target.read_text(encoding="utf-8") if target.exists() else ""
@@ -82,13 +82,15 @@ def ensure_gitignore_has_ship(repo_root: Path) -> None:
                     if content and not content.endswith("\n"):
                         f.write("\n")
                     f.write(".ship/\n")
+            return True
         except Exception:
-            pass
+            return False
 
     info_exclude = repo_root / ".git" / "info" / "exclude"
+    appended = False
     if info_exclude.parent.exists():
-        _append_ignore_entry(info_exclude)
-    else:
+        appended = _append_ignore_entry(info_exclude)
+    if not appended:
         _append_ignore_entry(repo_root / ".gitignore")
 
 

@@ -20,3 +20,8 @@ scratch/
 __pycache__/
 *.pyc
 .venv/
+
+# Ship Lifecycle
+.ship/
+.ship
+

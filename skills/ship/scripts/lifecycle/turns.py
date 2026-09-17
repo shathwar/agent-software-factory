@@ -193,6 +193,7 @@ def get_next_turn_contract(
                 "status_check": "READY (Exit code 0)",
                 "review_verdict": "PASS",
                 "living_specs_dir": "openspec/specs/",
+                "orchestrator_skill": "ship",
             },
             hard_constraints=[
                 "Review Clearance: Delivery requires an explicit PASS report from the review Judge and zero open CRITICAL/HIGH defects.",
@@ -205,7 +206,7 @@ def get_next_turn_contract(
                 "Present Delivery Walkthrough to user.",
             ],
             output_evidence=f"OpenSpec package archived to openspec/archive/ and commit trailers generated",
-            action_prompt=f"Execute delivery sign-off for '{target_change}'. Archive OpenSpec package, generate commit trailers, and compile Delivery Walkthrough.",
+            action_prompt=f"Execute delivery sign-off for '{target_change}' via ship orchestrator. Archive OpenSpec package, generate commit trailers, and compile Delivery Walkthrough.",
         )
 
     # Fallback / ARCHIVED
@@ -296,3 +297,11 @@ def format_turns_log(turns: List[Dict[str, Any]], change_id: Optional[str] = Non
             lines.append("─────────────────────────────────────────────────────────────────────")
     lines.append("═════════════════════════════════════════════════════════════════════")
     return "\n".join(lines)
+
+
+def resolve_skill_name(skill: str) -> str:
+    """Map lifecycle gate activity to installed skill directory name."""
+    if skill == "delivery":
+        return "ship"
+    return skill
+

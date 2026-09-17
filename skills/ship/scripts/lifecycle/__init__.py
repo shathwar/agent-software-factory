@@ -17,7 +17,7 @@ from .models import (
     TurnContract, TurnRecord,
 )
 from .ledger import FileLedgerStore, record_turn_to_ledger, get_turns_from_ledger
-from .turns import get_next_turn_contract, format_turn_contract, format_turns_log
+from .turns import get_next_turn_contract, format_turn_contract, format_turns_log, resolve_skill_name
 from .specs import OpenSpecRepository, merge_spec_requirements, normalize_req_title, parse_requirements_doc
 from .trailers import CommitTrailerGenerator, canonicalize_gate_name
 from .vcs import GIT_NOTES_REF, GitClient
@@ -55,6 +55,7 @@ __all__ = [
     "normalize_req_title",
     "parse_requirements_doc",
     "record_turn_to_ledger",
+    "resolve_skill_name",
     "validate_delivery_readiness",
     "validate_judge_report_contract",
     "validate_review_approval",

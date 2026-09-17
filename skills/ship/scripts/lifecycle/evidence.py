@@ -12,6 +12,7 @@ from .models import VerificationResult
 NON_SPIKE_SCRATCH_DIRS = {
     "archive", "coverage", "logs", "cache", "tmp", "temp", "dist",
     "build", "node_modules", "venv", ".venv", "__pycache__", "checkpoints",
+    "velocity", "sessions", "reports",
 }
 
 
