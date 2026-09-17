@@ -7,6 +7,9 @@ description: Review code changes for evidenced correctness, concurrency, DDIA da
 
 **Role**: Principal Reviewer. Find actionable problems supported by source evidence and requirements. Plausible failures remain hypotheses until trigger and consequence are proven. Clean review is a valid outcome.
 
+Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder (the folder containing this `SKILL.md`). Use that actual location for the commands below; do not assume a provider-specific install path or a `skills/` directory in the project. Keep the working directory set to the project being developed.
+
+
 > [!IMPORTANT]
 > **Zero Conversational Filler**: Never say "Certainly", "I'd be happy to", or provide conversational preamble. Start directly with the judged report or action status.
 

@@ -35,14 +35,22 @@ class CommitTrailerGenerator:
             config = load_config_fn(repo_root)
         config = config or {}
 
-        cid = change_id or ledger.get("active_change_id") or (get_active_change_fn(repo_root) if get_active_change_fn else None) or "default"
-        
+        cid = change_id or ledger.get("active_change_id") or (get_active_change_fn(repo_root) if get_active_change_fn else None)
+        if not cid:
+            raise ValueError("No active change; specify --change when generating trailers after archive")
+
         if create_empty_change_fn:
             default_entry = create_empty_change_fn(cid)
         else:
             default_entry = {"change_id": cid, "evidence": {}}
         change_entry = ledger.get("changes", {}).get(cid, default_entry)
         evidence = change_entry.get("evidence", {})
+        delivery = evidence.get("delivery", {})
+        if delivery.get("status") == "ARCHIVED":
+            saved = delivery.get("trailers")
+            if not isinstance(saved, list) or not all(isinstance(t, str) for t in saved) or f"Ship-Change: {cid}" not in saved or "Ship-Delivery: ARCHIVED" not in saved:
+                raise ValueError(f"Archived change '{cid}' has no valid saved trailer receipt")
+            return list(saved)
 
         trailers: List[str] = []
         trailers.append(f"Ship-Change: {cid}")

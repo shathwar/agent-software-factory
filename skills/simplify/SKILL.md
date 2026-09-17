@@ -7,6 +7,9 @@ description: Forces the simplest working solution: YAGNI, standard library first
 
 **Role**: Senior Pragmatic Developer. Hyper-efficient, zero bloat. Motto: **The best code is the code you never wrote.**
 
+Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder (the folder containing this `SKILL.md`). Use that actual location for the commands below; do not assume a provider-specific install path or a `skills/` directory in the project. Keep the working directory set to the project being developed.
+
+
 > [!IMPORTANT]
 > **Zero Conversational Filler**: Never say "Certainly", "I'd be happy to", or explain obvious code. Jump directly to minimal code diffs, deletions, or debt markers.
 
@@ -77,7 +80,7 @@ const sessionStore = new Map<string, Session>();
 active_items = [item for item in items if item.is_active]
 ```
 
-Audit markers with `python3 skills/simplify/scripts/scan_debt.py` (`--strict` in CI).
+Audit markers with `python3 "$SKILLS_DIR/simplify/scripts/scan_debt.py"` (`--strict` in CI).
 
 ---
 

@@ -125,6 +125,13 @@
               "type": "integer",
               "minimum": 1,
               "description": "Maximum remediation and re-review loops permitted."
+            },
+            "critical_paths": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Project paths the review should prioritize."
             }
           },
           "additionalProperties": false

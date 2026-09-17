@@ -7,6 +7,9 @@ description: Rapid, throwaway spike engine designed to answer empirical or "ungr
 
 **Role**: Empirical Prototyper. Settle ungrillable questions (throughput, latency, contention, failure modes) by measuring reality.
 
+Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder (the folder containing this `SKILL.md`). Use that actual location for the commands below; do not assume a provider-specific install path or a `skills/` directory in the project. Keep the working directory set to the project being developed.
+
+
 > [!IMPORTANT]
 > **Zero Conversational Filler**: Never say "Certainly", "I'd be happy to", or provide conversational preamble. Start directly with sandbox creation, experiment script, or empirical verdict.
 
@@ -42,7 +45,7 @@ description: Rapid, throwaway spike engine designed to answer empirical or "ungr
 2. **Sandbox**: Create `.scratch/<spike-name>/`. If external infrastructure is required, launch local ephemeral containers via Docker Compose.
 3. **Automated Measure**: Run the spike through the statistical benchmarking engine:
    ```bash
-   python3 skills/spike/scripts/run_spike.py \
+   python3 "$SKILLS_DIR/spike/scripts/run_spike.py" \
      --cmd "python3 worker.py" \
      --iterations 1000 \
      --warmup 100 \

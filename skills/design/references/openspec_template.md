@@ -136,7 +136,7 @@ OpenSpec distinguishes between **in-flight change packages** (`openspec/changes/
 ### Automation via Tooling
 Upon delivery sign-off, run:
 ```bash
-python3 skills/ship/scripts/inspect_lifecycle.py --archive
+python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --archive
 ```
 This automatically:
 1. Syncs all delta specification files into `openspec/specs/` (the cumulative living truth of the system).

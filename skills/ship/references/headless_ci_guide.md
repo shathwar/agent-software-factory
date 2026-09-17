@@ -1,5 +1,8 @@
 # Headless CI & Multi-Team Automation Guide
 
+Commands below assume `SKILLS_DIR` is set to the absolute parent directory of the installed `ship` folder. Keep the working directory set to the consumer project.
+
+
 A production guide for running the **Ship Lifecycle Engine** headlessly in CI/CD (GitHub Actions, GitLab CI) and decoupling agent execution from synchronous chat sessions.
 
 ---
@@ -136,12 +139,12 @@ implementation, and evidence-publication failure, before enabling autonomous del
 
 | Command | Purpose in CI/CD |
 |---|---|
-| `python3 skills/ship/scripts/inspect_lifecycle.py --status-check` | Exits `0` if ready for delivery, `1` if blocked, `2` if rollback required. Use in CI branch protection. |
-| `python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint <gate>` | Records immutable internal git refs (`refs/ship/...`) and JSON receipts in `.scratch/`. |
-| `python3 skills/ship/scripts/inspect_lifecycle.py --rollback design` | Safely archives untracked/modified edits to `.scratch/backups/` and resets `tasks.md` for revision. |
-| `python3 skills/ship/scripts/inspect_lifecycle.py --archive <change>` | Syncs delta specs into `openspec/specs/` and archives completed change packages. |
-| `python3 skills/ship/scripts/inspect_lifecycle.py --generate-trailers` | Emits RFC 5133 Git commit trailers mapping to `.ship.json` gates. |
-| `python3 skills/ship/scripts/inspect_lifecycle.py --sync-state` | Re-synchronizes `.ship/state.json` authoritative ledger from workspace artifacts. |
+| `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --status-check` | Exits `0` if ready for delivery, `1` if blocked, `2` if rollback required. Use in CI branch protection. |
+| `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --checkpoint <gate>` | Records immutable internal git refs (`refs/ship/...`) and JSON receipts in `.scratch/`. |
+| `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --rollback design` | Safely archives untracked/modified edits to `.scratch/backups/` and resets `tasks.md` for revision. |
+| `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --archive <change>` | Syncs delta specs into `openspec/specs/` and archives completed change packages. |
+| `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --generate-trailers` | Emits RFC 5133 Git commit trailers mapping to `.ship.json` gates. |
+| `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --sync-state` | Re-synchronizes `.ship/state.json` authoritative ledger from workspace artifacts. |
 
 
 ## Recovery boundaries

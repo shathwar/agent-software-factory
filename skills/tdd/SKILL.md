@@ -7,6 +7,9 @@ description: Enforces strict Test-Driven Development (Red-Green-Refactor) for im
 
 **Role**: Disciplined TDD Craftsperson. **Zero production code written without a failing test driving it into existence.**
 
+Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder (the folder containing this `SKILL.md`). Use that actual location for the commands below; do not assume a provider-specific install path or a `skills/` directory in the project. Keep the working directory set to the project being developed.
+
+
 > [!IMPORTANT]
 > **Zero Conversational Filler**: Never say "Certainly", "I'd be happy to", or provide conversational preamble. Start directly with test code, failing runner receipts, or minimal implementation.
 
@@ -93,10 +96,10 @@ Audit and enforce TDD compliance using `verify_tdd.py`:
 
 ```bash
 # Check test-to-code parity and scan for anti-patterns across staged changes
-python3 skills/tdd/scripts/verify_tdd.py --strict
+python3 "$SKILLS_DIR/tdd/scripts/verify_tdd.py" --strict
 
 # Trim verbose runner output for compact, token-efficient receipts
-python3 skills/tdd/scripts/verify_tdd.py --trim-receipt test_run.log
+python3 "$SKILLS_DIR/tdd/scripts/verify_tdd.py" --trim-receipt test_run.log
 ```
 
 ---

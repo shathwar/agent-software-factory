@@ -342,7 +342,7 @@ Use `skills/spike/scripts/run_spike.py` for automated statistical warmup, concur
 ### Example: Benchmarking API / Command Throughput & p99 Latency
 ```bash
 # Benchmark local worker script with 20 concurrent threads and 1,000 requests
-python3 skills/spike/scripts/run_spike.py \
+python3 "$SKILLS_DIR/spike/scripts/run_spike.py" \
   --cmd "curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/healthz" \
   --iterations 1000 \
   --warmup 100 \
@@ -354,7 +354,7 @@ python3 skills/spike/scripts/run_spike.py \
 
 ### Output JSON for Automated ADR & OpenSpec Bridge
 ```bash
-python3 skills/spike/scripts/run_spike.py \
+python3 "$SKILLS_DIR/spike/scripts/run_spike.py" \
   --cmd "python3 .scratch/test_db_query.py" \
   --iterations 500 \
   --json > .scratch/spike_results.json

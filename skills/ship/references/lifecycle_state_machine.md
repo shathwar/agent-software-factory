@@ -1,5 +1,8 @@
 # Lifecycle State Machine & Transition Rules
 
+Commands below assume `SKILLS_DIR` is set to the absolute parent directory of the installed `ship` folder. Keep the working directory set to the consumer project.
+
+
 A formal specification of the 4-gate engineering lifecycle state machine, its transition guards, and crash-recovery protocols.
 
 ---
@@ -97,7 +100,7 @@ A formal specification of the 4-gate engineering lifecycle state machine, its tr
 
 ### State 7: `DELIVERY_READY` ➔ `ARCHIVED` (OpenSpec Apply & Archive)
 - **Guard**: Delivery Walkthrough completed and signed off; all automated test suites pass.
-- **Action**: Run `python3 skills/ship/scripts/inspect_lifecycle.py --archive <change>`.
+- **Action**: Run `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --archive <change>`.
 - **Output**: Delta specs in `openspec/changes/<change>/specs/` merged/synced to living truth in `openspec/specs/`. Active package moved from `openspec/changes/<change>/` to `openspec/archive/<YYYY-MM-DD>-<change>/`. Lifecycle returns to clean state for next proposal.
 
 ---
@@ -131,20 +134,20 @@ The Ship Engine employs a tri-tier architecture combining working-tree agility w
 
 ```bash
 # Evaluate repository state and inspect active change ledger
-python3 skills/ship/scripts/inspect_lifecycle.py
+python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py"
 
 # Switch active change for multi-agent workflows
-python3 skills/ship/scripts/inspect_lifecycle.py --set-active-change <change_id>
+python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --set-active-change <change_id>
 
 # Re-synchronize state ledger from workspace artifacts
-python3 skills/ship/scripts/inspect_lifecycle.py --sync-state
+python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --sync-state
 
 # Attach review or test evidence to ledger and git notes
-python3 skills/ship/scripts/inspect_lifecycle.py --record-review .scratch/review_report.json
-python3 skills/ship/scripts/inspect_lifecycle.py --record-tests pass
+python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --record-review .scratch/review_report.json
+python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --record-tests pass
 
 # Generate commit trailers for delivery commit
-python3 skills/ship/scripts/inspect_lifecycle.py --generate-trailers
+python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --generate-trailers --change <change_id>
 ```
 
 ---
@@ -195,14 +198,14 @@ reports. Deleting the ledger loses the approval and requires it to be recorded a
 Before presenting a package for approval, capture its digest:
 
 ```bash
-python3 skills/ship/scripts/inspect_lifecycle.py --change CHANGE --design-fingerprint
+python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --change CHANGE --design-fingerprint
 ```
 
 After the user or authorized reviewer approves that exact package, record the
 captured digest (do not recompute it to silently accept intervening changes):
 
 ```bash
-python3 skills/ship/scripts/inspect_lifecycle.py --change CHANGE --approve-design REVIEWED_SHA256 --approved-by REVIEWER_ID
+python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --change CHANGE --approve-design REVIEWED_SHA256 --approved-by REVIEWER_ID
 ```
 
 The receipt lives under `changes[CHANGE].evidence.design.approval` in the ledger.
@@ -230,3 +233,15 @@ catch contradictions and stale results, but assume the user and agent operate in
 a trusted checkout. Independently authenticated evidence is an optional CI concern,
 not a prerequisite for local use. See the [headless CI guide](./headless_ci_guide.md)
 only when setting up that integration.
+
+
+### Archived receipts and configuration errors
+
+After archive, pass `--change <change_id>` to `--generate-trailers`. The active
+pointer is cleared on archive, and the command returns the saved trailer receipt
+instead of revalidating files that have moved. Without an active change or explicit
+ID, trailer generation fails visibly. Design approval preserves the active pointer.
+
+An absent `.ship.json` uses defaults. An unreadable, malformed, non-object, or
+incorrectly typed configuration raises an error; an explicit `--config` path must
+exist. Fix the configuration before resuming workflow commands.

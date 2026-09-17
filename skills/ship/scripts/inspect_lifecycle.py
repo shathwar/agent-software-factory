@@ -392,6 +392,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         bar = "═" * 69
         return [bar, f" {title}", bar, *lines, bar]
 
+    try:
+        load_ship_config(repo_root, explicit_path=args.config)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
     if args.design_fingerprint or args.approve_design is not None:
         from lifecycle.evidence import design_fingerprint
         try:
@@ -419,9 +425,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.generate_trailers:
-        trailers = generate_gate_trailers(repo_root, change_id=args.change)
-        output_result({"trailers": trailers}, trailers)
-        return 0
+        try:
+            trailers = generate_gate_trailers(repo_root, change_id=args.change)
+            output_result({"trailers": trailers}, trailers)
+            return 0
+        except ValueError as exc:
+            print(f"Error generating trailers: {exc}", file=sys.stderr)
+            return 1
 
     if args.record_review:
         try:

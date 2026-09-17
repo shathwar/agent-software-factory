@@ -58,13 +58,13 @@ const active = users.filter(u => u.isActive);
 To automatically scan, validate syntax, and compile a Markdown debt ledger across the repository, run the **Debt Scanner**:
 
 ```bash
-python3 skills/simplify/scripts/scan_debt.py
+python3 "$SKILLS_DIR/simplify/scripts/scan_debt.py"
 ```
 
 Use `--strict` in CI pipelines or pre-commit hooks to fail if any marker is missing a ceiling or upgrade path:
 
 ```bash
-python3 skills/simplify/scripts/scan_debt.py --strict
+python3 "$SKILLS_DIR/simplify/scripts/scan_debt.py" --strict
 ```
 
 Or perform a manual text search:

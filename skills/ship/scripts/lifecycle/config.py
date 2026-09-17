@@ -1,6 +1,7 @@
 """Configuration loading and validation for Ship Lifecycle Engine."""
 
 import json
+import math
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -56,26 +57,42 @@ class ShipConfigManager:
         """Load configuration from .ship.json with deep merge onto defaults."""
         default_config = cls.get_default_config()
 
-        config_file: Optional[Path] = None
-        if explicit_path:
-            p = Path(explicit_path)
-            if not p.is_absolute():
-                p = repo_root / p
-            if p.exists() and p.is_file():
-                config_file = p
-        else:
-            candidate = repo_root / ".ship.json"
-            if candidate.exists() and candidate.is_file():
-                config_file = candidate
-
-        if not config_file:
+        config_file = Path(explicit_path) if explicit_path else repo_root / ".ship.json"
+        if explicit_path and not config_file.is_absolute():
+            config_file = repo_root / config_file
+        if not explicit_path and not config_file.exists() and not config_file.is_symlink():
             return default_config
 
         try:
-            content = config_file.read_text(encoding="utf-8", errors="replace")
-            loaded: Dict[str, Any] = json.loads(content)
+            loaded = json.loads(config_file.read_text(encoding="utf-8"))
             if not isinstance(loaded, dict):
-                return default_config
+                raise ValueError("configuration must be a JSON object")
+
+            # Validate the schema vocabulary used by the bundled manifest, without
+            # adding a runtime dependency or duplicating field rules in Python.
+            def validate(value: Any, schema: Dict[str, Any], path: str) -> None:
+                types = {"object": dict, "array": list, "string": str,
+                         "integer": int, "number": (int, float), "boolean": bool, "null": type(None)}
+                allowed = schema["type"]
+                allowed = allowed if isinstance(allowed, list) else [allowed]
+                if not any(type(value) in (types[t] if isinstance(types[t], tuple) else (types[t],)) for t in allowed):
+                    raise ValueError(f"{path} must be {' or '.join(allowed)}")
+                if type(value) is float and not math.isfinite(value):
+                    raise ValueError(f"{path} must be finite")
+                if "minimum" in schema and value < schema["minimum"]:
+                    raise ValueError(f"{path} must be at least {schema['minimum']}")
+                if isinstance(value, dict):
+                    properties = schema.get("properties", {})
+                    if schema.get("additionalProperties") is False and value.keys() - properties.keys():
+                        raise ValueError(f"{path} contains unknown fields: {sorted(value.keys() - properties.keys())}")
+                    for required in schema.get("required", []):
+                        if required not in value:
+                            raise ValueError(f"{path}.{required} is required")
+                    for key in value.keys() & properties.keys():
+                        validate(value[key], properties[key], f"{path}.{key}")
+                elif isinstance(value, list):
+                    for item in value:
+                        validate(item, schema["items"], path)
 
             def deep_merge(target: Dict[str, Any], source: Dict[str, Any]) -> None:
                 for k, v in source.items():
@@ -85,11 +102,13 @@ class ShipConfigManager:
                         target[k] = v
 
             deep_merge(default_config, loaded)
+            schema = json.loads((Path(__file__).resolve().parents[2] / "references/ship.schema.json").read_text(encoding="utf-8"))
+            validate(default_config, schema, "config")
             try:
                 default_config["config_source"] = str(config_file.relative_to(repo_root))
             except ValueError:
                 default_config["config_source"] = str(config_file)
-        except Exception as e:
-            default_config["config_error"] = str(e)
+        except (OSError, ValueError) as e:
+            raise ValueError(f"Invalid Ship configuration {config_file}: {e}") from e
 
         return default_config

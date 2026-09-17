@@ -7,6 +7,9 @@ description: Complete autonomous engineering lifecycle orchestrator. Chains desi
 
 **Role**: Principal Tech Lead & Delivery Orchestrator. Drive features from raw idea to production PR across 4 deterministic gates.
 
+Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder (the folder containing this `SKILL.md`). Use that actual location for the commands below; do not assume a provider-specific install path or a `skills/` directory in the project. Keep the working directory set to the project being developed.
+
+
 > [!IMPORTANT]
 > **Zero Conversational Filler**: Never say "Certainly", "I'd be happy to", or provide conversational preamble. Start directly with state inspection, active gate execution, or delivery walkthrough.
 
@@ -57,7 +60,7 @@ Delivery: PR Sign-Off & Handoff (delivery)
 
 ## 2. Re-Entrant State Machine (Filesystem as State)
 
-The filesystem is the persistent state machine. Orient with `python3 skills/ship/scripts/inspect_lifecycle.py`:
+The filesystem is the persistent state machine. Orient with `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py"`:
 
 | Gate | Indicators | Action |
 |---|---|---|
@@ -76,7 +79,7 @@ The filesystem is the persistent state machine. Orient with `python3 skills/ship
 2. Present Frontier Rounds: `❓ Q[N]` with `➡️ Recommended Stance`.
 3. If empirical uncertainty arises, spike in `.scratch/` using [`spike`](../spike/SKILL.md).
 4. Compile `docs/adr/ADR-<NNNN>-<change>.md` and `openspec/changes/<change>/`.
-5. Checkpoint specification: `python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint design`.
+5. Checkpoint specification: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --checkpoint design`.
 6. Capture the design digest before presenting the package for confirmation. After explicit authorization, record that same digest and the approver identity using [design approval receipts](./references/lifecycle_state_machine.md#local-workflow-and-design-approval). Explicit approval in the current conversation is sufficient; record it without asking again. Use the known session identity or `session-user`, and apply authorization only to the reviewed design. A checkpoint alone is not approval.
 
 ### Implementation: Test-First Development
@@ -85,25 +88,25 @@ Iterate sequentially through `openspec/changes/<change>/tasks.md`:
 2. **Green**: [Simplify Implementer](../tdd/agents/simplify_implementer.md) writes minimal code using [Laziness Ladder](../simplify/SKILL.md) and custom test commands defined in `.ship.json`.
 3. **Refactor**: [Code Refactorer](../tdd/agents/code_refactorer.md) cleans code; adds [debt markers](../simplify/references/debt_tracking.md) with ceilings.
 4. Mark task completed `- [x]` and repeat.
-5. Checkpoint implementation: `python3 skills/ship/scripts/inspect_lifecycle.py --checkpoint implementation`.
+5. Checkpoint implementation: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --checkpoint implementation`.
 
 ### Review: Code Verification
 1. Inspect implementation changes across the working tree (staged, unstaged, and untracked) against the base branch:
-   - Resolve `inspect_changes.sh` from the installed skill directory (`${SKILLS_DIR:-$HOME/.gemini/config/skills}/review/scripts/inspect_changes.sh`) or local workspace path.
+   - Resolve `inspect_changes.sh` from the installed skill directory (`$SKILLS_DIR/review/scripts/inspect_changes.sh`) or local workspace path.
    - Execute `bash <resolved_path>/inspect_changes.sh --base <base-branch>` (default: `main`). Never restrict to `main...HEAD` as that omits uncommitted working-tree implementation edits.
 2. Launch [`review`](../review/SKILL.md) in `review-loop` mode.
 3. Stage 0 verifies code against OpenSpec/ADR; Stages 1–9 review concurrency, chaos, correctness.
 4. Auto-fix defects under green test protection until Judge issues an explicit `PASS` report. Package `.scratch/delivery_evidence.json` (Delivery Evidence Envelope) bundling the Judge report, verified test runner evidence, and reviewed commit/tree snapshot.
-5. **Rollback Guard**: If ADR invariant is fundamentally broken, execute `python3 skills/ship/scripts/inspect_lifecycle.py --rollback design` and re-open Frontier Round in design.
+5. **Rollback Guard**: If ADR invariant is fundamentally broken, execute `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --rollback design` and re-open Frontier Round in design.
 
 ### Delivery: Sign-Off & Handoff
-1. Verify gate status: `python3 skills/ship/scripts/inspect_lifecycle.py --status-check`.
+1. Verify gate status: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --status-check`.
 2. Run full test suite.
 3. Deliver Walkthrough: changes summary, ADR links, review scorecard, `scan_debt.py` ledger.
-4. Apply & Archive OpenSpec: Sync delta specs to `openspec/specs/` and move completed package to `openspec/archive/<YYYY-MM-DD>-<change>/` via `python3 ${SKILLS_DIR:-$HOME/.gemini/config/skills}/ship/scripts/inspect_lifecycle.py --archive [change]`.
+4. Apply & Archive OpenSpec: Sync delta specs to `openspec/specs/` and move completed package to `openspec/archive/<YYYY-MM-DD>-<change>/` via `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --archive [change]`.
 5. Attach Git Notes & Commit Trailers:
    - Deep validation evidence (review reports, test logs) is attached to the commit object via Git notes (`refs/notes/ship-evidence`).
-   - Format standard RFC 5133 commit trailers using `python3 inspect_lifecycle.py --generate-trailers` (`Ship-Change: <change>`, `Ship-<GateName>: <status>`).
+   - Format standard RFC 5133 commit trailers using `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --generate-trailers --change <change>` (`Ship-Change: <change>`, `Ship-<GateName>: <status>`).
 
 ---
 

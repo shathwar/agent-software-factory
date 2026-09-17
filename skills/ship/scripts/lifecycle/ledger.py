@@ -449,10 +449,11 @@ class FileLedgerStore:
         repo_root: Path,
         change_id: str,
         updater: Callable[[Dict[str, Any]], None],
-        set_active: bool = True,
+        set_active: Optional[bool] = True,
         sync_fn: Optional[Callable[[Path], Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         validate_change_id(change_id)
+        # True selects this change; False clears it if selected; None preserves selection.
         with cls.lock(repo_root):
             ledger = cls.load(repo_root, auto_sync=False)
             ledger_path = cls.get_ledger_path(repo_root)
@@ -466,7 +467,7 @@ class FileLedgerStore:
             entry["revision_counter"] = entry.get("revision_counter", 0) + 1
             if set_active:
                 ledger["active_change_id"] = change_id
-            elif ledger.get("active_change_id") == change_id:
+            elif set_active is False and ledger.get("active_change_id") == change_id:
                 ledger["active_change_id"] = None
             cls.save(repo_root, ledger)
             return entry
@@ -568,7 +569,7 @@ class FileLedgerStore:
                     "approved_by": approved_by.strip(), "approved_at": time.time(),
                 }
                 entry["blockers"] = [b for b in entry.get("blockers", []) if not b.startswith("Design:")]
-            return cls.mutate_change(repo_root, change, updater, set_active=False)
+            return cls.mutate_change(repo_root, change, updater, set_active=None)
 
     @classmethod
     def record_test_run(
