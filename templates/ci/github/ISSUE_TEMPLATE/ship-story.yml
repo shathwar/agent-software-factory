@@ -1,0 +1,92 @@
+name: Ship Story
+description: Standardized specification story for autonomous engineering agents (Ship lifecycle)
+title: "[Story]: "
+labels: ["ship:ready", "story"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### Autonomous Engineering Story
+        This issue triggers the autonomous `ship-dev` agent pipeline when labeled `ship:ready` or assigned.
+        Please provide clear requirements and acceptance criteria using markdown task checkboxes.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context & Motivation
+      description: Why this change is needed and what problem it solves.
+    validations:
+      required: true
+
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      description: Specific functional capabilities required (dev agent updates checkboxes in real time).
+      value: |
+        - [ ] 
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Concrete, verifiable outcomes and test conditions required to close this issue.
+      value: |
+        - [ ] 
+    validations:
+      required: true
+
+  - type: textarea
+    id: affected-files
+    attributes:
+      label: Affected Files & Scope
+      description: Key files or subsystems expected to be modified or created.
+      placeholder: |
+        - `src/...`
+        - `tests/...`
+    validations:
+      required: false
+
+  - type: textarea
+    id: test-requirements
+    attributes:
+      label: Test Requirements
+      description: Automated tests that must be added or updated to satisfy TDD invariants.
+      value: |
+        - [ ] Unit tests covering edge cases
+        - [ ] Integration or regression tests
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: invariants-checklist
+    attributes:
+      label: Architectural Invariants & Critical Paths
+      description: Flag any sensitive areas touched that mandate extra scrutiny during review.
+      options:
+        - label: Touches authentication, authorization, or session management
+        - label: Touches database schemas, data migrations, or persistence transactions
+        - label: Touches financial calculations, billing, or ledger state
+        - label: Touches external network egress or third-party webhooks
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - P0 - Blocker / Critical
+        - P1 - High
+        - P2 - Medium
+        - P3 - Low
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes & References
+      description: Links to ADRs, OpenSpec change IDs, design specs, or dependent issues.
+    validations:
+      required: false

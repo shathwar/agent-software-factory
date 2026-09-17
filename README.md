@@ -56,9 +56,10 @@ This framework transforms AI from an unpredictable code generator into a **disci
 | Corporate / Engineering Challenge | How This Framework Solves It | Team Impact |
 |---|---|---|
 | **AI Dependency & Boilerplate Bloat** | [**`simplify`**](./skills/simplify/SKILL.md) enforces the *Laziness Ladder* (YAGNI, codebase reuse, stdlib built-ins, zero unrequested abstractions). Automated CI scanning via `scan_debt.py`. | **Leaner codebases, zero unneeded npm/pip dependencies, lower maintenance overhead.** |
-| **Reviewer Fatigue on AI PRs** | [**`review`**](./skills/review/SKILL.md) performs a 10-stage systems review (Correctness, Concurrency, Failure, Craftsmanship) with an evidence-based Judge that rejects hallucinations. | **Senior/Staff engineers stop wasting hours catching basic race conditions, unindexed queries, and missing timeouts.** |
-| **Hollow, Backfilled Unit Tests** | [**`tdd`**](./skills/tdd/SKILL.md) enforces the *Iron Law of Test-First*. Agents are strictly forbidden from writing production code before proving a behavioral test fails. | **Real regression safety; tests verify observable behavior instead of mock configurations.** |
-| **Vanishing Architectural Context** | [**`design`**](./skills/design/SKILL.md) enforces the *Facts vs. Decisions Law* and compiles an **Architecture Decision Record (ADR)** and **OpenSpec package** directly into Git. | **Full audit trails for SOC2/compliance, clean RFC records, and effortless onboarding.** |
+| **Reviewer Fatigue on AI PRs** | [**`review`**](./skills/review/SKILL.md) performs a 10-stage systems review (Correctness, Concurrency, Security, WebPerf, Failure, Craftsmanship) with an evidence-based Judge that rejects hallucinations. | **Senior/Staff engineers stop wasting hours catching basic race conditions, unindexed queries, and missing timeouts.** |
+| **Hollow, Backfilled Unit Tests** | [**`tdd`**](./skills/tdd/SKILL.md) enforces the *Iron Law of Test-First* and an in-flight **Doubt Cycle**. Agents are strictly forbidden from writing production code before proving a behavioral test fails. | **Real regression safety; tests verify observable behavior instead of mock configurations.** |
+| **Vanishing Architectural Context** | [**`design`**](./skills/design/SKILL.md) enforces the *Facts vs. Decisions Law*, audits **Capability Closure**, and compiles an **ADR** and **OpenSpec package** directly into Git. | **Full audit trails for SOC2/compliance, clean RFC records, and effortless onboarding.** |
+| **Multi-Agent Coordination & Crashes** | [**`ship`**](./skills/ship/SKILL.md) provides a **two-phase atomic transaction engine** (`.ship/transactions/`) and multi-change isolation (`--change <id>`) with automatic crash recovery. | **Zero corrupted project state, self-healing archive journals, and safe concurrent feature branches.** |
 | **Security & Compliance Hurdles** | **Zero external dependencies.** The entire test suite, inspector CLIs, debt scanners, and validators run on standard library Python 3.10+ and POSIX bash. | **Simplifies internal enterprise security audits; zero supply chain or third-party package vulnerabilities.** |
 | **LLM Token Costs & Latency** | All core skills and agent prompts are **token-optimized ("cavemanned")**, stripping conversational fluff while retaining strict technical constraints. | **Measured 30–50% reduction in reference token overhead, lower prompt costs, and sharper model instruction adherence.** |
 
@@ -68,9 +69,10 @@ This framework transforms AI from an unpredictable code generator into a **disci
 > **Recommended Starting Point**: Pilot **[`review`](./skills/review/SKILL.md) in review-only mode**. Its read-only inspection, evidence requirements, and bounded repair workflow provide an immediate, low-risk way to measure useful defect findings and false-positive rates on real pull requests.
 
 Teams can adopt skills incrementally without changing their entire workflow:
-1. **Phase 1: Pre-PR Defense ([`review`](./skills/review/SKILL.md))**: Run `/review` on pull requests before requesting senior peer review. Catch race conditions and missing error paths early.
+1. **Phase 1: Pre-PR Defense ([`review`](./skills/review/SKILL.md))**: Run `/review` on pull requests before requesting senior peer review. Catch race conditions, unindexed queries, and missing error paths early.
 2. **Phase 2: Anti-Bloat Coding ([`simplify`](./skills/simplify/SKILL.md))**: Use `/simplify` on everyday tasks to enforce standard-library reuse. Add `python3 skills/simplify/scripts/scan_debt.py --strict` to CI to enforce documented debt ceilings.
-3. **Phase 3: Autonomous Lifecycle ([`ship`](./skills/ship/SKILL.md))**: Run `/ship "<feature>"` to drive complete features from architectural grilling (ADRs) through TDD to reviewed PRs. **Battle-Ready** with manifest support (`.ship.json`), git checkpointing, safe rollback, and subagent context isolation.
+3. **Phase 3: Autonomous Lifecycle ([`ship`](./skills/ship/SKILL.md))**: Run `/ship "<feature>"` to drive complete features from architectural grilling (ADRs) through TDD to reviewed PRs. Configure project manifests (`.ship.json`) for team workflow profiles (`small-fix`, `standard`, `high-risk`).
+4. **Phase 4: Headless CI Orchestration**: Automate the lifecycle in CI/CD (GitHub Actions / GitLab CI) via issue comments (`ship:approved`) using the [Headless CI Guide](./skills/ship/references/headless_ci_guide.md).
 
 ---
 
@@ -78,12 +80,12 @@ Teams can adopt skills incrementally without changing their entire workflow:
 
 | Skill Name | Command / Trigger | Lifecycle Stage | Description |
 |---|---|---|---|
-| [**`review`**](./skills/review/SKILL.md) | `/review`, `"review"`, `"adversarial review"` | Post-implementation | **Recommended Pilot**. 10-stage systems review covering correctness, concurrency, security hardening, web performance, and production risk. |
-| [**`simplify`**](./skills/simplify/SKILL.md) | `/simplify`, `"simplify"`, `"lazy senior dev"` | Simplicity & Anti-Bloat | Forces the simplest working solution: YAGNI, standard library first, zero unrequested abstractions. |
-| [**`tdd`**](./skills/tdd/SKILL.md) | `/tdd`, `"tdd"`, `"red-green-refactor"` | Implementation | Dual-speed TDD engine (fast fakes & ephemeral DBs), legacy characterization wrapping, in-flight Doubt Cycle, and `verify_tdd.py` CI auditor. |
-| [**`design`**](./skills/design/SKILL.md) | `/design`, `"design"`, `"grill me on this design"` | Pre-implementation | Relentlessly stress-tests architectures and plans using frontier rounds. Compiles an ADR & OpenSpec. |
-| [**`spike`**](./skills/spike/SKILL.md) | `/spike`, `"spike"`, `"throwaway spike"` | Empirical Validation | Rapid disposable spikes with automated statistical benchmarking (`run_spike.py`), ephemeral Docker sandboxes, and ADR bridge. |
-| [**`ship`**](./skills/ship/SKILL.md) | `/ship`, `"ship"`, `/lifecycle` | Full Lifecycle Orchestrator | **Battle-Ready**. Chains all 5 skills into an autonomous pipeline with 4 transition gates, git checkpoints, and rollbacks. |
+| [**`review`**](./skills/review/SKILL.md) | `/review`, `"review"`, `"adversarial review"` | Post-implementation | **Recommended Pilot**. 10-stage systems review covering correctness, concurrency, security hardening ([`handbook_security.md`](./skills/review/references/handbook_security.md)), web performance ([`handbook_webperf.md`](./skills/review/references/handbook_webperf.md)), architectural invariants ([`architectural_invariants.md`](./skills/review/references/architectural_invariants.md)), and production risk. |
+| [**`simplify`**](./skills/simplify/SKILL.md) | `/simplify`, `"simplify"`, `"lazy senior dev"` | Simplicity & Anti-Bloat | Forces the simplest working solution: YAGNI, standard library first, zero unrequested abstractions, and automated debt auditing via `scan_debt.py`. |
+| [**`tdd`**](./skills/tdd/SKILL.md) | `/tdd`, `"tdd"`, `"red-green-refactor"` | Implementation | Dual-speed TDD engine (fast fakes & ephemeral DBs), legacy characterization wrapping, in-flight **Doubt Cycle** ([`doubt_cycle.md`](./skills/tdd/references/doubt_cycle.md)), and `verify_tdd.py` CI parity auditor. |
+| [**`design`**](./skills/design/SKILL.md) | `/design`, `"design"`, `"grill me on this design"` | Pre-implementation | Relentlessly stress-tests architectures using frontier rounds, enforces **Capability Closure** ([`capability_closure.md`](./skills/design/references/capability_closure.md)), detects ungrillable questions, and compiles an ADR & OpenSpec. |
+| [**`spike`**](./skills/spike/SKILL.md) | `/spike`, `"spike"`, `"throwaway spike"` | Empirical Validation | Rapid disposable spikes with automated statistical benchmarking (`run_spike.py` p50/p90/p99 latency distributions), ephemeral Docker sandboxes, and ADR bridge. |
+| [**`ship`**](./skills/ship/SKILL.md) | `/ship`, `"ship"`, `/lifecycle` | Full Lifecycle Orchestrator | **Battle-Ready**. Chains all 5 skills into an autonomous pipeline with 4 transition gates, git checkpoints, safe rollback, team profiles, preflight doctor, and working tree fingerprinting. |
 
 ---
 
@@ -96,13 +98,19 @@ Give your agent [ship SKILL.md](./skills/ship/SKILL.md) and feature request: `/s
   - Authoritative multi-change ledger `.ship/state.json` (multi-agent isolation via `--change <id>`).
   - Deep commit evidence in Git notes (`refs/notes/ship-evidence`).
   - Standard RFC 5133 commit trailers (`Ship-Change`, `Ship-<Gate>`, `--generate-trailers`).
+- **Preflight Diagnostics (`--doctor`)**: Run `python3 skills/ship/scripts/inspect_lifecycle.py --doctor` to verify runtime, git availability, 6 installed skills, versions, ledger readability, and pending recovery before starting work.
+- **Team Workflow Profiles**: Configurable via `.ship.json` (`small-fix`, `standard`, `high-risk`) and host execution guidance (`workflow.execution: auto | sequential | parallel`) as detailed in [Local Team Rollout](./skills/ship/references/team_rollout.md).
+- **Cryptographic Design Receipts**: Binds authorization to exact specification digest; any requirements amendment invalidates approval and requests re-confirmation.
+- **Working Tree Fingerprinting**: SHA-256 snapshot of commit, tree hash, and uncommitted diff/untracked files; post-review modifications immediately flag `Ship-Review: STALE` and block delivery.
+- **Atomic Transactions & Crash Resilience**: Two-phase commit spec archiving (`.ship/transactions/`) with automatic self-healing recovery from interrupted sessions.
 - **Re-Entrant State Machine**: Filesystem (`openspec/`, `tasks.md`, `docs/adr/`) is persistent state machine. Resumes exact active phase instantly.
 - **Repository Manifest (`.ship.json`)**: Clean domain schema validated by [`ship.schema.json`](./skills/ship/references/ship.schema.json). Configures custom test commands (`gates.implementation.test`).
 - **Git Checkpoints & Safe Rollback**: Records private refs (`--checkpoint design`) and safely backs up broken code on architectural revisions (`--rollback design`).
-- **Lifecycle Inspector**: Run `python3 skills/ship/scripts/inspect_lifecycle.py` to evaluate repository state across all 4 gates deterministically.
+- **Zero-Loss State Migration**: Seamlessly upgrade legacy ledgers via `inspect_lifecycle.py --migrate-state` with byte-for-byte backups.
+- **Modular SOLID Architecture**: Structured Python package under [`skills/ship/scripts/lifecycle/`](./skills/ship/scripts/lifecycle/) separating VCS, evidence, ledger, gate verification, and transaction journals.
 - **Headless CI & GitHub Actions**: Run headlessly in CI with issue-based approvals via [Headless CI Guide](./skills/ship/references/headless_ci_guide.md).
 - **Agent Roster**: Led by [Lifecycle Orchestrator](./skills/ship/agents/lifecycle_orchestrator.md).
-- **References**: [Lifecycle State Machine Guide](./skills/ship/references/lifecycle_state_machine.md) and [Formal JSON Schema](./skills/ship/references/ship.schema.json).
+- **References**: [Lifecycle State Machine Guide](./skills/ship/references/lifecycle_state_machine.md), [Local Team Rollout Guide](./skills/ship/references/team_rollout.md), and [Formal JSON Schema](./skills/ship/references/ship.schema.json).
 
 ---
 
@@ -112,6 +120,7 @@ Give your agent the [design SKILL.md](./skills/design/SKILL.md) and your proposa
 
 - **The Facts vs. Decisions Law**: The agent autonomously inspects the codebase for facts. User turns are reserved strictly for architectural trade-offs.
 - **Frontier Rounds**: Batches unblocked questions with concrete recommended stances (`❓ Q1` + `➡️ Recommended Stance`) so you can answer rapidly by number.
+- **Capability Closure Checklists**: Enforces the 4 closure checklists in [capability_closure.md](./skills/design/references/capability_closure.md) (Entity Lifecycle, State Machine, Authorization Boundaries, Failure/Integration) to eliminate "happy path myopia" before drafting implementation tasks.
 - **Ungrillable Detection**: Recognizes when questions cannot be settled by talk and prompts a timeboxed spike using [spike](./skills/spike/SKILL.md).
 - **Agent Roster**: Led by the [Principal Systems Architect](./skills/design/agents/principal_architect.md).
 - **Output**: Generates a standard [Architecture Decision Record (ADR)](./skills/design/references/adr_template.md) under `docs/adr/` and/or an executable [OpenSpec Change Package](./skills/design/references/openspec_template.md) under `openspec/changes/`, which become the input contracts for `review`.
@@ -135,6 +144,8 @@ Give your agent the [spike SKILL.md](./skills/spike/SKILL.md) and the empirical 
 
 Give your agent the [tdd SKILL.md](./skills/tdd/SKILL.md) and the task or OpenSpec package to implement.
 
+- **The Iron Law**: No production code without a failing behavioral test first.
+- **In-Flight Doubt Cycle**: Applies [doubt_cycle.md](./skills/tdd/references/doubt_cycle.md) during Green ➔ Refactor transitions to challenge assumptions (boundary probing, mutant testing, mutation resistance, invariant assertions) while changes are still cheap and isolated.
 - **Dual-Speed Testing**: Fast in-memory unit tests (`< 50ms`) for domain rules; ephemeral databases (SQLite, Testcontainers) for real SQL queries and migrations. No mocking of DB engines.
 - **Brownfield Characterization (Golden Master)**: Safely onboards legacy untested code by snapshotting existing behavior before applying incremental TDD.
 - **Single-Context Micro-Cycles**: Fast inline Red-Green-Refactor for tasks < 150 lines, reserving multi-agent handoffs for major architectural features.
@@ -143,9 +154,8 @@ Give your agent the [tdd SKILL.md](./skills/tdd/SKILL.md) and the task or OpenSp
   - [**Test Driver**](./skills/tdd/agents/test_driver.md): Red Phase. Translates specs into failing behavioral tests using AAA.
   - [**Simplify Implementer**](./skills/tdd/agents/simplify_implementer.md): Green Phase. Climbs the Laziness Ladder to write the minimum passing code.
   - [**Code Refactorer**](./skills/tdd/agents/code_refactorer.md): Refactor Phase. Cleans code while tests remain green; adds debt markers.
-- **The Iron Law**: No production code without a failing test first.
 - **Red Verification**: Must execute the test suite and confirm the test fails for the expected reason before implementing.
-- **References**: Consult [TDD Patterns & Testability](./skills/tdd/references/tdd_patterns.md) and the [Testing Anti-Patterns Catalog](./skills/tdd/references/anti_patterns.md).
+- **References**: Consult [TDD Patterns & Testability](./skills/tdd/references/tdd_patterns.md), [Testing Anti-Patterns Catalog](./skills/tdd/references/anti_patterns.md), and [In-Flight Doubt Cycle](./skills/tdd/references/doubt_cycle.md).
 
 ---
 
@@ -154,8 +164,9 @@ Give your agent the [tdd SKILL.md](./skills/tdd/SKILL.md) and the task or OpenSp
 Give your agent the [simplify SKILL.md](./skills/simplify/SKILL.md) when implementing features, refactoring, or choosing libraries.
 
 - **The Laziness Ladder**: 1. YAGNI ➔ 2. Codebase reuse ➔ 3. Standard library ➔ 4. Platform native ➔ 5. Installed deps ➔ 6. One-liner ➔ 7. Minimum code.
+- **Deep Modules & Defining Errors Out of Existence**: Narrow interfaces hiding substantial complexity (Ousterhout); boundary conditions become valid no-ops rather than exceptions.
 - **Root-Cause Fixes**: Grep all callers and fix at the shared root, not symptom guards per caller.
-- **Debt Tracking & Scanner**: Mark deliberate pragmatic shortcuts with `// simplify: <shortcut>. Ceiling: <limit>. Upgrade: <next step>.`. Audit with `python3 skills/simplify/scripts/scan_debt.py` or `scan_debt.py --strict` in CI.
+- **Debt Tracking & Scanner**: Mark deliberate pragmatic shortcuts with `// simplify: <shortcut> | Ceiling: <limit> | Upgrade: <next step>.`. Audit with `python3 skills/simplify/scripts/scan_debt.py` or `scan_debt.py --strict` in CI.
 - **References**: Consult the [Laziness Ladder Guide](./skills/simplify/references/laziness_ladder.md) and [Debt Tracking Protocol](./skills/simplify/references/debt_tracking.md).
 
 ---
@@ -240,32 +251,45 @@ Mixed changes combine checks. Migration locks and async APIs add Concurrency. Se
 
 ## What gets checked?
 
-The checklist has ten stages. Only relevant stages apply.
+The checklist has ten stages, grounded in classical systems engineering (*DDIA*, *Release It!*, *A Philosophy of Software Design*):
 
-0. Spec alignment
-1. Correctness
-2. Concurrency and safety
-3. Failure and resilience
-4. Simplicity
-5. Maintainability
-6. Reuse
-7. Performance
-8. SOLID
-9. Patterns
+0. **Spec alignment**: Verifies implementation directly against ADR invariants and OpenSpec acceptance criteria.
+1. **Correctness**: Logic bugs, off-by-one, boundary cases, null dereferences, floating-point precision.
+2. **Concurrency and safety**: Race conditions, TOCTOU, atomic operations, locking order, DDIA data invariants (replication lag, fencing tokens, dual-writes).
+3. **Failure and resilience**: *Release It!* patterns: mandatory I/O timeouts, jittered exponential backoff, bulkheads, circuit breakers, poison-pill DLQ routing.
+4. **Simplicity**: YAGNI, standard library reuse, elimination of speculative indirection, dead code removal.
+5. **Maintainability**: Flat control flow, domain naming, narrow interfaces, deep modules.
+6. **Reuse**: Existing codebase utilities and platform primitives.
+7. **Performance**: Proven query costs, N+1 query elimination, unindexed lookups, memory leaks.
+8. **SOLID & Deep Modules**: High encapsulation, low interface leakage, clean single-responsibility boundaries.
+9. **Patterns**: Idiomatic system patterns (Single-Flight, Circuit Breaker, Outbox); no architectural astronautics.
 
-Fowler's code smells help the Design review. They are not another stage or automatic proof of a problem.
+### Specialist Handbooks & System Contracts
+
+Reviewers consult authoritative domain reference guides:
+- [**Security Hardening & Zero-Trust Defense**](./skills/review/references/handbook_security.md): Injection defenses (SQL, shell, XSS), authentication, authorization, cryptographic hygiene, secrets management, SSRF, and IDOR.
+- [**Web Performance & Resource Optimization**](./skills/review/references/handbook_webperf.md): Core Web Vitals (LCP, INP, CLS), render blocking, bundle splitting, memory lifecycles, and caching headers.
+- [**Architectural Invariants Contract**](./skills/review/references/architectural_invariants.md): Verifies repo-wide architectural invariants. Violations trigger the **Rollback Guard** (`inspect_lifecycle.py --rollback design`) to restore working state safely.
+- [**Production Risk Matrix**](./skills/review/references/production_risk_matrix.md): Blast radius evaluation, rollback safety, and observability gates.
 
 ## What you get
 
-All feedback uses plain, human language, including PR comments: what breaks, why it matters, and what to do next. Short and clear, with the evidence kept intact.
+All feedback uses plain, human language, including PR comments: what breaks, why it matters, and what to do next. Short and clear, with verifiable source evidence kept intact.
 
-One report: summary, stage scorecard, prioritised findings, simplification opportunities, test gaps, and a verification checklist. Missing checks stay visible. Agent handoffs stay internal.
-
-Each finding follows the same [12-field schema](./skills/review/references/finding_schema.md), including its location, evidence, impact, fix, and confidence.
+- **Unified Review Report**: Executive summary, 10-stage scorecard, prioritized findings, simplification opportunities, test gaps, and verification checklist. Missing checks stay visible; agent handoffs stay internal.
+- **12-Field Finding Schema**: Each finding adheres to the formal [12-field schema](./skills/review/references/finding_schema.md) (`id`, `severity`, `category`, `file`, `line`, `title`, `problem`, `evidence`, `impact`, `recommendation`, `confidence`, `fixability`).
+- **Autonomous vs. Human Decision Separation**: Findings marked `autonomous` are fixed by the Code Fixer in the bounded review loop. Findings marked `requires-human` surface concrete trade-offs formatted as Frontier Clarifications (`❓ Q1` + `➡️ Recommended Stance`).
+- **Delivery Evidence Envelope**: For lifecycle delivery, bundles the Judge PASS report, verified test runner metrics (command, exit code `0`, duration, test count, zero failures), and SHA-256 working tree fingerprint into [`.scratch/delivery_evidence.json`](./skills/review/references/finding_schema.md#6-delivery-evidence-envelope-scratchdelivery_evidencejson).
 
 ## Files
 
 ```text
+.codex-plugin/
+└── plugin.json                 # OpenAI Codex native skill manifest
+.cursor/rules/
+└── ship.mdc                    # Cursor IDE native lifecycle rule
+.github/
+└── copilot-instructions.md     # GitHub Copilot engineering instructions
 nano/                           # High-density, ultra-compact (<50 lines) rules for Cursor/Claude Code
 ├── AGENTS.md                   # Universal drop-in rule file (<100 lines) combining all 6 skills
 ├── review.nano.md
@@ -276,31 +300,51 @@ nano/                           # High-density, ultra-compact (<50 lines) rules 
 └── tdd.nano.md
 
 scripts/
-├── install.sh                  # Portable skill installer (symlink/copy to ~/.gemini/config/skills/)
-└── run_tests.sh                # Complete CI test runner (zero external dependencies)
+├── install.sh                  # Portable skill installer (symlink/copy to target environments)
+└── run_tests.sh                # Complete CI test runner (230 tests, zero external dependencies)
 
 skills/
 ├── ship/
 │   ├── SKILL.md
+│   ├── VERSION
 │   ├── agents/
 │   │   └── lifecycle_orchestrator.md
 │   ├── scripts/
-│   │   └── inspect_lifecycle.py
+│   │   ├── inspect_lifecycle.py
+│   │   └── lifecycle/          # Modularized SOLID lifecycle engine package
+│   │       ├── checkpoints.py
+│   │       ├── config.py
+│   │       ├── engine.py
+│   │       ├── evidence.py
+│   │       ├── gates.py
+│   │       ├── ledger.py
+│   │       ├── models.py
+│   │       ├── operations.py
+│   │       ├── paths.py
+│   │       ├── protocols.py
+│   │       ├── specs.py
+│   │       ├── trailers.py
+│   │       ├── transactions.py
+│   │       └── vcs.py
 │   └── references/
 │       ├── lifecycle_state_machine.md
+│       ├── team_rollout.md
 │       ├── headless_ci_guide.md
 │       └── ship.schema.json
 ├── design/
 │   ├── SKILL.md
+│   ├── VERSION
 │   ├── agents/
 │   │   └── principal_architect.md
 │   └── references/
 │       ├── interview_protocol.md
 │       ├── systems_inquiry_matrix.md
+│       ├── capability_closure.md
 │       ├── adr_template.md
 │       └── openspec_template.md
 ├── spike/
 │   ├── SKILL.md
+│   ├── VERSION
 │   ├── agents/
 │   │   └── spike_prototyper.md
 │   ├── scripts/
@@ -310,6 +354,7 @@ skills/
 │       └── experiment_templates.md
 ├── tdd/
 │   ├── SKILL.md
+│   ├── VERSION
 │   ├── agents/
 │   │   ├── test_driver.md
 │   │   ├── simplify_implementer.md
@@ -317,10 +362,12 @@ skills/
 │   ├── scripts/
 │   │   └── verify_tdd.py
 │   └── references/
+│       ├── doubt_cycle.md
 │       ├── tdd_patterns.md
 │       └── anti_patterns.md
 ├── simplify/
 │   ├── SKILL.md
+│   ├── VERSION
 │   ├── scripts/
 │   │   └── scan_debt.py
 │   └── references/
@@ -328,6 +375,7 @@ skills/
 │       └── debt_tracking.md
 └── review/
     ├── SKILL.md
+    ├── VERSION
     ├── agents/
     │   ├── correctness_reviewer.md
     │   ├── concurrency_reviewer.md
@@ -344,6 +392,9 @@ skills/
         ├── handbook_foundations.md
         ├── handbook_craftsmanship.md
         ├── handbook_architecture.md
+        ├── handbook_security.md
+        ├── handbook_webperf.md
+        ├── architectural_invariants.md
         ├── review_pipeline.md
         ├── review_loop.md
         └── production_risk_matrix.md
@@ -414,48 +465,71 @@ For teams operating across multiple AI coding tools with tight context budgets:
 
 ---
 
-## Validation
+## Validation & Verification Suite
 
-Run all checks from the repository root (Python 3.10+ standard library, zero pip dependencies required):
+Run all checks from the repository root (100% Python 3.10+ standard library, zero external pip dependencies required):
 
 ```bash
 ./scripts/run_tests.sh
 ```
 
-The tests check bash/python syntax across all scripts, inspector behavior, report validation, simplify debt scanning, lifecycle state transitions, and local Markdown link targets. CI runs them on Linux and macOS.
+The test runner executes **230 automated unit and integration tests** in ~45 seconds across Linux and macOS, verifying:
+- **Operational Boundary Trials ([`test_agent_workflow_trials.py`](./tests/test_agent_workflow_trials.py))**: Real agent workflows across dirty trees, concurrent multi-change development, crash recovery, amended designs, and external installations.
+- **Atomic Transactions & Crash Recovery ([`test_archive_recovery.py`](./tests/test_archive_recovery.py))**: Two-phase commit spec archiving, orphan journal recovery, and atomic ledger transitions.
+- **Evidence Gates & Cryptographic Invariants ([`test_evidence_gates.py`](./tests/test_evidence_gates.py))**: Specification digest binding, contradictory result rejection, and post-review modification invalidation.
+- **Team Operations & Diagnostics ([`test_team_operations.py`](./tests/test_team_operations.py))**: Preflight doctor checks, workflow profile deep-merging, and zero-loss state migrations.
+- **Core Engine Mechanics ([`test_inspect_lifecycle.py`](./tests/test_inspect_lifecycle.py))**: Git checkpoints, safe rollback on renames, Git notes attachment, and RFC 5133 trailer generation.
+- **Document Integrity ([`test_documents.py`](./tests/test_documents.py))**: Validates that all relative Markdown link targets exist on disk and that schema document examples adhere to contract.
 
-Validate a saved reviewer/Judge report with:
+### CLI Inspection & Auditing Tools
 
+Preflight health diagnosis across runtime, git, skills, and configuration:
 ```bash
-python3 skills/review/scripts/validate_report.py report.json
+python3 skills/ship/scripts/inspect_lifecycle.py --doctor
 ```
 
-Audit codebase debt markers with:
+Evaluate active engineering lifecycle state and verify gate readiness:
+```bash
+python3 skills/ship/scripts/inspect_lifecycle.py --status-check
+```
 
+Generate standard RFC 5133 Git commit trailers:
+```bash
+python3 skills/ship/scripts/inspect_lifecycle.py --generate-trailers --change <change>
+```
+
+Safely migrate legacy ledgers with an automatic byte-for-byte backup:
+```bash
+python3 skills/ship/scripts/inspect_lifecycle.py --migrate-state
+```
+
+Audit codebase technical debt markers and enforce documented limits in CI:
 ```bash
 python3 skills/simplify/scripts/scan_debt.py --strict
 ```
 
-Audit TDD test-to-code parity and anti-patterns with:
-
+Audit TDD test-to-code parity and detect assertless tests / whitebox spies:
 ```bash
 python3 skills/tdd/scripts/verify_tdd.py --strict
 ```
 
-Benchmark an empirical spike with:
+Validate a reviewer or Judge report against the formal 12-field schema:
+```bash
+python3 skills/review/scripts/validate_report.py report.json
+```
 
+Benchmark an empirical spike with warmup passes and latency percentiles (p50/p90/p95/p99):
 ```bash
 python3 skills/spike/scripts/run_spike.py --cmd "python3 -c 'pass'" --iterations 100
 ```
 
-Evaluate active engineering lifecycle state with:
+---
 
-```bash
-python3 skills/ship/scripts/inspect_lifecycle.py
-```
+## Enterprise & Team Rollout
 
+The suite is designed for structured, low-risk adoption across engineering organizations:
 
-
-## Team rollout
-
-The current suite is a local-first pilot candidate. See [local team rollout](skills/ship/references/team_rollout.md) for `--doctor`, workflow profiles, host capability fallbacks, pinned installations, backed-up ledger migration, and agent evaluation scenarios. CI is optional. Complete the pilot before describing an organization-wide deployment as validated.
+- **Local Team Rollout Guide ([`team_rollout.md`](./skills/ship/references/team_rollout.md))**: Detailed guide covering `--doctor` preflight, workflow profiles (`small-fix`, `standard`, `high-risk`), host capability adaptations (`auto`, `sequential`, `parallel`), pinned distributions (`install.sh --mode copy --backup`), and zero-loss ledger migration.
+- **Behavioral Evaluation Cases & Pilot Benchmarks ([`skill_evaluations.md`](./tests/skill_evaluations.md))**: 12 realistic evaluation fixtures and acceptance criteria for benchmarking agent decisions, boundary respect, and defect detection before organizational distribution.
+- **Headless CI & Asynchronous Automation ([`headless_ci_guide.md`](./skills/ship/references/headless_ci_guide.md))**: Ready-to-use GitHub Actions and GitLab CI workflows decoupling feature development from active IDE chat sessions using issue-based approval gates (`ship:approved`).
+- **Zero-Telemetry Local Operation**: All ledgers, evidence, and logs remain strictly local or inside your private Git repository. No data or telemetry is transmitted externally.

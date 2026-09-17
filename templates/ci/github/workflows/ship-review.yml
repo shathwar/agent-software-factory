@@ -1,0 +1,68 @@
+name: Ship Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  pull_request_review_comment:
+    types: [created]
+  issue_comment:
+    types: [created]
+
+jobs:
+  ship-review:
+    if: >
+      github.event_name == 'pull_request' ||
+      github.event_name == 'pull_request_review_comment' ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@ship review') && github.event.issue.pull_request)
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ship-review-${{ github.event.pull_request.number || github.event.issue.number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Ship Review Agent
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_bots: "coderabbitai,claude,ship-agent[bot]"
+          claude_args: '--max-turns 15 --allowedTools "Read,Glob,Grep,Bash(git diff:*),Bash(git log:*),Bash(git show:*)"'
+          prompt: |
+            You are an Evidence-Based Principal Reviewer inspecting this Pull Request.
+            Your role is strictly READ-ONLY. You may inspect git diffs, examine files, and review history.
+            You must NOT execute code or modify files.
+
+            ## Review Criteria
+
+            1. **Correctness & Verification**:
+               - Verify that every new capability or bugfix is protected by automated tests.
+               - Check test quality: do tests assert specific values or just generic non-null/truthy values?
+               - Reject any tests with tautological assertions or missing error paths.
+
+            2. **Architectural Invariants**:
+               - Check `ARCHITECTURAL_INVARIANTS.md` and `.ship.json` if present.
+               - Ensure the changes do not violate core architectural boundaries or introduce prohibited third-party dependencies.
+
+            3. **Security & Data Integrity**:
+               - Ensure zero hardcoded credentials, tokens, or sensitive strings.
+               - Check input validation at all system boundaries and API endpoints.
+               - Check for SQL injection, command injection, path traversal, or privilege escalation.
+
+            4. **Simplicity & Anti-Bloat**:
+               - Flag any unnecessary abstractions, premature generalizations, or dead code.
+               - Verify reuse of existing utility functions rather than introducing redundant helpers.
+
+            ## Reporting Findings
+
+            - Provide concise, actionable feedback with exact `path/to/file:line` references.
+            - Categorize findings by severity: `[BLOCKER]`, `[WARNING]`, or `[NIT]`.
+            - If no issues are found, explicitly emit `PASS: All architectural and correctness invariants satisfied.`

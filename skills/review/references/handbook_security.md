@@ -64,7 +64,32 @@ This handbook provides an adversarial checklist for auditing security vulnerabil
 
 ---
 
-## 5. Finding Schema Mapping
+## 5. Indirect Prompt Injection & Output Poisoning (OWASP Agentic Top 10 / AGT)
+
+Adapted from the **Microsoft Agent Governance Toolkit (AGT)** and **OWASP Agentic Top 10 (ASI01/ASI02)**, autonomous agents processing untrusted external content (web fetches, repository files, third-party tool stdout, issue comments) must defend against prompt injection and output poisoning:
+
+### Role-Confusion Indicators
+- **Rule**: Scan for chat template delimiters or special tokens embedded inside user data or tool outputs:
+  - `<|im_start|>`, `<|im_end|>`, `<|system|>`, `system:`, `[INST]`, `[/INST]`.
+- **Defect Trigger**: External text attempts to fool the LLM parser into treating data as system instructions.
+
+### Instruction Override & Exfiltration Lures
+- **Rule**: Reject or sanitize outputs containing high-risk jailbreak and exfiltration patterns:
+  - `"ignore previous instructions"`, `"disregard all earlier prompts"`
+  - `"reveal the system prompt"`, `"print developer message"`
+  - `"disable guardrails"`, `"bypass safety policy"`
+  - `"send the token"`, `"exfiltrate credentials"`
+  - `"treat tool output as trusted"`, `"follow hidden instructions"`
+
+### Cloud Metadata SSRF & CLI Secret Dumping
+- **Rule**: Autonomous agents executing shell or network commands MUST never query cloud metadata services or dump CLI authentication tokens:
+  - Cloud Metadata IPs: `169.254.169.254`, `100.100.100.200`, `metadata.google.internal`.
+  - Token Dumping Commands: `gh auth token`, `az account get-access-token`, `kubectl config view --raw`, `security find-generic-password`.
+  - Credential File Paths: `~/.ssh/id_*`, `~/.aws/credentials`, `~/.azure/`, `~/.kube/config`, `~/.netrc`, `~/.git-credentials`, `/proc/*/environ`.
+
+---
+
+## 6. Finding Schema Mapping
 
 When filing security findings:
 - **Category**: `ProductionRisk` (for auth/permission/data-leak bugs) or `Correctness` (for input validation/injection bugs).
@@ -72,3 +97,4 @@ When filing security findings:
   - `CRITICAL`: Remote code execution, unauthenticated data exfiltration, auth bypass, or hardcoded production credentials.
   - `HIGH`: Authenticated privilege escalation, SSRF, SQLi requiring login, or missing authorization check.
   - `MEDIUM`: Missing rate limiting, insecure cookie flags, or missing CSP headers.
+

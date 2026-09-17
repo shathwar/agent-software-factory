@@ -1,0 +1,99 @@
+name: Ship Auto-Fix
+
+on:
+  pull_request_review:
+    types: [submitted]
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  ship-fix:
+    # Restrict execution strictly to bot-generated reviews to prevent unintended human loops
+    if: >
+      (github.event_name == 'pull_request_review' && github.event.review.user.type == 'Bot') ||
+      (github.event_name == 'pull_request_review_comment' && github.event.comment.user.type == 'Bot')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    timeout-minutes: 25
+    concurrency:
+      group: ship-autofix-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    steps:
+      - name: Check Autofix Iteration Limit
+        id: iteration
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          COUNT=$(gh pr view ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }} \
+            --json commits \
+            --jq '[.commits[].messageHeadline | select(test("\\[autofix"))] | length')
+          echo "current_count=$COUNT" >> $GITHUB_OUTPUT
+          NEXT_COUNT=$((COUNT + 1))
+          echo "next_count=$NEXT_COUNT" >> $GITHUB_OUTPUT
+
+          if [ "$COUNT" -ge 5 ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "::warning::Autofix iteration limit reached (5/5). Terminating auto-fix loop."
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Notify Human Review Required
+        if: steps.iteration.outputs.skip == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }} \
+            --body "🛑 **Ship Auto-Fix has reached its safety iteration limit (5/5)**. Automated iterations have stopped to prevent token drainage. A human engineer must review the remaining feedback and resolve manually."
+
+      - name: Checkout PR Branch
+        if: steps.iteration.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Setup Python
+        if: steps.iteration.outputs.skip != 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run Ship Auto-Fix Agent
+        if: steps.iteration.outputs.skip != 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: '--max-turns 20 --allowedTools "Edit,Write,Read,MultiEdit,Glob,Grep,Bash(git:*),Bash(gh:*),Bash(pytest:*),Bash(python3:*),Bash(npm:*),Bash(ruff:*),Bash(mypy:*)"'
+          prompt: |
+            A review bot posted feedback on this PR (#${{ github.event.pull_request.number }}).
+            Your mission is to resolve the issues raised while preserving existing architectural invariants and test coverage.
+
+            ## Instructions
+
+            1. **Examine Feedback**:
+               - Read all comments: `gh pr view ${{ github.event.pull_request.number }} --comments`
+               - Review bot findings: `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews`
+
+            2. **Fix Issues Rigorously**:
+               - Address all `[BLOCKER]` and `[WARNING]` findings.
+               - Verify that changes do not violate `ARCHITECTURAL_INVARIANTS.md`.
+               - Do not compromise test rigor: add tests covering any newly discovered edge cases.
+
+            3. **Run Verification**:
+               - Run project tests (e.g. `pytest`, `npm test`).
+               - Run type checks and linters.
+               - If `skills/ship/scripts/inspect_lifecycle.py` exists, ensure `--status-check` passes.
+
+            4. **Commit & Push**:
+               - Stage all fixes.
+               - Commit with headline:
+                 `git commit -m "fix: address review feedback [autofix ${{ steps.iteration.outputs.next_count }}/5]"`
+               - Push the changes to the PR branch:
+                 `git push origin ${{ github.event.pull_request.head.ref }}`

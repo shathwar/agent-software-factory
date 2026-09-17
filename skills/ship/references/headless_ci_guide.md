@@ -97,12 +97,43 @@ Every repository or monorepo service can include a `.ship.json` at its root or s
 
 ---
 
-## 4. Headless integration contract (not a runnable workflow)
+## 4. Turnkey CI/CD Templates & Integration Contract
 
-This repository does **not** ship a complete headless agent runner or a ready-to-use
-issue-triggered GitHub Actions workflow. The earlier example omitted persistence
-between design and implementation runs; copying it would lose the approved work.
-Use the following contract when integrating your organisation's runner.
+To enable fast enterprise adoption, this repository includes turnkey, production-grade GitHub Actions workflows, issue forms, and safety hooks in `templates/ci/`:
+
+```text
+templates/ci/
+├── github/
+│   ├── ISSUE_TEMPLATE/
+│   │   └── ship-story.yml          # Agent-parseable story specification form
+│   └── workflows/
+│       ├── ship-dev.yml            # Implementation agent with live checkbox telemetry
+│       ├── ship-review.yml         # Read-only principal review agent (invariants & security)
+│       └── ship-fix.yml            # Autonomous auto-fix loop with 5-iteration cap guardrail
+└── safety/
+    ├── block-destructive.sh        # PreToolUse destructive bash command blocker
+    ├── pre-tool-branch-guard.sh    # PreToolUse main branch edit blocker
+    └── settings.example.json       # Example configuration wiring safety hooks & deny rules
+```
+
+### The Autonomous Triad Pipeline
+
+1. **`ship-dev.yml` (Implementation & Telemetry)**:
+   - Triggers when an issue is assigned or labeled `ship:ready` (or `@ship` issue comment).
+   - **Real-Time Checkbox Telemetry**: Actively mutates task checkboxes (`- [ ]` to `- [x]`) in the GitHub Issue body via `gh issue edit` as requirements pass, offering live execution visibility without checking console logs.
+   - Enforces TDD Red-Green-Refactor cycles and verifies zero regressions.
+   - Executes `python3 skills/ship/scripts/inspect_lifecycle.py --status-check` before opening a PR referencing `Closes #<N>`.
+2. **`ship-review.yml` (Sandboxed Invariant Review)**:
+   - Triggers on PR open, reopen, or synchronization.
+   - Strictly sandboxed with read-only tools (`Read`, `Glob`, `Grep`, `git diff`, `git log`, `git show`). Code execution is prohibited.
+   - Evaluates diffs against `ARCHITECTURAL_INVARIANTS.md`, correctness, security handbooks, and test coverage.
+3. **`ship-fix.yml` (Feedback Loop with Iteration Cap)**:
+   - Triggers strictly on Bot review feedback (`user.type == 'Bot'`), ignoring humans to prevent unintended feedback loops.
+   - **Safety Iteration Limit (5/5)**: Inspects PR commits for headlines matching `[autofix N/5]`. If the iteration count reaches 5, the workflow posts an alert comment requiring human intervention and terminates cleanly, protecting token budgets.
+
+### Enterprise Integration Contract
+
+When integrating your organization's custom agent runner or CI infrastructure, adhere to the following contract:
 
 1. **Persist the design result.** Create an issue-specific branch and commit the ADR
    and OpenSpec package. Publish its exact commit SHA. Persist the checkpoint receipt,
