@@ -253,7 +253,9 @@ class FileLedgerStore:
             existing: Dict[str, Any] = loaded if isinstance(loaded, dict) and "changes" in loaded else {}
 
             changes: Dict[str, Any] = dict(existing.get("changes", {}))
-            active_change_id = target_change_id or existing.get("active_change_id") or cls.get_active_change(repo_root)
+            active_change_id = existing.get("active_change_id") or cls.get_active_change(repo_root)
+            if not active_change_id and target_change_id:
+                active_change_id = target_change_id
 
             packages = inspect_openspec_fn(repo_root, target_change=None) if inspect_openspec_fn else []
             adrs = inspect_adrs_fn(repo_root) if inspect_adrs_fn else []
@@ -438,7 +440,7 @@ class FileLedgerStore:
         repo_root: Path,
         change_id: str,
         updater: Callable[[Dict[str, Any]], None],
-        set_active: Optional[bool] = True,
+        set_active: Optional[bool] = None,
         sync_fn: Optional[Callable[[Path], Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         validate_change_id(change_id)

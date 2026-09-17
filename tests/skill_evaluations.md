@@ -22,3 +22,19 @@ Record the skill commit, model, request, fixture snapshot, tool actions, final r
 | Ship crash recovery | Supply workspace with `openspec/changes/auth/tasks.md` having 1 of 3 tasks checked `[x]`. | Evaluates filesystem; resumes immediately at task 2 in TDD Red phase; does not re-prompt for architecture or design approval. |
 
 For publication idempotency, a further stubbed case can return an uncertain post result followed by an existing matching comment; verify that resumption finds the comment instead of creating a duplicate. Real provider integration remains a separate check requiring a designated test PR.
+
+---
+
+## Realistic End-to-End Workflow Trials
+
+These trials evaluate full multi-step workflow transitions, boundary enforcement, and crash recovery across real repository lifecycles (automated in `tests/test_agent_workflow_trials.py`).
+
+| Trial | Scenario & Boundary Condition | Expected Agent Workflow & Outcome |
+|---|---|---|
+| Existing uncommitted work | Workspace has dirty or untracked source files prior to review. Code modified after review. | Detects dirty working tree; blocks delivery and archive until current state is reviewed; detects post-review modifications as `Ship-Review: STALE` and blocks delivery until re-reviewed. |
+| Two concurrent changes | Multiple features (`alpha` and `beta`) in flight in the same repository. `alpha` is active and delivery-ready; `beta` has failing tests. | Keeps changes isolated; operations on `beta` never mutate `alpha` or hijack active change pointer; archiving `alpha` preserves `beta` intact and safely clears active selection. |
+| Interrupted session resumption | Session terminates abruptly during TDD; crash leaves pending archive journal. | Next agent session resumes cold at exact next task without re-asking design approval or losing completed tasks; orphaned transaction journals self-heal automatically on next invocation. |
+| Rejected & amended design | Requirements or tasks amended after initial design approval. | Rejection/amendment invalidates approval digest; lifecycle drops to `DESIGN_APPROVAL_REQUIRED`; blocks archive and delivery; stale digest rejected; explicit re-approval unblocks TDD. |
+| Failed tests block advancement | All tasks in `tasks.md` checked `[x]`, but test suite reports failure. | Enforces test-first invariant; refuses to advance to Review or Delivery; recommends Red-Green-Refactor; emits `Ship-Implementation: FAILED` and blocks archive until clean green evidence is recorded. |
+| External installation & consumer project | Skills installed via `scripts/install.sh --target <dir> --mode copy` and run in an independent external repository. | Runs cleanly with zero path or import errors; passes `doctor`; executes full lifecycle from design fingerprint through approval, TDD, review, status check, and archive. |
+
