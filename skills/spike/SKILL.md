@@ -23,6 +23,14 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 - Teardown Mandate: ALL ephemeral containers and processes MUST be torn down upon spike completion.
 </hard_constraints>
 
+<turn_contract>
+Verify before ending the turn:
+✓ 1. Sandbox Isolation Confirmed: All scratch prototype files located strictly in `.scratch/<spike-name>/`; zero files written to `src/`.
+✓ 2. Statistical Measurement Verified: Benchmarks run via `run_spike.py` with warmup and p50/p95/p99 percentiles.
+✓ 3. ADR / Spec Bridge Complete: Empirical verdict and SLI table synced to active ADR or OpenSpec package.
+✓ 4. Teardown Executed: All ephemeral containers, ports, and processes cleanly torn down.
+</turn_contract>
+
 ---
 
 ## 1. Core Operating Principles

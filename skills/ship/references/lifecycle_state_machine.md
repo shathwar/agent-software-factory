@@ -110,7 +110,8 @@ A formal specification of the 4-gate engineering lifecycle state machine, its tr
 The Ship Engine employs a tri-tier architecture combining working-tree agility with permanent Git immutability:
 
 1. **Tier 1: Explicit State Ledger (`.ship/state.json`)**:
-   - Authoritative workflow state tracking `change_id`, active phase (Gates 1–4), `task_status`, active `blockers`, a monotonic `revision_counter`, and references to validation evidence.
+   - Authoritative workflow state tracking `change_id`, active phase (Gates 1–4), `task_status`, active `blockers`, a monotonic `revision_counter`, references to validation evidence, and a full `turns` provenance log.
+   - Reconstructs turn-level history: which skill ran, against what inputs, what evidence it produced, and how the result affected workflow state (`inspect_lifecycle.py --turns`).
    - Fully supports multi-agent and multi-change isolation: distinct changes are stored under `changes[change_id]`.
    - Thread- and crash-safe atomic updates (`NamedTemporaryFile` + `os.replace`).
    - Self-healing synchronization: if `.ship/state.json` is missing, `inspect_lifecycle.py` automatically reconstructs it from workspace artifacts.

@@ -21,6 +21,14 @@ For script commands in the references, resolve `SKILLS_DIR` to the absolute pare
 - Confirmation Gate: NEVER compile final ADR/OpenSpec until the user explicitly confirms the design frontier.
 </hard_constraints>
 
+<turn_contract>
+Verify before ending the turn:
+✓ 1. Facts Autonomously Discovered: Inspected existing schemas, routes, and configs without asking the author code-discoverable facts.
+✓ 2. Decision Frontier Batched: Frontier questions batched into a numbered round with a recommended engineering stance.
+✓ 3. Ungrillable Isolated: Empirical blockers branched to `spike` in `.scratch/`.
+✓ 4. Checkpoint Recorded: Design package compiled (`docs/adr/`, `openspec/changes/<change>/`) and checkpoint recorded via `inspect_lifecycle.py --checkpoint design`.
+</turn_contract>
+
 ---
 
 ## 1. Core Operating Principles

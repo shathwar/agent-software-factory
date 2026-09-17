@@ -21,6 +21,14 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 - Explicit Debt Markers: ANY intentional shortcut MUST match: `simplify: <desc> | Ceiling: <limit> | Upgrade: <action>`.
 </hard_constraints>
 
+<turn_contract>
+Verify before ending the turn:
+✓ 1. Laziness Ladder Evaluated: Standard library and existing project utilities checked before writing custom code or adding dependencies.
+✓ 2. Zero Unrequested Abstractions: Speculative interfaces, wrappers, and indirection eliminated.
+✓ 3. Green Tests Preserved: Test suite run and verified green following all simplification diffs.
+✓ 4. Debt Formatted & Scanned: All shortcuts use standard debt markers with ceilings; verified via `scan_debt.py`.
+</turn_contract>
+
 ---
 
 ## 1. The Laziness Ladder

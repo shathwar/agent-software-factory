@@ -25,7 +25,7 @@
    - Tri-Tier state sync: Authoritative ledger `.ship/state.json`, Git notes evidence (`refs/notes/ship-evidence`), RFC 5133 commit trailers (`Ship-Change`, `Ship-<Gate>`).
 
 ## Hard Rules
-- Context Isolation: Run gates via isolated subagents to prevent context rot.
+- Turn Contracts: Execute specialist skills through explicit Turn Contracts. Subagents are an optional optimization; sequential independent turns enforce identical gates and state.
 - Multi-Change Isolation: Support parallel changes via `--change <id>` in `.ship/state.json`.
 - Rollback Guard: On invariant violation in review, rollback code cleanly to `design`.
 - Manifest Support: Honors repository `.ship.json`.

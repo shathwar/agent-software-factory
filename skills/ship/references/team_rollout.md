@@ -60,6 +60,31 @@ never pretend those passes were independent agents. The same gates still apply.
 The orchestrator owns ledger transitions. Parallel implementation should use
 separate worktrees; a file lock does not isolate agents editing the same source.
 
+## Agent harness independence and turn execution
+
+The agentic SDLC workflow does not depend on recursive or dynamically spawned subagents. It operates identically across all major harness environments:
+- **Claude Code**: Single-session turns, slash command or CLI driven (`inspect_lifecycle.py --next-turn`). Optional subagents via Task tool when available.
+- **OpenCode / Aider**: CLI / REPL independent turns orchestrated via `--next-turn` and skill prompts.
+- **Cursor**: Composer / agent turns orchestrated sequentially in-editor.
+- **CI/CD (GitHub Actions / GitLab CI)**: Headless pipeline execution using `--status-check` and deterministic script gates.
+- **Antigravity**: Multi-turn paired development with optional background subagents for parallel review perspectives.
+
+### Turn Contracts and Turn Provenance
+
+Specialist activities are governed by explicit **Turn Contracts**:
+```bash
+python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --next-turn [--format json]
+```
+The workflow controller (or human developer) executes the specialist activity specified by the contract, fulfills its exit checklist, and records the turn:
+```bash
+python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --record-turn '{"skill": "tdd", "inputs": {"task": "1"}, "evidence": {"tests": "passed"}}' --harness claude-code
+```
+To audit or reconstruct the turn history of a change:
+```bash
+python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --turns [--change <id>]
+```
+Turn provenance reconstructs which skill ran, against what inputs, what evidence it produced, and how the result affected the workflow state.
+
 ## Pinning, upgrade, and rollback
 
 This checkout identifies the suite as `0.2.0-rc.1`: a pilot candidate, not a

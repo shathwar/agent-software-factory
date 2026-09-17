@@ -12,8 +12,12 @@ from .evidence import (
     validate_review_approval,
 )
 from .gates import determine_lifecycle_state, validate_delivery_readiness
-from .ledger import FileLedgerStore
-from .models import GateResult, GateStatus, GitInfo, LifecyclePhase, OpenSpecInfo, ShipConfig, VerificationResult
+from .models import (
+    GateResult, GateStatus, GitInfo, LifecyclePhase, OpenSpecInfo, ShipConfig, VerificationResult,
+    TurnContract, TurnRecord,
+)
+from .ledger import FileLedgerStore, record_turn_to_ledger, get_turns_from_ledger
+from .turns import get_next_turn_contract, format_turn_contract, format_turns_log
 from .specs import OpenSpecRepository, merge_spec_requirements, normalize_req_title, parse_requirements_doc
 from .trailers import CommitTrailerGenerator, canonicalize_gate_name
 from .vcs import GIT_NOTES_REF, GitClient
@@ -33,10 +37,16 @@ __all__ = [
     "OpenSpecRepository",
     "ShipConfig",
     "ShipConfigManager",
+    "TurnContract",
+    "TurnRecord",
     "VerificationResult",
     "canonicalize_gate_name",
     "determine_lifecycle_state",
     "format_summary",
+    "format_turn_contract",
+    "format_turns_log",
+    "get_next_turn_contract",
+    "get_turns_from_ledger",
     "inspect_review_reports",
     "inspect_spikes",
     "is_spike_completed",
@@ -44,6 +54,7 @@ __all__ = [
     "merge_spec_requirements",
     "normalize_req_title",
     "parse_requirements_doc",
+    "record_turn_to_ledger",
     "validate_delivery_readiness",
     "validate_judge_report_contract",
     "validate_review_approval",

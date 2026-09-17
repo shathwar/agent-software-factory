@@ -53,10 +53,12 @@ def read_ledger_file(path: Path) -> Optional[Dict[str, Any]]:
             if not isinstance(cid, str) or not isinstance(entry, dict):
                 valid = False
                 break
-            for key, kind in (("task_status", dict), ("evidence", dict), ("checkpoints", dict), ("blockers", list)):
+            for key, kind in (("task_status", dict), ("evidence", dict), ("checkpoints", dict), ("blockers", list), ("turns", list)):
                 if key in entry and not isinstance(entry[key], kind):
                     valid = False
             if isinstance(entry.get("blockers", []), list) and any(not isinstance(b, str) for b in entry.get("blockers", [])):
+                valid = False
+            if isinstance(entry.get("turns", []), list) and any(not isinstance(t, dict) for t in entry.get("turns", [])):
                 valid = False
             revision = entry.get("revision_counter", 0)
             if type(revision) is not int or revision < 0:
@@ -140,6 +142,7 @@ def create_empty_change_entry(change_id: str) -> Dict[str, Any]:
         "revision_counter": 0,
         "evidence": make_default_evidence(),
         "checkpoints": {},
+        "turns": [],
     }
 
 
@@ -306,6 +309,7 @@ class FileLedgerStore:
                     entry["task_status"]["next"] = matched_pkg["next_task"]
                     entry["task_status"]["in_progress"] = matched_pkg["next_task"]
 
+                entry.setdefault("turns", [])
                 entry.setdefault("evidence", {})
                 entry["evidence"].setdefault("design", {"adr": None, "status": "PENDING"})
                 entry["evidence"].setdefault("spike", {"status": "NONE", "verdict": None, "dir": None})
@@ -546,6 +550,31 @@ class FileLedgerStore:
             package = packages[0] if packages else {"change": cid, "has_tasks": False, "total_tasks": 0}
             entry["phase"] = validate_delivery_readiness(ev, package, git_info, entry, design_error=design_error, spikes=inspect_spikes(repo_root))[0]
 
+            turns = entry.setdefault("turns", [])
+            turn_idx = len(turns) + 1
+            turns.append({
+                "turn_id": f"turn-{turn_idx:03d}",
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "skill": "review",
+                "harness": "generic",
+                "execution_mode": report.get("execution_mode", "sequential"),
+                "inputs": {
+                    "report_path": ev.get("report_path"),
+                    "reviewer": ev.get("reviewer"),
+                },
+                "evidence": {
+                    "verdict": ev.get("verdict"),
+                    "findings_count": ev.get("findings_count", 0),
+                    "critical_or_high_count": ev.get("critical_or_high_count", 0),
+                    "test_evidence_passed": ev.get("test_evidence_passed"),
+                },
+                "state_delta": {
+                    "phase": entry["phase"],
+                    "review_verdict": ev.get("verdict"),
+                    "blockers_count": len(blockers),
+                },
+            })
+
         return cls.mutate_change(repo_root, cid, updater, sync_fn=sync_fn)
 
     @classmethod
@@ -562,6 +591,28 @@ class FileLedgerStore:
                     "approved_by": approved_by.strip(), "approved_at": time.time(),
                 }
                 entry["blockers"] = [b for b in entry.get("blockers", []) if not b.startswith("Design:")]
+                turns = entry.setdefault("turns", [])
+                turn_idx = len(turns) + 1
+                turns.append({
+                    "turn_id": f"turn-{turn_idx:03d}",
+                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "skill": "design",
+                    "harness": "generic",
+                    "execution_mode": "sequential",
+                    "inputs": {
+                        "action": "approve_design",
+                        "fingerprint": fingerprint,
+                        "approved_by": approved_by.strip(),
+                    },
+                    "evidence": {
+                        "design_fingerprint": fingerprint,
+                        "approved_by": approved_by.strip(),
+                    },
+                    "state_delta": {
+                        "design_approved": True,
+                        "phase": entry.get("phase"),
+                    },
+                })
             return cls.mutate_change(repo_root, change, updater, set_active=None)
 
     @classmethod
@@ -600,7 +651,68 @@ class FileLedgerStore:
                 blockers.append(f"Tests: {test_summary.get('failed_count', 1)} test(s) failing")
             entry["blockers"] = blockers
 
+            turns = entry.setdefault("turns", [])
+            turn_idx = len(turns) + 1
+            turns.append({
+                "turn_id": f"turn-{turn_idx:03d}",
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "skill": "tdd",
+                "harness": "generic",
+                "execution_mode": "sequential",
+                "inputs": {"command": test_summary.get("command")},
+                "evidence": {
+                    "tests_passed": passed,
+                    "failed_count": test_summary.get("failed_count", 0),
+                    "tests_run": test_summary.get("tests_run"),
+                },
+                "state_delta": {
+                    "implementation_status": impl["status"],
+                    "tests_passed": passed,
+                },
+            })
+
         return cls.mutate_change(repo_root, cid, updater, sync_fn=sync_fn)
+
+    @classmethod
+    def record_turn(
+        cls,
+        repo_root: Path,
+        turn_data: Dict[str, Any],
+        change_id: Optional[str] = None,
+        sync_fn: Optional[Callable[[Path], Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        cid = change_id or turn_data.get("change_id") or cls.get_active_change(repo_root) or "default"
+        validate_change_id(cid)
+
+        with cls.lock(repo_root):
+            def updater(entry: Dict[str, Any]) -> None:
+                turns = entry.setdefault("turns", [])
+                turn_idx = len(turns) + 1
+                record = {
+                    "turn_id": turn_data.get("turn_id") or f"turn-{turn_idx:03d}",
+                    "timestamp": turn_data.get("timestamp") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "skill": turn_data.get("skill", "unknown"),
+                    "harness": turn_data.get("harness", "generic"),
+                    "execution_mode": turn_data.get("execution_mode", "sequential"),
+                    "inputs": turn_data.get("inputs", {}),
+                    "evidence": turn_data.get("evidence", {}),
+                    "state_delta": turn_data.get("state_delta", {}),
+                }
+                turns.append(record)
+
+            return cls.mutate_change(repo_root, cid, updater, sync_fn=sync_fn)
+
+    @classmethod
+    def get_turns(cls, repo_root: Path, change_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        with cls.lock(repo_root):
+            ledger = cls.load(repo_root, auto_sync=False)
+            cid = change_id or ledger.get("active_change_id")
+            if not cid and ledger.get("changes"):
+                cid = list(ledger["changes"].keys())[0]
+            if not cid:
+                return []
+            entry = ledger.get("changes", {}).get(cid, {})
+            return list(entry.get("turns", []))
 
     @classmethod
     def clear_active_change(cls, repo_root: Path, change: Optional[str] = None) -> None:
@@ -622,5 +734,7 @@ save_ledger = FileLedgerStore.save
 mutate_change_state = FileLedgerStore.mutate_change
 record_review_to_ledger = FileLedgerStore.record_review
 record_test_run_to_ledger = FileLedgerStore.record_test_run
+record_turn_to_ledger = FileLedgerStore.record_turn
+get_turns_from_ledger = FileLedgerStore.get_turns
 sync_ledger_from_workspace = FileLedgerStore.sync_from_workspace
 

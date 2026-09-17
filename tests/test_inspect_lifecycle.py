@@ -3039,6 +3039,190 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(set(state["changes"]), {"alpha"})
             self.assertEqual(state["changes"]["alpha"]["evidence"]["delivery"]["status"], "ARCHIVED")
 
+    def test_next_turn_planning_across_lifecycle_phases(self):
+        """get_next_turn_contract deterministically derives specialist turn contracts across phases."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            for args in [("init", "-b", "main"), ("config", "user.name", "Test"),
+                         ("config", "user.email", "test@example.com"), ("config", "commit.gpgsign", "false")]:
+                subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+
+            # Phase 1: Clean workspace -> design turn
+            contract = inspect_lifecycle.get_next_turn(root)
+            self.assertEqual(contract.skill, "design")
+            self.assertIn(contract.phase, {"INITIAL_PROPOSAL", "FRONTIER_ROUNDS"})
+            self.assertEqual(contract.role, "Senior Principal Systems Architect")
+
+            # Phase 2: Design compiled but unapproved -> design approval turn
+            pkg = root / "openspec/changes/alpha"
+            (pkg / "specs").mkdir(parents=True)
+            (pkg / "proposal.md").write_text("# Proposal\n")
+            (pkg / "tasks.md").write_text("- [ ] Task 1\n")
+            (pkg / "specs/spec.md").write_text("### Requirement: Spec\nSpec text\n")
+            subprocess.run(["git", "add", "."], cwd=root, check=True, capture_output=True)
+            subprocess.run(["git", "commit", "-m", "add spec"], cwd=root, check=True, capture_output=True)
+            contract2 = inspect_lifecycle.get_next_turn(root, target_change="alpha")
+            self.assertEqual(contract2.skill, "design")
+            self.assertEqual(contract2.phase, "DESIGN_APPROVAL_REQUIRED")
+
+            # Phase 3: Approved design with unchecked tasks -> tdd turn
+            fp = inspect_lifecycle.compute_working_tree_fingerprint(root)
+            from lifecycle.evidence import design_fingerprint
+            dfp = design_fingerprint(root, "alpha")
+            inspect_lifecycle.FileLedgerStore.approve_design(root, "alpha", dfp, "architect")
+            inspect_lifecycle.set_active_change(root, "alpha")
+            contract3 = inspect_lifecycle.get_next_turn(root, target_change="alpha")
+            self.assertEqual(contract3.skill, "tdd")
+            self.assertEqual(contract3.phase, "TDD_ACTIVE")
+            self.assertEqual(contract3.inputs["current_task"], "Task 1")
+
+            # Phase 4: All tasks checked, review pending -> review turn
+            (pkg / "tasks.md").write_text("- [x] Task 1\n")
+            contract4 = inspect_lifecycle.get_next_turn(root, target_change="alpha")
+            self.assertEqual(contract4.skill, "review")
+            self.assertEqual(contract4.phase, "REVIEW_ACTIVE")
+
+            # Phase 5: Judge PASS -> delivery turn
+            # Phase 5: Judge PASS and tests passed -> delivery turn
+            inspect_lifecycle.record_test_run_to_ledger(root, {"passed": True}, change_id="alpha")
+            tree_fp = inspect_lifecycle.compute_working_tree_fingerprint(root)
+            rev_file = root / ".scratch/alpha/review_report.json"
+            rev_file.parent.mkdir(parents=True, exist_ok=True)
+            rev_file.write_text(json.dumps({
+                "change": "alpha", "reviewer": "judge", "status": "complete", "verdict": "PASS",
+                "findings": [], "coverage": ["checked"], "questions": [], "routing_notes": [],
+                "test_evidence": True, "working_tree_fingerprint": tree_fp,
+            }))
+            inspect_lifecycle.record_review_to_ledger(root, str(rev_file), change_id="alpha")
+            contract5 = inspect_lifecycle.get_next_turn(root, target_change="alpha")
+            self.assertEqual(contract5.skill, "delivery")
+            self.assertEqual(contract5.phase, "DELIVERY_READY")
+
+    def test_next_turn_cli_text_and_json(self):
+        """CLI --next-turn outputs formatted turn contracts in text and JSON."""
+        import contextlib
+        import io
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            # Text format
+            out_buf = io.StringIO()
+            with contextlib.redirect_stdout(out_buf):
+                ret = inspect_lifecycle.main(["--path", str(root), "--next-turn"])
+            self.assertEqual(ret, 0)
+            text_out = out_buf.getvalue()
+            self.assertIn("TURN CONTRACT: DESIGN", text_out)
+            self.assertIn("DECLARED INPUTS", text_out)
+            self.assertIn("EXIT VERIFICATION CHECKLIST", text_out)
+
+            # JSON format
+            json_buf = io.StringIO()
+            with contextlib.redirect_stdout(json_buf):
+                ret = inspect_lifecycle.main(["--path", str(root), "--next-turn", "--format", "json"])
+            self.assertEqual(ret, 0)
+            data = json.loads(json_buf.getvalue())
+            self.assertEqual(data["skill"], "design")
+            self.assertEqual(data["role"], "Senior Principal Systems Architect")
+
+    def test_record_turn_and_provenance_retrieval(self):
+        """Turns can be recorded into ledger and retrieved via API and CLI."""
+        import contextlib
+        import io
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            # Record turn via API
+            turn_data = {
+                "skill": "tdd",
+                "harness": "claude-code",
+                "execution_mode": "sequential",
+                "inputs": {"task": "Task 1: Add authentication"},
+                "evidence": {"tests_passed": True, "tests_run": 5},
+                "state_delta": {"completed_tasks": 1},
+            }
+            res = inspect_lifecycle.record_turn(root, turn_data, change_id="alpha")
+            self.assertEqual(res["change_id"], "alpha")
+            turns = inspect_lifecycle.get_turns(root, change_id="alpha")
+            self.assertEqual(len(turns), 1)
+            self.assertEqual(turns[0]["turn_id"], "turn-001")
+            self.assertEqual(turns[0]["skill"], "tdd")
+            self.assertEqual(turns[0]["harness"], "claude-code")
+            self.assertTrue(turns[0]["evidence"]["tests_passed"])
+
+            # Record second turn via CLI
+            cli_turn = json.dumps({
+                "skill": "review",
+                "harness": "cursor",
+                "inputs": {"scope": "auth.py"},
+                "evidence": {"verdict": "PASS"},
+            })
+            ret = inspect_lifecycle.main(["--path", str(root), "--change", "alpha", "--record-turn", cli_turn])
+            self.assertEqual(ret, 0)
+            turns2 = inspect_lifecycle.get_turns(root, change_id="alpha")
+            self.assertEqual(len(turns2), 2)
+            self.assertEqual(turns2[1]["turn_id"], "turn-002")
+            self.assertEqual(turns2[1]["skill"], "review")
+            self.assertEqual(turns2[1]["harness"], "cursor")
+
+            # Display provenance log via CLI --turns
+            out_buf = io.StringIO()
+            with contextlib.redirect_stdout(out_buf):
+                self.assertEqual(inspect_lifecycle.main(["--path", str(root), "--change", "alpha", "--turns"]), 0)
+            output = out_buf.getvalue()
+            self.assertIn("TURN PROVENANCE AUDIT TRAIL FOR 'alpha'", output)
+            self.assertIn("Skill: TDD", output)
+            self.assertIn("Skill: REVIEW", output)
+
+    def test_turn_provenance_backward_compatibility_and_validation(self):
+        """Ledgers without turns remain valid; corrupt turns are rejected."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / ".ship").mkdir()
+            state_file = root / ".ship/state.json"
+            # Legacy ledger without turns
+            legacy = {
+                "version": 1,
+                "active_change_id": "legacy",
+                "changes": {
+                    "legacy": {
+                        "change_id": "legacy",
+                        "phase": "design",
+                        "task_status": {},
+                        "blockers": [],
+                        "revision_counter": 1,
+                        "evidence": {},
+                    }
+                }
+            }
+            state_file.write_text(json.dumps(legacy))
+            loaded = inspect_lifecycle.load_ledger(root)
+            self.assertEqual(loaded["version"], 1)
+            self.assertEqual(inspect_lifecycle.get_turns(root, "legacy"), [])
+
+            # Corrupt turns: not a list
+            corrupt1 = {
+                "version": 1,
+                "changes": {
+                    "bad": {
+                        "turns": "not-a-list",
+                    }
+                }
+            }
+            state_file.write_text(json.dumps(corrupt1))
+            with self.assertRaises(ValueError):
+                inspect_lifecycle.load_ledger(root)
+
+            # Corrupt turns: contains non-dict element
+            corrupt2 = {
+                "version": 1,
+                "changes": {
+                    "bad": {
+                        "turns": ["string-instead-of-dict"],
+                    }
+                }
+            }
+            state_file.write_text(json.dumps(corrupt2))
+            with self.assertRaises(ValueError):
+                inspect_lifecycle.load_ledger(root)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,7 +15,7 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 
 <hard_constraints>
 - Re-Entrant State: Inspect filesystem state (`inspect_lifecycle.py`) first. Resume cleanly; never re-run finished gates.
-- Execution Capabilities: Honor `workflow.execution`. Use isolated subagents when available; otherwise run focused sequential passes with separate findings and Judge adjudication. Disclose the actual execution mode. Missing subagents must not stop local work or weaken gate requirements.
+- Harness Independence: The workflow does NOT depend on recursive subagents. Specialist activities execute as independent agent turns orchestrated by the workflow controller, supporting sequential execution or parallel passes where supported. Subagents are an optional optimization, never a core dependency. Disclose the execution mode honestly.
 - Git Restrictions: Checkpoints and Git notes create internal commit objects. Respect explicit no-Git-mutation restrictions; use local evidence and disclose skipped checkpoint/note capabilities as described in [team rollout](./references/team_rollout.md#git-mutation-restrictions).
 - Design Checkpoint: Record `inspect_lifecycle.py --checkpoint design`. NEVER proceed to implementation without explicit user confirmation of the ADR/OpenSpec package.
 - Test-First Law: In implementation, every task MUST follow strict Red-Green-Refactor with failing behavioral tests before code. Enforce `.ship.json` test commands when present.
@@ -26,9 +26,9 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 
 <turn_contract>
 Verify before ending the turn:
-✓ 1. Re-entrant State Checked: Inspected `inspect_lifecycle.py` before executing or advancing.
+✓ 1. Turn Contract Inspected: Inspected `inspect_lifecycle.py --next-turn` before executing or advancing.
 ✓ 2. Receipts Pasted: Terminal receipts (command, exit code, test count, duration) pasted for any test or gate execution.
-✓ 3. Ledger Synchronized: Gate transitions, design approvals, or evidence records committed to `.ship/state.json`.
+✓ 3. Ledger Synchronized & Provenance Recorded: Gate transitions, design approvals, test runs, or evidence records committed to `.ship/state.json` with turn provenance.
 ✓ 4. Zero Unsubstantiated Claims: No phase marked complete without verifiable filesystem or command evidence.
 </turn_contract>
 

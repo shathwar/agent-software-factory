@@ -340,3 +340,138 @@ class AgentWorkflowTrialTests(unittest.TestCase):
             self.assertTrue((project_dir / "openspec/specs/tax.md").exists())
             self.assertFalse(change_dir.exists())
             self.assertEqual(len(list((project_dir / "openspec/archive").glob("*-billing*"))), 1)
+
+    def test_trial_7_harness_independence_and_turn_provenance(self):
+        """Trial 7: SDLC executes as independent turns across distinct harnesses with full provenance reconstruction."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            # Initialize git repository
+            for args in [("init", "-b", "main"), ("config", "user.name", "Developer"),
+                         ("config", "user.email", "dev@example.com"), ("config", "commit.gpgsign", "false")]:
+                subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+            (root / "README.md").write_text("# Project\n")
+            subprocess.run(["git", "add", "."], cwd=root, check=True, capture_output=True)
+            subprocess.run(["git", "commit", "-m", "initial"], cwd=root, check=True, capture_output=True)
+
+            change_id = "inventory"
+
+            # ------------------------------------------------------------------
+            # Turn 1: Claude Code Harness - Design Turn
+            # ------------------------------------------------------------------
+            turn1_contract = lifecycle.get_next_turn_contract(lifecycle.evaluate_repository(root))
+            self.assertEqual(turn1_contract.skill, "design")
+            self.assertEqual(turn1_contract.role, "Senior Principal Systems Architect")
+
+            # Specialist executes design activity and compiles OpenSpec package
+            change_dir = root / f"openspec/changes/{change_id}"
+            (change_dir / "specs").mkdir(parents=True)
+            (change_dir / "proposal.md").write_text("# Proposal: Inventory Tracking\n")
+            (change_dir / "tasks.md").write_text("- [x] Task 1: Deduct stock on checkout\n")
+            (change_dir / "specs/stock.md").write_text("### Requirement: Stock Deduction\nEnsure atomic stock decrement\n")
+            subprocess.run(["git", "add", "."], cwd=root, check=True, capture_output=True)
+            subprocess.run(["git", "commit", "-m", "docs: design inventory spec"], cwd=root, check=True, capture_output=True)
+
+            dfp = design_fingerprint(root, change_id)
+            self.assertTrue(bool(dfp))
+
+            # Record Turn 1 provenance
+            lifecycle.record_turn_to_ledger(root, {
+                "skill": "design",
+                "harness": "claude-code",
+                "execution_mode": "sequential",
+                "inputs": {"proposal": "Inventory Tracking", "commit": "initial"},
+                "evidence": {"design_fingerprint": dfp, "specs": ["stock.md"]},
+                "state_delta": {"phase": "SPEC_CONFIRMED"},
+            }, change_id=change_id)
+
+            # ------------------------------------------------------------------
+            # Turn 2: Cursor Harness - Design Approval Turn
+            # ------------------------------------------------------------------
+            turn2_contract = lifecycle.get_next_turn_contract(lifecycle.evaluate_repository(root, target_change=change_id))
+            self.assertEqual(turn2_contract.skill, "design")
+            self.assertEqual(turn2_contract.phase, "DESIGN_APPROVAL_REQUIRED")
+
+            # Developer confirms design in Cursor composer
+            FileLedgerStore.approve_design(root, change_id, dfp, "lead-architect")
+            lifecycle.set_active_change(root, change_id)
+
+            # ------------------------------------------------------------------
+            # Turn 3: OpenCode Harness - TDD Implementation Turn
+            # ------------------------------------------------------------------
+            # Implement domain code and test
+            src_file = root / "inventory.py"
+            src_file.write_text("def deduct_stock(qty, item): return qty - item\n")
+            test_file = root / "test_inventory.py"
+            test_file.write_text("from inventory import deduct_stock\ndef test_deduct(): assert deduct_stock(10, 2) == 8\n")
+            subprocess.run(["git", "add", "."], cwd=root, check=True, capture_output=True)
+            subprocess.run(["git", "commit", "-m", "feat: implement stock deduction with tests"], cwd=root, check=True, capture_output=True)
+
+            # Record passing test run with OpenCode harness
+            lifecycle.record_test_run_to_ledger(
+                root,
+                {"passed": True, "tests_run": 1, "failed_count": 0, "command": "pytest test_inventory.py"},
+                change_id=change_id,
+            )
+
+            # ------------------------------------------------------------------
+            # Turn 4: CI/CD Headless Harness - Adversarial Review Turn
+            # ------------------------------------------------------------------
+            turn4_contract = lifecycle.get_next_turn_contract(lifecycle.evaluate_repository(root, target_change=change_id))
+            self.assertEqual(turn4_contract.skill, "review")
+            self.assertEqual(turn4_contract.phase, "REVIEW_ACTIVE")
+
+            # Review Judge executes and generates delivery evidence envelope
+            tree_fp = compute_working_tree_fingerprint(root)
+            review_file = root / f".scratch/{change_id}/review_report.json"
+            review_file.parent.mkdir(parents=True, exist_ok=True)
+            review_file.write_text(json.dumps({
+                "change": change_id, "reviewer": "judge", "status": "complete", "verdict": "PASS",
+                "findings": [], "coverage": ["stock.md", "inventory.py"], "questions": [], "routing_notes": [],
+                "test_evidence": True, "working_tree_fingerprint": tree_fp,
+            }))
+            lifecycle.record_review_to_ledger(root, str(review_file), change_id=change_id)
+
+            # ------------------------------------------------------------------
+            # Turn 5: Release Orchestrator - Delivery & Archive Turn
+            # ------------------------------------------------------------------
+            turn5_contract = lifecycle.get_next_turn_contract(lifecycle.evaluate_repository(root, target_change=change_id))
+            self.assertEqual(turn5_contract.skill, "delivery")
+            self.assertEqual(turn5_contract.phase, "DELIVERY_READY")
+
+            self.assertEqual(lifecycle.main(["--path", str(root), "--status-check", "--change", change_id]), 0)
+            archive_res = lifecycle.apply_and_archive_openspec(root, change_id)
+            self.assertEqual(archive_res["change"], change_id)
+            self.assertTrue((root / "openspec/specs/stock.md").exists())
+            self.assertFalse(change_dir.exists())
+
+            # ------------------------------------------------------------------
+            # Provenance Reconstruction Verification
+            # ------------------------------------------------------------------
+            state = json.loads((root / ".ship/state.json").read_text())
+            turns = state["changes"][change_id].get("turns", [])
+            self.assertGreaterEqual(len(turns), 4)
+
+            # Reconstruct: which skill ran, against what inputs, what evidence it produced, and state effects
+            skills_executed = [t["skill"] for t in turns]
+            self.assertIn("design", skills_executed)
+            self.assertIn("tdd", skills_executed)
+            self.assertIn("review", skills_executed)
+
+            # Reconstruct harnesses involved
+            harnesses = [t.get("harness") for t in turns]
+            self.assertIn("claude-code", harnesses)
+
+            # Verify inputs and evidence preserved
+            design_turn = next(t for t in turns if t["skill"] == "design" and t.get("harness") == "claude-code")
+            self.assertEqual(design_turn["inputs"]["proposal"], "Inventory Tracking")
+            self.assertEqual(design_turn["evidence"]["design_fingerprint"], dfp)
+
+            tdd_turn = next(t for t in turns if t["skill"] == "tdd")
+            self.assertTrue(tdd_turn["evidence"]["tests_passed"])
+
+            review_turn = next(t for t in turns if t["skill"] == "review")
+            self.assertEqual(review_turn["evidence"]["verdict"], "PASS")
+
+            # Final trailers check
+            trailers = lifecycle.generate_gate_trailers(root, change_id=change_id)
+            self.assertIn("Ship-Delivery: ARCHIVED", trailers)

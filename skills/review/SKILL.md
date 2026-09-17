@@ -27,13 +27,14 @@ Verify before ending the turn:
 ✓ 2. Independent Adjudication: All findings evaluated by the Judge; zero unadjudicated raw reviewer output returned.
 ✓ 3. Frozen Classification Enforced: In `review-loop`, every finding produced an explicit outcome (`FOLDED <sha>`, `DISPUTED <reason>`, `BLOCKED <missing>`, or `REPLAN <phase>`); zero silent downgrades or dropped issues.
 ✓ 4. Complete Findings Schema: Every finding adheres to the exact 12-field schema contract.
+✓ 5. Ledger Updated & Provenance Recorded: Review report recorded via `inspect_lifecycle.py --record-review` with execution mode and findings count.
 </turn_contract>
 
 ---
 
 ## 1. Orchestrator Execution Flow
 
-If the host lacks subagent support, run the review perspectives sequentially with separate findings, then perform Judge adjudication. State that execution was sequential; do not claim independent agents.
+The review workflow is independent of recursive subagents. Specialist review perspectives (Correctness, Concurrency, Architecture, etc.) execute in parallel when supported by the harness, or as focused sequential passes with separate findings when running in single-agent environments (e.g. Claude Code, Cursor, OpenCode, CI/CD). The Judge performs independent adjudication across both modes, guaranteeing identical findings and governance semantics. State honestly whether execution was sequential or parallel.
 
 Select action mode:
 - **`review`** *(Default)*: Review only. Return judged report without edits or posting.

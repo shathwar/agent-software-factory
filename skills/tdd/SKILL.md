@@ -23,6 +23,14 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 - Behavior Over Mocks: Assert on observable inputs, outputs, and state transitions. Never mock internal units or assert on private methods.
 </hard_constraints>
 
+<turn_contract>
+Verify before ending the turn:
+✓ 1. Red Receipt Captured: Pasted raw terminal failure receipt proving assertion failure before writing implementation.
+✓ 2. Minimal Green Code: Implemented only the bare minimum code needed to turn test green.
+✓ 3. Green Receipt Captured: Pasted raw runner summary showing zero exit code and all tests passing.
+✓ 4. Task Checkbox & Ledger Updated: Marked `- [x]` in `tasks.md` and recorded test run via `inspect_lifecycle.py --record-tests pass`.
+</turn_contract>
+
 ---
 
 ## 1. The Five Laws of TDD

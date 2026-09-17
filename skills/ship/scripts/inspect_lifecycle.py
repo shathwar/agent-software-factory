@@ -31,6 +31,10 @@ from lifecycle import (
     canonicalize_gate_name,
     determine_lifecycle_state,
     format_summary,
+    format_turn_contract,
+    format_turns_log,
+    get_next_turn_contract,
+    get_turns_from_ledger,
     inspect_review_reports,
     inspect_spikes,
     is_spike_completed,
@@ -38,6 +42,7 @@ from lifecycle import (
     merge_spec_requirements,
     normalize_req_title,
     parse_requirements_doc,
+    record_turn_to_ledger,
     validate_delivery_readiness,
     validate_judge_report_contract,
     validate_review_approval,
@@ -265,6 +270,32 @@ def perform_rollback(
     )
 
 
+def get_next_turn(
+    repo_root: Path,
+    target_change: Optional[str] = None,
+    config_path: Optional[str] = None,
+    execution_mode: Optional[str] = None,
+) -> Any:
+    return _engine.get_next_turn_contract(
+        repo_root, target_change=target_change, config_path=config_path, execution_mode=execution_mode
+    )
+
+
+def record_turn(
+    repo_root: Path,
+    turn_data: Dict[str, Any],
+    change_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    return _ledger_store.record_turn(repo_root, turn_data, change_id=change_id, sync_fn=_engine.sync_ledger)
+
+
+def get_turns(
+    repo_root: Path,
+    change_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    return _ledger_store.get_turns(repo_root, change_id=change_id)
+
+
 def evaluate_repository(
     repo_root: Path,
     target_change: Optional[str] = None,
@@ -378,6 +409,30 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--approve-design", metavar="SHA256", help="Record external approval of this design digest; requires --change and --approved-by.")
     parser.add_argument("--approved-by", help="Identity supplied by the approving user or trusted host.")
 
+    parser.add_argument(
+        "--next-turn",
+        action="store_true",
+        help="Evaluate repository state and output the deterministic Turn Contract for the active change.",
+    )
+    parser.add_argument(
+        "--record-turn",
+        default=None,
+        metavar="TURN_JSON_OR_PATH",
+        help="Record a specialist turn into the ledger turn provenance history.",
+    )
+    parser.add_argument(
+        "--turns",
+        "--provenance",
+        action="store_true",
+        dest="show_turns",
+        help="Display the turn-level provenance audit trail for --change.",
+    )
+    parser.add_argument(
+        "--harness",
+        default=None,
+        help="Harness identifier for recorded turns (e.g. claude-code, opencode, cursor, ci, antigravity).",
+    )
+
     parser.add_argument("--doctor", action="store_true", help="Check the local installation and workspace without modifying them.")
     parser.add_argument("--migrate-state", action="store_true", help="Back up and migrate a supported legacy versionless ledger to v1.")
     parser.add_argument("--version", action="store_true", help="Print the installed suite version.")
@@ -419,6 +474,43 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
+
+    if args.next_turn:
+        try:
+            contract = _engine.get_next_turn_contract(
+                repo_root, target_change=args.change, config_path=args.config
+            )
+            output_result(contract.to_dict(), [format_turn_contract(contract)])
+            return 0
+        except Exception as e:
+            print(f"Error deriving next turn: {e}", file=sys.stderr)
+            return 1
+
+    if args.show_turns:
+        turns = _ledger_store.get_turns(repo_root, change_id=args.change)
+        output_result(turns, [format_turns_log(turns, change_id=args.change)])
+        return 0
+
+    if args.record_turn:
+        try:
+            tfile = Path(args.record_turn)
+            if tfile.exists():
+                tdata = json.loads(tfile.read_text(encoding="utf-8"))
+            else:
+                tdata = json.loads(args.record_turn)
+        except Exception:
+            tdata = {"skill": args.record_turn}
+        if args.harness:
+            tdata["harness"] = args.harness
+        try:
+            res = _ledger_store.record_turn(repo_root, tdata, change_id=args.change)
+            rev = res.get("revision_counter", 0)
+            turns_cnt = len(res.get("turns", []))
+            output_result(res, [f"Turn recorded for change '{res.get('change_id')}' (total turns: {turns_cnt}, rev: r{rev})"])
+            return 0
+        except Exception as e:
+            print(f"Error recording turn: {e}", file=sys.stderr)
+            return 1
 
     if args.design_fingerprint or args.approve_design is not None:
         from lifecycle.evidence import design_fingerprint

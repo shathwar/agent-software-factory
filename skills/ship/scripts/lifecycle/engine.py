@@ -177,6 +177,18 @@ class LifecycleEngine:
             "active_change": active_change,
         }
 
+    def get_next_turn_contract(
+        self,
+        repo_root: Path,
+        target_change: Optional[str] = None,
+        config_path: Optional[str] = None,
+        execution_mode: Optional[str] = None,
+    ) -> Any:
+        """Derive the deterministic Turn Contract for the next required specialist activity."""
+        eval_data = self.evaluate_repository(repo_root, target_change=target_change, config_path=config_path)
+        from .turns import get_next_turn_contract
+        return get_next_turn_contract(eval_data, execution_mode=execution_mode)
+
     def sync_ledger(self, repo_root: Path, target_change_id: Optional[str] = None) -> Dict[str, Any]:
         """Reconcile and self-heal state ledger from disk artifacts."""
         return self.ledger.sync_from_workspace(

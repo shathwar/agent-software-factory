@@ -4,30 +4,30 @@
 
 ---
 
-## 1. Strict Scope & Context Isolation Law
+## 1. Strict Scope & Turn Contract Law
 
-- **Pure Dispatcher Role**: The orchestrator coordinates transitions and verifies receipts. It NEVER writes implementation code, tests, or adversarial reviews directly in the main orchestrator conversation context.
-- **Execution Capabilities**: Use isolated subagents when the host and selected execution mode support them. Otherwise use focused sequential passes. Carry explicit ADR paths, task lists, receipts, and reports between passes; never fabricate independent reviewers.
-- **Persistent State Machine**: The filesystem (`openspec/`, `tasks.md`, `docs/adr/`, `.scratch/`) acts as the state machine. Orient with `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py"` at session start.
+- **Turn-by-Turn Coordinator**: The orchestrator coordinates transitions and verifies receipts through explicit Turn Contracts. It NEVER writes implementation code, tests, or adversarial reviews directly in the main orchestrator conversation context.
+- **Harness Independence**: Execution does NOT depend on recursive subagents. When the harness supports subagents, dispatch isolated subagents for context boundary isolation or parallel review. Otherwise, execute focused sequential agent turns. Carry explicit ADR paths, task lists, receipts, and reports between turns; never fabricate independent reviewers.
+- **Persistent State Machine & Provenance**: The filesystem and ledger (`.ship/state.json`) act as the state machine. Orient with `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --next-turn` at session start.
 
 ---
 
 ## 2. Gate Coordination & Checkpoint Protocol
 
 1. **Design (Specification & Architecture)**:
-   - Dispatch isolated `design` subagent (`principal_architect`).
-   - If empirical unknown blocks design, subagent dispatches `spike` (`spike_prototyper`) in `.scratch/`.
+   - Execute `design` turn (`principal_architect`).
+   - If empirical unknown blocks design, execute `spike` turn (`spike_prototyper`) in `.scratch/`.
    - On spec confirmation, record checkpoint: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --checkpoint design`.
    - Obtain user approval to proceed.
 
 2. **Implementation (TDD + Simplify)**:
-   - Dispatch isolated `tdd` subagent with approved `tasks.md` and spec context.
-   - Subagent coordinates `test_driver` ➔ `simplify_implementer` ➔ `code_refactorer` sequentially.
+   - Execute `tdd` turn with approved `tasks.md` and spec context.
+   - Coordinate `test_driver` ➔ `simplify_implementer` ➔ `code_refactorer` sequentially.
    - Enforce config from `.ship.json` (if present) for explicit `gates.implementation.test`.
    - On completion of all tasks and green test run, record checkpoint: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --checkpoint implementation`.
 
 3. **Review (Adversarial Review & Auto-Fix)**:
-   - Dispatch isolated `review` subagent in `review-loop` mode.
+   - Execute `review` turn in `review-loop` mode (run perspectives in parallel if supported, or sequentially).
    - Stage 0 verifies code against OpenSpec/ADR; Stages 1–9 review concurrency, correctness, and failure modes.
    - If ADR invariants fundamentally broken, execute rollback:
      `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --rollback design`

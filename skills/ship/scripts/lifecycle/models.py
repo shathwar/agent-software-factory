@@ -113,3 +113,55 @@ class OpenSpecInfo:
             "all_tasks_complete": self.all_tasks_complete,
             "specs": self.specs,
         }
+
+
+@dataclass
+class TurnContract:
+    change_id: str
+    phase: str
+    skill: str
+    role: str
+    execution_mode: str = "sequential"
+    inputs: Dict[str, Any] = field(default_factory=dict)
+    hard_constraints: List[str] = field(default_factory=list)
+    exit_criteria: List[str] = field(default_factory=list)
+    output_evidence: str = ""
+    action_prompt: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "change_id": self.change_id,
+            "phase": self.phase,
+            "skill": self.skill,
+            "role": self.role,
+            "execution_mode": self.execution_mode,
+            "inputs": self.inputs,
+            "hard_constraints": self.hard_constraints,
+            "exit_criteria": self.exit_criteria,
+            "output_evidence": self.output_evidence,
+            "action_prompt": self.action_prompt,
+        }
+
+
+@dataclass
+class TurnRecord:
+    turn_id: str
+    skill: str
+    timestamp: str = ""
+    harness: str = "generic"
+    execution_mode: str = "sequential"
+    inputs: Dict[str, Any] = field(default_factory=dict)
+    evidence: Dict[str, Any] = field(default_factory=dict)
+    state_delta: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "turn_id": self.turn_id,
+            "skill": self.skill,
+            "timestamp": self.timestamp,
+            "harness": self.harness,
+            "execution_mode": self.execution_mode,
+            "inputs": self.inputs,
+            "evidence": self.evidence,
+            "state_delta": self.state_delta,
+        }
