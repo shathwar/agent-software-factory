@@ -9,7 +9,10 @@ import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
 
-from .evidence import validate_review_approval
+from .evidence import (
+    validate_review_approval, is_test_evidence_passing, implementation_failed,
+    design_fingerprint, validate_design_approval,
+)
 from .vcs import GitClient
 from .paths import repository_path, validate_change_id
 from .transactions import recover_archive, sync_directory
@@ -348,13 +351,14 @@ class FileLedgerStore:
                     b for b in entry.get("blockers", [])
                     if not (
                         b.startswith("Tests:")
+                        or b.startswith("Design:")
                         or b.startswith("Spike active in ")
                         or is_review_blocker(b)
                     )
                 ]
 
                 existing_test_blockers = [b for b in entry.get("blockers", []) if b.startswith("Tests:")]
-                if entry.get("evidence", {}).get("implementation", {}).get("tests_passed") is False:
+                if implementation_failed(entry["evidence"]["implementation"]):
                     failed_cnt = entry["evidence"]["implementation"].get("failed_count", 1)
                     t_blocker = f"Tests: {failed_cnt} test(s) failing"
                     if t_blocker not in existing_test_blockers:
@@ -365,7 +369,13 @@ class FileLedgerStore:
                     if eb not in blockers:
                         blockers.append(eb)
 
-                if spikes:
+                design_error = validate_design_approval(repo_root, change, entry) if matched_pkg else None
+                if design_error:
+                    blockers.append(f"Design: {design_error}")
+
+                if design_error:
+                    entry["phase"] = "design"
+                elif spikes:
                     entry["phase"] = "spike"
                     blockers.append(f"Spike active in {spikes[0]}")
                 elif not matched_pkg or matched_pkg["total_tasks"] == 0:
@@ -533,12 +543,32 @@ class FileLedgerStore:
             approval_error = validate_review_approval(ev, cid, git_info)
             if approval_error:
                 blockers.append(f"Review: {approval_error}")
+            design_error = validate_design_approval(repo_root, cid, entry)
+            blockers[:] = [b for b in blockers if not b.startswith("Design:")]
+            if design_error:
+                blockers.append(f"Design: {design_error}")
             if not approval_error and not blockers:
                 entry["phase"] = "delivery"
             else:
                 entry["phase"] = "review"
 
         return cls.mutate_change(repo_root, cid, updater, sync_fn=sync_fn)
+
+    @classmethod
+    def approve_design(cls, repo_root: Path, change: str, fingerprint: str, approved_by: str) -> Dict[str, Any]:
+        """Record an externally authorized approval of an explicitly reviewed snapshot."""
+        if not isinstance(approved_by, str) or not approved_by.strip():
+            raise ValueError("An approver identity is required")
+        with cls.lock(repo_root):
+            if fingerprint != design_fingerprint(repo_root, change):
+                raise ValueError("Design changed: reviewed fingerprint does not match current design")
+            def updater(entry: Dict[str, Any]) -> None:
+                entry.setdefault("evidence", {}).setdefault("design", {})["approval"] = {
+                    "change": change, "fingerprint": fingerprint,
+                    "approved_by": approved_by.strip(), "approved_at": time.time(),
+                }
+                entry["blockers"] = [b for b in entry.get("blockers", []) if not b.startswith("Design:")]
+            return cls.mutate_change(repo_root, change, updater, set_active=False)
 
     @classmethod
     def record_test_run(
@@ -552,11 +582,14 @@ class FileLedgerStore:
         sync_fn: Optional[Callable[[Path], Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         cid = change_id or cls.get_active_change(repo_root) or "default"
+        if not isinstance(test_summary, dict):
+            raise ValueError("Test summary must be a JSON object")
+        passed = is_test_evidence_passing(test_summary)
 
         def updater(entry: Dict[str, Any]) -> None:
             impl = entry["evidence"]["implementation"]
-            impl["status"] = "PASSED" if test_summary.get("passed", False) else "FAILED"
-            impl["tests_passed"] = test_summary.get("passed", False)
+            impl["status"] = "PASSED" if passed else "FAILED"
+            impl["tests_passed"] = passed
             impl["failed_count"] = test_summary.get("failed_count", 0)
             impl["command"] = test_summary.get("command")
 
@@ -569,7 +602,7 @@ class FileLedgerStore:
                     impl["evidence_ref"] = notes_ref
 
             blockers = [b for b in entry.get("blockers", []) if not b.startswith("Tests:")]
-            if not test_summary.get("passed", False):
+            if not passed:
                 blockers.append(f"Tests: {test_summary.get('failed_count', 1)} test(s) failing")
             entry["blockers"] = blockers
 

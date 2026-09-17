@@ -166,3 +166,67 @@ If an agent run is aborted, timed out, or restarted in a new session:
    - If a report exists with Judge adjudication, `PASS` verdict, zero open Critical/High defects, and verified test evidence, resume at `DELIVERY_READY`.
 5. **Step 5: Apply, Archive, and Commit with Trailers**:
    - Sync delta specs to `openspec/specs/`, archive change package to `openspec/archive/`, attach evidence to Git notes, and append `Ship-*` trailers to the delivery commit.
+
+
+## Local workflow and design approval
+
+Local interactive use is the default. No CI service, remote approval system, or
+separate identity service is required. The agent runs the configured tests locally,
+keeps the terminal output, records the results, and uses the ledger to resume work.
+Git notes and trailers provide evidence alongside the code when Git is available.
+
+A user’s explicit approval in the current conversation authorizes the agent to
+record the design receipt for the package they reviewed. The agent handles the
+digest and CLI commands; the user does not need to copy hashes or run commands.
+Use an identity already provided by the session, or the descriptive label
+`session-user` when no named identity is available. This label records conversational
+authorization and does not claim verified identity. Do not ask for another approval
+when the current design is already explicitly authorized. If approval predates
+digest capture, record it only when the agent can establish that the design has not
+changed since the user reviewed it.
+
+### Design approval receipts
+
+The inspector requires an explicit receipt before routing a change to implementation
+or delivery. Existing changes with no receipt return `DESIGN_APPROVAL_REQUIRED`;
+workspace sync does not infer approval from ADR status, completed tasks, or review
+reports. Deleting the ledger loses the approval and requires it to be recorded again.
+
+Before presenting a package for approval, capture its digest:
+
+```bash
+python3 skills/ship/scripts/inspect_lifecycle.py --change CHANGE --design-fingerprint
+```
+
+After the user or authorized reviewer approves that exact package, record the
+captured digest (do not recompute it to silently accept intervening changes):
+
+```bash
+python3 skills/ship/scripts/inspect_lifecycle.py --change CHANGE --approve-design REVIEWED_SHA256 --approved-by REVIEWER_ID
+```
+
+The receipt lives under `changes[CHANGE].evidence.design.approval` in the ledger.
+It binds the change ID, approver, timestamp, and digest. The digest includes every
+file in that change package and `docs/adr/`, including file names. Adding, removing,
+or editing those files invalidates approval. All ADRs are included conservatively;
+unrelated ADR edits also require reapproval. Task checkbox completion is normalized,
+so ticking tasks does not invalidate approval; changing task wording does. Source
+code changes do not alter the design digest and remain subject to review freshness.
+Unsafe symlinks are rejected. The implementation currently uses the conventional
+`openspec/changes/` and `docs/adr/` paths.
+
+Inspection, ledger reconciliation, normal archive, and trailer generation use the
+same approval rule. `--force` remains an explicit archive override, not proof that
+gates passed. Use it only when the user explicitly authorizes bypassing those checks.
+
+
+### Local test evidence
+
+Run the project’s test command before recording its result. Prefer a structured
+summary with `passed`, integer `exit_code`, positive integer `tests_run`, zero
+integer failure counts, and `command`, backed by the actual terminal output.
+`--record-tests` records the result; it does not execute tests. Local evidence checks
+catch contradictions and stale results, but assume the user and agent operate in
+a trusted checkout. Independently authenticated evidence is an optional CI concern,
+not a prerequisite for local use. See the [headless CI guide](./headless_ci_guide.md)
+only when setting up that integration.

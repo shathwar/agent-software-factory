@@ -95,6 +95,9 @@ class ArchiveRecoveryTests(unittest.TestCase):
             'findings': [], 'coverage': ['checked'], 'questions': [], 'routing_notes': [],
             'test_evidence': True, 'commit': sha,
         }))
+        from lifecycle.evidence import design_fingerprint
+        from lifecycle.ledger import FileLedgerStore
+        FileLedgerStore.approve_design(root, "alpha", design_fingerprint(root, "alpha"), "test-reviewer")
         lifecycle.sync_ledger_from_workspace(root)
         return living.read_bytes(), (root / '.ship/state.json').read_bytes()
 

@@ -10,6 +10,7 @@ import shutil
 import uuid
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
+from .evidence import validate_design_approval, implementation_failed
 from .paths import repository_path, resolve_change_path, validate_change_id
 from .transactions import atomic_write, begin_archive, record_archive_progress, recover_archive, sync_directory
 
@@ -374,7 +375,7 @@ class OpenSpecRepository:
                             f"Cannot archive '{change_name}': active ledger blockers ({'; '.join(blockers)}). Remediate blockers before archiving or use --force."
                         )
                     impl_ev = change_entry.get("evidence", {}).get("implementation", {})
-                    if impl_ev.get("tests_passed") is False or impl_ev.get("status") == "FAILED":
+                    if implementation_failed(impl_ev):
                         failed_cnt = impl_ev.get("failed_count", 1)
                         raise RuntimeError(
                             f"Cannot archive '{change_name}': {failed_cnt} test(s) failing recorded in ledger. Fix tests before archiving or use --force."
@@ -393,6 +394,13 @@ class OpenSpecRepository:
                 if review_err:
                     msg = review_err if review_err.startswith("Judge report") else (review_err[:1].lower() + review_err[1:])
                     raise RuntimeError(f"Cannot archive '{change_name}': {msg}")
+
+        if not force:
+            from .ledger import FileLedgerStore
+            current = FileLedgerStore.load(repo_root, auto_sync=False).get("changes", {}).get(change_name)
+            design_error = validate_design_approval(repo_root, change_name, current)
+            if design_error:
+                raise RuntimeError(f"Cannot archive '{change_name}': {design_error}")
 
         synced_specs = []
         living_specs_dir = repository_path(repo_root, "openspec/specs")

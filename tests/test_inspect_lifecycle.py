@@ -17,6 +17,13 @@ import inspect_lifecycle
 
 
 class TestInspectLifecycle(unittest.TestCase):
+    def _approve_design(self, root):
+        from lifecycle.evidence import design_fingerprint
+        from lifecycle.ledger import FileLedgerStore
+        for package in (root / "openspec/changes").glob("*"):
+            if package.is_dir():
+                FileLedgerStore.approve_design(root, package.name, design_fingerprint(root, package.name), "test-reviewer")
+
     def _init_git_repo(self, tmppath: Path, branch: str = "main") -> None:
         subprocess.run(["git", "init", "-b", branch], cwd=tmppath, check=True, capture_output=True)
         subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
@@ -84,6 +91,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 "- [ ] 3. Verify signature\n"
             )
 
+            self._approve_design(tmppath)
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "implementation")
             self.assertEqual(res["state_key"], "TDD_ACTIVE")
@@ -101,6 +109,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 "- [x] 2. Handle retries with jitter\n"
             )
 
+            self._approve_design(tmppath)
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "review")
             self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
@@ -131,6 +140,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 })
             )
 
+            self._approve_design(tmppath)
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "delivery")
             self.assertEqual(res["state_key"], "DELIVERY_READY")
@@ -153,6 +163,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 })
             )
 
+            self._approve_design(tmppath)
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "review")
             self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
@@ -175,6 +186,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 })
             )
 
+            self._approve_design(tmppath)
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "review")
             self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
@@ -197,6 +209,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 })
             )
 
+            self._approve_design(tmppath)
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "review")
             self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
@@ -327,6 +340,7 @@ class TestInspectLifecycle(unittest.TestCase):
                     "test_evidence": {"exit_code": 1},
                 })
             )
+            self._approve_design(tmppath)
             res_fail = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res_fail["gate"], "review")
             self.assertEqual(res_fail["state_key"], "REVIEW_ACTIVE")
@@ -383,6 +397,7 @@ class TestInspectLifecycle(unittest.TestCase):
             (curr_pkg / "tasks.md").write_text("- [ ] 1. Task in progress\n")
 
             # evaluate_repository must select 'z-current' in TDD_ACTIVE, NOT 'a-old' in REVIEW_ACTIVE
+            self._approve_design(tmppath)
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "implementation")
             self.assertEqual(res["state_key"], "TDD_ACTIVE")
@@ -440,6 +455,7 @@ class TestInspectLifecycle(unittest.TestCase):
             }))
 
             # Initially clean: DELIVERY_READY
+            self._approve_design(tmppath)
             res_clean = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res_clean["gate"], "delivery")
             self.assertEqual(res_clean["state_key"], "DELIVERY_READY")
@@ -494,6 +510,7 @@ class TestInspectLifecycle(unittest.TestCase):
             }
             (scratch_dir / "delivery_evidence.json").write_text(json.dumps(envelope))
 
+            self._approve_design(tmppath)
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "delivery")
             self.assertEqual(res["state_key"], "DELIVERY_READY")
@@ -638,6 +655,7 @@ class TestInspectLifecycle(unittest.TestCase):
             (scratch_dir / "delivery_evidence.json").write_text(json.dumps(envelope))
 
             # Delivery check must reject because envelope change is 'auth', but active package is 'billing'
+            self._approve_design(tmppath)
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "review")
             self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
@@ -696,6 +714,7 @@ class TestInspectLifecycle(unittest.TestCase):
             (scratch_dir / "delivery_evidence.json").write_text(json.dumps(envelope))
 
             # The reviewed working tree changes must clear delivery!
+            self._approve_design(tmppath)
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "delivery")
             self.assertEqual(res["state_key"], "DELIVERY_READY")
@@ -785,6 +804,7 @@ class TestInspectLifecycle(unittest.TestCase):
             (scratch_dir / "delivery_evidence.json").write_text(json.dumps(envelope))
 
             # Symbolic HEAD without fingerprint MUST NOT produce DELIVERY_READY
+            self._approve_design(tmppath)
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "review")
             self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
@@ -841,6 +861,7 @@ class TestInspectLifecycle(unittest.TestCase):
             }
             (scratch_dir / "delivery_evidence.json").write_text(json.dumps(malformed_envelope))
 
+            self._approve_design(tmppath)
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "review")
             self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
@@ -909,6 +930,7 @@ class TestInspectLifecycle(unittest.TestCase):
             }
             (scratch_dir / "delivery_evidence.json").write_text(json.dumps(envelope))
 
+            self._approve_design(tmppath)
             # Simulate failure during directory move
             import unittest.mock as mock
             with mock.patch("shutil.move", side_effect=OSError("Simulated move failure")):
@@ -958,6 +980,7 @@ class TestInspectLifecycle(unittest.TestCase):
             }))
 
             # Set active change via .ship/state.json
+            self._approve_design(tmppath)
             inspect_lifecycle.set_active_change(tmppath, "feat")
             self.assertEqual(inspect_lifecycle.get_active_change(tmppath), "feat")
 
@@ -1101,6 +1124,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 "test_evidence": True,
             }))
 
+            self._approve_design(tmppath)
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "review")
             self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
@@ -1145,6 +1169,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 "test_evidence": True,
             }))
 
+            self._approve_design(tmppath)
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "review")
             self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
@@ -1186,6 +1211,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 },
             }))
 
+            self._approve_design(tmppath)
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "review")
             self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
@@ -1250,6 +1276,7 @@ class TestInspectLifecycle(unittest.TestCase):
             }))
 
             # Starts at DELIVERY_READY
+            self._approve_design(tmppath)
             res_ready = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res_ready["gate"], "delivery")
             self.assertEqual(res_ready["state_key"], "DELIVERY_READY")
@@ -1300,6 +1327,7 @@ class TestInspectLifecycle(unittest.TestCase):
             (scratch_dir / "delivery_evidence.json").write_text(json.dumps(envelope))
 
             # Delivery evaluation must reject skipped status
+            self._approve_design(tmppath)
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res["gate"], "review")
             self.assertEqual(res["state_key"], "REVIEW_ACTIVE")
@@ -1611,6 +1639,7 @@ class TestInspectLifecycle(unittest.TestCase):
             spikes = inspect_lifecycle.inspect_spikes(tmppath)
             self.assertEqual(spikes, [])
 
+            self._approve_design(tmppath)
             res = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertNotEqual(res["state_key"], "SPIKE_ACTIVE")
             self.assertEqual(res["gate"], "implementation")
@@ -1909,7 +1938,8 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertTrue((tmppath / ".ship" / "state.json").exists())
             self.assertIn("billing", ledger["changes"])
             billing = ledger["changes"]["billing"]
-            self.assertEqual(billing["phase"], "implementation")
+            self.assertEqual(billing["phase"], "design")
+            self.assertTrue(any(b.startswith("Design:") for b in billing["blockers"]))
             self.assertEqual(billing["task_status"]["total"], 2)
             self.assertEqual(billing["task_status"]["completed"], 1)
             self.assertEqual(billing["task_status"]["pending"], 1)
@@ -1962,7 +1992,7 @@ class TestInspectLifecycle(unittest.TestCase):
                     "evidence": {
                         "design": {"adr": "docs/adr/ADR-0002-auth.md", "status": "ACCEPTED"},
                         "spike": {"status": "PASSED", "verdict": "latency < 20ms"},
-                        "implementation": {"status": "PASSED"},
+                        "implementation": {"status": "PASSED", "tests_passed": True},
                         "simplify": {"debt_count": 0},
                         "review": {"verdict": "PASS", "reviewer": "judge", "status": "complete",
                                    "change": "auth-v2", "is_judge": True, "judge_report_valid": True,
@@ -1972,11 +2002,15 @@ class TestInspectLifecycle(unittest.TestCase):
                 })
             )
 
+            pkg = tmppath / "openspec/changes/auth-v2"
+            pkg.mkdir(parents=True)
+            (pkg / "tasks.md").write_text("- [x] Done\n")
+            self._approve_design(tmppath)
             trailers = inspect_lifecycle.generate_gate_trailers(tmppath, change_id="auth-v2")
             trailer_text = "\n".join(trailers)
 
             self.assertIn("Ship-Change: auth-v2", trailer_text)
-            self.assertIn("Ship-Design: ADR-0002-auth (ACCEPTED)", trailer_text)
+            self.assertIn("Ship-Design: PASSED", trailer_text)
             self.assertIn("Ship-Spike: PASSED (latency < 20ms)", trailer_text)
             self.assertIn("Ship-Implementation: PASSED (3/3 tasks)", trailer_text)
             self.assertIn("Ship-Simplify: DEBT-0", trailer_text)
@@ -2094,6 +2128,7 @@ class TestInspectLifecycle(unittest.TestCase):
             }))
 
             # Record a failed test in the ledger
+            self._approve_design(tmppath)
             inspect_lifecycle.record_test_run_to_ledger(
                 tmppath,
                 {"passed": False, "failed_count": 1, "command": "pytest"},
@@ -2330,8 +2365,8 @@ class TestInspectLifecycle(unittest.TestCase):
             # Explicit blockers must still be present!
             self.assertIn("Awaiting design approval", fx["blockers"])
             self.assertIn("Security team signoff", fx["blockers"])
-            # Phase changed from design to implementation -> revision_counter incremented
-            self.assertEqual(fx["phase"], "implementation")
+            # Missing approval remains blocked; discovered tasks still increment the revision
+            self.assertEqual(fx["phase"], "design")
             self.assertGreater(fx["revision_counter"], 2)
 
     def test_concurrent_worktrees_git_notes_shared_locking(self):
@@ -2424,6 +2459,10 @@ class TestInspectLifecycle(unittest.TestCase):
         """If source tree is modified after review, review trailer emits STALE and delivery emits BLOCKED."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
+            pkg = tmppath / "openspec/changes/feature-y"
+            pkg.mkdir(parents=True)
+            (pkg / "tasks.md").write_text("- [ ] Task\n")
+            self._approve_design(tmppath)
             # Create a real git repo
             subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
             subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
@@ -2461,6 +2500,7 @@ class TestInspectLifecycle(unittest.TestCase):
             )
 
             # Before modification: trailers are PASS and READY
+            self._approve_design(tmppath)
             trailers_before = inspect_lifecycle.generate_gate_trailers(tmppath, change_id="feature-y")
             text_before = "\n".join(trailers_before)
             self.assertIn("Ship-Review: PASS (by judge)", text_before)
@@ -2481,12 +2521,16 @@ class TestInspectLifecycle(unittest.TestCase):
         """Review recording stores snapshot_sha and trailers detect when a new commit is made."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
+            pkg = tmppath / "openspec/changes/feature-z"
+            pkg.mkdir(parents=True)
+            (pkg / "tasks.md").write_text("- [ ] Task\n")
+            self._approve_design(tmppath)
             subprocess.run(["git", "init"], cwd=tmppath, check=True, capture_output=True)
             subprocess.run(["git", "config", "user.name", "Test"], cwd=tmppath, check=True)
             subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmppath, check=True)
             f1 = tmppath / "file.txt"
             f1.write_text("v1\n")
-            subprocess.run(["git", "add", "file.txt"], cwd=tmppath, check=True)
+            subprocess.run(["git", "add", "file.txt", "openspec"], cwd=tmppath, check=True)
             subprocess.run(["git", "commit", "-m", "commit 1"], cwd=tmppath, check=True)
             c1 = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmppath, check=True, capture_output=True, text=True).stdout.strip()
 
@@ -2507,6 +2551,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 "questions": [],
                 "routing_notes": [],
             }
+            self._approve_design(tmppath)
             inspect_lifecycle.record_review_to_ledger(tmppath, review_dict, change_id="feature-z")
 
             ledger = inspect_lifecycle.load_ledger(tmppath, auto_sync=False)
@@ -2522,7 +2567,7 @@ class TestInspectLifecycle(unittest.TestCase):
 
             # Now commit new code (c2)
             f1.write_text("v2\n")
-            subprocess.run(["git", "add", "file.txt"], cwd=tmppath, check=True)
+            subprocess.run(["git", "add", "file.txt", "openspec"], cwd=tmppath, check=True)
             subprocess.run(["git", "commit", "-m", "commit 2"], cwd=tmppath, check=True)
 
             # Trailers at commit c2 must detect that HEAD no longer matches snapshot_sha!
@@ -2537,6 +2582,10 @@ class TestInspectLifecycle(unittest.TestCase):
         """Recording a PASS review clears previous review blockers generated by workspace sync."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
+            pkg = tmppath / "openspec/changes/auth-service"
+            pkg.mkdir(parents=True)
+            (pkg / "tasks.md").write_text("- [ ] Task\n")
+            self._approve_design(tmppath)
             # Create a package and initialize state
             inspect_lifecycle.mutate_change_state(
                 tmppath,
@@ -2564,6 +2613,7 @@ class TestInspectLifecycle(unittest.TestCase):
                     "test_evidence_passed": True,
                 }
 
+            self._approve_design(tmppath)
             synced = inspect_lifecycle.FileLedgerStore.sync_from_workspace(
                 tmppath,
                 inspect_openspec_fn=inspect_pkg,
@@ -2588,6 +2638,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 "questions": [],
                 "routing_notes": [],
             }
+            self._approve_design(tmppath)
             updated = inspect_lifecycle.record_review_to_ledger(tmppath, pass_review, change_id="auth-service")
 
             # Obsolete review failure must be completely cleared and phase transitioned to delivery!
@@ -2599,6 +2650,10 @@ class TestInspectLifecycle(unittest.TestCase):
         """Completing a task increments revision_counter even when phase and blockers do not change."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
+            pkg = tmppath / "openspec/changes/checkout"
+            pkg.mkdir(parents=True)
+            (pkg / "tasks.md").write_text("- [ ] Task\n")
+            self._approve_design(tmppath)
             entry = inspect_lifecycle.mutate_change_state(
                 tmppath,
                 "checkout",
@@ -2679,6 +2734,7 @@ class TestInspectLifecycle(unittest.TestCase):
             subprocess.run(["git", "add", "."], cwd=root, check=True, capture_output=True)
             subprocess.run(["git", "commit", "-m", "initial"], cwd=root, check=True, capture_output=True)
             sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+            self._approve_design(root)
             inspect_lifecycle.set_active_change(root, "feature")
             inspect_lifecycle.sync_ledger_from_workspace(root)
             report = root / ".scratch/review_report.json"
@@ -2874,6 +2930,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 "findings": [], "coverage": ["Checked"], "questions": [], "routing_notes": [],
                 "test_evidence": True,
             }))
+        self._approve_design(root)
         inspect_lifecycle.sync_ledger_from_workspace(root)
         return living
 
@@ -2927,6 +2984,7 @@ class TestInspectLifecycle(unittest.TestCase):
             living = self._archive_workspace(root, ["alpha"])
             new_spec = root / "openspec/changes/alpha/specs/new.md"
             new_spec.write_text("### Requirement: New\nNew behavior\n")
+            self._approve_design(root)
             inspect_lifecycle.set_active_change(root, "alpha")
             state = root / ".ship/state.json"
             before_state = state.read_bytes()
@@ -2971,7 +3029,7 @@ class TestInspectLifecycle(unittest.TestCase):
             self._archive_workspace(root, ["alpha"])
             (root / ".ship/state.json").unlink()
             with patch.object(FileLedgerStore, "save", wraps=FileLedgerStore.save) as save:
-                inspect_lifecycle.apply_and_archive_openspec(root, "alpha")
+                inspect_lifecycle.apply_and_archive_openspec(root, "alpha", force=True)
             self.assertEqual(save.call_count, 1)
             state = inspect_lifecycle.load_ledger(root)
             self.assertEqual(set(state["changes"]), {"alpha"})

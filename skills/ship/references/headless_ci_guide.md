@@ -191,3 +191,27 @@ separators, traversal, and unsafe managed symlinks. `--force` can bypass workflo
 approval requirements but cannot bypass these filesystem boundaries. These checks
 assume a trusted checkout; do not allow an untrusted local process to replace paths
 while the runner operates.
+
+
+## Optional CI enforcement
+
+Local skill use does not require CI. Follow the [local workflow and approval receipts](./lifecycle_state_machine.md#local-workflow-and-design-approval) for normal interactive sessions. The following applies only when adding a protected CI merge gate.
+
+
+These receipts record authorization; they do not authenticate the supplied identity.
+The local checkout, ledger, Git notes, report JSON, and CLI are writable by the same
+operator. They are workflow records, not tamper-proof attestations. Boolean or textual
+legacy test reports remain accepted as self-reported evidence. Structured reports
+are checked for contradictory exit codes, failure counts, flags, and nested results;
+malformed results cannot count as passing. `--record-tests` does not execute tests.
+
+For an enforced organizational gate, use the existing CI and review platform as the
+trust authority. A protected job must authenticate the approval event, retain the
+reviewed digest, and run required tests independently on the candidate commit. Let
+that job generate the structured test summary (`passed`, integer `exit_code`, positive
+integer `tests_run`, zero integer failure counts, and `command`) and retain its logs
+with the commit SHA. Only the trusted job should publish the required merge check;
+an agent-generated report or trailer must not substitute for it. Use trusted workflow
+code and policy when evaluating a candidate that can itself modify scripts or config.
+This repository supplies the local checks and receipt interface; the organization’s
+runner must provide that identity and execution integration.

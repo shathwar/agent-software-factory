@@ -12,6 +12,7 @@ from .evidence import (
     is_test_evidence_passing,
     validate_judge_report_contract,
     validate_review_approval,
+    validate_design_approval,
 )
 from .gates import determine_lifecycle_state, validate_delivery_readiness
 from .ledger import FileLedgerStore
@@ -146,6 +147,13 @@ class LifecycleEngine:
             sync_fn=lambda r: self.sync_ledger(r, resolved_change),
         )
         active_change = ledger.get("changes", {}).get(resolved_change) if resolved_change else None
+
+        if openspec_packages:
+            design_error = validate_design_approval(repo_root, active_pkg_change, active_change)
+            active_change = dict(active_change or {})
+            active_change["blockers"] = [b for b in active_change.get("blockers", []) if not b.startswith("Design:")]
+            if design_error:
+                active_change["blockers"].append(f"Design: {design_error}")
 
         gate, state_key, next_action = determine_lifecycle_state(
             git_info, adrs, openspec_packages, spikes, review_report, active_change=active_change

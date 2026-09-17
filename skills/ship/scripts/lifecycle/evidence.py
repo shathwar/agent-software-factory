@@ -1,6 +1,7 @@
 """Evidence verification components for Spikes, TDD, and Review Judge reports."""
 
 import json
+import hashlib
 import math
 from pathlib import Path
 import re
@@ -24,25 +25,28 @@ def is_test_evidence_passing(evidence: Any) -> bool:
         if not evidence:
             return False
         # 1. Exit code must be 0
-        if "exit_code" in evidence and evidence["exit_code"] != 0:
+        if "exit_code" in evidence and (type(evidence["exit_code"]) is not int or evidence["exit_code"] != 0):
             return False
         # 2. Passed flag must be boolean True
         if "passed" in evidence and evidence["passed"] is not True:
             return False
         # 3. Tests run count must be positive integer (> 0)
         if "tests_run" in evidence:
-            if not isinstance(evidence["tests_run"], int) or evidence["tests_run"] <= 0:
+            if type(evidence["tests_run"]) is not int or evidence["tests_run"] <= 0:
                 return False
         # 4. Failure/error counts must be 0
-        for fail_key in ("failed", "errors", "failures"):
-            if fail_key in evidence and isinstance(evidence[fail_key], (int, float)):
-                if evidence[fail_key] > 0:
+        for fail_key in ("failed", "failed_count", "errors", "failures"):
+            if fail_key in evidence:
+                if type(evidence[fail_key]) is not int or evidence[fail_key] != 0:
                     return False
         # 5. Status string
         if "status" in evidence:
             st = str(evidence["status"]).lower().strip()
             if st not in {"pass", "passed", "ok", "success", "green"}:
                 return False
+
+        if "test_evidence" in evidence and not is_test_evidence_passing(evidence["test_evidence"]):
+            return False
 
         # Affirmative passing criteria
         has_positive = (
@@ -500,3 +504,48 @@ def validate_review_snapshot(
             return f"Working tree has unreviewed source modifications ({mod_str}). Re-run adversarial review on current code before shipping."
 
     return None
+
+
+def design_fingerprint(repo_root: Path, change: str) -> str:
+    """Bind approval to package contents and ADRs; task completion is not design."""
+    from .paths import repository_path, resolve_change_path
+    package = resolve_change_path(repo_root, change)
+    if not package.is_dir():
+        raise ValueError(f"Missing design package: {change}")
+    records = []
+    for directory in (package, repository_path(repo_root, "docs/adr")):
+        for candidate in sorted(directory.rglob("*")):
+            path = repository_path(repo_root, candidate.relative_to(repo_root).as_posix())
+            if not path.is_file():
+                continue
+            data = path.read_bytes()
+            if path == package / "tasks.md":
+                data = re.sub(rb"(?m)^(\s*[-*] )\[[xX ]\]", rb"\1[ ]", data)
+            records.append((path.relative_to(repo_root).as_posix(), hashlib.sha256(data).hexdigest()))
+    if not records:
+        raise ValueError("Design package is empty")
+    return hashlib.sha256(json.dumps(records, separators=(",", ":")).encode()).hexdigest()
+
+
+def validate_design_approval(repo_root: Path, change: str, entry: Optional[Dict[str, Any]]) -> Optional[str]:
+    receipt = (entry or {}).get("evidence", {}).get("design", {}).get("approval")
+    if not isinstance(receipt, dict) or receipt.get("change") != change or not isinstance(receipt.get("approved_by"), str) or not receipt["approved_by"].strip():
+        return "Design approval required for this change."
+    try:
+        if receipt.get("fingerprint") != design_fingerprint(repo_root, change):
+            return "Design changed since approval; obtain approval again."
+    except (ValueError, OSError) as exc:
+        return f"Design cannot be verified: {exc}"
+    return None
+
+
+def implementation_failed(evidence: Dict[str, Any]) -> bool:
+    """Check recorded results, including legacy ledgers, using the ingestion rule."""
+    if evidence.get("status") == "FAILED":
+        return True
+    if evidence.get("tests_passed") is None and evidence.get("status", "PENDING") == "PENDING":
+        return False
+    return not is_test_evidence_passing({
+        "passed": evidence.get("tests_passed"),
+        "failed_count": evidence.get("failed_count", 0),
+    })

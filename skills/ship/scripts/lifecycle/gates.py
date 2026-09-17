@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from .evidence import validate_review_approval
+from .evidence import validate_review_approval, implementation_failed
 from .models import GateResult, GateStatus
 
 
@@ -29,7 +29,7 @@ def validate_delivery_readiness(
                 return ("implementation", "TDD_ACTIVE", f"Blocked by test failure in ledger: {test_b[0]}. Run Red-Green-Refactor.")
             return review_blocked(f"Blocked by active ledger blockers: {'; '.join(blockers)}. Remediate findings before shipping.")
         impl_ev = active_change.get("evidence", {}).get("implementation", {})
-        if impl_ev.get("tests_passed") is False or impl_ev.get("status") == "FAILED":
+        if implementation_failed(impl_ev):
             return ("implementation", "TDD_ACTIVE", "Blocked by failing test evidence in ledger. Run Red-Green-Refactor.")
         review_ev = active_change.get("evidence", {}).get("review", {})
         if review_ev.get("verdict") in {"FAIL", "FAILED", "REJECTED"}:
@@ -88,6 +88,10 @@ def determine_lifecycle_state(
                 f"Compile tasks.md and specs/ for '{pkg_change_name}'. Seek user confirmation to proceed.",
             )
 
+        design_blockers = [b for b in (active_change or {}).get("blockers", []) if b.startswith("Design:")]
+        if design_blockers:
+            return ("design", "DESIGN_APPROVAL_REQUIRED", design_blockers[0])
+
         if active_pkg["pending_tasks"] > 0:
             next_task_str = f" Next: '{active_pkg['next_task']}'." if active_pkg["next_task"] else ""
             return (
@@ -101,7 +105,7 @@ def determine_lifecycle_state(
                 impl_ev = active_change.get("evidence", {}).get("implementation", {})
                 blockers = active_change.get("blockers", [])
                 test_blockers = [b for b in blockers if b.startswith("Tests:")]
-                if impl_ev.get("tests_passed") is False or impl_ev.get("status") == "FAILED" or test_blockers:
+                if implementation_failed(impl_ev) or test_blockers:
                     reason = test_blockers[0] if test_blockers else f"{impl_ev.get('failed_count', 1)} test(s) failing"
                     return (
                         "implementation",

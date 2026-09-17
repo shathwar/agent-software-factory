@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from .evidence import validate_review_approval, validate_review_snapshot
+from .evidence import validate_review_approval, validate_review_snapshot, validate_design_approval, implementation_failed
 
 
 def canonicalize_gate_name(gate_name: str) -> str:
@@ -50,19 +50,9 @@ class CommitTrailerGenerator:
         gates_cfg = config.get("gates", {})
 
         # 1. Gate: Design
-        design_ev = evidence.get("design", {})
-        if design_ev.get("adr"):
-            adr_name = Path(design_ev["adr"]).stem
-            status = design_ev.get("status", "ACCEPTED")
-            trailers.append(f"Ship-Design: {adr_name} ({status})")
-        elif "design" in gates_cfg:
-            cur_phase = change_entry.get("phase", "design")
-            if cur_phase in {"implementation", "review", "delivery"}:
-                trailers.append("Ship-Design: PASSED")
-            elif cur_phase == "spike":
-                trailers.append("Ship-Design: SPIKE")
-            else:
-                trailers.append("Ship-Design: IN_PROGRESS")
+        design_error = validate_design_approval(repo_root, cid, change_entry)
+        if "design" in gates_cfg:
+            trailers.append("Ship-Design: " + ("BLOCKED" if design_error else "PASSED"))
 
         # 2. Gate: Spike
         spike_ev = evidence.get("spike", {})
@@ -75,11 +65,7 @@ class CommitTrailerGenerator:
         impl_ev = evidence.get("implementation", {})
         tasks = change_entry.get("task_status", {})
         blockers = change_entry.get("blockers", [])
-        has_test_failures = (
-            impl_ev.get("tests_passed") is False
-            or impl_ev.get("status") == "FAILED"
-            or any(b.startswith("Tests:") for b in blockers)
-        )
+        has_test_failures = implementation_failed(impl_ev) or any(b.startswith("Tests:") for b in blockers)
 
         if tasks.get("total", 0) > 0:
             if has_test_failures:
@@ -132,10 +118,10 @@ class CommitTrailerGenerator:
         # 6. Gate: Delivery
         deliv_ev = evidence.get("delivery", {})
         deliv_status = deliv_ev.get("status", "PENDING")
-        if has_test_failures or blockers or approval_error:
+        if has_test_failures or blockers or approval_error or design_error:
             if deliv_status == "ARCHIVED":
                 trailers.append("Ship-Delivery: ARCHIVED")
-            elif change_entry.get("phase") == "delivery" or deliv_status == "READY" or approval_error:
+            elif change_entry.get("phase") == "delivery" or deliv_status == "READY" or approval_error or design_error:
                 trailers.append("Ship-Delivery: BLOCKED")
         elif change_entry.get("phase") == "delivery" or deliv_status in {"READY", "ARCHIVED"}:
             trailers.append(f"Ship-Delivery: {deliv_status if deliv_status != 'PENDING' else 'READY'}")

@@ -374,6 +374,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="Generate and print RFC 5133 commit trailers for the active or specified change.",
     )
 
+    parser.add_argument("--design-fingerprint", action="store_true", help="Print the design digest for --change.")
+    parser.add_argument("--approve-design", metavar="SHA256", help="Record external approval of this design digest; requires --change and --approved-by.")
+    parser.add_argument("--approved-by", help="Identity supplied by the approving user or trusted host.")
+
     args = parser.parse_args(argv)
     repo_root = Path(args.path).resolve()
 
@@ -387,6 +391,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     def banner(title: str, lines: Sequence[str]) -> List[str]:
         bar = "═" * 69
         return [bar, f" {title}", bar, *lines, bar]
+
+    if args.design_fingerprint or args.approve_design is not None:
+        from lifecycle.evidence import design_fingerprint
+        try:
+            if not args.change:
+                raise ValueError("Design approval requires explicit --change")
+            if args.design_fingerprint:
+                digest = design_fingerprint(repo_root, args.change)
+                output_result({"fingerprint": digest}, [digest])
+            else:
+                res = _ledger_store.approve_design(repo_root, args.change, args.approve_design, args.approved_by)
+                output_result(res, [f"Design approval recorded for {args.change}"])
+            return 0
+        except (ValueError, OSError) as exc:
+            print(f"Error recording design approval: {exc}", file=sys.stderr)
+            return 1
 
     if args.set_active_change:
         set_active_change(repo_root, args.set_active_change)
