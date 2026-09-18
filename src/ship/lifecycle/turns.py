@@ -21,7 +21,7 @@ def get_next_turn_contract(
         or "default"
     )
     git_info = repo_eval.get("git", {})
-    tree_fp = git_info.get("commit", "unknown")
+    tree_fp = git_info.get("working_tree_fingerprint")
     cfg = repo_eval.get("config", {})
     t_cmd = cfg.get("gates", {}).get("implementation", {}).get("test") or "autodetect"
 
@@ -36,7 +36,14 @@ def get_next_turn_contract(
     matched_pkg = next((p for p in pkgs if p.get("change") == target_change), None)
     next_task = (matched_pkg.get("next_task") if matched_pkg else None) or active_change.get("task_status", {}).get("next")
 
-    if state_key in {"INITIAL_PROPOSAL", "FRONTIER_ROUNDS"}:
+    design_actions = {
+        "INITIAL_PROPOSAL": "Discover facts, settle the design frontier, and compile ADR/OpenSpec.",
+        "FRONTIER_ROUNDS": "Continue the unresolved design frontier and compile ADR/OpenSpec.",
+        "ADR_PROPOSED": "Review the proposed ADR with the user and resolve outstanding design decisions.",
+        "ADR_ACCEPTED": "Preserve the accepted ADR decisions and compile the OpenSpec package and tasks.",
+        "SPEC_UNFINISHED": "Complete the existing specification package and its executable task breakdown.",
+    }
+    if state_key in design_actions:
         return TurnContract(
             change_id=target_change,
             phase=state_key,
@@ -63,7 +70,7 @@ def get_next_turn_contract(
                 f"Checkpoint recorded via inspect_lifecycle.py --change {target_change} --checkpoint design.",
             ],
             output_evidence="ADR + OpenSpec package + design checkpoint in .scratch/checkpoints/",
-            action_prompt=f"Execute design turn for change '{target_change}'. Discover facts, batch frontier rounds, compile ADR/OpenSpec, and checkpoint specification.",
+            action_prompt=f"Execute design turn for change '{target_change}'. {design_actions[state_key]} Obtain approval of the completed package before implementation.",
             suggested_command=f"ship checkpoint design --change {target_change}",
             suggested_mcp_tool="ship_checkpoint",
             suggested_mcp_args={"gate": "design", "change": target_change},
@@ -162,6 +169,9 @@ def get_next_turn_contract(
         )
 
     if state_key == "REVIEW_ACTIVE":
+        review_cfg = cfg.get("gates", {}).get("review", {})
+        reviewers = review_cfg.get("reviewers", ["correctness", "concurrency", "design", "judge"])
+        max_iterations = review_cfg.get("max_iterations", 3)
         review_mode = "parallel" if exec_mode == "parallel" else "sequential"
         return TurnContract(
             change_id=target_change,
@@ -171,7 +181,10 @@ def get_next_turn_contract(
             execution_mode=review_mode,
             inputs={
                 "change_id": target_change,
-                "base_branch": "main",
+                "base_branch": review_cfg.get("base_branch", "main"),
+                "reviewers": reviewers,
+                "max_iterations": max_iterations,
+                "critical_paths": review_cfg.get("critical_paths", []),
                 "inspect_script": "$SKILLS_DIR/review/scripts/inspect_changes.sh",
                 "blockers": blockers,
                 "tree_fingerprint": tree_fp,
@@ -180,11 +193,11 @@ def get_next_turn_contract(
                 "Facts vs. Decisions Law: Autonomously inspect code and git diff; never ask questions answerable from code.",
                 "Judge Adjudication: Reject hallucinations; all findings must be evidenced against actual code.",
                 "Schema Compliance: Every reported finding must strictly adhere to the 12-field schema contract.",
-                "Repair Ceiling: In review-loop, never exceed 3 repair iterations.",
+                f"Repair Ceiling: In review-loop, never exceed {max_iterations} repair iterations.",
                 "Rollback Guard: If an ADR architectural invariant is broken, trigger rollback to design.",
             ],
             exit_criteria=[
-                "10-stage review executed across active perspectives (Correctness, Concurrency, Failure Resilience, Craftsmanship).",
+                f"Applicable review stages executed using configured perspectives: {', '.join(reviewers)}.",
                 "Candidate findings adjudicated by Evidence-Based Judge.",
                 "Delivery Evidence Envelope or review_report.json generated with PASS/FAIL verdict.",
                 f"Review report recorded via inspect_lifecycle.py --change {target_change} --record-review <report_path>.",
@@ -227,7 +240,10 @@ def get_next_turn_contract(
             suggested_mcp_args={"change": target_change},
         )
 
-    # Fallback / ARCHIVED
+    if state_key != "ARCHIVED":
+        raise ValueError(f"Unsupported lifecycle state: {state_key!r}; cannot derive a safe next turn")
+
+    # Only an archived change is complete.
     return TurnContract(
         change_id=target_change,
         phase=state_key,
@@ -294,6 +310,20 @@ def format_turn_contract(contract: TurnContract) -> str:
     return "\n".join(lines)
 
 
+def validate_turn_record(record: Any) -> None:
+    """Validate provenance at ingestion without interpreting claimed evidence as approval."""
+    if not isinstance(record, dict):
+        raise ValueError("Turn record must be a JSON object")
+    for field in ("turn_id", "timestamp", "skill", "harness", "execution_mode", "change_id"):
+        if field in record and (not isinstance(record[field], str) or not record[field].strip()):
+            raise ValueError(f"Turn record {field} must be a nonempty string")
+    for field in ("inputs", "evidence", "state_delta"):
+        if field in record and not isinstance(record[field], dict):
+            raise ValueError(f"Turn record {field} must be a JSON object")
+    if record.get("execution_mode", "sequential") not in ("sequential", "parallel"):
+        raise ValueError("Turn execution_mode must be sequential or parallel")
+
+
 def format_turns_log(turns: List[Dict[str, Any]], change_id: Optional[str] = None) -> str:
     """Format turn-level provenance audit trail."""
     cid_str = f" FOR '{change_id}'" if change_id else ""
@@ -306,6 +336,11 @@ def format_turns_log(turns: List[Dict[str, Any]], change_id: Optional[str] = Non
         lines.append("• No turns recorded yet in lifecycle ledger.")
     else:
         for idx, t in enumerate(turns, 1):
+            try:
+                validate_turn_record(t)
+            except ValueError as exc:
+                lines.append(f"[record-{idx}] INVALID: {exc}; preserved, export with --format json")
+                continue
             tid = t.get("turn_id", f"turn-{idx:03d}")
             skill = t.get("skill", "unknown")
             harness = t.get("harness", "generic")

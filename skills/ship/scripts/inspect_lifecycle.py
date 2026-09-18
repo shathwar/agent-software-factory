@@ -489,21 +489,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.show_turns:
         turns = _ledger_store.get_turns(repo_root, change_id=args.change)
-        output_result(turns, [format_turns_log(turns, change_id=args.change)])
+        output_result(turns, None if args.format == "json" else [format_turns_log(turns, change_id=args.change)])
         return 0
 
     if args.record_turn:
         try:
-            tfile = Path(args.record_turn)
-            if tfile.exists():
-                tdata = json.loads(tfile.read_text(encoding="utf-8"))
+            raw = args.record_turn.strip()
+            if raw.startswith(("{", "[")):
+                tdata = json.loads(raw)
+            elif Path(raw).is_file():
+                tdata = json.loads(Path(raw).read_text(encoding="utf-8"))
+            elif raw in {"ship", "design", "spike", "tdd", "simplify", "review", "delivery"}:
+                tdata = {"skill": raw}
             else:
-                tdata = json.loads(args.record_turn)
-        except Exception:
-            tdata = {"skill": args.record_turn}
-        if args.harness:
-            tdata["harness"] = args.harness
-        try:
+                raise ValueError("Supply turn JSON, an existing JSON file, or a known skill name")
+            if not isinstance(tdata, dict):
+                raise ValueError("Turn record must be a JSON object")
+            if args.harness:
+                tdata["harness"] = args.harness
             res = _ledger_store.record_turn(repo_root, tdata, change_id=args.change)
             rev = res.get("revision_counter", 0)
             turns_cnt = len(res.get("turns", []))

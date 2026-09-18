@@ -91,14 +91,14 @@ def handle_ship_record_turn(args: Dict[str, Any]) -> Dict[str, Any]:
     change = args.get("change")
     record_payload = {
         "skill": args.get("skill"),
-        "inputs": args.get("inputs") or {},
-        "evidence": args.get("evidence") or {},
-        "state_delta": args.get("state_delta") or {},
-        "harness": args.get("harness") or "generic",
-        "execution_mode": args.get("execution_mode") or "sequential",
+        "inputs": args.get("inputs", {}),
+        "evidence": args.get("evidence", {}),
+        "state_delta": args.get("state_delta", {}),
+        "harness": args.get("harness", "generic"),
+        "execution_mode": args.get("execution_mode", "sequential"),
     }
     rec = record_turn_to_ledger(root, record_payload, change_id=change)
-    return rec.to_dict()
+    return rec
 
 
 def handle_ship_checkpoint(args: Dict[str, Any]) -> Dict[str, Any]:

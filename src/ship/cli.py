@@ -153,13 +153,13 @@ def run_lifecycle(argv: Sequence[str]) -> int:
 
     if args.show_turns:
         turns = ledger_store.get_turns(repo_root, change_id=args.change)
-        output_result(turns, [format_turns_log(turns, change_id=args.change)])
+        output_result(turns, None if args.format == "json" else [format_turns_log(turns, change_id=args.change)])
         return 0
 
     if args.record_turn:
         try:
-            t_path = Path(args.record_turn)
-            t_payload = json.loads(t_path.read_text(encoding="utf-8")) if t_path.is_file() else json.loads(args.record_turn)
+            raw = args.record_turn.strip()
+            t_payload = json.loads(raw) if raw.startswith(("{", "[")) else json.loads(Path(raw).read_text(encoding="utf-8"))
             if not isinstance(t_payload, dict):
                 raise ValueError("Turn record payload must be a JSON object.")
         except Exception as exc:
@@ -167,9 +167,13 @@ def run_lifecycle(argv: Sequence[str]) -> int:
             return 1
         if args.harness and "harness" not in t_payload:
             t_payload["harness"] = args.harness
-        rec = ledger_store.record_turn(repo_root, t_payload, change_id=args.change, sync_fn=engine.sync_ledger)
-        output_result(rec.to_dict(), [f"Recorded turn {rec.turn_id} for skill '{rec.skill}' under harness '{rec.harness}'"])
-        return 0
+        try:
+            rec = ledger_store.record_turn(repo_root, t_payload, change_id=args.change, sync_fn=engine.sync_ledger)
+            output_result(rec, [f"Recorded turn for change '{rec['change_id']}'"])
+            return 0
+        except ValueError as exc:
+            print(f"Error recording turn: {exc}", file=sys.stderr)
+            return 1
 
     if args.next_turn:
         try:

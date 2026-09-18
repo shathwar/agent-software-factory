@@ -683,6 +683,10 @@ class FileLedgerStore:
         change_id: Optional[str] = None,
         sync_fn: Optional[Callable[[Path], Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
+        from .turns import validate_turn_record
+        validate_turn_record(turn_data)
+        if change_id and turn_data.get("change_id") not in (None, change_id):
+            raise ValueError("Turn change_id does not match the selected change")
         cid = change_id or turn_data.get("change_id") or cls.get_active_change(repo_root) or "default"
         validate_change_id(cid)
 
