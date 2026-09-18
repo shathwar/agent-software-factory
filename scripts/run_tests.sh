@@ -19,6 +19,7 @@ python3 -m py_compile skills/ship/scripts/lifecycle/*.py
 python3 -m py_compile src/ship/*.py src/ship/lifecycle/*.py src/ship/mcp/*.py src/ship/tools/*.py
 python3 -m py_compile skills/tdd/scripts/verify_tdd.py
 python3 -m py_compile skills/spike/scripts/run_spike.py
+python3 -m py_compile scripts/sync_skills.py
 echo "✓ Script syntax OK"
 echo ""
 

@@ -184,6 +184,22 @@ class PackagingTests(unittest.TestCase):
             self.assertEqual(ret, 0)
             self.assertIn("Recorded review report", buf.getvalue())
 
+    def test_skills_and_src_byte_for_byte_parity(self):
+        """All mapped files between src/ship/ and skills/ must be 100% byte-for-byte identical."""
+        sync_script = ROOT / "scripts" / "sync_skills.py"
+        self.assertTrue(sync_script.exists())
+        res = subprocess.run(
+            [sys.executable, str(sync_script), "--check", "--path", str(ROOT)],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(
+            res.returncode,
+            0,
+            f"Parity mismatch between src/ship and skills/:\n{res.stderr}\n{res.stdout}\nRun 'python3 scripts/sync_skills.py' to synchronize.",
+        )
+        self.assertIn("Parity check passed", res.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

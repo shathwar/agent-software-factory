@@ -25,3 +25,11 @@ __pycache__/
 .ship/
 .ship
 
+# Python packaging & builds
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+*.pyo
+*.pyd
+

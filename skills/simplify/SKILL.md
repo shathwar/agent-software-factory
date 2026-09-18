@@ -104,7 +104,8 @@ Audit markers across tiers:
 
 ---
 
-## 6. Engineering References (Loaded On-Demand)
+## 6. Engineering References & Specialist Roles
 
+- [Simplify Implementer Role (`simplify_implementer.md`)](./agents/simplify_implementer.md): Minimal production code agent prompt for green-phase implementation.
 - [The Laziness Ladder Guide (`laziness_ladder.md`)](./references/laziness_ladder.md): Language-by-language stdlib replacements and anti-bloat patterns.
 - [Debt Tracking & Ledger Protocol (`debt_tracking.md`)](./references/debt_tracking.md): Auditing and cleaning up `simplify:` shortcuts.
