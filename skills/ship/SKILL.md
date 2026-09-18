@@ -14,6 +14,7 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 > **Zero Conversational Filler**: Never say "Certainly", "I'd be happy to", or provide conversational preamble. Start directly with state inspection, active gate execution, or delivery walkthrough.
 
 <hard_constraints>
+- Local Preflight: On first use in a project or after an upgrade, run the installed inspector with `--doctor`. If the default Python is unsupported, select an available Python 3.10+ interpreter and use it consistently. Do not claim a successful preflight when checks fail.
 - Re-Entrant State: Inspect filesystem state (`inspect_lifecycle.py`) first. Resume cleanly; never re-run finished gates.
 - Harness Independence: The workflow does NOT depend on recursive subagents. Specialist activities execute as independent agent turns orchestrated by the workflow controller, supporting sequential execution or parallel passes where supported. Subagents are an optional optimization, never a core dependency. Disclose the execution mode honestly.
 - Git Restrictions: Checkpoints and Git notes create internal commit objects. Respect explicit no-Git-mutation restrictions; use local evidence and disclose skipped checkpoint/note capabilities as described in [team rollout](./references/team_rollout.md#git-mutation-restrictions).
@@ -69,7 +70,10 @@ Delivery: PR Sign-Off & Handoff (delivery)
 
 ## 2. Re-Entrant State Machine (Filesystem as State)
 
-The filesystem is the persistent state machine. Orient with `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py"`:
+The filesystem is the persistent state machine. Orient using the most direct available tier:
+- **Tier A (Native MCP Tool)**: Call `ship_next_turn` or `ship_status`.
+- **Tier B (Packaged CLI)**: Run `ship turn` or `ship status`.
+- **Tier C (Path-Based Fallback)**: Run `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --next-turn`.
 
 | Gate | Indicators | Action |
 |---|---|---|

@@ -87,11 +87,12 @@ Turn provenance reconstructs which skill ran, against what inputs, what evidence
 
 ## Pinning, upgrade, and rollback
 
-This checkout identifies the suite as `0.2.0-rc.1`: a pilot candidate, not a
-published production release. Pin the distribution checkout to an organization-
-approved full commit SHA (or a verified published tag when available). Prefer
-`install.sh --mode copy` for team distributions; symlinks follow source changes.
-The installed Ship `VERSION` and doctor report identify the candidate, while the
+This checkout identifies the suite as `1.0.0`: the production baseline
+release with packaged CLI (`ship`) and zero-dependency MCP server (`ship mcp`).
+Pin the distribution checkout to an organization-approved full commit SHA (or a
+verified published tag when available). Prefer `pip install -e .` for packaged CLI
+usage or `install.sh --mode copy` for team distributions; symlinks follow source changes.
+The installed Ship `VERSION` and doctor report identify the release, while the
 pinned commit identifies its exact content. There is no remote update service.
 
 Before upgrading, stop active agents, record the installed version/commit, preserve

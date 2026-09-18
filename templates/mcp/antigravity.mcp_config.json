@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "ship": {
+      "command": "ship",
+      "args": ["mcp"],
+      "env": {}
+    }
+  }
+}

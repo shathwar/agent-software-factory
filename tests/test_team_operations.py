@@ -102,3 +102,24 @@ class TeamOperationsTests(unittest.TestCase):
             self.assertIn('Ship-Delivery: BLOCKED', trailers)
             with self.assertRaisesRegex(RuntimeError, 'pending tasks'):
                 fixtures.lifecycle.apply_and_archive_openspec(root, 'alpha')
+
+
+    def test_local_envelope_is_archived_without_git_notes_recording(self):
+        import re
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fixtures.ArchiveRecoveryTests().workspace(root)
+            (root / '.scratch/alpha/review_report.json').unlink()
+            # Use the documented example as the consumer would, filling its snapshot.
+            schema_doc = Path(__file__).resolve().parents[1] / 'skills/review/references/finding_schema.md'
+            example = re.search(r"```json delivery_evidence\n(.*?)\n```", schema_doc.read_text(), re.S).group(1)
+            report = json.loads(example)
+            self.assertIn('change', report)
+            report['change'] = 'alpha'
+            report['snapshot'] = {'working_tree_fingerprint': fixtures.lifecycle.compute_working_tree_fingerprint(root)}
+            (root / '.scratch/delivery_evidence.json').write_text(json.dumps(report))
+            FileLedgerStore.mutate_change(root, 'alpha', lambda e: e['evidence'].update(review={'status': 'PENDING'}))
+            self.assertEqual(fixtures.lifecycle.evaluate_repository(root, target_change='alpha')['state_key'], 'DELIVERY_READY')
+            result = fixtures.lifecycle.apply_and_archive_openspec(root, 'alpha')
+            self.assertIn('Ship-Review: PASS (by judge)', result['trailers'])
+            self.assertEqual(fixtures.lifecycle.generate_gate_trailers(root, 'alpha'), result['trailers'])

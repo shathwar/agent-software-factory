@@ -88,7 +88,10 @@ const sessionStore = new Map<string, Session>();
 active_items = [item for item in items if item.is_active]
 ```
 
-Audit markers with `python3 "$SKILLS_DIR/simplify/scripts/scan_debt.py"` (`--strict` in CI).
+Audit markers across tiers:
+- **Tier A (Native MCP Tool)**: Call `ship_simplify_scan(strict=True)`
+- **Tier B (Packaged CLI)**: Run `ship simplify --strict`
+- **Tier C (Path Fallback)**: Run `python3 "$SKILLS_DIR/simplify/scripts/scan_debt.py"` (`--strict` in CI).
 
 ---
 

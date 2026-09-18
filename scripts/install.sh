@@ -24,6 +24,8 @@ MODE_EXPLICIT=0
 DRY_RUN=0
 OVERWRITE=0
 BACKUP=0
+INSTALL_PIP=0
+INSTALL_MCP=0
 
 IS_WINDOWS=0
 case "$(uname -s 2>/dev/null || echo 'unknown')" in
@@ -43,6 +45,8 @@ Options:
   --target-cursor    Install to Cursor skills directory (~/.cursor/skills)
   --target-antigravity, --target-gemini
                      Install to Antigravity global directory (~/.gemini/config/skills)
+  --pip, --editable  Install 'ship' CLI package locally into Python environment (pip install -e .)
+  --mcp              Register 'ship' MCP server into target harness config (Antigravity/Claude/Cursor)
   --mode <symlink|copy>
                      Installation mode: 'symlink' or 'copy' (default: symlink on Unix, copy on Windows)
   --overwrite        Overwrite existing non-symlink directories (default: preserve & skip)
@@ -81,6 +85,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --target-antigravity|--target-gemini)
             TARGET_DIR="$HOME/.gemini/config/skills"
+            shift
+            ;;
+        --pip|--editable)
+            INSTALL_PIP=1
+            shift
+            ;;
+        --mcp)
+            INSTALL_MCP=1
             shift
             ;;
         --mode)
@@ -198,4 +210,48 @@ done
 
 echo "---------------------------------------------------------------------"
 echo "✓ Successfully installed $installed_count skill(s) into $TARGET_DIR (skipped: $skipped_count)"
+
+if [[ $INSTALL_PIP -eq 1 ]]; then
+    echo "---------------------------------------------------------------------"
+    echo "📦 Installing 'ship' CLI package locally (pip install -e .) ..."
+    if [[ $DRY_RUN -eq 0 ]]; then
+        python3 -m pip install -e "$REPO_ROOT"
+    fi
+fi
+
+if [[ $INSTALL_MCP -eq 1 ]]; then
+    echo "---------------------------------------------------------------------"
+    echo "🔌 Registering 'ship' MCP server into target harness config ..."
+    MCP_CONF=""
+    if [[ "$TARGET_DIR" == *".gemini"* ]]; then
+        MCP_CONF="$HOME/.gemini/config/mcp_config.json"
+    elif [[ "$TARGET_DIR" == *".claude"* ]]; then
+        MCP_CONF="$HOME/.claude/mcp_config.json"
+    elif [[ "$TARGET_DIR" == *".cursor"* ]]; then
+        MCP_CONF="$HOME/.cursor/mcp.json"
+    else
+        MCP_CONF="$TARGET_DIR/mcp_config.json"
+    fi
+
+    if [[ $DRY_RUN -eq 0 ]]; then
+        mkdir -p "$(dirname "$MCP_CONF")"
+        python3 -c "
+import json, sys
+p = sys.argv[1]
+try:
+    with open(p, 'r') as f:
+        data = json.load(f)
+except Exception:
+    data = {}
+servers = data.setdefault('mcpServers', {})
+servers['ship'] = {'command': 'ship', 'args': ['mcp']}
+with open(p, 'w') as f:
+    json.dump(data, f, indent=2)
+print(f' ✓ Registered ship MCP server in {p}')
+" "$MCP_CONF"
+    else
+        echo " (DRY-RUN: would update $MCP_CONF)"
+    fi
+fi
+
 echo "====================================================================="

@@ -1,0 +1,139 @@
+"""Tests for ship-sdlc packaging, CLI subcommands, and flag backward compatibility."""
+
+import io
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from ship.cli import main as ship_cli_main
+
+
+class PackagingTests(unittest.TestCase):
+    def test_pyproject_toml_structure_and_metadata(self):
+        """pyproject.toml conforms to standard PEP 518/621 specification."""
+        pyproject_path = ROOT / "pyproject.toml"
+        self.assertTrue(pyproject_path.exists())
+        content = pyproject_path.read_text(encoding="utf-8")
+        self.assertIn('name = "ship-sdlc"', content)
+        self.assertIn('version = "1.0.0"', content)
+        self.assertIn('ship = "ship.cli:main"', content)
+        self.assertIn('requires-python = ">=3.10"', content)
+        self.assertIn('dependencies = []', content)
+
+    def test_cli_version_and_help(self):
+        """ship --version and ship --help return expected information."""
+        # Version
+        buf = io.StringIO()
+        old_stdout = sys.stdout
+        try:
+            sys.stdout = buf
+            ret = ship_cli_main(["--version"])
+        finally:
+            sys.stdout = old_stdout
+        self.assertEqual(ret, 0)
+        self.assertIn("1.0.0", buf.getvalue())
+
+        # Help
+        buf = io.StringIO()
+        try:
+            sys.stdout = buf
+            ret = ship_cli_main(["--help"])
+        finally:
+            sys.stdout = old_stdout
+        self.assertEqual(ret, 0)
+        self.assertIn("Ship SDLC CLI v1.0.0", buf.getvalue())
+        self.assertIn("ship status", buf.getvalue())
+        self.assertIn("ship turn", buf.getvalue())
+        self.assertIn("ship mcp", buf.getvalue())
+
+    def test_cli_subcommands_and_flag_parity(self):
+        """Subcommands execute equivalent lifecycle operations as legacy flags."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            # Initialize git repository
+            for args in [("init", "-b", "main"), ("config", "user.name", "Dev"),
+                         ("config", "user.email", "dev@example.com"), ("config", "commit.gpgsign", "false")]:
+                subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+            (root / "README.md").write_text("# Project\n")
+            subprocess.run(["git", "add", "."], cwd=root, check=True, capture_output=True)
+            subprocess.run(["git", "commit", "-m", "initial"], cwd=root, check=True, capture_output=True)
+
+            # 1. ship turn / ship next-turn / ship next
+            buf = io.StringIO()
+            old_stdout = sys.stdout
+            try:
+                sys.stdout = buf
+                ret = ship_cli_main(["next", "--path", str(root)])
+            finally:
+                sys.stdout = old_stdout
+            self.assertEqual(ret, 0)
+            self.assertIn("TURN CONTRACT: DESIGN", buf.getvalue())
+            self.assertIn("SUGGESTED INVOCATION:", buf.getvalue())
+
+            # 2. ship doctor
+            buf = io.StringIO()
+            try:
+                sys.stdout = buf
+                ret = ship_cli_main(["doctor", "--path", str(root)])
+            finally:
+                sys.stdout = old_stdout
+            self.assertEqual(ret, 0)
+            self.assertIn("Ship 1.0.0", buf.getvalue())
+            self.assertIn("OK python:", buf.getvalue())
+
+            # 3. ship status on unready repo with --json
+            buf = io.StringIO()
+            try:
+                sys.stdout = buf
+                ret = ship_cli_main(["status", "--json", "--path", str(root)])
+            finally:
+                sys.stdout = old_stdout
+            self.assertNotEqual(ret, 0)
+            status_json = json.loads(buf.getvalue())
+            self.assertFalse(status_json["ready"])
+            self.assertEqual(status_json["gate"], "design")
+
+            # 4. Specialist tool subcommands
+            # ship tdd
+            buf = io.StringIO()
+            try:
+                sys.stdout = buf
+                ret = ship_cli_main(["tdd", "--files"])
+            finally:
+                sys.stdout = old_stdout
+            self.assertEqual(ret, 0)
+            self.assertIn("TDD Audit & Verification Report", buf.getvalue())
+
+            # ship simplify
+            (root / "example.py").write_text("# simplify: In-memory list. Ceiling: 100 items. Upgrade: SQLite.\n")
+            buf = io.StringIO()
+            try:
+                sys.stdout = buf
+                ret = ship_cli_main(["simplify", str(root)])
+            finally:
+                sys.stdout = old_stdout
+            self.assertEqual(ret, 0)
+            self.assertIn("Operational Ceiling", buf.getvalue())
+
+            # ship spike
+            buf = io.StringIO()
+            try:
+                sys.stdout = buf
+                ret = ship_cli_main(["spike", "--cmd", "echo ok", "--iterations", "3", "--warmup", "1"])
+            finally:
+                sys.stdout = old_stdout
+            self.assertEqual(ret, 0)
+            self.assertIn("Empirical Results", buf.getvalue())
+
+
+if __name__ == "__main__":
+    unittest.main()

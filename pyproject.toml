@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ship-sdlc"
+version = "1.0.0"
+description = "Autonomous engineering lifecycle compiler, state ledger, and MCP server for AI coding agents."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "shathwar" }]
+keywords = ["ship", "sdlc", "agentic-lifecycle", "mcp", "tdd", "turn-contracts"]
+dependencies = []
+
+[project.scripts]
+ship = "ship.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

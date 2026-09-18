@@ -152,7 +152,7 @@ To prevent contaminating the specialist and Judge report contract with lifecycle
 ```json delivery_evidence
 {
   "schema_version": "1.0",
-  "topic": "feature-topic-name",
+  "change": "feature-change-id",
   "verdict": "PASS",
   "snapshot": {
     "commit": "a1b2c3d4e5f6...",

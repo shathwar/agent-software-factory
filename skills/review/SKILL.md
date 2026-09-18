@@ -27,7 +27,7 @@ Verify before ending the turn:
 ✓ 2. Independent Adjudication: All findings evaluated by the Judge; zero unadjudicated raw reviewer output returned.
 ✓ 3. Frozen Classification Enforced: In `review-loop`, every finding produced an explicit outcome (`FOLDED <sha>`, `DISPUTED <reason>`, `BLOCKED <missing>`, or `REPLAN <phase>`); zero silent downgrades or dropped issues.
 ✓ 4. Complete Findings Schema: Every finding adheres to the exact 12-field schema contract.
-✓ 5. Ledger Updated & Provenance Recorded: Review report recorded via `inspect_lifecycle.py --record-review` with execution mode and findings count.
+✓ 5. Ledger Updated & Provenance Recorded: Review report recorded via `ship_record_review` (MCP), `ship record-review` (CLI), or `inspect_lifecycle.py --record-review` with execution mode and findings count.
 </turn_contract>
 
 ---

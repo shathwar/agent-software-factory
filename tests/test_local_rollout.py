@@ -25,7 +25,7 @@ class LocalRolloutTests(unittest.TestCase):
                 result = subprocess.run([sys.executable, str(script), *args], cwd=project, capture_output=True, text=True)
                 self.assertEqual(result.returncode, code, result.stderr)
                 return result
-            self.assertEqual(cli("--version").stdout.strip(), "0.2.0-rc.1")
+            self.assertEqual(cli("--version").stdout.strip(), "1.0.0")
             self.assertTrue(json.loads(cli("--doctor", "--format", "json").stdout)["ok"])
             self.assertEqual(list(project.iterdir()), [])
             fixtures.ArchiveRecoveryTests().workspace(project)

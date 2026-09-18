@@ -101,8 +101,10 @@ Specification ➔ 🔴 RED (test_driver) ➔ 🟢 GREEN (simplify_implementer) �
 
 ## 6. Deterministic Verification & Tooling
 
-Audit and enforce TDD compliance using `verify_tdd.py`:
-
+Audit and enforce TDD compliance across available tiers:
+- **Tier A (Native MCP Tool)**: Call `ship_tdd_verify(strict=True)` or `ship_tdd_verify(trim_receipt=raw_log)`.
+- **Tier B (Packaged CLI)**: Run `ship tdd --strict` or `ship tdd --trim-receipt test_run.log`.
+- **Tier C (Path Fallback)**:
 ```bash
 # Check test-to-code parity and scan for anti-patterns across staged changes
 python3 "$SKILLS_DIR/tdd/scripts/verify_tdd.py" --strict

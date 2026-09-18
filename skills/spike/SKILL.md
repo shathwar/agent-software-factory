@@ -51,16 +51,22 @@ Verify before ending the turn:
 
 1. **Hypothesis**: Define measurable threshold (e.g. *p99 latency < 10ms at 5,000 req/sec; zero deadlocks under 50 concurrent workers*).
 2. **Sandbox**: Create `.scratch/<spike-name>/`. If external infrastructure is required, launch local ephemeral containers via Docker Compose.
-3. **Automated Measure**: Run the spike through the statistical benchmarking engine:
-   ```bash
-   python3 "$SKILLS_DIR/spike/scripts/run_spike.py" \
-     --cmd "python3 worker.py" \
-     --iterations 1000 \
-     --warmup 100 \
-     --concurrency 20 \
-     --expected-p99 10.0 \
-     --expected-rps 5000
-   ```
+3. **Automated Measure**: Run the spike through the statistical benchmarking engine across available tiers:
+   - **Tier A (Native MCP Tool)**: Call `ship_spike_run(command="python3 worker.py", iterations=1000, warmup=100, concurrency=20)`
+   - **Tier B (Packaged CLI)**:
+     ```bash
+     ship spike --cmd "python3 worker.py" --iterations 1000 --warmup 100 --concurrency 20 --expected-p99 10.0 --expected-rps 5000
+     ```
+   - **Tier C (Path Fallback)**:
+     ```bash
+     python3 "$SKILLS_DIR/spike/scripts/run_spike.py" \
+       --cmd "python3 worker.py" \
+       --iterations 1000 \
+       --warmup 100 \
+       --concurrency 20 \
+       --expected-p99 10.0 \
+       --expected-rps 5000
+     ```
 4. **Deliver Verdict & Bridge**: Export results directly into the design ADR or OpenSpec package, clean up containers, and delete the scratch sandbox.
 
 ---
