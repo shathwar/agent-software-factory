@@ -18,6 +18,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from typing import Sequence
 
 # Production file extensions that require test coverage
 CODE_EXTENSIONS = {
@@ -322,7 +323,31 @@ def trim_test_receipt(raw_output: str, max_lines: int = 40) -> str:
     return "\n".join(trimmed)
 
 
-def main() -> int:
+def verify_tdd(ref_range: str | None = None, files: list[str] | None = None, repo_root: Path | None = None, strict: bool = False) -> TDDCheckResult:
+    """Convenience function to run TDD parity and anti-pattern audit on changed or specified files."""
+    try:
+        files_to_check = files if files else get_changed_files(ref_range, repo_root=repo_root)
+        return audit_tdd(files_to_check, repo_root=repo_root, strict=strict)
+    except GitDiscoveryError as e:
+        return TDDCheckResult(
+            passed=False,
+            production_files=[],
+            test_files=[],
+            untested_files=[],
+            findings=[
+                Finding(
+                    category="git_discovery",
+                    file="git",
+                    line=1,
+                    message=str(e),
+                    severity="ERROR",
+                )
+            ],
+            error=str(e),
+        )
+
+
+def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Deterministic TDD Verification & Anti-Pattern Auditor")
     parser.add_argument("--ref-range", help="Git revision range (e.g. main...HEAD or HEAD~1)")
     parser.add_argument("--files", nargs="*", help="Specific files to audit instead of git diff")
@@ -330,7 +355,7 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", help="Output results in JSON format")
     parser.add_argument("--trim-receipt", help="Path to raw test runner output to trim (or '-' for stdin)")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.trim_receipt:
         if args.trim_receipt == "-":

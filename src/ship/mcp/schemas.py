@@ -132,11 +132,11 @@ TOOLS_MANIFEST: List[Dict[str, Any]] = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "change": {"type": "string", "description": "Change ID to archive"},
+                "change": {"type": "string", "description": "Change ID to archive (default: active change in .ship/state.json)"},
                 "force": {"type": "boolean", "description": "Force archive even if review or task checks fail (default: false)"},
                 "path": {"type": "string", "description": "Path to repository root (default: current working directory)"}
             },
-            "required": ["change"]
+            "required": []
         }
     },
     {
@@ -145,10 +145,10 @@ TOOLS_MANIFEST: List[Dict[str, Any]] = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "change": {"type": "string", "description": "Target change ID"},
+                "change": {"type": "string", "description": "Target change ID (default: active change in .ship/state.json)"},
                 "path": {"type": "string", "description": "Path to repository root (default: current working directory)"}
             },
-            "required": ["change"]
+            "required": []
         }
     },
     {

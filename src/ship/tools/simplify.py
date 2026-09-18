@@ -16,7 +16,7 @@ from pathlib import Path
 import re
 import sys
 import tokenize
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 DEFAULT_EXCLUDES = {
     ".git",

@@ -240,6 +240,23 @@ class MCPServerTests(unittest.TestCase):
             tr_data = json.loads(resps[0]["result"]["content"][0]["text"])
             self.assertIn("Ship-Change: mcp-feat", tr_data["formatted"])
 
+            # Test ship_trailers omitting change argument (auto-resolving active change)
+            self.stdout_buf.truncate(0)
+            self.stdout_buf.seek(0)
+            req_tr_auto = {
+                "jsonrpc": "2.0",
+                "id": 13,
+                "method": "tools/call",
+                "params": {"name": "ship_trailers", "arguments": {"path": str(root)}},
+            }
+            handle_request(req_tr_auto)
+            resps = self._get_responses()
+            self.assertEqual(len(resps), 1)
+            self.assertFalse(resps[0]["result"]["isError"])
+            tr_auto_data = json.loads(resps[0]["result"]["content"][0]["text"])
+            self.assertIn("Ship-Change: mcp-feat", tr_auto_data["formatted"])
+            self.assertEqual(tr_auto_data["change_id"], "mcp-feat")
+
             # Test ship_record_review
             self.stdout_buf.truncate(0)
             self.stdout_buf.seek(0)
@@ -270,6 +287,29 @@ class MCPServerTests(unittest.TestCase):
             self.assertFalse(resps[0]["result"]["isError"])
             rev_data = json.loads(resps[0]["result"]["content"][0]["text"])
             self.assertEqual(rev_data["status"], "RECORDED")
+
+            # Set up change package for mcp-feat to test ship_archive without change argument
+            change_dir = root / "openspec/changes/mcp-feat"
+            (change_dir / "specs").mkdir(parents=True, exist_ok=True)
+            (change_dir / "specs/feature.md").write_text("# Feature Spec\n")
+            (change_dir / "proposal.md").write_text("# Proposal\n")
+            (change_dir / "tasks.md").write_text("- [x] Done\n")
+
+            self.stdout_buf.truncate(0)
+            self.stdout_buf.seek(0)
+            req_arch = {
+                "jsonrpc": "2.0",
+                "id": 14,
+                "method": "tools/call",
+                "params": {"name": "ship_archive", "arguments": {"path": str(root), "force": True}},
+            }
+            handle_request(req_arch)
+            resps = self._get_responses()
+            self.assertEqual(len(resps), 1)
+            self.assertFalse(resps[0]["result"]["isError"])
+            arch_data = json.loads(resps[0]["result"]["content"][0]["text"])
+            self.assertEqual(arch_data["status"], "ARCHIVED")
+            self.assertEqual(arch_data["change_id"], "mcp-feat")
 
     def test_stdio_server_loop(self):
         """Full stdio server loop handles lines and parse error gracefully."""

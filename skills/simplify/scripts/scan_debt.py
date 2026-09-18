@@ -16,7 +16,7 @@ from pathlib import Path
 import re
 import sys
 import tokenize
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 DEFAULT_EXCLUDES = {
     ".git",
@@ -252,6 +252,14 @@ def format_table(markers: List[Dict[str, Any]], markdown: bool = True) -> str:
         lines.append(f"| {loc} | {shortcut} | {ceiling} | {upgrade} | {status} |")
 
     return "\n".join(lines)
+
+
+def scan_debt(paths: Optional[Sequence[Path | str]] = None, strict: bool = False) -> Tuple[List[Dict[str, Any]], bool]:
+    """Convenience function to scan paths for debt markers and return (markers, has_errors)."""
+    target_paths = [Path(p) for p in paths] if paths else [Path.cwd()]
+    markers = scan_paths(target_paths)
+    has_errors = any(not m.get("is_valid", True) for m in markers)
+    return markers, has_errors
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:

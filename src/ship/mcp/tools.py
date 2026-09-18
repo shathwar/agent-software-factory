@@ -107,11 +107,13 @@ def handle_ship_checkpoint(args: Dict[str, Any]) -> Dict[str, Any]:
     change = args.get("change")
     mgr = CheckpointManager()
     res = mgr.create_checkpoint(root, gate, change=change)
+    if change:
+        FileLedgerStore.set_active_change(root, change)
     return {
         "checkpoint_ref": res.get("ref"),
         "receipt": res,
         "gate": gate,
-        "change_id": change,
+        "change_id": change or res.get("change"),
     }
 
 
@@ -121,10 +123,12 @@ def handle_ship_rollback(args: Dict[str, Any]) -> Dict[str, Any]:
     change = args.get("change")
     mgr = CheckpointManager()
     res = mgr.perform_rollback(root, gate, change=change)
+    if change:
+        FileLedgerStore.set_active_change(root, change)
     return {
         "status": res.get("status"),
         "target_gate": res.get("target_gate"),
-        "change_id": change,
+        "change_id": change or res.get("change"),
         "backup_directory": res.get("backup_directory"),
         "message": res.get("message"),
         "details": res,
@@ -184,14 +188,15 @@ def handle_ship_record_review(args: Dict[str, Any]) -> Dict[str, Any]:
 
 def handle_ship_archive(args: Dict[str, Any]) -> Dict[str, Any]:
     root = _get_root(args)
-    change = args["change"]
+    change = args.get("change")
     force = bool(args.get("force", False))
     repo = OpenSpecRepository()
     engine = LifecycleEngine(spec_repo=repo)
     res = engine.archive_change(root, change, force=force)
+    resolved_change = res.get("change") or change
     return {
         "status": "ARCHIVED",
-        "change_id": change,
+        "change_id": resolved_change,
         "archive_path": str(res.get("archived_path", "")),
         "trailers": res.get("trailers", []),
         "details": res,
@@ -200,11 +205,19 @@ def handle_ship_archive(args: Dict[str, Any]) -> Dict[str, Any]:
 
 def handle_ship_trailers(args: Dict[str, Any]) -> Dict[str, Any]:
     root = _get_root(args)
-    change = args["change"]
+    change = args.get("change")
     generator = CommitTrailerGenerator()
     trailers = generator.generate_trailers(root, target_change=change)
+    resolved_change = change
+    if not resolved_change:
+        resolved_change = FileLedgerStore.get_active_change(root)
+    if not resolved_change:
+        for t in trailers:
+            if t.startswith("Ship-Change:"):
+                resolved_change = t.split(":", 1)[1].strip()
+                break
     return {
-        "change_id": change,
+        "change_id": resolved_change,
         "trailers": trailers,
         "formatted": "\n".join(trailers),
     }
@@ -259,7 +272,9 @@ def handle_ship_simplify_scan(args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def handle_ship_spike_run(args: Dict[str, Any]) -> Dict[str, Any]:
-    cmd = args["command"]
+    cmd = args.get("command")
+    if not cmd:
+        raise ValueError("Parameter 'command' is required for ship_spike_run.")
     iterations = int(args.get("iterations", 10))
     concurrency = int(args.get("concurrency", 1))
     warmup = int(args.get("warmup", 0))

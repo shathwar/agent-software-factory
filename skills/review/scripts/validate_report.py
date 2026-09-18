@@ -7,6 +7,7 @@ import math
 from pathlib import Path, PurePosixPath
 import re
 import sys
+from typing import Optional, Sequence
 
 TOP_REQUIRED = {"reviewer", "status", "findings", "coverage", "questions", "routing_notes"}
 REVIEWERS = {"correctness", "concurrency", "design", "judge"}
@@ -142,10 +143,10 @@ def validate_report(report):
     return errors
 
 
-def main():
+def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("report", help="JSON report file, or - for stdin")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     try:
         text = (sys.stdin.read() if args.report == "-"
                 else Path(args.report).read_text(encoding="utf-8"))

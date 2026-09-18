@@ -23,6 +23,7 @@ import statistics
 import subprocess
 import sys
 import time
+from typing import Sequence
 
 
 @dataclass
@@ -271,7 +272,7 @@ def format_markdown_table(
     return "\n".join(lines), all_passed
 
 
-def main() -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Automated Statistical Spike Runner for Prototypes")
     parser.add_argument("--cmd", required=True, help="Command line string to benchmark")
     parser.add_argument("--iterations", type=int, default=100, help="Number of measurement runs (default: 100)")
@@ -285,7 +286,7 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=60.0, help="Timeout per iteration in seconds (default: 60.0)")
     parser.add_argument("--json", action="store_true", help="Output results in JSON format")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     cwd = Path(args.cwd).resolve() if args.cwd else None
 
