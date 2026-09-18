@@ -87,7 +87,13 @@ class GitClient:
                     if any(rel_str.startswith(p) for p in ignored_prefixes) or rel_str == "report.json":
                         continue
                     full_path = repo_root / rel_str
-                    if full_path.is_file():
+                    if full_path.is_symlink():
+                        try:
+                            target = os.readlink(full_path)
+                            hasher.update(f"UNTRACKED_SYMLINK:{rel_str}->{target}\n".encode("utf-8"))
+                        except Exception:
+                            pass
+                    elif full_path.is_file():
                         hasher.update(f"UNTRACKED:{rel_str}\n".encode("utf-8"))
                         try:
                             hasher.update(full_path.read_bytes())

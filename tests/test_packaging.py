@@ -134,6 +134,56 @@ class PackagingTests(unittest.TestCase):
             self.assertEqual(ret, 0)
             self.assertIn("Empirical Results", buf.getvalue())
 
+            # 5. ship checkpoint and ship rollback
+            buf = io.StringIO()
+            try:
+                sys.stdout = buf
+                ret = ship_cli_main(["checkpoint", "design", "--change", "feat-test", "--path", str(root)])
+            finally:
+                sys.stdout = old_stdout
+            self.assertEqual(ret, 0)
+            self.assertIn("Created checkpoint for design", buf.getvalue())
+
+            buf = io.StringIO()
+            try:
+                sys.stdout = buf
+                ret = ship_cli_main(["rollback", "design", "--change", "feat-test", "--path", str(root)])
+            finally:
+                sys.stdout = old_stdout
+            self.assertEqual(ret, 0)
+            self.assertIn("rolled back", buf.getvalue())
+
+            # 6. ship trailers
+            buf = io.StringIO()
+            try:
+                sys.stdout = buf
+                ret = ship_cli_main(["trailers", "feat-test", "--path", str(root)])
+            finally:
+                sys.stdout = old_stdout
+            self.assertEqual(ret, 0)
+            self.assertIn("Ship-Change: feat-test", buf.getvalue())
+            self.assertIn("Ship-Design: BLOCKED", buf.getvalue())
+
+            # 7. ship record-review
+            rev_file = root / "review_report.json"
+            rev_file.write_text(json.dumps({
+                "reviewer": "judge",
+                "status": "complete",
+                "verdict": "PASS",
+                "findings": [],
+                "coverage": ["all"],
+                "questions": [],
+                "routing_notes": []
+            }))
+            buf = io.StringIO()
+            try:
+                sys.stdout = buf
+                ret = ship_cli_main(["record-review", str(rev_file), "--change", "feat-test", "--path", str(root)])
+            finally:
+                sys.stdout = old_stdout
+            self.assertEqual(ret, 0)
+            self.assertIn("Recorded review report", buf.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

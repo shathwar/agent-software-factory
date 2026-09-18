@@ -3257,6 +3257,37 @@ class TestInspectLifecycle(unittest.TestCase):
         self.assertEqual(inspect_lifecycle.resolve_skill_name("simplify"), "simplify")
         self.assertEqual(inspect_lifecycle.resolve_skill_name("spike"), "spike")
 
+    def test_working_tree_fingerprint_handles_untracked_symlinks(self):
+        """Untracked broken and valid symbolic links must be hashed deterministically without crashing."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            for args in [("init", "-b", "main"), ("config", "user.name", "Dev"),
+                         ("config", "user.email", "dev@example.com"), ("config", "commit.gpgsign", "false")]:
+                subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+            (root / "README.md").write_text("# Hello\n")
+            subprocess.run(["git", "add", "."], cwd=root, check=True, capture_output=True)
+            subprocess.run(["git", "commit", "-m", "init"], cwd=root, check=True, capture_output=True)
+
+            fp_clean = inspect_lifecycle.compute_working_tree_fingerprint(root)
+            self.assertIsNotNone(fp_clean)
+
+            # Untracked broken symlink
+            symlink = root / "broken_link"
+            symlink.symlink_to("nonexistent_target_1")
+            fp_broken = inspect_lifecycle.compute_working_tree_fingerprint(root)
+            self.assertNotEqual(fp_clean, fp_broken)
+
+            # Mutate symlink target
+            symlink.unlink()
+            symlink.symlink_to("nonexistent_target_2")
+            fp_mutated = inspect_lifecycle.compute_working_tree_fingerprint(root)
+            self.assertNotEqual(fp_broken, fp_mutated)
+
+            # Remove symlink restores clean fingerprint
+            symlink.unlink()
+            fp_restored = inspect_lifecycle.compute_working_tree_fingerprint(root)
+            self.assertEqual(fp_clean, fp_restored)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from ship.lifecycle.engine import LifecycleEngine, format_summary
 from ship.lifecycle.ledger import FileLedgerStore, record_test_run_to_ledger, record_review_to_ledger, record_turn_to_ledger, read_ledger_file
 from ship.lifecycle.checkpoints import CheckpointManager
+from ship.lifecycle.config import ShipConfigManager
 from ship.lifecycle.evidence import design_fingerprint
 from ship.lifecycle.vcs import GitClient
 
@@ -257,9 +258,9 @@ def run_lifecycle(argv: Sequence[str]) -> int:
 
     if args.checkpoint:
         try:
-            mgr = CheckpointManager()
-            ref, r_path = mgr.create_checkpoint(repo_root, args.checkpoint, change=args.change, create_git_tag=args.create_git_tag)
-            output_result({"ref": ref, "receipt": str(r_path)}, [f"Created checkpoint for {args.checkpoint}: {ref}"])
+            mgr = CheckpointManager(GitClient(), ShipConfigManager, ledger_store)
+            res = mgr.create_checkpoint(repo_root, args.checkpoint, change=args.change, create_git_tag=args.create_git_tag)
+            output_result(res, [f"Created checkpoint for {args.checkpoint}: {res.get('ref')}"])
             return 0
         except Exception as exc:
             print(f"Error: {exc}", file=sys.stderr)
@@ -267,9 +268,9 @@ def run_lifecycle(argv: Sequence[str]) -> int:
 
     if args.rollback:
         try:
-            mgr = CheckpointManager()
-            restored, b_path = mgr.perform_rollback(repo_root, args.rollback, change=args.change, force=args.force)
-            output_result({"restored_ref": restored, "backup": str(b_path)}, [f"Rolled back {args.rollback} to {restored}; backup at {b_path}"])
+            mgr = CheckpointManager(GitClient(), ShipConfigManager, ledger_store)
+            res = mgr.perform_rollback(repo_root, args.rollback, change=args.change, force=args.force)
+            output_result(res, [res.get("message") or f"Rolled back {args.rollback} for {args.change or 'active change'}"])
             return 0
         except Exception as exc:
             print(f"Error: {exc}", file=sys.stderr)
@@ -348,7 +349,9 @@ def run_lifecycle(argv: Sequence[str]) -> int:
             print("Error: specify --archive <change> or --change <change>", file=sys.stderr)
             return 1
         try:
-            trailers, a_path = engine.archive_change(repo_root, target, force=args.force)
+            res_archive = engine.archive_change(repo_root, target, force=args.force)
+            trailers = res_archive.get("trailers", [])
+            a_path = res_archive.get("archived_path", "")
             output_result({"trailers": trailers, "archive_path": str(a_path)}, [f"Archived {target} to {a_path}"] + trailers)
             return 0
         except Exception as exc:

@@ -500,9 +500,21 @@ class FileLedgerStore:
             p = Path(report_path_or_dict)
             if not p.is_absolute():
                 p = repo_root / p
-            report = parse_report_fn(p, repo_root) if parse_report_fn else {}
+            if parse_report_fn:
+                report = parse_report_fn(p, repo_root)
+            else:
+                from .evidence import parse_review_report_file
+                report = parse_review_report_file(p, repo_root)
         else:
             report = report_path_or_dict
+
+        if get_git_info_fn is None:
+            from .vcs import GitClient
+            get_git_info_fn = GitClient().get_info
+
+        if attach_note_fn is None:
+            from .vcs import GitClient
+            attach_note_fn = GitClient().attach_git_note_evidence
 
         cid = change_id or report.get("change") or cls.get_active_change(repo_root) or "default"
 
@@ -632,6 +644,14 @@ class FileLedgerStore:
         if not isinstance(test_summary, dict):
             raise ValueError("Test summary must be a JSON object")
         passed = is_test_evidence_passing(test_summary)
+
+        if get_git_info_fn is None:
+            from .vcs import GitClient
+            get_git_info_fn = GitClient().get_info
+
+        if attach_note_fn is None:
+            from .vcs import GitClient
+            attach_note_fn = GitClient().attach_git_note_evidence
 
         def updater(entry: Dict[str, Any]) -> None:
             impl = entry["evidence"]["implementation"]

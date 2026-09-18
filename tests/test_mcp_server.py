@@ -192,6 +192,85 @@ class MCPServerTests(unittest.TestCase):
             self.assertEqual(status_data["status"], "BLOCKED")
             self.assertEqual(status_data["active_gate"], "design")
 
+            # Test ship_checkpoint
+            self.stdout_buf.truncate(0)
+            self.stdout_buf.seek(0)
+            req_chk = {
+                "jsonrpc": "2.0",
+                "id": 9,
+                "method": "tools/call",
+                "params": {"name": "ship_checkpoint", "arguments": {"path": str(root), "gate": "design", "change": "mcp-feat"}},
+            }
+            handle_request(req_chk)
+            resps = self._get_responses()
+            self.assertEqual(len(resps), 1)
+            self.assertFalse(resps[0]["result"]["isError"])
+            chk_data = json.loads(resps[0]["result"]["content"][0]["text"])
+            self.assertIn("refs/ship/mcp-feat/design", chk_data["checkpoint_ref"])
+
+            # Test ship_rollback
+            self.stdout_buf.truncate(0)
+            self.stdout_buf.seek(0)
+            req_rb = {
+                "jsonrpc": "2.0",
+                "id": 10,
+                "method": "tools/call",
+                "params": {"name": "ship_rollback", "arguments": {"path": str(root), "gate": "design", "change": "mcp-feat"}},
+            }
+            handle_request(req_rb)
+            resps = self._get_responses()
+            self.assertEqual(len(resps), 1)
+            self.assertFalse(resps[0]["result"]["isError"])
+            rb_data = json.loads(resps[0]["result"]["content"][0]["text"])
+            self.assertEqual(rb_data["status"], "success")
+
+            # Test ship_trailers
+            self.stdout_buf.truncate(0)
+            self.stdout_buf.seek(0)
+            req_tr = {
+                "jsonrpc": "2.0",
+                "id": 11,
+                "method": "tools/call",
+                "params": {"name": "ship_trailers", "arguments": {"path": str(root), "change": "mcp-feat"}},
+            }
+            handle_request(req_tr)
+            resps = self._get_responses()
+            self.assertEqual(len(resps), 1)
+            self.assertFalse(resps[0]["result"]["isError"])
+            tr_data = json.loads(resps[0]["result"]["content"][0]["text"])
+            self.assertIn("Ship-Change: mcp-feat", tr_data["formatted"])
+
+            # Test ship_record_review
+            self.stdout_buf.truncate(0)
+            self.stdout_buf.seek(0)
+            req_rev = {
+                "jsonrpc": "2.0",
+                "id": 12,
+                "method": "tools/call",
+                "params": {
+                    "name": "ship_record_review",
+                    "arguments": {
+                        "path": str(root),
+                        "change": "mcp-feat",
+                        "report_data": {
+                            "reviewer": "judge",
+                            "status": "complete",
+                            "verdict": "PASS",
+                            "findings": [],
+                            "coverage": ["all"],
+                            "questions": [],
+                            "routing_notes": []
+                        }
+                    }
+                },
+            }
+            handle_request(req_rev)
+            resps = self._get_responses()
+            self.assertEqual(len(resps), 1)
+            self.assertFalse(resps[0]["result"]["isError"])
+            rev_data = json.loads(resps[0]["result"]["content"][0]["text"])
+            self.assertEqual(rev_data["status"], "RECORDED")
+
     def test_stdio_server_loop(self):
         """Full stdio server loop handles lines and parse error gracefully."""
         lines = [

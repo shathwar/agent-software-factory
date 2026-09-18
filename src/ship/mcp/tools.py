@@ -106,10 +106,10 @@ def handle_ship_checkpoint(args: Dict[str, Any]) -> Dict[str, Any]:
     gate = args["gate"]
     change = args.get("change")
     mgr = CheckpointManager()
-    ref, receipt = mgr.create_checkpoint(root, gate, change_id=change)
+    res = mgr.create_checkpoint(root, gate, change=change)
     return {
-        "checkpoint_ref": ref,
-        "receipt_file": str(receipt),
+        "checkpoint_ref": res.get("ref"),
+        "receipt": res,
         "gate": gate,
         "change_id": change,
     }
@@ -120,12 +120,14 @@ def handle_ship_rollback(args: Dict[str, Any]) -> Dict[str, Any]:
     gate = args["gate"]
     change = args.get("change")
     mgr = CheckpointManager()
-    restored_ref, backup_path = mgr.rollback_to_checkpoint(root, gate, change_id=change)
+    res = mgr.perform_rollback(root, gate, change=change)
     return {
-        "restored_ref": restored_ref,
-        "backup_archive": str(backup_path),
-        "gate": gate,
+        "status": res.get("status"),
+        "target_gate": res.get("target_gate"),
         "change_id": change,
+        "backup_directory": res.get("backup_directory"),
+        "message": res.get("message"),
+        "details": res,
     }
 
 
@@ -186,12 +188,13 @@ def handle_ship_archive(args: Dict[str, Any]) -> Dict[str, Any]:
     force = bool(args.get("force", False))
     repo = OpenSpecRepository()
     engine = LifecycleEngine(spec_repo=repo)
-    trailers, archive_path = engine.archive_change(root, change, force=force)
+    res = engine.archive_change(root, change, force=force)
     return {
         "status": "ARCHIVED",
         "change_id": change,
-        "archive_path": str(archive_path),
-        "trailers": trailers,
+        "archive_path": str(res.get("archived_path", "")),
+        "trailers": res.get("trailers", []),
+        "details": res,
     }
 
 

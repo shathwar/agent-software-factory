@@ -15,6 +15,10 @@ def canonicalize_gate_name(gate_name: str) -> str:
 class CommitTrailerGenerator:
     """Generates RFC 5133 Git commit trailers matching ship.json gates and ledger state."""
 
+    def generate_trailers(self, repo_root: Path, target_change: Optional[str] = None) -> List[str]:
+        """Instance method alias for generating trailers for an active or targeted change."""
+        return self.generate(repo_root, change_id=target_change)
+
     @classmethod
     def generate(
         cls,
@@ -28,22 +32,34 @@ class CommitTrailerGenerator:
         create_empty_change_fn: Optional[Callable[[str], Dict[str, Any]]] = None,
         get_git_info_fn: Optional[Callable[[Path], Dict[str, Any]]] = None,
     ) -> List[str]:
-        if ledger is None and load_ledger_fn:
-            ledger = load_ledger_fn(repo_root, auto_sync=False)
+        if ledger is None:
+            if load_ledger_fn:
+                ledger = load_ledger_fn(repo_root, auto_sync=False)
+            else:
+                from .ledger import FileLedgerStore
+                ledger = FileLedgerStore.load(repo_root, auto_sync=False)
         ledger = ledger or {}
 
-        if config is None and load_config_fn:
-            config = load_config_fn(repo_root)
+        if config is None:
+            if load_config_fn:
+                config = load_config_fn(repo_root)
+            else:
+                from .config import ShipConfigManager
+                config = ShipConfigManager.load(repo_root)
         config = config or {}
 
         cid = change_id or ledger.get("active_change_id") or (get_active_change_fn(repo_root) if get_active_change_fn else None)
+        if not cid:
+            from .ledger import FileLedgerStore
+            cid = FileLedgerStore.get_active_change(repo_root)
         if not cid:
             raise ValueError("No active change; specify --change when generating trailers after archive")
 
         if create_empty_change_fn:
             default_entry = create_empty_change_fn(cid)
         else:
-            default_entry = {"change_id": cid, "evidence": {}}
+            from .ledger import create_empty_change_entry
+            default_entry = create_empty_change_entry(cid)
         change_entry = ledger.get("changes", {}).get(cid, default_entry)
         evidence = change_entry.get("evidence", {})
         delivery = evidence.get("delivery", {})
@@ -60,7 +76,7 @@ class CommitTrailerGenerator:
 
         # 1. Gate: Design
         design_error = validate_design_approval(repo_root, cid, change_entry)
-        if "design" in gates_cfg:
+        if "design" in gates_cfg or not gates_cfg or gates_cfg.get("design") is not False:
             trailers.append("Ship-Design: " + ("BLOCKED" if design_error else "PASSED"))
 
         # 2. Gate: Spike

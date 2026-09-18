@@ -37,7 +37,16 @@ def _locked_recovery(method):
 class CheckpointManager:
     """Manages working-tree and Git ref checkpoints and safe rollback state restoration."""
 
-    def __init__(self, vcs_client: Any, config_manager: Any, ledger_store: Any):
+    def __init__(self, vcs_client: Any = None, config_manager: Any = None, ledger_store: Any = None):
+        if vcs_client is None:
+            from .vcs import GitClient
+            vcs_client = GitClient()
+        if config_manager is None:
+            from .config import ShipConfigManager
+            config_manager = ShipConfigManager
+        if ledger_store is None:
+            from .ledger import FileLedgerStore
+            ledger_store = FileLedgerStore
         self.vcs = vcs_client
         self.config_manager = config_manager
         self.ledger = ledger_store
@@ -54,8 +63,9 @@ class CheckpointManager:
         gate_name: str,
         change: Optional[str] = None,
         create_git_tag: bool = False,
+        change_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        resolved_change = change or self.ledger.get_active_change(repo_root) or "default"
+        resolved_change = change or change_id or self.ledger.get_active_change(repo_root) or "default"
         git_info = self.vcs.get_info(repo_root)
         cfg = self.config_manager.load(repo_root)
         allow_git_tag = create_git_tag or cfg.get("create_git_tag", False)
@@ -133,8 +143,9 @@ class CheckpointManager:
         target_gate: str,
         change: Optional[str] = None,
         force: bool = False,
+        change_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        resolved_change = change or self.ledger.get_active_change(repo_root) or "default"
+        resolved_change = change or change_id or self.ledger.get_active_change(repo_root) or "default"
         canonical_tag = canonicalize_gate_name(target_gate)
         self._validate_names(resolved_change, canonical_tag)
         resolve_change_path(repo_root, resolved_change)
@@ -309,3 +320,15 @@ class CheckpointManager:
             raise RuntimeError(f"Files restored but ledger update failed; backups are in {backup_dir}") from exc
 
         return res_payload
+
+    def rollback_to_checkpoint(
+        self,
+        repo_root: Path,
+        gate_name: str,
+        change: Optional[str] = None,
+        change_id: Optional[str] = None,
+        force: bool = False,
+    ) -> Dict[str, Any]:
+        """Alias for perform_rollback supporting both parameter naming conventions."""
+        return self.perform_rollback(repo_root, gate_name, change=change or change_id, force=force)
+
