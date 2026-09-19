@@ -137,6 +137,22 @@ class CheckpointManager:
         except Exception as exc:
             raise RuntimeError("Checkpoint created, but ledger update failed") from exc
 
+        try:
+            from .events import EventLogger
+            from .models import EventType
+            EventLogger(repo_root).emit(
+                event_type=EventType.CHECKPOINT_CREATED,
+                change_id=resolved_change,
+                target=canonical_tag,
+                payload={
+                    "gate": canonical_tag,
+                    "commit": commit_sha or "none",
+                    "fingerprint": fingerprint,
+                },
+            )
+        except Exception:
+            pass
+
         return receipt_data
 
     @_locked_recovery

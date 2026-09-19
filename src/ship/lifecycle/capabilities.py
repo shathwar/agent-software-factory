@@ -145,6 +145,7 @@ class CapabilityManager:
             ".agentflow/ledger.json",
             ".agentflow/state.json",
             ".agentflow/state.lock",
+            ".agentflow/events*",
             ".agentflow/checkpoints*",
             ".agentflow/archive*",
             "refs/ship/*",
@@ -289,6 +290,26 @@ class CapabilityManager:
             })
 
             FileLedgerStore.save(self.repo_root, ledger)
+
+            try:
+                from .events import EventLogger
+                EventLogger(self.repo_root).emit(
+                    event_type="CAPABILITY_GRANTED",
+                    change_id=cid,
+                    agent_id=agent_id,
+                    session_id=session_id,
+                    task_id=task_id,
+                    target=target,
+                    payload={
+                        "capability_id": cap_id,
+                        "operation": op_val,
+                        "approval_ref": approval_ref,
+                        "expires_at": expires_at,
+                    },
+                )
+            except Exception:
+                pass
+
             return cap
 
     def grant_from_approval(
@@ -370,6 +391,18 @@ class CapabilityManager:
             })
 
             FileLedgerStore.save(self.repo_root, ledger)
+
+            try:
+                from .events import EventLogger
+                EventLogger(self.repo_root).emit(
+                    event_type="CAPABILITY_REVOKED",
+                    change_id=cid,
+                    agent_id=cap.agent_id,
+                    payload={"capability_id": capability_id, "reason": reason},
+                )
+            except Exception:
+                pass
+
             return cap
 
     def get_capability(self, capability_id: str, change_id: Optional[str] = None) -> Optional[Capability]:
@@ -430,6 +463,29 @@ class CapabilityManager:
                 audit_log = ch_mut.setdefault("security_audit", [])
                 audit_log.append(dec.to_dict())
                 FileLedgerStore.save(self.repo_root, ledger_mut)
+
+            try:
+                from .events import EventLogger
+                ev_type = "ACTION_ALLOWED" if dec.allowed else "ACTION_DENIED"
+                EventLogger(self.repo_root).emit(
+                    event_type=ev_type,
+                    change_id=cid,
+                    agent_id=agent_id,
+                    session_id=session_id,
+                    task_id=task_id,
+                    target=target,
+                    payload={
+                        "operation": op_val,
+                        "ring": ring_val,
+                        "allowed": dec.allowed,
+                        "reason": dec.reason,
+                        "capability_id": dec.capability_id,
+                        "violation_code": dec.violation_code,
+                    },
+                )
+            except Exception:
+                pass
+
             return dec
 
         ledger = FileLedgerStore.load(self.repo_root, auto_sync=False)

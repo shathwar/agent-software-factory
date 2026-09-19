@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
+import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -833,6 +834,97 @@ class RecoveryDecision:
             "details": self.details,
             "timestamp": self.timestamp,
         }
+
+
+class EventType(str, Enum):
+    AGENT_STARTED = "AGENT_STARTED"
+    AGENT_STOPPED = "AGENT_STOPPED"
+    TASK_CLAIMED = "TASK_CLAIMED"
+    LEASE_GRANTED = "LEASE_GRANTED"
+    LEASE_RELEASED = "LEASE_RELEASED"
+    LEASE_EXPIRED = "LEASE_EXPIRED"
+    ACTION_REQUESTED = "ACTION_REQUESTED"
+    ACTION_ALLOWED = "ACTION_ALLOWED"
+    ACTION_DENIED = "ACTION_DENIED"
+    FILE_MODIFIED = "FILE_MODIFIED"
+    TEST_EXECUTED = "TEST_EXECUTED"
+    EVIDENCE_CREATED = "EVIDENCE_CREATED"
+    VERIFICATION_STARTED = "VERIFICATION_STARTED"
+    VERIFICATION_PASSED = "VERIFICATION_PASSED"
+    VERIFICATION_FAILED = "VERIFICATION_FAILED"
+    REMEDIATION_STARTED = "REMEDIATION_STARTED"
+    APPROVAL_REQUESTED = "APPROVAL_REQUESTED"
+    APPROVAL_GRANTED = "APPROVAL_GRANTED"
+    APPROVAL_REJECTED = "APPROVAL_REJECTED"
+    APPROVAL_REVOKED = "APPROVAL_REVOKED"
+    CAPABILITY_GRANTED = "CAPABILITY_GRANTED"
+    CAPABILITY_REVOKED = "CAPABILITY_REVOKED"
+    GATE_EVALUATED = "GATE_EVALUATED"
+    CHECKPOINT_CREATED = "CHECKPOINT_CREATED"
+    HALT_TRIGGERED = "HALT_TRIGGERED"
+    RESUME_TRIGGERED = "RESUME_TRIGGERED"
+
+
+@dataclass
+class ExecutionEvent:
+    event_id: str
+    event_type: str
+    timestamp: str
+    change_id: Optional[str] = None
+    agent_id: Optional[str] = None
+    session_id: Optional[str] = None
+    task_id: Optional[str] = None
+    target: Optional[str] = None
+    payload: Dict[str, Any] = field(default_factory=dict)
+    provenance: Dict[str, Any] = field(default_factory=dict)
+    prev_event_hash: Optional[str] = None
+    event_hash: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        et = self.event_type.value if hasattr(self.event_type, "value") else str(self.event_type)
+        return {
+            "event_id": self.event_id,
+            "event_type": et,
+            "timestamp": self.timestamp,
+            "change_id": self.change_id,
+            "agent_id": self.agent_id,
+            "session_id": self.session_id,
+            "task_id": self.task_id,
+            "target": self.target,
+            "payload": self.payload,
+            "provenance": self.provenance,
+            "prev_event_hash": self.prev_event_hash,
+            "event_hash": self.event_hash,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ExecutionEvent":
+        return cls(
+            event_id=str(data.get("event_id", "")),
+            event_type=str(data.get("event_type", "")),
+            timestamp=str(data.get("timestamp", "")),
+            change_id=data.get("change_id"),
+            agent_id=data.get("agent_id"),
+            session_id=data.get("session_id"),
+            task_id=data.get("task_id"),
+            target=data.get("target"),
+            payload=dict(data.get("payload", {})),
+            provenance=dict(data.get("provenance", {})),
+            prev_event_hash=data.get("prev_event_hash"),
+            event_hash=str(data.get("event_hash", "")),
+        )
+
+    def canonical_string(self) -> str:
+        """Deterministic canonical representation for cryptographic hash chaining."""
+        et = self.event_type.value if hasattr(self.event_type, "value") else str(self.event_type)
+        payload_str = json.dumps(self.payload, sort_keys=True, separators=(",", ":"))
+        prov_str = json.dumps(self.provenance, sort_keys=True, separators=(",", ":"))
+        return (
+            f"{self.event_id}|{et}|{self.timestamp}|{self.change_id}|"
+            f"{self.agent_id or ''}|{self.session_id or ''}|{self.task_id or ''}|"
+            f"{self.target or ''}|{payload_str}|{prov_str}|{self.prev_event_hash or ''}"
+        )
+
 
 
 

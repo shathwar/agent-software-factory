@@ -192,6 +192,26 @@ class ProvenanceManager:
             })
 
             FileLedgerStore.save(self.repo_root, ledger)
+
+            try:
+                from .events import EventLogger
+                EventLogger(self.repo_root).emit(
+                    event_type="AGENT_STARTED",
+                    change_id=cid,
+                    agent_id=agent_id,
+                    session_id=session_id,
+                    payload={
+                        "role": resolved_role,
+                        "runtime": resolved_runtime,
+                        "model": resolved_model,
+                        "skill": skill,
+                        "skill_version": skill_version,
+                        "agentflow_version": agentflow_version,
+                    },
+                )
+            except Exception:
+                pass
+
             return session
 
     def end_session(
@@ -218,6 +238,19 @@ class ProvenanceManager:
             sessions[session_id] = session.to_dict()
 
             FileLedgerStore.save(self.repo_root, ledger)
+
+            try:
+                from .events import EventLogger
+                EventLogger(self.repo_root).emit(
+                    event_type="AGENT_STOPPED",
+                    change_id=cid,
+                    agent_id=session.agent_id,
+                    session_id=session_id,
+                    payload={"status": status, "ended_at": now_iso},
+                )
+            except Exception:
+                pass
+
             return session
 
     def get_session(self, session_id: str, change_id: Optional[str] = None) -> Optional[AgentSession]:

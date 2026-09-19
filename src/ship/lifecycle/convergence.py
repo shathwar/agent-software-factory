@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 import hashlib
 import json
+from pathlib import Path
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -442,4 +443,59 @@ class ConvergenceController:
                     return False, f"Unresolved verification failure in tier '{tier}'"
 
         return True, "Convergence certified: change verified cleanly within all operational budgets"
+
+
+def halt_autonomy(
+    repo_root: Path,
+    change_id: str,
+    reason: str,
+    agent_id: str = "convergence-controller",
+    session_id: Optional[str] = None,
+) -> None:
+    """Explicitly halt autonomy for a change, recording the halt blocker and emitting HALT_TRIGGERED."""
+    from .ledger import FileLedgerStore
+    from .events import EventLogger
+    from .models import EventType
+
+    with FileLedgerStore.lock(repo_root):
+        def updater(entry: Dict[str, Any]) -> None:
+            blockers = entry.setdefault("blockers", [])
+            halt_str = f"Halt: {reason}"
+            if halt_str not in blockers:
+                blockers.append(halt_str)
+        FileLedgerStore.mutate_change(repo_root, change_id, updater)
+
+    EventLogger(repo_root).emit(
+        event_type=EventType.HALT_TRIGGERED,
+        change_id=change_id,
+        agent_id=agent_id,
+        session_id=session_id or f"sess-{agent_id}",
+        target=change_id,
+        payload={"reason": reason},
+    )
+
+
+def record_remediation_attempt(
+    repo_root: Path,
+    change_id: str,
+    agent_id: str,
+    issue: str,
+    attempt_number: int,
+    session_id: Optional[str] = None,
+) -> None:
+    """Record that a remediation attempt has started and emit REMEDIATION_STARTED."""
+    from .events import EventLogger
+    from .models import EventType
+
+    EventLogger(repo_root).emit(
+        event_type=EventType.REMEDIATION_STARTED,
+        change_id=change_id,
+        agent_id=agent_id,
+        session_id=session_id or f"sess-{agent_id}",
+        target=issue,
+        payload={"issue": issue, "attempt": attempt_number},
+    )
+
+
+record_attempt = record_remediation_attempt
 

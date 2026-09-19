@@ -260,6 +260,24 @@ def execute_and_verify_tests(
             findings.append("CONTRADICTION DETECTED: Agent claimed tests passed, but independent execution failed.")
 
     verdict = "VERIFIED" if passed else "NOT_VERIFIED"
+    try:
+        from .events import EventLogger
+        from .models import EventType
+        EventLogger(repo_root).emit(
+            event_type=EventType.TEST_EXECUTED,
+            agent_id="engine",
+            target=cmd,
+            payload={
+                "command": cmd,
+                "exit_code": exit_code,
+                "passed": passed,
+                "duration_seconds": round(duration, 3),
+                "stdout_sha256": stdout_hash,
+            },
+        )
+    except Exception:
+        pass
+
     return VerificationRecord(
         claim="Test suite passes cleanly when executed by engine",
         gate="implementation",
@@ -440,6 +458,20 @@ def run_gate_verification(
     results: Dict[str, VerificationRecord] = {}
     requested = set(tiers) if tiers else {"grounding", "execution", "coverage"}
 
+    try:
+        from .events import EventLogger
+        from .models import EventType
+        EventLogger(repo_root).emit(
+            event_type=EventType.VERIFICATION_STARTED,
+            change_id=change,
+            agent_id=verifier_id,
+            session_id=session_id or f"sess-{verifier_id}",
+            target=change,
+            payload={"tiers": sorted(list(requested)), "test_command": test_command},
+        )
+    except Exception:
+        pass
+
     # Tier 2: Grounding
     if "grounding" in requested or "all" in requested:
         if review_report:
@@ -513,6 +545,21 @@ def run_gate_verification(
             rec.provenance = prov.to_dict()
         if not rec.target_provenance and target_prov:
             rec.target_provenance = target_prov
+
+    try:
+        from .events import EventLogger
+        from .models import EventType
+        all_passed = all(rec.verdict == "VERIFIED" for rec in results.values())
+        EventLogger(repo_root).emit(
+            event_type=EventType.VERIFICATION_PASSED if all_passed else EventType.VERIFICATION_FAILED,
+            change_id=change,
+            agent_id=verifier_id,
+            session_id=session_id or f"sess-{verifier_id}",
+            target=change,
+            payload={tier: rec.verdict for tier, rec in results.items()},
+        )
+    except Exception:
+        pass
 
     return results
 

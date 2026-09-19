@@ -109,6 +109,22 @@ class ApprovalManager:
             requests[req_id] = req.to_dict()
             FileLedgerStore.save(self.repo_root, ledger)
 
+        try:
+            from .events import EventLogger
+            EventLogger(self.repo_root).emit(
+                event_type="APPROVAL_REQUESTED",
+                change_id=cid,
+                agent_id=req.agent,
+                payload={
+                    "request_id": req_id,
+                    "action": req.action,
+                    "scope": req.scope,
+                    "reason": req.reason,
+                },
+            )
+        except Exception:
+            pass
+
         return req
 
     def approve_request(
@@ -180,8 +196,25 @@ class ApprovalManager:
             # Store authorization
             authorizations = apprs.setdefault("authorizations", {})
             authorizations[appr_id] = approval.to_dict()
-
             FileLedgerStore.save(self.repo_root, ledger)
+
+        try:
+            from .events import EventLogger
+            EventLogger(self.repo_root).emit(
+                event_type="APPROVAL_GRANTED",
+                change_id=cid,
+                agent_id=approval.agent,
+                payload={
+                    "approval_id": approval.approval_id,
+                    "human": approval.human,
+                    "action": approval.action,
+                    "scope": approval.scope,
+                    "expires_at": approval.expires_at,
+                    "signature": approval.signature,
+                },
+            )
+        except Exception:
+            pass
 
         return approval
 
@@ -241,6 +274,24 @@ class ApprovalManager:
             authorizations[appr_id] = approval.to_dict()
             FileLedgerStore.save(self.repo_root, ledger)
 
+        try:
+            from .events import EventLogger
+            EventLogger(self.repo_root).emit(
+                event_type="APPROVAL_GRANTED",
+                change_id=cid,
+                agent_id=approval.agent,
+                payload={
+                    "approval_id": approval.approval_id,
+                    "human": approval.human,
+                    "action": approval.action,
+                    "scope": approval.scope,
+                    "expires_at": approval.expires_at,
+                    "signature": approval.signature,
+                },
+            )
+        except Exception:
+            pass
+
         return approval
 
     def reject_request(
@@ -269,7 +320,19 @@ class ApprovalManager:
             req_data["rejection_reason"] = reason.strip()
 
             FileLedgerStore.save(self.repo_root, ledger)
-            return ApprovalRequest.from_dict(req_data)
+
+        try:
+            from .events import EventLogger
+            EventLogger(self.repo_root).emit(
+                event_type="APPROVAL_REJECTED",
+                change_id=cid,
+                agent_id=req_data.get("agent"),
+                payload={"request_id": request_id, "human": human, "reason": reason},
+            )
+        except Exception:
+            pass
+
+        return ApprovalRequest.from_dict(req_data)
 
     def revoke_approval(
         self,
@@ -298,7 +361,19 @@ class ApprovalManager:
             data["metadata"]["revocation_reason"] = reason.strip()
 
             FileLedgerStore.save(self.repo_root, ledger)
-            return DurableApproval.from_dict(data)
+
+        try:
+            from .events import EventLogger
+            EventLogger(self.repo_root).emit(
+                event_type="APPROVAL_REVOKED",
+                change_id=cid,
+                agent_id=data.get("agent"),
+                payload={"approval_id": approval_id, "human": human, "reason": reason},
+            )
+        except Exception:
+            pass
+
+        return DurableApproval.from_dict(data)
 
     def get_approval(self, approval_id: str, change_id: Optional[str] = None) -> Optional[DurableApproval]:
         """Retrieve durable approval object by ID."""

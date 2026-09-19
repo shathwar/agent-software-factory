@@ -58,6 +58,8 @@ CORE SUBCOMMANDS:
       Evaluate capability policy for trusted host enforcement.
   agentflow approval <request|approve|grant-direct|reject|revoke|list> [options]
       Manage durable authorization objects and scope-limited human approvals.
+  agentflow events <list|tail|verify> [options]
+      Forensic audit trail: append-only cryptographic hash-chained execution event stream.
   agentflow doctor [--path <dir>]
       Run preflight diagnostics (runtime, git, skill directories, ledger).
 
@@ -1191,6 +1193,91 @@ Actions:
         return 1
 
 
+def run_events_cli(argv: Sequence[str]) -> int:
+    """Handle forensic audit trail and execution event log CLI commands."""
+    if argv and argv[0] in ("-h", "--help"):
+        print("""Usage: agentflow events <action> [options]
+
+Actions:
+  list [--change <id>] [--type <type>] [--agent <id>] [--limit <n>] [--json]
+      Query and list recorded execution events from the forensic audit trail.
+  tail [-n <count>] [--change <id>] [--json]
+      Tail the most recent execution events.
+  verify [--path <dir>] [--json]
+      Verify the cryptographic hash-chain integrity of the append-only event log.
+""")
+        return 0
+
+    action = "list"
+    rem = list(argv)
+    if argv and argv[0].lower() in ("list", "tail", "verify"):
+        action = argv[0].lower()
+        rem = argv[1:]
+
+    parser = argparse.ArgumentParser(prog=f"agentflow events {action}")
+    parser.add_argument("--path", "--repo-root", dest="path", default=".", help="Repository root path")
+    parser.add_argument("--change", default=None, help="Target change ID")
+    parser.add_argument("--json", action="store_true", help="Output JSON format")
+
+    from .lifecycle.events import EventLogger
+
+    if action == "list":
+        parser.add_argument("--type", "--event-type", dest="event_type", default=None, help="Filter by event type")
+        parser.add_argument("--agent", default=None, help="Filter by agent ID")
+        parser.add_argument("--limit", type=int, default=50, help="Maximum number of events to return")
+        args = parser.parse_args(rem)
+        logger = EventLogger(Path(args.path).resolve())
+        events = logger.query(
+            change_id=args.change,
+            event_type=args.event_type,
+            agent_id=args.agent,
+            limit=args.limit,
+        )
+        if args.json:
+            print(json.dumps([e.to_dict() for e in events], indent=2))
+        else:
+            print(f"📜 Execution Event Log ({len(events)} events):")
+            for e in events:
+                cid_str = f" [{e.change_id}]" if e.change_id else ""
+                agent_str = f" ({e.agent_id})" if e.agent_id else ""
+                target_str = f" -> {e.target}" if e.target else ""
+                print(f"  • {e.timestamp} | {e.event_type:20s}{cid_str}{agent_str}{target_str}")
+        return 0
+
+    elif action == "tail":
+        parser.add_argument("-n", "--count", type=int, default=20, help="Number of recent events to display")
+        args = parser.parse_args(rem)
+        logger = EventLogger(Path(args.path).resolve())
+        events = logger.tail(n=args.count, change_id=args.change)
+        if args.json:
+            print(json.dumps([e.to_dict() for e in events], indent=2))
+        else:
+            print(f"📜 Recent Events (last {len(events)}):")
+            for e in events:
+                cid_str = f" [{e.change_id}]" if e.change_id else ""
+                agent_str = f" ({e.agent_id})" if e.agent_id else ""
+                target_str = f" -> {e.target}" if e.target else ""
+                print(f"  • {e.timestamp} | {e.event_type:20s}{cid_str}{agent_str}{target_str}")
+        return 0
+
+    elif action == "verify":
+        args = parser.parse_args(rem)
+        logger = EventLogger(Path(args.path).resolve())
+        valid, msg, broken_index = logger.verify_integrity()
+        if args.json:
+            print(json.dumps({"valid": valid, "message": msg, "broken_index": broken_index}, indent=2))
+        else:
+            if valid:
+                print(f"✅ {msg}")
+            else:
+                print(f"❌ Event log integrity broken at event #{broken_index}: {msg}", file=sys.stderr)
+        return 0 if valid else 1
+
+    else:
+        print(f"Unknown events action: '{action}'. See 'agentflow events --help'.", file=sys.stderr)
+        return 1
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """Unified entrypoint for ship CLI with subcommands, specialist tools, and MCP server."""
     if argv is None:
@@ -1221,6 +1308,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if cmd in ("approval", "approvals", "authz"):
         return run_approval_cli(sub_args)
+
+    if cmd in ("event", "events", "log", "audit"):
+        return run_events_cli(sub_args)
 
     # Specialist tools dispatch
     if cmd == "tdd":

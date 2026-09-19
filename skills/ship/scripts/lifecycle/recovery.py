@@ -224,6 +224,25 @@ class RecoveryManager:
 
             FileLedgerStore.save(self.repo_root, ledger)
 
+            try:
+                from .events import EventLogger
+                from .models import EventType
+                EventLogger(self.repo_root).emit(
+                    event_type=EventType.RESUME_TRIGGERED,
+                    change_id=cid,
+                    agent_id=intervened_by or "supervisor",
+                    target=cid,
+                    payload={
+                        "strategy": strategy,
+                        "restored_phase": eval_phase,
+                        "reconciled_items": reconciled,
+                        "cleared_halt_blockers": halt_blockers,
+                        "notes": notes,
+                    },
+                )
+            except Exception:
+                pass
+
             return RecoveryDecision(
                 strategy=strategy,
                 change_id=cid,

@@ -66,3 +66,7 @@ def get_reviews_dir(repo_root: Path) -> Path:
 def get_tmp_dir(repo_root: Path) -> Path:
     return agentflow_path(repo_root, "tmp")
 
+
+def get_event_log_file(repo_root: Path) -> Path:
+    return agentflow_path(repo_root, "events.jsonl")
+

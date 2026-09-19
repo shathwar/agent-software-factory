@@ -302,6 +302,29 @@ class CoordinationManager:
             })
 
             FileLedgerStore.save(self.repo_root, ledger)
+
+            try:
+                from .events import EventLogger
+                logger = EventLogger(self.repo_root)
+                logger.emit(
+                    event_type="TASK_CLAIMED",
+                    change_id=cid,
+                    agent_id=owner_id,
+                    session_id=sess_id,
+                    task_id=task_id,
+                    payload={"target_files": req_files},
+                )
+                logger.emit(
+                    event_type="LEASE_GRANTED",
+                    change_id=cid,
+                    agent_id=owner_id,
+                    session_id=sess_id,
+                    task_id=task_id,
+                    payload={"lease_token": token, "expires_at": new_lease.expires_at, "ttl_seconds": ttl},
+                )
+            except Exception:
+                pass
+
             return CoordinationResult(success=True, task_id=task_id, lease=new_lease)
 
     def heartbeat_lease(
@@ -423,6 +446,20 @@ class CoordinationManager:
             })
 
             FileLedgerStore.save(self.repo_root, ledger)
+
+            try:
+                from .events import EventLogger
+                EventLogger(self.repo_root).emit(
+                    event_type="LEASE_RELEASED",
+                    change_id=cid,
+                    agent_id=lease.owner_id,
+                    session_id=sess_id,
+                    task_id=task_id,
+                    payload={"completed": completed},
+                )
+            except Exception:
+                pass
+
             return CoordinationResult(success=True, task_id=task_id, lease=lease)
 
     def handoff_task(
