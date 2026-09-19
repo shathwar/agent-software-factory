@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 
 
 class ShipConfigManager:
-    """Manages discovery, loading, and merging of .ship.json configuration."""
+    """Manages discovery, loading, and merging of .agentflow.json configuration."""
 
     @staticmethod
     def get_default_config() -> Dict[str, Any]:
@@ -55,10 +55,10 @@ class ShipConfigManager:
 
     @classmethod
     def load(cls, repo_root: Path, explicit_path: Optional[str] = None) -> Dict[str, Any]:
-        """Load configuration from .ship.json with deep merge onto defaults."""
+        """Load configuration from .agentflow.json with deep merge onto defaults."""
         default_config = cls.get_default_config()
 
-        config_file = Path(explicit_path) if explicit_path else repo_root / ".ship.json"
+        config_file = Path(explicit_path) if explicit_path else repo_root / ".agentflow.json"
         if explicit_path and not config_file.is_absolute():
             config_file = repo_root / config_file
         if not explicit_path and not config_file.exists() and not config_file.is_symlink():

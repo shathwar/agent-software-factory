@@ -20,29 +20,29 @@ class TeamOperationsTests(unittest.TestCase):
             result = doctor(root)
             self.assertTrue(result['ok'], result)
             self.assertEqual(list(root.iterdir()), [])
-            (root / '.ship').mkdir()
-            (root / '.ship/state.json').write_text('corrupt')
-            before = (root / '.ship/state.json').read_bytes()
+            (root / '.agentflow').mkdir()
+            (root / '.agentflow/state.json').write_text('corrupt')
+            before = (root / '.agentflow/state.json').read_bytes()
             result = doctor(root)
             self.assertFalse(result['ok'])
-            self.assertEqual((root / '.ship/state.json').read_bytes(), before)
-            self.assertFalse((root / '.ship/state.lock').exists())
+            self.assertEqual((root / '.agentflow/state.json').read_bytes(), before)
+            self.assertFalse((root / '.agentflow/state.lock').exists())
 
     def test_doctor_reports_pending_recovery_without_running_it(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / '.ship').mkdir()
-            journal = root / '.ship/archive-transaction.json'
+            (root / '.agentflow').mkdir()
+            journal = root / '.agentflow/archive-transaction.json'
             journal.write_text('not a real transaction')
             self.assertFalse(doctor(root)['ok'])
             self.assertEqual(journal.read_text(), 'not a real transaction')
-            self.assertFalse((root / '.ship/state.lock').exists())
+            self.assertFalse((root / '.agentflow/state.lock').exists())
 
     def test_migration_preserves_legacy_bytes_and_is_idempotent(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             fixtures.ArchiveRecoveryTests().workspace(root)
-            path = root / '.ship/state.json'
+            path = root / '.agentflow/state.json'
             state = json.loads(path.read_text())
             state.pop('version')
             path.write_text(json.dumps(state, indent=4))
@@ -53,13 +53,13 @@ class TeamOperationsTests(unittest.TestCase):
             expected = dict(state, version=1)
             self.assertEqual(json.loads(path.read_text()), expected)
             self.assertFalse(migrate_state(root)['changed'])
-            self.assertEqual(len(list((root / '.ship').glob('state.pre-v1-*'))), 1)
+            self.assertEqual(len(list((root / '.agentflow').glob('state.pre-v1-*'))), 1)
 
     def test_migration_refuses_unknown_state_and_handles_failed_backup(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / '.ship').mkdir()
-            path = root / '.ship/state.json'
+            (root / '.agentflow').mkdir()
+            path = root / '.agentflow/state.json'
             path.write_text('{"version": 999, "changes": {}}')
             before = path.read_bytes()
             with self.assertRaises(ValueError):
@@ -75,7 +75,7 @@ class TeamOperationsTests(unittest.TestCase):
     def test_profiles_apply_defaults_then_explicit_team_overrides(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            config = root / '.ship.json'
+            config = root / '.agentflow.json'
             config.write_text(json.dumps({'workflow': {'profile': 'small-fix', 'execution': 'sequential'}}))
             self.assertEqual(ShipConfigManager.load(root)['gates']['review']['reviewers'], ['correctness', 'judge'])
             config.write_text(json.dumps({'workflow': {'profile': 'small-fix'}, 'gates': {'review': {'reviewers': ['design', 'judge']}}}))
@@ -90,7 +90,7 @@ class TeamOperationsTests(unittest.TestCase):
             root = Path(tmp)
             fixtures.ArchiveRecoveryTests().workspace(root)
             (root / 'openspec/changes/alpha/tasks.md').write_text('- [ ] Done\n')
-            report_path = root / '.scratch/alpha/review_report.json'
+            report_path = root / '.agentflow/reviews/alpha/review_report.json'
             report = json.loads(report_path.read_text())
             report['working_tree_fingerprint'] = fixtures.lifecycle.compute_working_tree_fingerprint(root)
             report_path.write_text(json.dumps(report))
@@ -109,7 +109,7 @@ class TeamOperationsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             fixtures.ArchiveRecoveryTests().workspace(root)
-            (root / '.scratch/alpha/review_report.json').unlink()
+            (root / '.agentflow/reviews/alpha/review_report.json').unlink()
             # Use the documented example as the consumer would, filling its snapshot.
             schema_doc = Path(__file__).resolve().parents[1] / 'skills/review/references/finding_schema.md'
             example = re.search(r"```json delivery_evidence\n(.*?)\n```", schema_doc.read_text(), re.S).group(1)
@@ -117,7 +117,7 @@ class TeamOperationsTests(unittest.TestCase):
             self.assertIn('change', report)
             report['change'] = 'alpha'
             report['snapshot'] = {'working_tree_fingerprint': fixtures.lifecycle.compute_working_tree_fingerprint(root)}
-            (root / '.scratch/delivery_evidence.json').write_text(json.dumps(report))
+            (root / '.agentflow/reviews/delivery_evidence.json').write_text(json.dumps(report))
             FileLedgerStore.mutate_change(root, 'alpha', lambda e: e['evidence'].update(review={'status': 'PENDING'}))
             self.assertEqual(fixtures.lifecycle.evaluate_repository(root, target_change='alpha')['state_key'], 'DELIVERY_READY')
             result = fixtures.lifecycle.apply_and_archive_openspec(root, 'alpha')

@@ -12,7 +12,7 @@ from .models import VerificationResult
 NON_SPIKE_SCRATCH_DIRS = {
     "archive", "coverage", "logs", "cache", "tmp", "temp", "dist",
     "build", "node_modules", "venv", ".venv", "__pycache__", "checkpoints",
-    "velocity", "sessions", "reports",
+    "velocity", "sessions", "reports", "reviews", "backups", "spikes",
 }
 
 
@@ -170,7 +170,7 @@ def inspect_spikes(repo_root: Path) -> List[str]:
                     if "-" in change_part:
                         known_packages.add(re.sub(r"-\d+$", "", change_part))
 
-    for base in [repo_root / ".scratch", repo_root / "scratch"]:
+    for base in [repo_root / ".agentflow" / "spikes", repo_root / ".scratch", repo_root / "scratch"]:
         if base.exists() and base.is_dir():
             for child in base.iterdir():
                 if child.is_dir() and not child.name.startswith("."):
@@ -398,13 +398,19 @@ def inspect_review_reports(
     if target:
         for name in report_names:
             candidate_paths.extend([
+                repo_root / ".agentflow" / "reviews" / target / name,
+                repo_root / ".agentflow" / target / name,
                 repo_root / ".scratch" / target / name,
                 repo_root / "scratch" / target / name,
+                repo_root / ".agentflow" / "reviews" / f"{Path(name).stem}_{target}.json",
+                repo_root / ".agentflow" / f"{Path(name).stem}_{target}.json",
                 repo_root / ".scratch" / f"{Path(name).stem}_{target}.json",
                 repo_root / "scratch" / f"{Path(name).stem}_{target}.json",
             ])
     for name in report_names:
         candidate_paths.extend([
+            repo_root / ".agentflow" / "reviews" / name,
+            repo_root / ".agentflow" / name,
             repo_root / ".scratch" / name,
             repo_root / "scratch" / name,
         ])

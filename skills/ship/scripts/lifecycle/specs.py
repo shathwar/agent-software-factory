@@ -11,7 +11,7 @@ import uuid
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from .evidence import validate_design_approval
-from .paths import repository_path, resolve_change_path, validate_change_id
+from .paths import repository_path, resolve_change_path, validate_change_id, get_state_file
 from .transactions import atomic_write, begin_archive, record_archive_progress, recover_archive, sync_directory
 
 REMOVAL_TITLE_MARKER = re.compile(
@@ -176,7 +176,7 @@ class OpenSpecRepository:
                 for d in archive_dir.iterdir():
                     if d.is_dir() and (d.name == target or d.name.endswith(f"-{target}")):
                         return True
-            state_file = repo_root / ".ship" / "state.json"
+            state_file = get_state_file(repo_root)
             if state_file.exists():
                 try:
                     data = json.loads(state_file.read_text(encoding="utf-8"))

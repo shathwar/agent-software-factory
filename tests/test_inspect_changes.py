@@ -178,10 +178,10 @@ class InspectorTests(unittest.TestCase):
         self.assertIn("FINANCIAL / PRECISION REVIEW", output)
 
     def test_untracked_spec_discovery(self):
-        self.write(".scratch/feature_spec.md", "# Feature Spec\n")
+        self.write(".agentflow/feature_spec.md", "# Feature Spec\n")
         output = self.inspect("--no-diff")
         self.assertIn("Available Spec / PRD Documents:", output)
-        self.assertIn(".scratch/feature_spec.md", output)
+        self.assertIn(".agentflow/feature_spec.md", output)
 
     def test_openspec_and_adr_discovery(self):
         self.write("openspec/changes/order-stream/specs/exit.md", "# Requirement: Exit\n")

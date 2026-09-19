@@ -24,6 +24,7 @@ DEFAULT_EXCLUDES = {
     "venv",
     "node_modules",
     "__pycache__",
+    ".agentflow",
     ".scratch",
     "scratch",
     ".idea",

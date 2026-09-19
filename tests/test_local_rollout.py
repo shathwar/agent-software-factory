@@ -37,7 +37,7 @@ class LocalRolloutTests(unittest.TestCase):
             cli('--set-active-change', 'alpha')
             digest = cli('--change', 'alpha', '--design-fingerprint').stdout.strip()
             cli('--change', 'alpha', '--approve-design', digest, '--approved-by', 'session-user')
-            state = json.loads((project / '.ship/state.json').read_text())
+            state = json.loads((project / '.agentflow/state.json').read_text())
             self.assertEqual(state['active_change_id'], 'alpha')
             self.assertEqual(json.loads(cli('--format', 'json').stdout)['target_change'], 'alpha')
             # A different change's approval must not steal or clear the selected change.
@@ -45,7 +45,7 @@ class LocalRolloutTests(unittest.TestCase):
             cli('--change', 'beta', '--approve-design', beta_digest, '--approved-by', 'session-user')
             self.assertEqual(json.loads(cli('--format', 'json').stdout)['target_change'], 'alpha')
             # The review must cover the current workspace, including the other package.
-            report_path = project / '.scratch/alpha/review_report.json'
+            report_path = project / '.agentflow/reviews/alpha/review_report.json'
             report = json.loads(report_path.read_text())
             report['working_tree_fingerprint'] = cli('--fingerprint').stdout.strip()
             report_path.write_text(json.dumps(report))
@@ -65,12 +65,12 @@ class LocalRolloutTests(unittest.TestCase):
             with self.subTest(config=config), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
                 fixtures.ArchiveRecoveryTests().workspace(root)
-                before = (root / '.ship/state.json').read_bytes()
-                (root / '.ship.json').write_text(config)
+                before = (root / '.agentflow/state.json').read_bytes()
+                (root / '.agentflow.json').write_text(config)
                 result = subprocess.run([sys.executable, str(script), '--path', str(root), '--status-check'], capture_output=True, text=True)
                 self.assertEqual(result.returncode, 1)
                 self.assertIn('Invalid Ship configuration', result.stderr)
-                self.assertEqual((root / '.ship/state.json').read_bytes(), before)
+                self.assertEqual((root / '.agentflow/state.json').read_bytes(), before)
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             fixtures.ArchiveRecoveryTests().workspace(root)

@@ -59,7 +59,7 @@ This framework transforms AI from an unpredictable code generator into a **disci
 | **Reviewer Fatigue on AI PRs** | [**`review`**](./skills/review/SKILL.md) performs a 10-stage systems review (Correctness, Concurrency, Security, WebPerf, Failure, Craftsmanship) with an evidence-based Judge that rejects hallucinations. | **Senior/Staff engineers stop wasting hours catching basic race conditions, unindexed queries, and missing timeouts.** |
 | **Hollow, Backfilled Unit Tests** | [**`tdd`**](./skills/tdd/SKILL.md) enforces the *Iron Law of Test-First* and an in-flight **Doubt Cycle**. Agents are strictly forbidden from writing production code before proving a behavioral test fails. | **Real regression safety; tests verify observable behavior instead of mock configurations.** |
 | **Vanishing Architectural Context** | [**`design`**](./skills/design/SKILL.md) enforces the *Facts vs. Decisions Law*, audits **Capability Closure**, and compiles an **ADR** and **OpenSpec package** directly into Git. | **Full audit trails for SOC2/compliance, clean RFC records, and effortless onboarding.** |
-| **Multi-Agent Coordination & Crashes** | [**`ship`**](./skills/ship/SKILL.md) provides a **two-phase atomic transaction engine** (`.ship/transactions/`) and multi-change isolation (`--change <id>`) with automatic crash recovery. | **Zero corrupted project state, self-healing archive journals, and safe concurrent feature branches.** |
+| **Multi-Agent Coordination & Crashes** | [**`ship`**](./skills/ship/SKILL.md) provides a **two-phase atomic transaction engine** (`.agentflow/archive-transaction.json`) and multi-change isolation (`--change <id>`) with automatic crash recovery. | **Zero corrupted project state, self-healing archive journals, and safe concurrent feature branches.** |
 | **Security & Compliance Hurdles** | **Zero external dependencies.** The entire test suite, inspector CLIs, debt scanners, and validators run on standard library Python 3.10+ and POSIX bash. | **Simplifies internal enterprise security audits; zero supply chain or third-party package vulnerabilities.** |
 | **LLM Token Costs & Latency** | All core skills and agent prompts are **token-optimized ("cavemanned")**, stripping conversational fluff while retaining strict technical constraints. | **Measured 30–50% reduction in reference token overhead, lower prompt costs, and sharper model instruction adherence.** |
 
@@ -71,7 +71,7 @@ This framework transforms AI from an unpredictable code generator into a **disci
 Teams can adopt skills incrementally without changing their entire workflow:
 1. **Phase 1: Pre-PR Defense ([`review`](./skills/review/SKILL.md))**: Run `/review` on pull requests before requesting senior peer review. Catch race conditions, unindexed queries, and missing error paths early.
 2. **Phase 2: Anti-Bloat Coding ([`simplify`](./skills/simplify/SKILL.md))**: Use `/simplify` on everyday tasks to enforce standard-library reuse. Add `python3 skills/simplify/scripts/scan_debt.py --strict` to CI to enforce documented debt ceilings.
-3. **Phase 3: Autonomous Lifecycle ([`ship`](./skills/ship/SKILL.md))**: Run `/ship "<feature>"` to drive complete features from architectural grilling (ADRs) through TDD to reviewed PRs. Configure project manifests (`.ship.json`) for team workflow profiles (`small-fix`, `standard`, `high-risk`).
+3. **Phase 3: Autonomous Lifecycle ([`ship`](./skills/ship/SKILL.md))**: Run `/ship "<feature>"` to drive complete features from architectural grilling (ADRs) through TDD to reviewed PRs. Configure project manifests (`.agentflow.json`) for team workflow profiles (`small-fix`, `standard`, `high-risk`).
 4. **Phase 4: Headless CI Orchestration**: Automate the lifecycle in CI/CD (GitHub Actions / GitLab CI) via issue comments (`ship:approved`) using the [Headless CI Guide](./skills/ship/references/headless_ci_guide.md).
 
 ---
@@ -84,7 +84,7 @@ Teams can adopt skills incrementally without changing their entire workflow:
 | [**`simplify`**](./skills/simplify/SKILL.md) | `/simplify`, `"simplify"`, `"lazy senior dev"` | Simplicity & Anti-Bloat | Forces the simplest working solution: YAGNI, standard library first, zero unrequested abstractions, and automated debt auditing via `scan_debt.py`. |
 | [**`tdd`**](./skills/tdd/SKILL.md) | `/tdd`, `"tdd"`, `"red-green-refactor"` | Implementation | Dual-speed TDD engine (fast fakes & ephemeral DBs), legacy characterization wrapping, in-flight **Doubt Cycle** ([`doubt_cycle.md`](./skills/tdd/references/doubt_cycle.md)), and `verify_tdd.py` CI parity auditor. |
 | [**`design`**](./skills/design/SKILL.md) | `/design`, `"design"`, `"grill me on this design"` | Pre-implementation | Relentlessly stress-tests architectures using frontier rounds, enforces **Capability Closure** ([`capability_closure.md`](./skills/design/references/capability_closure.md)), detects ungrillable questions, and compiles an ADR & OpenSpec. |
-| [**`spike`**](./skills/spike/SKILL.md) | `/spike`, `"spike"`, `"throwaway spike"` | Empirical Validation | Rapid disposable spikes with automated statistical benchmarking (`run_spike.py` p50/p90/p99 latency distributions), ephemeral Docker sandboxes, and ADR bridge. |
+| [**`spike`**](./skills/spike/SKILL.md) | `/spike`, `"spike"`, `"throwaway spike"` | Empirical Validation | Rapid disposable spikes with automated statistical benchmarking (`run_spike.py` p50/p90/p95/p99/max, RPS, RSS memory delta), ephemeral Docker sandboxes, and ADR bridge. |
 | [**`ship`**](./skills/ship/SKILL.md) | `/ship`, `"ship"`, `/lifecycle` | Full Lifecycle Orchestrator | **Battle-Ready**. Chains all 5 skills into an autonomous pipeline with 4 transition gates, git checkpoints, safe rollback, team profiles, preflight doctor, and working tree fingerprinting. |
 
 ---
@@ -95,16 +95,16 @@ Give your agent [ship SKILL.md](./skills/ship/SKILL.md) and feature request: `/s
 
 - **One Command Delivery**: Drives feature from architectural grilling to tested, simplified, production-reviewed PR.
 - **Tri-Tier State Engine**:
-  - Authoritative multi-change ledger `.ship/state.json` (multi-agent isolation via `--change <id>`).
+  - Authoritative multi-change ledger `.agentflow/state.json` (multi-agent isolation via `--change <id>`).
   - Deep commit evidence in Git notes (`refs/notes/ship-evidence`).
   - Standard RFC 5133 commit trailers (`Ship-Change`, `Ship-<Gate>`, `--generate-trailers`).
 - **Preflight Diagnostics (`--doctor`)**: Run `python3 skills/ship/scripts/inspect_lifecycle.py --doctor` to verify runtime, git availability, 6 installed skills, versions, ledger readability, and pending recovery before starting work.
-- **Team Workflow Profiles**: Configurable via `.ship.json` (`small-fix`, `standard`, `high-risk`) and host execution guidance (`workflow.execution: auto | sequential | parallel`) as detailed in [Local Team Rollout](./skills/ship/references/team_rollout.md).
+- **Team Workflow Profiles**: Configurable via `.agentflow.json` (`small-fix`, `standard`, `high-risk`) and host execution guidance (`workflow.execution: auto | sequential | parallel`) as detailed in [Local Team Rollout](./skills/ship/references/team_rollout.md).
 - **Cryptographic Design Receipts**: Binds authorization to exact specification digest; any requirements amendment invalidates approval and requests re-confirmation.
 - **Working Tree Fingerprinting**: SHA-256 snapshot of commit, tree hash, and uncommitted diff/untracked files; post-review modifications immediately flag `Ship-Review: STALE` and block delivery.
-- **Atomic Transactions & Crash Resilience**: Two-phase commit spec archiving (`.ship/transactions/`) with automatic self-healing recovery from interrupted sessions.
+- **Atomic Transactions & Crash Resilience**: Two-phase commit spec archiving (`.agentflow/archive-transaction.json`) with automatic self-healing recovery from interrupted sessions.
 - **Re-Entrant State Machine**: Filesystem (`openspec/`, `tasks.md`, `docs/adr/`) is persistent state machine. Resumes exact active phase instantly.
-- **Repository Manifest (`.ship.json`)**: Clean domain schema validated by [`ship.schema.json`](./skills/ship/references/ship.schema.json). Configures custom test commands (`gates.implementation.test`).
+- **Repository Manifest (`.agentflow.json`)**: Clean domain schema validated by [`ship.schema.json`](./skills/ship/references/ship.schema.json). Configures custom test commands (`gates.implementation.test`).
 - **Git Checkpoints & Safe Rollback**: Records private refs (`--checkpoint design`) and safely backs up broken code on architectural revisions (`--rollback design`).
 - **Zero-Loss State Migration**: Seamlessly upgrade legacy ledgers via `inspect_lifecycle.py --migrate-state` with byte-for-byte backups.
 - **Modular SOLID Architecture**: Structured Python package under [`skills/ship/scripts/lifecycle/`](./skills/ship/scripts/lifecycle/) separating VCS, evidence, ledger, gate verification, and transaction journals.
@@ -131,7 +131,7 @@ Give your agent the [design SKILL.md](./skills/design/SKILL.md) and your proposa
 
 Give your agent the [spike SKILL.md](./skills/spike/SKILL.md) and the empirical question or hypothesis.
 
-- **Throwaway Mindset**: Strict isolation to `.scratch/<spike-name>/`. Zero pollution of production source trees.
+- **Throwaway Mindset**: Strict isolation to `.agentflow/spikes/<spike-name>/`. Zero pollution of production source trees.
 - **Ephemeral Infrastructure Sandboxing**: Isolated `docker-compose.yml` for real backend dependencies (Postgres, Redis, Kafka) on dynamic ports.
 - **Automated Benchmark Runner (`run_spike.py`)**: Warmup passes, concurrent worker load, and statistical percentile distributions (p50/p90/p95/p99/max, RPS, RSS memory delta).
 - **Automated ADR & OpenSpec Bridge**: Immediately exports evidenced verdicts and verified configuration snippets to `docs/adr/`.
@@ -279,7 +279,7 @@ All feedback uses plain, human language, including PR comments: what breaks, why
 - **Unified Review Report**: Executive summary, 10-stage scorecard, prioritized findings, simplification opportunities, test gaps, and verification checklist. Missing checks stay visible; agent handoffs stay internal.
 - **12-Field Finding Schema**: Each finding adheres to the formal [12-field schema](./skills/review/references/finding_schema.md) (`id`, `severity`, `category`, `file`, `line`, `title`, `problem`, `evidence`, `impact`, `recommendation`, `confidence`, `fixability`).
 - **Autonomous vs. Human Decision Separation**: Findings marked `autonomous` are fixed by the Code Fixer in the bounded review loop. Findings marked `requires-human` surface concrete trade-offs formatted as Frontier Clarifications (`❓ Q1` + `➡️ Recommended Stance`).
-- **Delivery Evidence Envelope**: For lifecycle delivery, bundles the Judge PASS report, verified test runner metrics (command, exit code `0`, duration, test count, zero failures), and SHA-256 working tree fingerprint into [`.scratch/delivery_evidence.json`](./skills/review/references/finding_schema.md#6-delivery-evidence-envelope-scratchdelivery_evidencejson).
+- **Delivery Evidence Envelope**: For lifecycle delivery, bundles the Judge PASS report, verified test runner metrics (command, exit code `0`, duration, test count, zero failures), and SHA-256 working tree fingerprint into [`.agentflow/reviews/delivery_evidence.json`](./skills/review/references/finding_schema.md#6-delivery-evidence-envelope-agentflowreviewsdelivery_evidencejson).
 
 ## Files
 

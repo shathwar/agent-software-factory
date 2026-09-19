@@ -195,7 +195,7 @@ class TestSafetyHooks:
             "rm -rf build",
             "rm -rf dist/ build/",
             "rm -rf node_modules",
-            "rm -rf .scratch/temp",
+            "rm -rf .agentflow/tmp",
             "rm -r -f ./.pytest_cache",
             "rm -fr .next",
             "rm -rf target",

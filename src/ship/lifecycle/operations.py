@@ -9,7 +9,7 @@ import uuid
 
 from .config import ShipConfigManager
 from .ledger import FileLedgerStore, read_ledger_file
-from .paths import repository_path
+from .paths import repository_path, get_state_file, get_journal_file, agentflow_path
 from .transactions import atomic_write
 
 
@@ -47,9 +47,9 @@ def doctor(root: Path):
     except ValueError as exc:
         check("configuration", False, str(exc))
     try:
-        state = read_ledger_file(repository_path(root, ".ship/state.json"))
+        state = read_ledger_file(get_state_file(root))
         check("ledger", True, "Not initialized" if state is None else ("Version 1" if "version" in state else "Legacy versionless ledger; run --migrate-state"))
-        journal = repository_path(root, ".ship/archive-transaction.json")
+        journal = get_journal_file(root)
         check("recovery", not journal.exists(), "Run normal inspection to recover interrupted archive" if journal.exists() else "No pending archive")
     except (ValueError, OSError) as exc:
         check("ledger", False, str(exc))
@@ -59,11 +59,11 @@ def doctor(root: Path):
 def migrate_state(root: Path):
     """Stamp the supported versionless format as v1; never infer unknown schemas."""
     with FileLedgerStore.lock(root):
-        path = repository_path(root, ".ship/state.json")
+        path = get_state_file(root)
         state = read_ledger_file(path)
         if state is None or "version" in state:
             return {"changed": False, "version": state.get("version") if state else None}
-        backup = repository_path(root, f".ship/state.pre-v1-{uuid.uuid4().hex}.json")
+        backup = agentflow_path(root, f"state.pre-v1-{uuid.uuid4().hex}.json")
         atomic_write(backup, path.read_bytes())
         state["version"] = 1
         FileLedgerStore.save(root, state)

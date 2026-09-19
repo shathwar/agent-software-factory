@@ -39,7 +39,7 @@ class ILedgerStore(Protocol):
     """Protocol for thread-safe state ledger persistence."""
 
     def get_ledger_path(self, repo_path: Path) -> Path:
-        """Return the path to .ship/state.json."""
+        """Return the path to .agentflow/state.json."""
         ...
 
     @contextmanager

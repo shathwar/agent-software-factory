@@ -12,18 +12,15 @@
 
 # Temporary & logs
 *.log
-scratch/
-.scratch/
-.scratch
 
 # Python validation tools
 __pycache__/
 *.pyc
 .venv/
 
-# Ship Lifecycle
-.ship/
-.ship
+# Agentflow Lifecycle Workspace
+.agentflow/
+.agentflow
 
 # Python packaging & builds
 build/

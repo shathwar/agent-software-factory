@@ -64,7 +64,7 @@ class TurnRegressionTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
                 store.record_turn(root, {'skill': 'review', 'inputs': {'file': 'app.py'}}, change_id='alpha')
-                path = root / '.ship/state.json'
+                path = root / '.agentflow/state.json'
                 before = path.read_bytes()
                 for payload in invalid:
                     with self.subTest(namespace=namespace, payload=payload):
@@ -77,10 +77,10 @@ class TurnRegressionTests(unittest.TestCase):
             cli = importlib.import_module(module_name)
             with tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
-                (root / '.ship').mkdir()
+                (root / '.agentflow').mkdir()
                 turns = [{'skill': 'review', 'inputs': ['app.py']}]
                 state = {'version': 1, 'active_change_id': 'alpha', 'changes': {'alpha': {'turns': turns}}}
-                path = root / '.ship/state.json'
+                path = root / '.agentflow/state.json'
                 path.write_text(json.dumps(state))
                 before = path.read_bytes()
                 stdout = io.StringIO()
@@ -100,7 +100,7 @@ class TurnRegressionTests(unittest.TestCase):
                 args = ['--path', tmp, '--change', 'alpha', '--record-turn']
                 for payload in ('{"inputs":["app.py"]}', '{broken', '[]'):
                     self.assertEqual(cli.main(args + [payload]), 1)
-                    self.assertFalse((Path(tmp) / '.ship/state.json').exists())
+                    self.assertFalse((Path(tmp) / '.agentflow/state.json').exists())
                 self.assertEqual(cli.main(args + [json.dumps({'skill': 'review', 'inputs': {'context': 'x' * 500}})]), 0)
 
 
@@ -110,7 +110,7 @@ class TurnRegressionTests(unittest.TestCase):
             for extra in ({'inputs': []}, {'evidence': False}, {'execution_mode': ''}):
                 with self.assertRaises(ValueError):
                     handle_ship_record_turn(dict(path=tmp, change='alpha', skill='review', **extra))
-                self.assertFalse((Path(tmp) / '.ship/state.json').exists())
+                self.assertFalse((Path(tmp) / '.agentflow/state.json').exists())
             result = handle_ship_record_turn({'path': tmp, 'change': 'alpha', 'skill': 'review', 'inputs': {}})
             self.assertEqual(result['change_id'], 'alpha')
             self.assertEqual(result['turns'][-1]['skill'], 'review')

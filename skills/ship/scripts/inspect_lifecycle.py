@@ -329,7 +329,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument(
         "--config",
         default=None,
-        help="Path to custom .ship.json configuration.",
+        help="Path to custom .agentflow.json configuration.",
     )
     parser.add_argument(
         "--checkpoint",
@@ -381,24 +381,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "--set-active-change",
         default=None,
         metavar="CHANGE_ID",
-        help="Set the active change ID in .ship/state.json.",
+        help="Set the active change ID in .agentflow/state.json.",
     )
     parser.add_argument(
         "--sync-state",
         action="store_true",
-        help="Force re-synchronize .ship/state.json from workspace artifacts.",
+        help="Force re-synchronize .agentflow/state.json from workspace artifacts.",
     )
     parser.add_argument(
         "--record-review",
         default=None,
         metavar="REPORT_JSON",
-        help="Record a review report JSON into .ship/state.json and git notes.",
+        help="Record a review report JSON into .agentflow/state.json and git notes.",
     )
     parser.add_argument(
         "--record-tests",
         default=None,
         metavar="TEST_DATA",
-        help="Record test results into .ship/state.json and git notes (passed/failed or path to JSON).",
+        help="Record test results into .agentflow/state.json and git notes (passed/failed or path to JSON).",
     )
     parser.add_argument(
         "--generate-trailers",
@@ -539,7 +539,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.sync_state:
         synced = sync_ledger_from_workspace(repo_root, target_change_id=args.change)
-        output_result(synced, ["Successfully synchronized .ship/state.json from workspace artifacts."])
+        output_result(synced, ["Successfully synchronized .agentflow/state.json from workspace artifacts."])
         return 0
 
     if args.generate_trailers:

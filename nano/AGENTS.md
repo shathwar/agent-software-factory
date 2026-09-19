@@ -32,7 +32,7 @@ Universal high-density engineering instructions for AI coding agents. Grounded i
 ---
 
 ## 4. Empirical Spikes (`spike`)
-- **Strict Sandbox**: Throwaway code lives strictly in `.scratch/<spike-name>/`. Never write prototype code to `src/`.
+- **Strict Sandbox**: Throwaway code lives strictly in `.agentflow/spikes/<spike-name>/`. Never write prototype code to `src/`.
 - **Falsifiable SLIs**: Define explicit numerical thresholds (p99 latency, RPS) before measuring.
 - **Real Infrastructure**: Spin up ephemeral local Docker Compose instances on dynamic ports for backend I/O spikes.
 - **Statistical Rigor**: Use `run_spike.py` for warmup passes and latency percentiles (p50/p95/p99).
@@ -59,5 +59,5 @@ Universal high-density engineering instructions for AI coding agents. Grounded i
 ## 6. Delivery Lifecycle (`ship`)
 - **Deterministic Gates**: Design (Spec & ADR) ➔ Implementation (TDD + Simplify) ➔ Review (Adversarial Code Review) ➔ Delivery.
 - **Git Checkpoints & Rollback**: Tag refs at `design` and `implementation`. Safe rollback to `design` if invariants break during review.
-- **Tri-Tier State**: Authoritative ledger `.ship/state.json`, deep commit evidence in Git notes (`refs/notes/ship-evidence`), RFC 5133 commit trailers (`Ship-Change`, `Ship-<Gate>`).
+- **Tri-Tier State**: Authoritative ledger `.agentflow/state.json`, deep commit evidence in Git notes (`refs/notes/ship-evidence`), RFC 5133 commit trailers (`Ship-Change`, `Ship-<Gate>`).
 - **Harness Independence & Turn Contracts**: Orchestrate specialist gates via explicit Turn Contracts as independent turns. Subagents are an optional optimization; sequential independent turns preserve identical state and governance.

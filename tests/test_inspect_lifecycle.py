@@ -405,7 +405,7 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(res["state_key"], "TDD_ACTIVE")
             self.assertEqual(res["openspec_packages"][0]["change"], "z-current")
 
-            # Explicit active change persistence in .ship/state.json
+            # Explicit active change persistence in .agentflow/state.json
             inspect_lifecycle.set_active_change(tmppath, "a-old")
             res_explicit = inspect_lifecycle.evaluate_repository(tmppath)
             self.assertEqual(res_explicit["openspec_packages"][0]["change"], "a-old")
@@ -953,7 +953,7 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertFalse(pkg_dir.exists())
 
     def test_active_change_persistence_does_not_revoke_delivery_or_block_archive(self):
-        """Active change written to .ship/state.json must not count as an unreviewed source modification."""
+        """Active change written to .agentflow/state.json must not count as an unreviewed source modification."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             self._init_git_repo(tmppath)
@@ -965,8 +965,8 @@ class TestInspectLifecycle(unittest.TestCase):
             subprocess.run(["git", "commit", "-m", "init"], cwd=tmppath, check=True)
             commit_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmppath, capture_output=True, text=True).stdout.strip()
 
-            (tmppath / ".scratch").mkdir()
-            (tmppath / ".scratch" / "delivery_evidence.json").write_text(json.dumps({
+            (tmppath / ".agentflow").mkdir()
+            (tmppath / ".agentflow" / "delivery_evidence.json").write_text(json.dumps({
                 "change": "feat",
                 "verdict": "PASS",
                 "snapshot": {"commit": commit_sha},
@@ -981,7 +981,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 },
             }))
 
-            # Set active change via .ship/state.json
+            # Set active change via .agentflow/state.json
             self._approve_design(tmppath)
             inspect_lifecycle.set_active_change(tmppath, "feat")
             self.assertEqual(inspect_lifecycle.get_active_change(tmppath), "feat")
@@ -991,7 +991,7 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(res["gate"], "delivery")
             self.assertEqual(res["state_key"], "DELIVERY_READY")
 
-            # Must archive cleanly, clearing active change in .ship/state.json
+            # Must archive cleanly, clearing active change in .agentflow/state.json
             arch_res = inspect_lifecycle.apply_and_archive_openspec(tmppath, change="feat")
             self.assertEqual(arch_res["change"], "feat")
             self.assertIsNone(inspect_lifecycle.get_active_change(tmppath))
@@ -1341,7 +1341,7 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertIn("requires 'complete'", str(ctx.exception))
 
     def test_ship_json_config_loading(self):
-        """Verify .ship.json config loading and overriding in inspect_lifecycle."""
+        """Verify .agentflow.json config loading and overriding in inspect_lifecycle."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             config_data = {
@@ -1352,10 +1352,10 @@ class TestInspectLifecycle(unittest.TestCase):
                     "review": {"max_iterations": 5},
                 },
             }
-            (tmppath / ".ship.json").write_text(json.dumps(config_data))
+            (tmppath / ".agentflow.json").write_text(json.dumps(config_data))
 
             cfg = inspect_lifecycle.load_ship_config(tmppath)
-            self.assertEqual(cfg["config_source"], ".ship.json")
+            self.assertEqual(cfg["config_source"], ".agentflow.json")
             self.assertEqual(cfg["project"]["name"], "billing")
             self.assertEqual(cfg["project"]["scope"], "services/billing")
             self.assertEqual(cfg["gates"]["implementation"]["test"], "pnpm test")
@@ -1365,11 +1365,11 @@ class TestInspectLifecycle(unittest.TestCase):
             # Check format_summary displays config
             eval_data = inspect_lifecycle.evaluate_repository(tmppath)
             summary = inspect_lifecycle.format_summary(eval_data)
-            self.assertIn(".ship.json", summary)
+            self.assertIn(".agentflow.json", summary)
             self.assertIn("pnpm test", summary)
 
     def test_ship_json_config_loading_custom_path(self):
-        """Verify .ship.json parsing from explicit custom path."""
+        """Verify .agentflow.json parsing from explicit custom path."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             json_content = json.dumps({
@@ -1379,11 +1379,11 @@ class TestInspectLifecycle(unittest.TestCase):
                     "review": {"max_iterations": 4},
                 },
             })
-            custom_file = tmppath / "custom.ship.json"
+            custom_file = tmppath / "custom.agentflow.json"
             custom_file.write_text(json_content)
 
             cfg = inspect_lifecycle.load_ship_config(tmppath, explicit_path=str(custom_file))
-            self.assertEqual(cfg["config_source"], "custom.ship.json")
+            self.assertEqual(cfg["config_source"], "custom.agentflow.json")
             self.assertEqual(cfg["project"]["name"], "auth-service")
             self.assertEqual(cfg["gates"]["implementation"]["test"], "pytest -q")
             self.assertEqual(cfg["gates"]["review"]["max_iterations"], 4)
@@ -1410,7 +1410,7 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(chk["gate"], "design")
             self.assertEqual(chk["change"], "payment")
             self.assertTrue(chk["ref_created"])
-            chk_file = tmppath / ".scratch" / "checkpoints" / "payment_design.json"
+            chk_file = tmppath / ".agentflow" / "checkpoints" / "payment_design.json"
             self.assertTrue(chk_file.exists())
 
             # Now simulate partial dirty edits in implementation
@@ -1497,7 +1497,7 @@ class TestInspectLifecycle(unittest.TestCase):
                     },
                 },
             })
-            (tmppath / ".ship.json").write_text(json_content)
+            (tmppath / ".agentflow.json").write_text(json_content)
             parsed = inspect_lifecycle.load_ship_config(tmppath)
             self.assertEqual(parsed["project"]["name"], "billing")
             self.assertEqual(parsed["gates"]["implementation"]["test"], "pytest -q")
@@ -1516,7 +1516,7 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(chk["gate"], "design")
             self.assertEqual(chk["commit"], "none")
             self.assertFalse(chk["ref_created"])
-            self.assertTrue((tmppath / ".scratch" / "checkpoints" / "new-feature_design.json").exists())
+            self.assertTrue((tmppath / ".agentflow" / "checkpoints" / "new-feature_design.json").exists())
 
     def test_status_check_exit_codes(self):
         """Verify --status-check exit code returns: 0 for ready, 1 for in-progress, 2 for review rejection."""
@@ -1904,23 +1904,23 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(entry3["revision_counter"], 3)
 
     def test_ledger_atomic_persistence(self):
-        """save_ledger atomically creates .ship/state.json without temp file remnants."""
+        """save_ledger atomically creates .agentflow/state.json without temp file remnants."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             data = {"version": 1, "active_change_id": "test", "changes": {}}
             inspect_lifecycle.save_ledger(tmppath, data)
 
-            state_file = tmppath / ".ship" / "state.json"
+            state_file = tmppath / ".agentflow" / "state.json"
             self.assertTrue(state_file.exists())
             loaded = json.loads(state_file.read_text(encoding="utf-8"))
             self.assertEqual(loaded["active_change_id"], "test")
 
             # Check no .tmp files remain
-            tmp_files = list((tmppath / ".ship").glob("*.tmp"))
+            tmp_files = list((tmppath / ".agentflow").glob("*.tmp"))
             self.assertEqual(len(tmp_files), 0)
 
     def test_ledger_self_healing_from_workspace(self):
-        """Missing .ship/state.json is reconstructed deterministically from workspace artifacts."""
+        """Missing .agentflow/state.json is reconstructed deterministically from workspace artifacts."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             # Create OpenSpec package
@@ -1932,12 +1932,12 @@ class TestInspectLifecycle(unittest.TestCase):
             adr_dir.mkdir(parents=True)
             (adr_dir / "ADR-0001-billing.md").write_text("# ADR\n**Status**: ACCEPTED\n")
 
-            # Ensure .ship does NOT exist
-            self.assertFalse((tmppath / ".ship" / "state.json").exists())
+            # Ensure .agentflow does NOT exist
+            self.assertFalse((tmppath / ".agentflow" / "state.json").exists())
 
             # Load ledger should trigger self-healing sync
             ledger = inspect_lifecycle.load_ledger(tmppath, auto_sync=True)
-            self.assertTrue((tmppath / ".ship" / "state.json").exists())
+            self.assertTrue((tmppath / ".agentflow" / "state.json").exists())
             self.assertIn("billing", ledger["changes"])
             billing = ledger["changes"]["billing"]
             self.assertEqual(billing["phase"], "design")
@@ -2030,7 +2030,7 @@ class TestInspectLifecycle(unittest.TestCase):
             # 1. Sync state CLI
             code = inspect_lifecycle.main(["--path", str(tmppath), "--sync-state"])
             self.assertEqual(code, 0)
-            self.assertTrue((tmppath / ".ship" / "state.json").exists())
+            self.assertTrue((tmppath / ".agentflow" / "state.json").exists())
 
             # 2. Set active change CLI
             code = inspect_lifecycle.main(["--path", str(tmppath), "--set-active-change", "orders"])
@@ -2787,13 +2787,13 @@ class TestInspectLifecycle(unittest.TestCase):
                     (pkg / "tasks.md").write_text("- [x] Done\n")
                 (root / "alpha.py").write_text("alpha = 2\n")
                 (root / "beta.py").write_text("beta = 2\n")
-                before = (root / ".ship/state.json").read_bytes()
+                before = (root / ".agentflow/state.json").read_bytes()
                 for force in (False, True):
                     with self.assertRaisesRegex(RuntimeError, "isolated worktrees"):
                         inspect_lifecycle.perform_rollback(root, "design", change="alpha", force=force)
                 self.assertEqual((root / "beta.py").read_text(), "beta = 2\n")
                 self.assertEqual((root / "alpha.py").read_text(), "alpha = 2\n")
-                self.assertEqual((root / ".ship/state.json").read_bytes(), before)
+                self.assertEqual((root / ".agentflow/state.json").read_bytes(), before)
 
     def test_rollback_requires_valid_checkpoint_before_clearing_failures(self):
         for bad in ("missing", "corrupt", "missing-object", "mismatched-ref"):
@@ -2802,7 +2802,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 pkg = self._recovery_repo(root)
                 if bad != "missing":
                     inspect_lifecycle.create_checkpoint(root, "design", change="alpha")
-                    receipt = root / ".scratch/checkpoints/alpha_design.json"
+                    receipt = root / ".agentflow/checkpoints/alpha_design.json"
                     if bad == "corrupt":
                         receipt.write_text("{")
                     elif bad == "missing-object":
@@ -2812,10 +2812,10 @@ class TestInspectLifecycle(unittest.TestCase):
                     else:
                         subprocess.run(["git", "update-ref", "refs/ship/alpha/design", "HEAD"], cwd=root, check=True)
                 inspect_lifecycle.record_test_run_to_ledger(root, {"passed": False, "failed_count": 1}, "alpha")
-                before = (root / ".ship/state.json").read_bytes()
+                before = (root / ".agentflow/state.json").read_bytes()
                 with self.assertRaises(RuntimeError):
                     inspect_lifecycle.perform_rollback(root, "design", change="alpha")
-                self.assertEqual((root / ".ship/state.json").read_bytes(), before)
+                self.assertEqual((root / ".agentflow/state.json").read_bytes(), before)
                 self.assertEqual((pkg / "tasks.md").read_text(), "- [x] Done\n")
 
     def test_corrupt_ledger_is_preserved_by_all_state_operations(self):
@@ -2823,8 +2823,8 @@ class TestInspectLifecycle(unittest.TestCase):
             with self.subTest(invalid=invalid), tempfile.TemporaryDirectory() as tmpdir:
                 root = Path(tmpdir)
                 self._recovery_repo(root)
-                (root / ".ship").mkdir()
-                state = root / ".ship/state.json"
+                (root / ".agentflow").mkdir()
+                state = root / ".agentflow/state.json"
                 state.write_text(invalid)
                 operations = [
                     lambda: inspect_lifecycle.load_ledger(root),
@@ -2850,20 +2850,20 @@ class TestInspectLifecycle(unittest.TestCase):
             inspect_lifecycle.create_checkpoint(root, "design", change="alpha")
             (root / "alpha.py").write_text("alpha = 2\n")
             (root / "new.py").write_text("precious new code\n")
-            before = (root / ".ship/state.json").read_bytes()
+            before = (root / ".agentflow/state.json").read_bytes()
             with patch("lifecycle.checkpoints.shutil.copy2", side_effect=OSError("disk full")):
                 with self.assertRaisesRegex(RuntimeError, "Rollback failed"):
                     inspect_lifecycle.perform_rollback(root, "design", change="alpha")
             self.assertEqual((root / "alpha.py").read_text(), "alpha = 2\n")
             self.assertEqual((root / "new.py").read_text(), "precious new code\n")
-            self.assertEqual((root / ".ship/state.json").read_bytes(), before)
+            self.assertEqual((root / ".agentflow/state.json").read_bytes(), before)
 
     def test_failed_checkpoint_snapshot_does_not_replace_previous_checkpoint(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             self._recovery_repo(root)
             inspect_lifecycle.create_checkpoint(root, "design", change="alpha")
-            receipt = root / ".scratch/checkpoints/alpha_design.json"
+            receipt = root / ".agentflow/checkpoints/alpha_design.json"
             before = receipt.read_bytes()
             (root / "alpha.py").write_text("uncommitted work\n")
             from lifecycle.vcs import GitClient
@@ -2898,24 +2898,24 @@ class TestInspectLifecycle(unittest.TestCase):
             root = Path(tmpdir)
             self._recovery_repo(root)
             inspect_lifecycle.mutate_change_state(root, "alpha", lambda e: e.update(blockers=["Hold"]))
-            before = (root / ".ship/state.json").read_bytes()
+            before = (root / ".agentflow/state.json").read_bytes()
             from lifecycle.vcs import GitClient
             with patch.object(GitClient, "attach_git_note_evidence", return_value=None):
                 with self.assertRaisesRegex(RuntimeError, "Git notes; ledger unchanged"):
                     inspect_lifecycle.record_test_run_to_ledger(root, {"passed": True}, "alpha")
                 with self.assertRaisesRegex(RuntimeError, "Git notes; ledger unchanged"):
                     inspect_lifecycle.record_review_to_ledger(root, {"verdict": "PASS"}, "alpha")
-            self.assertEqual((root / ".ship/state.json").read_bytes(), before)
+            self.assertEqual((root / ".agentflow/state.json").read_bytes(), before)
 
     def test_unborn_checkpoint_cannot_be_used_for_rollback(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             self._init_git_repo(root)
             inspect_lifecycle.create_checkpoint(root, "design", change="alpha")
-            before = (root / ".ship/state.json").read_bytes()
+            before = (root / ".agentflow/state.json").read_bytes()
             with self.assertRaisesRegex(RuntimeError, "with commits"):
                 inspect_lifecycle.perform_rollback(root, "design", change="alpha")
-            self.assertEqual((root / ".ship/state.json").read_bytes(), before)
+            self.assertEqual((root / ".agentflow/state.json").read_bytes(), before)
 
 
     def _archive_workspace(self, root, changes):
@@ -2990,7 +2990,7 @@ class TestInspectLifecycle(unittest.TestCase):
             new_spec.write_text("### Requirement: New\nNew behavior\n")
             self._approve_design(root)
             inspect_lifecycle.set_active_change(root, "alpha")
-            state = root / ".ship/state.json"
+            state = root / ".agentflow/state.json"
             before_state = state.read_bytes()
             living.write_bytes(living.read_bytes().replace(b"\n", b"\r\n"))
             before_spec = living.read_bytes()
@@ -3031,7 +3031,7 @@ class TestInspectLifecycle(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             self._archive_workspace(root, ["alpha"])
-            (root / ".ship/state.json").unlink()
+            (root / ".agentflow/state.json").unlink()
             with patch.object(FileLedgerStore, "save", wraps=FileLedgerStore.save) as save:
                 inspect_lifecycle.apply_and_archive_openspec(root, "alpha", force=True)
             self.assertEqual(save.call_count, 1)
@@ -3175,8 +3175,8 @@ class TestInspectLifecycle(unittest.TestCase):
         """Ledgers without turns remain valid; corrupt turns are rejected."""
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            (root / ".ship").mkdir()
-            state_file = root / ".ship/state.json"
+            (root / ".agentflow").mkdir()
+            state_file = root / ".agentflow/state.json"
             # Legacy ledger without turns
             legacy = {
                 "version": 1,
@@ -3228,7 +3228,7 @@ class TestInspectLifecycle(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             for utility_name in ["velocity", "sessions", "reports"]:
-                d = root / ".scratch" / utility_name
+                d = root / ".agentflow" / "spikes" / utility_name
                 d.mkdir(parents=True)
                 (d / "data.json").write_text("{}")
             spikes = inspect_lifecycle.inspect_spikes(root)
@@ -3246,7 +3246,7 @@ class TestInspectLifecycle(unittest.TestCase):
             inspect_lifecycle.ensure_gitignore_has_ship(root)
             gitignore = root / ".gitignore"
             self.assertTrue(gitignore.exists())
-            self.assertIn(".ship/", gitignore.read_text())
+            self.assertIn(".agentflow/", gitignore.read_text())
 
     def test_resolve_skill_name(self):
         """Delivery gate activity maps to ship orchestrator skill."""

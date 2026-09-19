@@ -81,7 +81,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-v", "--version", action="store_true", help="Print the installed suite version.")
     parser.add_argument("--path", default=".", help="Path to repository root (default: current directory).")
     parser.add_argument("--change", dest="change", default=None, help="Target a specific change ID (e.g. feature-login).")
-    parser.add_argument("--config", default=None, help="Path to custom .ship.json configuration.")
+    parser.add_argument("--config", default=None, help="Path to custom .agentflow.json configuration.")
     parser.add_argument("--checkpoint", default=None, metavar="GATE", help="Record a git ref and receipt checkpoint.")
     parser.add_argument("--rollback", default=None, metavar="GATE", help="Safely rollback working state to gate checkpoint.")
     parser.add_argument("--status-check", action="store_true", help="Exit with 0 if ready, 1 if blocked, 2 if rollback required.")

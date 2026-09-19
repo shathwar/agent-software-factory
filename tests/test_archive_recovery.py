@@ -88,7 +88,7 @@ class ArchiveRecoveryTests(unittest.TestCase):
                      ('add', '.'), ('commit', '-m', 'initial')]:
             subprocess.run(['git', *args], cwd=root, check=True, capture_output=True)
         sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
-        report = root / '.scratch/alpha/review_report.json'
+        report = root / '.agentflow/reviews/alpha/review_report.json'
         report.parent.mkdir(parents=True)
         report.write_text(json.dumps({
             'change': 'alpha', 'reviewer': 'judge', 'status': 'complete', 'verdict': 'PASS',
@@ -99,7 +99,7 @@ class ArchiveRecoveryTests(unittest.TestCase):
         from lifecycle.ledger import FileLedgerStore
         FileLedgerStore.approve_design(root, "alpha", design_fingerprint(root, "alpha"), "test-reviewer")
         lifecycle.sync_ledger_from_workspace(root)
-        return living.read_bytes(), (root / '.ship/state.json').read_bytes()
+        return living.read_bytes(), (root / '.agentflow/state.json').read_bytes()
 
     def stop_process(self, root, step):
         result = subprocess.run([sys.executable, '-c', CHILD, str(SCRIPTS), str(root), step],
@@ -116,15 +116,15 @@ class ArchiveRecoveryTests(unittest.TestCase):
                 for _ in range(2):
                     result = lifecycle.evaluate_repository(root, target_change='alpha')
                     self.assertEqual(result['state_key'], 'ARCHIVED' if committed else 'DELIVERY_READY')
-                    self.assertFalse((root / '.ship/archive-transaction.json').exists())
-                    self.assertEqual(list((root / 'openspec/specs').glob('.ship-write-*')), [])
+                    self.assertFalse((root / '.agentflow/archive-transaction.json').exists())
+                    self.assertEqual(list((root / 'openspec/specs').glob('.agentflow-write-*')), [])
                     if committed:
                         self.assertFalse((root / 'openspec/changes/alpha').exists())
                         self.assertIn('Alpha behavior', (root / 'openspec/specs/shared.md').read_text())
                         self.assertTrue((root / 'openspec/specs/new.md').exists())
                     else:
                         self.assertEqual((root / 'openspec/specs/shared.md').read_bytes(), original_spec)
-                        self.assertEqual((root / '.ship/state.json').read_bytes(), original_state)
+                        self.assertEqual((root / '.agentflow/state.json').read_bytes(), original_state)
                         self.assertFalse((root / 'openspec/specs/new.md').exists())
                         self.assertTrue((root / 'openspec/changes/alpha').is_dir())
                 if not committed:
@@ -141,14 +141,14 @@ class ArchiveRecoveryTests(unittest.TestCase):
             for _ in range(2):
                 self.assertEqual(lifecycle.evaluate_repository(root, target_change='alpha')['state_key'], 'DELIVERY_READY')
             self.assertEqual((root / 'openspec/specs/shared.md').read_bytes(), original_spec)
-            self.assertEqual((root / '.ship/state.json').read_bytes(), original_state)
+            self.assertEqual((root / '.agentflow/state.json').read_bytes(), original_state)
 
     def test_invalid_journal_stops_operations_without_overwriting_it(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self.workspace(root)
             self.stop_process(root, 'move')
-            journal = root / '.ship/archive-transaction.json'
+            journal = root / '.agentflow/archive-transaction.json'
             data = json.loads(journal.read_text())
             data['specs'][0]['path'] = '../outside'
             journal.write_text(json.dumps(data))
@@ -167,7 +167,7 @@ class ArchiveRecoveryTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'spec changed outside'):
                 lifecycle.evaluate_repository(root, target_change='alpha')
             self.assertEqual(living.read_text(), 'manual work after interruption')
-            self.assertTrue((root / '.ship/archive-transaction.json').exists())
+            self.assertTrue((root / '.agentflow/archive-transaction.json').exists())
 
     def test_unsafe_identifiers_rejected_across_operations(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -179,7 +179,7 @@ class ArchiveRecoveryTests(unittest.TestCase):
             outside.mkdir()
             sentinel = outside / 'valuable.txt'
             sentinel.write_text('keep')
-            state = (root / '.ship/state.json').read_bytes()
+            state = (root / '.agentflow/state.json').read_bytes()
             for bad in (str(outside), '../external', '../../external', r'..\external', '.', '..', 'alpha/beta'):
                 actions = (
                     lambda: lifecycle.apply_and_archive_openspec(root, bad, force=True),
@@ -192,7 +192,7 @@ class ArchiveRecoveryTests(unittest.TestCase):
                     with self.subTest(change=bad, action=action), self.assertRaises(ValueError):
                         action()
                 self.assertEqual(sentinel.read_text(), 'keep')
-                self.assertEqual((root / '.ship/state.json').read_bytes(), state)
+                self.assertEqual((root / '.agentflow/state.json').read_bytes(), state)
 
     def test_symlinked_managed_paths_are_rejected(self):
         for location in ('package', 'changes', 'spec-file', 'living-dir', 'ledger-dir', 'lock-file'):
@@ -206,8 +206,8 @@ class ArchiveRecoveryTests(unittest.TestCase):
                     'changes': root / 'openspec/changes',
                     'spec-file': root / 'openspec/changes/alpha/specs/shared.md',
                     'living-dir': root / 'openspec/specs',
-                    'ledger-dir': root / '.ship',
-                    'lock-file': root / '.ship/state.lock',
+                    'ledger-dir': root / '.agentflow',
+                    'lock-file': root / '.agentflow/state.lock',
                 }
                 managed = paths[location]
                 outside = base / 'external'

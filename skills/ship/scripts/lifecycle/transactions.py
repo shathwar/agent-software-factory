@@ -10,9 +10,12 @@ import shutil
 import tempfile
 from typing import Any, Dict, Optional
 
-from .paths import repository_path, resolve_change_path, validate_change_id
+from .paths import (
+    repository_path, resolve_change_path, validate_change_id,
+    get_state_file, get_journal_file,
+)
 
-JOURNAL = ".ship/archive-transaction.json"
+JOURNAL = ".agentflow/archive-transaction.json"
 
 
 def sync_directory(path: Path) -> None:
@@ -25,7 +28,7 @@ def sync_directory(path: Path) -> None:
 
 def atomic_write(path: Path, data: bytes, tag: Optional[str] = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary = tempfile.mkstemp(prefix=f".ship-write-{tag}-" if tag else ".ship-write-", dir=path.parent)
+    fd, temporary = tempfile.mkstemp(prefix=f".agentflow-write-{tag}-" if tag else ".agentflow-write-", dir=path.parent)
     try:
         if path.exists():
             os.fchmod(fd, path.stat().st_mode & 0o777)
@@ -46,11 +49,11 @@ def _encode(data: Optional[bytes]) -> Optional[str]:
 
 def begin_archive(repo_root: Path, operation_id: str, change: str, destination: Path,
                   updates: Dict[Path, Any]) -> None:
-    journal = repository_path(repo_root, JOURNAL)
+    journal = get_journal_file(repo_root)
     if journal.exists():
         raise RuntimeError("Unfinished archive must be recovered before starting another")
     source = resolve_change_path(repo_root, change)
-    ledger = repository_path(repo_root, ".ship/state.json")
+    ledger = get_state_file(repo_root)
     payload = {
         "version": 1, "operation_id": operation_id, "change": change, "phase": "prepared",
         "source": str(source.relative_to(repo_root)),
@@ -93,7 +96,7 @@ def recover_archive(repo_root: Path) -> Optional[str]:
                 raise ValueError("invalid living spec path")
             before = base64.b64decode(item["before"], validate=True) if item["before"] is not None else None
             specs.append((path, before, item["after_hash"]))
-        ledger = repository_path(repo_root, ".ship/state.json")
+        ledger = get_state_file(repo_root)
         current_bytes = ledger.read_bytes() if ledger.exists() else None
         current = json.loads(current_bytes) if current_bytes is not None else {}
         delivery = current.get("changes", {}).get(change, {}).get("evidence", {}).get("delivery", {})
@@ -130,6 +133,8 @@ def recover_archive(repo_root: Path) -> Optional[str]:
                 sync_directory(destination.parent)
         for parent in {path.parent for path, _, _ in specs}:
             if parent.exists():
+                for temporary in parent.glob(f".agentflow-write-{data['operation_id']}-*"):
+                    temporary.unlink()
                 for temporary in parent.glob(f".ship-write-{data['operation_id']}-*"):
                     temporary.unlink()
                 sync_directory(parent)

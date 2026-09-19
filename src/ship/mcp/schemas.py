@@ -42,7 +42,7 @@ TOOLS_MANIFEST: List[Dict[str, Any]] = [
     },
     {
         "name": "ship_record_turn",
-        "description": "Persist turn-level execution provenance into .ship/state.json (skill, harness, execution mode, inputs, evidence, state delta).",
+        "description": "Persist turn-level execution provenance into .agentflow/state.json (skill, harness, execution mode, inputs, evidence, state delta).",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -73,7 +73,7 @@ TOOLS_MANIFEST: List[Dict[str, Any]] = [
     },
     {
         "name": "ship_rollback",
-        "description": "Safely rollback workspace to a prior gate checkpoint, backing up uncommitted changes to .scratch/backups/.",
+        "description": "Safely rollback workspace to a prior gate checkpoint, backing up uncommitted changes to .agentflow/backups/.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -132,7 +132,7 @@ TOOLS_MANIFEST: List[Dict[str, Any]] = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "change": {"type": "string", "description": "Change ID to archive (default: active change in .ship/state.json)"},
+                "change": {"type": "string", "description": "Change ID to archive (default: active change in .agentflow/state.json)"},
                 "force": {"type": "boolean", "description": "Force archive even if review or task checks fail (default: false)"},
                 "path": {"type": "string", "description": "Path to repository root (default: current working directory)"}
             },
@@ -145,7 +145,7 @@ TOOLS_MANIFEST: List[Dict[str, Any]] = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "change": {"type": "string", "description": "Target change ID (default: active change in .ship/state.json)"},
+                "change": {"type": "string", "description": "Target change ID (default: active change in .agentflow/state.json)"},
                 "path": {"type": "string", "description": "Path to repository root (default: current working directory)"}
             },
             "required": []

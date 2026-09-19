@@ -30,7 +30,7 @@ Granular rules for modular injection into specific agent sub-prompts or focused 
 | File | Discipline | Key Invariants |
 |---|---|---|
 | [`design.nano.md`](./design.nano.md) | Systems Design | Facts vs. Decisions Law, decision frontier batching, ungrillable detection. |
-| [`spike.nano.md`](./spike.nano.md) | Empirical Spikes | Scratch isolation (`.scratch/`), falsifiable SLIs, statistical percentiles. |
+| [`spike.nano.md`](./spike.nano.md) | Empirical Spikes | Spike isolation (`.agentflow/spikes/`), falsifiable SLIs, statistical percentiles. |
 | [`tdd.nano.md`](./tdd.nano.md) | Test-Driven Dev | Zero production code before failing test, dual-speed testing tiers (domain vs persistence). |
 | [`simplify.nano.md`](./simplify.nano.md) | Anti-Bloat | Laziness Ladder, YAGNI, deep modules, explicit `simplify:` debt ceilings. |
 | [`review.nano.md`](./review.nano.md) | Code Review | Evidence-based judge (reject hallucinations), 10-stage review hierarchy. |

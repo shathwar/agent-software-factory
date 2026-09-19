@@ -47,11 +47,11 @@ class EvidenceGateTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Design approval"):
                 lifecycle.apply_and_archive_openspec(root, "alpha")
             digest = design_fingerprint(root, "alpha")
-            before = (root / ".ship/state.json").read_bytes()
+            before = (root / ".agentflow/state.json").read_bytes()
             for approver in (None, "", " "):
                 with self.assertRaises(ValueError):
                     FileLedgerStore.approve_design(root, "alpha", digest, approver)
-            self.assertEqual((root / ".ship/state.json").read_bytes(), before)
+            self.assertEqual((root / ".agentflow/state.json").read_bytes(), before)
             args = ["--path", str(root), "--change", "alpha", "--approve-design", digest, "--approved-by", "reviewer@example.org"]
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(lifecycle.main(args), 0)
@@ -62,11 +62,11 @@ class EvidenceGateTests(unittest.TestCase):
             self.assertEqual(lifecycle.evaluate_repository(root, target_change="alpha")["state_key"], "TDD_ACTIVE")
             tasks.write_text("- [x] Different scope\n")
             self.assertEqual(lifecycle.evaluate_repository(root, target_change="alpha")["state_key"], "DESIGN_APPROVAL_REQUIRED")
-            before = (root / ".ship/state.json").read_bytes()
+            before = (root / ".agentflow/state.json").read_bytes()
             with contextlib.redirect_stderr(io.StringIO()):
                 self.assertEqual(lifecycle.main(args), 1)
-            self.assertEqual((root / ".ship/state.json").read_bytes(), before)
-            report_path = root / ".scratch/alpha/review_report.json"
+            self.assertEqual((root / ".agentflow/state.json").read_bytes(), before)
+            report_path = root / ".agentflow/reviews/alpha/review_report.json"
             report = json.loads(report_path.read_text())
             report["working_tree_fingerprint"] = lifecycle.compute_working_tree_fingerprint(root)
             report_path.write_text(json.dumps(report))
@@ -99,6 +99,6 @@ class EvidenceGateTests(unittest.TestCase):
             FileLedgerStore.mutate_change(root, "alpha", lambda e: e["evidence"]["implementation"].update(status="PASSED", tests_passed="false", failed_count=3))
             lifecycle.sync_ledger_from_workspace(root)
             self.assertEqual(lifecycle.evaluate_repository(root, target_change="alpha")["state_key"], "TDD_ACTIVE")
-            (root / ".ship/state.json").unlink()
+            (root / ".agentflow/state.json").unlink()
             lifecycle.sync_ledger_from_workspace(root)
             self.assertEqual(lifecycle.evaluate_repository(root, target_change="alpha")["state_key"], "DESIGN_APPROVAL_REQUIRED")

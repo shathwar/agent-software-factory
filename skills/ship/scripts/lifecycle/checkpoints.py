@@ -11,7 +11,10 @@ import functools
 from typing import Any, Callable, Dict, List, Optional
 
 from .trailers import canonicalize_gate_name
-from .paths import repository_path, resolve_change_path, validate_change_id
+from .paths import (
+    repository_path, resolve_change_path, validate_change_id,
+    get_checkpoints_dir, agentflow_path,
+)
 
 
 def _backup_path(src: Path, dest: Path) -> None:
@@ -87,7 +90,7 @@ class CheckpointManager:
                     env = {**os.environ, "GIT_INDEX_FILE": str(Path(idx_dir) / "index"), "GIT_LITERAL_PATHSPECS": "1"}
                     self.vcs.run_cmd(repo_root, "read-tree", commit_sha, env=env, check=True)
                     candidates = self.vcs.run_cmd(repo_root, "ls-files", "--cached", "--others", "--exclude-standard", "-z", env=env, check=True, text=False).stdout.split(b"\0")
-                    excluded = (b".scratch", b"scratch", b".gemini", b".ship")
+                    excluded = (b".agentflow", b".scratch", b"scratch", b".gemini", b".ship")
                     paths = sorted({p for p in candidates if p and not any(p == x or p.startswith(x + b"/") for x in excluded)})
                     if paths:
                         pathspec = Path(idx_dir) / "paths"
@@ -108,9 +111,9 @@ class CheckpointManager:
             except Exception as exc:
                 raise RuntimeError("Checkpoint reference could not be saved") from exc
 
-        chk_dir = repository_path(repo_root, ".scratch/checkpoints")
+        chk_dir = get_checkpoints_dir(repo_root)
         chk_dir.mkdir(parents=True, exist_ok=True)
-        receipt_file = repository_path(repo_root, f".scratch/checkpoints/{resolved_change}_{canonical_tag}.json")
+        receipt_file = chk_dir / f"{resolved_change}_{canonical_tag}.json"
         receipt_data = {
             "change": resolved_change,
             "gate": canonical_tag,
@@ -152,9 +155,9 @@ class CheckpointManager:
 
         git_info = self.vcs.get_info(repo_root)
         timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        backup_dir = repository_path(repo_root, f".scratch/rollback_{timestamp_str}")
+        backup_dir = agentflow_path(repo_root, f"backups/rollback_{timestamp_str}")
 
-        chk_file = repository_path(repo_root, f".scratch/checkpoints/{resolved_change}_{canonical_tag}.json")
+        chk_file = get_checkpoints_dir(repo_root) / f"{resolved_change}_{canonical_tag}.json"
         target_tag = f"ship/{resolved_change}/{canonical_tag}"
         target_ref = f"refs/ship/{resolved_change}/{canonical_tag}"
 
@@ -219,7 +222,7 @@ class CheckpointManager:
                         if p not in changed_files:
                             changed_files.append(p)
 
-                    ignored_prefixes = (".scratch/", "scratch/", ".ship/", "ship/", ".gemini/", ".git/")
+                    ignored_prefixes = (".agentflow/", ".scratch/", "scratch/", ".ship/", "ship/", ".gemini/", ".git/")
                     tasks_rel = f"openspec/changes/{resolved_change}/tasks.md"
 
                     if tasks_rel not in changed_files and (repo_root / tasks_rel).exists():

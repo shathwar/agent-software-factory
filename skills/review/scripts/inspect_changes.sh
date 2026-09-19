@@ -90,7 +90,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Options:"
             echo "  --base <ref>         Base branch or ref to diff working tree against (e.g. 'main')"
-            echo "  --scope <dir>        Restrict caller grep to subproject directory (auto-detects .ship.json scope)"
+            echo "  --scope <dir>        Restrict caller grep to subproject directory (auto-detects .agentflow.json scope)"
             echo "  --max-diff-lines <N> Maximum diff lines to output before truncating (default: 2000)"
             echo "  --no-diff            Omit the full unified diff output"
             echo "  --full-diff          Print the full unified diff output (default)"
@@ -120,8 +120,8 @@ fi
 # --- 2. Resolve Branch, Base & Target Scope ---
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "HEAD")
 
-if [[ -z "$SCOPE_DIR" && -f ".ship.json" ]]; then
-    DETECTED_SCOPE=$(sed -n -E 's/.*"scope"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' .ship.json 2>/dev/null | head -n 1 || true)
+if [[ -z "$SCOPE_DIR" && -f ".agentflow.json" ]]; then
+    DETECTED_SCOPE=$(sed -n -E 's/.*"scope"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' .agentflow.json 2>/dev/null | head -n 1 || true)
     if [[ -n "$DETECTED_SCOPE" && "$DETECTED_SCOPE" != "." ]]; then
         SCOPE_DIR="$DETECTED_SCOPE"
     fi
@@ -282,10 +282,10 @@ fi
 SPEC_FILES=()
 while IFS= read -r -d '' f; do
     contains "$f" ${SPEC_FILES[@]+"${SPEC_FILES[@]}"} || SPEC_FILES+=("$f")
-done < <(git ls-files -z --cached --others --exclude-standard "*spec*.md" "*PRD*.md" "*RFC*.md" "docs/specs/*" "docs/rfcs/*" "docs/adr/*" ".scratch/*" "specs/*" "openspec/*" 2>/dev/null || true)
+done < <(git ls-files -z --cached --others --exclude-standard "*spec*.md" "*PRD*.md" "*RFC*.md" "docs/specs/*" "docs/rfcs/*" "docs/adr/*" ".agentflow/*" ".scratch/*" "specs/*" "openspec/*" 2>/dev/null || true)
 
 # Also check untracked or ignored scratch, spec, adr, and openspec directories on disk
-for scratch_dir in .scratch scratch docs/specs specs docs/adr openspec; do
+for scratch_dir in .agentflow .scratch scratch docs/specs specs docs/adr openspec; do
     if [[ -d "$scratch_dir" ]]; then
         while IFS= read -r -d '' sf; do
             clean_sf="${sf#./}"

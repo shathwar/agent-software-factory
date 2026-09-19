@@ -69,7 +69,7 @@ def get_next_turn_contract(
                 f"Design digest computed via inspect_lifecycle.py --change {target_change} --design-fingerprint.",
                 f"Checkpoint recorded via inspect_lifecycle.py --change {target_change} --checkpoint design.",
             ],
-            output_evidence="ADR + OpenSpec package + design checkpoint in .scratch/checkpoints/",
+            output_evidence="ADR + OpenSpec package + design checkpoint in .agentflow/checkpoints/",
             action_prompt=f"Execute design turn for change '{target_change}'. {design_actions[state_key]} Obtain approval of the completed package before implementation.",
             suggested_command=f"ship checkpoint design --change {target_change}",
             suggested_mcp_tool="ship_checkpoint",
@@ -97,7 +97,7 @@ def get_next_turn_contract(
                 "Explicit confirmation obtained from user ('Proceed' / approval).",
                 f"Approval recorded via inspect_lifecycle.py --change {target_change} --approve-design <digest> --approved-by <identity>.",
             ],
-            output_evidence=f"Design approval recorded in .ship/state.json for change '{target_change}'",
+            output_evidence=f"Design approval recorded in .agentflow/state.json for change '{target_change}'",
             action_prompt=f"Present design package for '{target_change}' to user. On confirmation, record approval in ledger using exact design digest.",
             suggested_command=f"ship approve {target_change} <digest> --approved-by <identity>",
             suggested_mcp_tool="ship_approve_design",
@@ -115,10 +115,10 @@ def get_next_turn_contract(
             inputs={
                 "change_id": target_change,
                 "active_spikes": spikes,
-                "sandbox_dir": str(spikes[0]) if (spikes and str(spikes[0]).startswith(".scratch")) else (f".scratch/{spikes[0]}" if spikes else ".scratch/spike/"),
+                "sandbox_dir": str(spikes[0]) if spikes else ".agentflow/spikes/",
             },
             hard_constraints=[
-                "Sandbox Isolation: NEVER write prototype code to production paths (src/, lib/). Work strictly in .scratch/.",
+                "Sandbox Isolation: NEVER write prototype code to production paths (src/, lib/). Work strictly in .agentflow/spikes/.",
                 "Falsifiable SLI: Define explicit numerical hypothesis before measuring.",
                 "Teardown Mandate: ALL ephemeral containers and processes must be torn down upon completion.",
             ],
@@ -128,7 +128,7 @@ def get_next_turn_contract(
                 "Verdict and SLI table synced to active ADR or OpenSpec package.",
             ],
             output_evidence="Empirical benchmark report and verdict bridged to design specification",
-            action_prompt=f"Execute spike in .scratch/ to answer empirical blocker for '{target_change}'. Settle design question and bridge verdict.",
+            action_prompt=f"Execute spike in .agentflow/spikes/ to answer empirical blocker for '{target_change}'. Settle design question and bridge verdict.",
             suggested_command="ship spike '<benchmark_command>'",
             suggested_mcp_tool="ship_spike_run",
             suggested_mcp_args={"command": "<benchmark_command>"},
@@ -204,9 +204,9 @@ def get_next_turn_contract(
             ],
             output_evidence="Judge-approved review_report.json with PASS verdict and verified test evidence",
             action_prompt=f"Execute adversarial code review on working tree diff for '{target_change}'. Run perspectives, adjudicate via Judge, and record report.",
-            suggested_command=f"ship review validate .scratch/{target_change}/review_report.json",
+            suggested_command=f"ship review validate .agentflow/reviews/{target_change}/review_report.json",
             suggested_mcp_tool="ship_review_validate",
-            suggested_mcp_args={"report_path": f".scratch/{target_change}/review_report.json"},
+            suggested_mcp_args={"report_path": f".agentflow/reviews/{target_change}/review_report.json"},
         )
 
     if state_key == "DELIVERY_READY":

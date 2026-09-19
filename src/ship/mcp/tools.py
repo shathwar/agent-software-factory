@@ -170,7 +170,7 @@ def handle_ship_record_review(args: Dict[str, Any]) -> Dict[str, Any]:
     change = args.get("change")
     report_path = args.get("report_path")
     if not report_path and args.get("report_data"):
-        scratch = root / ".scratch" / (change or "default")
+        scratch = root / ".agentflow" / "reviews" / (change or "default")
         scratch.mkdir(parents=True, exist_ok=True)
         tmp_file = scratch / "review_report.json"
         tmp_file.write_text(json.dumps(args["report_data"], indent=2), encoding="utf-8")

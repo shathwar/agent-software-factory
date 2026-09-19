@@ -35,7 +35,7 @@ TEST_FILE_PATTERNS = [
 
 # Exclusion patterns for non-production logic
 EXCLUDE_PATH_PATTERNS = [
-    re.compile(r"(?:^|[\\/])(?:\.git|\.scratch|scratch|\.github|docs|dist|build|node_modules|venv|\.venv)[\\/]"),
+    re.compile(r"(?:^|[\\/])(?:\.git|\.agentflow|\.scratch|scratch|\.github|docs|dist|build|node_modules|venv|\.venv)[\\/]"),
     re.compile(r"\.(?:md|json|yml|yaml|toml|ini|cfg|txt|sql|html|css|scss|svg|png|jpg)$"),
 ]
 

@@ -14,7 +14,10 @@ from .evidence import (
     design_fingerprint, validate_design_approval, inspect_spikes,
 )
 from .vcs import GitClient
-from .paths import repository_path, validate_change_id
+from .paths import (
+    repository_path, validate_change_id, agentflow_path,
+    get_state_file, get_lock_file, get_checkpoints_dir,
+)
 from .transactions import recover_archive, sync_directory
 
 try:
@@ -70,18 +73,18 @@ def read_ledger_file(path: Path) -> Optional[Dict[str, Any]]:
     return data
 
 
-def ensure_gitignore_has_ship(repo_root: Path) -> None:
-    """Ensure .ship/ is ignored in git without creating unwanted untracked working-tree files."""
+def ensure_gitignore_has_agentflow(repo_root: Path) -> None:
+    """Ensure .agentflow/ is ignored in git without creating unwanted untracked working-tree files."""
     def _append_ignore_entry(target: Path) -> bool:
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
             content = target.read_text(encoding="utf-8") if target.exists() else ""
             lines = [l.strip() for l in content.splitlines()]
-            if ".ship" not in lines and ".ship/" not in lines:
+            if ".agentflow" not in lines and ".agentflow/" not in lines:
                 with target.open("a", encoding="utf-8") as f:
                     if content and not content.endswith("\n"):
                         f.write("\n")
-                    f.write(".ship/\n")
+                    f.write(".agentflow/\n")
             return True
         except Exception:
             return False
@@ -92,6 +95,9 @@ def ensure_gitignore_has_ship(repo_root: Path) -> None:
         appended = _append_ignore_entry(info_exclude)
     if not appended:
         _append_ignore_entry(repo_root / ".gitignore")
+
+
+ensure_gitignore_has_ship = ensure_gitignore_has_agentflow
 
 
 def is_review_blocker(blocker: str) -> bool:
@@ -149,19 +155,19 @@ def create_empty_change_entry(change_id: str) -> Dict[str, Any]:
 
 
 class FileLedgerStore:
-    """Thread-safe, atomic state store for .ship/state.json."""
+    """Thread-safe, atomic state store for .agentflow/state.json."""
 
     @staticmethod
     def get_ledger_path(repo_root: Path) -> Path:
-        return repository_path(repo_root, ".ship/state.json")
+        return get_state_file(repo_root)
 
     @classmethod
     @contextmanager
     def lock(cls, repo_root: Path, timeout_sec: float = 10.0):
-        ship_dir = repository_path(repo_root, ".ship")
-        ship_dir.mkdir(parents=True, exist_ok=True)
+        agentflow_dir = agentflow_path(repo_root)
+        agentflow_dir.mkdir(parents=True, exist_ok=True)
         sync_directory(repo_root)
-        lock_file = repository_path(repo_root, ".ship/state.lock").resolve()
+        lock_file = get_lock_file(repo_root).resolve()
         lock_key = str(lock_file)
 
         if not hasattr(_tls, "locks"):
@@ -219,12 +225,12 @@ class FileLedgerStore:
     def save(cls, repo_root: Path, ledger: Dict[str, Any]) -> None:
         with cls.lock(repo_root):
             read_ledger_file(cls.get_ledger_path(repo_root))
-            ship_dir = repository_path(repo_root, ".ship")
-            ship_dir.mkdir(parents=True, exist_ok=True)
-            ensure_gitignore_has_ship(repo_root)
+            agentflow_dir = agentflow_path(repo_root)
+            agentflow_dir.mkdir(parents=True, exist_ok=True)
+            ensure_gitignore_has_agentflow(repo_root)
             ledger_path = cls.get_ledger_path(repo_root)
 
-            temp_fd, temp_path = tempfile.mkstemp(prefix="state_", suffix=".json.tmp", dir=str(ship_dir))
+            temp_fd, temp_path = tempfile.mkstemp(prefix="state_", suffix=".json.tmp", dir=str(agentflow_dir))
             try:
                 with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
                     json.dump(ledger, f, indent=2)
@@ -346,7 +352,7 @@ class FileLedgerStore:
                     for key in ("is_judge", "is_envelope", "judge_report_valid", "judge_report_errors", "change"):
                         entry["evidence"]["review"][key] = review.get(key)
 
-                chk_dir = repo_root / ".scratch" / "checkpoints"
+                chk_dir = get_checkpoints_dir(repo_root)
                 if chk_dir.exists():
                     for cf in chk_dir.glob(f"{change}_*.json"):
                         cdata = read_json_file(cf)

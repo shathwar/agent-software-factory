@@ -52,7 +52,7 @@ class AgentWorkflowTrialTests(unittest.TestCase):
                 lifecycle.apply_and_archive_openspec(root, "alpha")
 
             # Adversarial review conducted against current dirty working tree snapshot
-            report_path = root / ".scratch/alpha/review_report.json"
+            report_path = root / ".agentflow/reviews/alpha/review_report.json"
             report = json.loads(report_path.read_text())
             report["working_tree_fingerprint"] = compute_working_tree_fingerprint(root)
             report_path.write_text(json.dumps(report))
@@ -100,7 +100,7 @@ class AgentWorkflowTrialTests(unittest.TestCase):
             self.assertEqual(lifecycle.get_active_change(root), "alpha")
 
             # Bind alpha's review report to current workspace including the new package
-            report_path = root / ".scratch/alpha/review_report.json"
+            report_path = root / ".agentflow/reviews/alpha/review_report.json"
             report = json.loads(report_path.read_text())
             report["working_tree_fingerprint"] = compute_working_tree_fingerprint(root)
             report_path.write_text(json.dumps(report))
@@ -113,7 +113,7 @@ class AgentWorkflowTrialTests(unittest.TestCase):
 
             # Alpha must remain active and delivery-ready without pollution
             self.assertEqual(lifecycle.get_active_change(root), "alpha")
-            state = json.loads((root / ".ship/state.json").read_text())
+            state = json.loads((root / ".agentflow/state.json").read_text())
             self.assertEqual(state["active_change_id"], "alpha")
 
             alpha_eval = lifecycle.evaluate_repository(root, target_change="alpha")
@@ -173,7 +173,7 @@ class AgentWorkflowTrialTests(unittest.TestCase):
             # Simulate mid-archive crash leaving transaction journal via begin_archive
             op_id = uuid.uuid4().hex
             begin_archive(root, op_id, "checkout", root / "openspec/archive/2026-09-17-checkout", {})
-            journal = root / ".ship/archive-transaction.json"
+            journal = root / ".agentflow/archive-transaction.json"
             self.assertTrue(journal.exists())
 
             # Next CLI / inspection invocation triggers crash recovery automatically
@@ -217,7 +217,7 @@ class AgentWorkflowTrialTests(unittest.TestCase):
             FileLedgerStore.approve_design(root, "alpha", new_digest, "team-lead")
 
             # Re-bind review report to current fingerprint and verify readiness
-            report_path = root / ".scratch/alpha/review_report.json"
+            report_path = root / ".agentflow/reviews/alpha/review_report.json"
             report = json.loads(report_path.read_text())
             report["working_tree_fingerprint"] = compute_working_tree_fingerprint(root)
             report_path.write_text(json.dumps(report))
@@ -321,7 +321,7 @@ class AgentWorkflowTrialTests(unittest.TestCase):
             cli("--change", "billing", "--record-tests", "pass")
 
             # 3. Record Judge review report
-            review_file = project_dir / ".scratch/billing/review_report.json"
+            review_file = project_dir / ".agentflow/reviews/billing/review_report.json"
             review_file.parent.mkdir(parents=True, exist_ok=True)
             tree_fp = cli("--fingerprint").stdout.strip()
             review_file.write_text(json.dumps({
@@ -422,7 +422,7 @@ class AgentWorkflowTrialTests(unittest.TestCase):
 
             # Review Judge executes and generates delivery evidence envelope
             tree_fp = compute_working_tree_fingerprint(root)
-            review_file = root / f".scratch/{change_id}/review_report.json"
+            review_file = root / f".agentflow/reviews/{change_id}/review_report.json"
             review_file.parent.mkdir(parents=True, exist_ok=True)
             review_file.write_text(json.dumps({
                 "change": change_id, "reviewer": "judge", "status": "complete", "verdict": "PASS",
@@ -447,7 +447,7 @@ class AgentWorkflowTrialTests(unittest.TestCase):
             # ------------------------------------------------------------------
             # Provenance Reconstruction Verification
             # ------------------------------------------------------------------
-            state = json.loads((root / ".ship/state.json").read_text())
+            state = json.loads((root / ".agentflow/state.json").read_text())
             turns = state["changes"][change_id].get("turns", [])
             self.assertGreaterEqual(len(turns), 4)
 

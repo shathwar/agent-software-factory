@@ -28,3 +28,41 @@ def repository_path(repo_root: Path, relative: str) -> Path:
 
 def resolve_change_path(repo_root: Path, change_id: str) -> Path:
     return repository_path(repo_root, f"openspec/changes/{validate_change_id(change_id)}")
+
+
+AGENTFLOW_DIR = ".agentflow"
+
+
+def agentflow_path(repo_root: Path, relative: str = "") -> Path:
+    """Resolve a managed path within the .agentflow directory."""
+    rel = f"{AGENTFLOW_DIR}/{relative}".rstrip("/") if relative else AGENTFLOW_DIR
+    return repository_path(repo_root, rel)
+
+
+def get_state_file(repo_root: Path) -> Path:
+    return agentflow_path(repo_root, "state.json")
+
+
+def get_lock_file(repo_root: Path) -> Path:
+    return agentflow_path(repo_root, "state.lock")
+
+
+def get_journal_file(repo_root: Path) -> Path:
+    return agentflow_path(repo_root, "archive-transaction.json")
+
+
+def get_checkpoints_dir(repo_root: Path) -> Path:
+    return agentflow_path(repo_root, "checkpoints")
+
+
+def get_spikes_dir(repo_root: Path) -> Path:
+    return agentflow_path(repo_root, "spikes")
+
+
+def get_reviews_dir(repo_root: Path) -> Path:
+    return agentflow_path(repo_root, "reviews")
+
+
+def get_tmp_dir(repo_root: Path) -> Path:
+    return agentflow_path(repo_root, "tmp")
+

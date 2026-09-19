@@ -78,7 +78,7 @@ class GitClient:
         except Exception:
             pass
 
-        ignored_prefixes = (".scratch/", "scratch/", ".ship/", "openspec/archive/", "openspec/.", ".gemini/", ".git/")
+        ignored_prefixes = (".agentflow/", ".scratch/", "scratch/", ".ship/", "openspec/archive/", "openspec/.", ".gemini/", ".git/")
         try:
             untracked_res = self.run_cmd(repo_root, "ls-files", "--others", "--exclude-standard", "-z", text=False)
             if untracked_res.returncode == 0:
@@ -132,7 +132,7 @@ class GitClient:
             info["modified_count"] = sum(1 for l in status_lines if not l.startswith("??"))
             info["untracked_count"] = sum(1 for l in status_lines if l.startswith("??"))
 
-            ignored_prefixes = (".scratch/", "scratch/", ".ship/", "openspec/archive/", "openspec/.", ".gemini/", ".git/")
+            ignored_prefixes = (".agentflow/", ".scratch/", "scratch/", ".ship/", "openspec/archive/", "openspec/.", ".gemini/", ".git/")
             modified_sources = []
             for l in status_lines:
                 filename = l[3:].strip()
