@@ -398,7 +398,11 @@ class CapabilityOperation(str, Enum):
     EXECUTE = "EXECUTE"
     GIT = "GIT"
     NETWORK = "NETWORK"
+    NETWORK_READ = "NETWORK_READ"
+    NETWORK_WRITE = "NETWORK_WRITE"
     SECRET_READ = "SECRET_READ"
+    CLOUD_MUTATE = "CLOUD_MUTATE"
+    GITHUB_WRITE = "GITHUB_WRITE"
 
 
 class ExecutionRing(str, Enum):

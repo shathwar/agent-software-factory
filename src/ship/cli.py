@@ -863,7 +863,7 @@ Actions:
     if action == "grant":
         parser.add_argument("agent_id", nargs="?", default=None, help="Agent ID holding capability")
         parser.add_argument("--agent", dest="agent_opt", default=None, help="Agent ID")
-        parser.add_argument("--op", "--operation", dest="operation", required=True, help="Capability operation (READ, WRITE, DELETE, EXECUTE, GIT, NETWORK, SECRET_READ)")
+        parser.add_argument("--op", "--operation", dest="operation", required=True, help="Capability operation (READ, WRITE, DELETE, EXECUTE, GIT, NETWORK, NETWORK_READ, NETWORK_WRITE, SECRET_READ, CLOUD_MUTATE, GITHUB_WRITE)")
         parser.add_argument("--target", required=True, help="Target resource path, glob, or command pattern")
         parser.add_argument("--task", dest="task_id", default=None, help="Bound task ID (e.g. 1.1)")
         parser.add_argument("--session", dest="session_id", default=None, help="Bound session ID")

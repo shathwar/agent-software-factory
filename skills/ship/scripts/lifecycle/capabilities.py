@@ -18,6 +18,7 @@ import fnmatch
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
+from urllib.parse import urlparse
 import uuid
 
 from .models import (
@@ -51,7 +52,7 @@ def _is_expired(expires_at: Optional[str], now: Optional[datetime] = None) -> bo
 
 
 def _target_matches(cap_pattern: str, requested_target: str) -> bool:
-    """Evaluate whether cap_pattern matches requested_target path/pattern."""
+    """Evaluate whether cap_pattern matches requested_target path, URL, ARN, or secret pattern."""
     p = cap_pattern.strip()
     t = requested_target.strip()
 
@@ -68,15 +69,37 @@ def _target_matches(cap_pattern: str, requested_target: str) -> bool:
     if p == t:
         return True
 
-    # fnmatch check
+    # Case-sensitive fnmatch
     if fnmatch.fnmatchcase(t, p):
         return True
+
+    # Case-insensitive fnmatch (for secrets, env vars, cloud resources)
+    if fnmatch.fnmatchcase(t.upper(), p.upper()):
+        return True
+
+    # URL / Hostname matching
+    if "://" in t:
+        try:
+            parsed = urlparse(t)
+            host = parsed.netloc.split(":")[0]
+            if host == p or fnmatch.fnmatchcase(host, p):
+                return True
+            # Scheme + host or URL prefix match
+            prefix = p.rstrip("*")
+            if t.startswith(prefix) or f"{parsed.scheme}://{parsed.netloc}".startswith(prefix):
+                return True
+        except Exception:
+            pass
 
     # Subdirectory/prefix matching (e.g. src/auth matches src/auth/login.py)
     if not p.endswith("*") and not p.endswith("/"):
         p_dir = p + "/*"
         if fnmatch.fnmatchcase(t, p_dir):
             return True
+
+    # Namespace / ARN prefix matching (e.g. aws:s3 matches aws:s3:::bucket or github:pr matches github:pr:create)
+    if not p.endswith("*") and (t.startswith(p + ":") or t.startswith(p + "/")):
+        return True
 
     return False
 
@@ -99,6 +122,7 @@ class CapabilityManager:
         Ring 2: Production Code & Tests (TDD / Ship Dev)
         Ring 3: Disposable Workspace & Scratch (Sandboxed)
         """
+        op = str(operation.value if hasattr(operation, "value") else operation).upper()
         norm = target.replace("\\", "/").strip()
         if norm.startswith("./"):
             norm = norm[2:]
@@ -117,7 +141,14 @@ class CapabilityManager:
             if fnmatch.fnmatchcase(norm, pat) or norm == pat:
                 return ExecutionRing.RING_0_HYPERVISOR
 
-        # Ring 1: Architecture & Governance
+        # Ring 1: Architecture & Governance, Secrets, Cloud, GitHub
+        if op in ("SECRET_READ", "CLOUD_MUTATE", "GITHUB_WRITE"):
+            return ExecutionRing.RING_1_GOVERNANCE
+        if norm.startswith(("secret:", "env:", "aws:", "azure:", "gcp:", "db:", "github:")):
+            return ExecutionRing.RING_1_GOVERNANCE
+        if norm in (".env", ".env.local", ".env.production", ".env.staging"):
+            return ExecutionRing.RING_1_GOVERNANCE
+
         ring_1_patterns = [
             ".agentflow.json",
             ".agentflow/config*",
@@ -135,7 +166,10 @@ class CapabilityManager:
             if fnmatch.fnmatchcase(norm, pat) or fnmatch.fnmatchcase(norm.lower(), pat.lower()):
                 return ExecutionRing.RING_1_GOVERNANCE
 
-        # Ring 3: Disposable Workspace & Scratch
+        # Ring 3: Disposable Workspace & Scratch & Network
+        if op in ("NETWORK", "NETWORK_READ", "NETWORK_WRITE") or "://" in norm:
+            return ExecutionRing.RING_3_WORKSPACE
+
         ring_3_patterns = [
             ".agentflow/spikes/*",
             "scratch/*",
@@ -389,14 +423,23 @@ class CapabilityManager:
 
         # 3. Capability Matching Gate: Must hold an active, matching capability
         caps = change.get("capabilities", {})
-        matching_cap: Optional[Capability] = None
+        matching_caps: List[Capability] = []
         expired_match: Optional[Capability] = None
+
+        def _op_matches(granted_op: str, req_op: str) -> bool:
+            if granted_op in (req_op, "*", "ALL"):
+                return True
+            if req_op in ("NETWORK_READ", "NETWORK_WRITE") and granted_op == "NETWORK":
+                return True
+            if req_op == "NETWORK" and granted_op in ("NETWORK_READ", "NETWORK_WRITE"):
+                return True
+            return False
 
         for d in caps.values():
             c = Capability.from_dict(d)
             if c.agent_id != agent_id:
                 continue
-            if c.operation not in (op_val, "*", "ALL"):
+            if not _op_matches(c.operation, op_val):
                 continue
             if not _target_matches(c.target, target):
                 continue
@@ -412,10 +455,9 @@ class CapabilityManager:
                 expired_match = c
                 continue
 
-            matching_cap = c
-            break
+            matching_caps.append(c)
 
-        if not matching_cap:
+        if not matching_caps:
             if expired_match:
                 return _record_decision(AccessDecision(
                     allowed=False,
@@ -439,33 +481,6 @@ class CapabilityManager:
                 timestamp=now_iso,
             ))
 
-        # 4. Ring 1 Policy Gate: Architecture & Governance mutation requires authorized ADR or design approval
-        if ring == ExecutionRing.RING_1_GOVERNANCE and op_val in (
-            CapabilityOperation.WRITE.value,
-            CapabilityOperation.DELETE.value,
-        ):
-            ref = matching_cap.approval_ref.lower()
-            valid_approval = (
-                ref.startswith("adr:")
-                or ref.startswith("design:")
-                or ref.startswith("gate:design")
-                or ref.startswith("human:")
-                or ref.startswith("tech_lead:")
-                or "adr" in ref
-            )
-            if not valid_approval:
-                return _record_decision(AccessDecision(
-                    allowed=False,
-                    reason="Ring 1 (Architecture & Governance) mutations require an approved ADR or design gate authorization ref",
-                    ring=ring_val,
-                    agent_id=agent_id,
-                    operation=op_val,
-                    target=target,
-                    capability_id=matching_cap.capability_id,
-                    violation_code="RING_1_UNAUTHORIZED",
-                    timestamp=now_iso,
-                ))
-
         # 5. Ring 2 & Lease Gate: Production code mutation requires an active Task Lease covering target file
         if ring == ExecutionRing.RING_2_PRODUCTION and op_val in (
             CapabilityOperation.WRITE.value,
@@ -479,7 +494,7 @@ class CapabilityManager:
                     agent_id=agent_id,
                     operation=op_val,
                     target=target,
-                    capability_id=matching_cap.capability_id,
+                    capability_id=matching_caps[0].capability_id,
                     violation_code="LEASE_REQUIRED",
                     timestamp=now_iso,
                 ))
@@ -495,7 +510,7 @@ class CapabilityManager:
                     agent_id=agent_id,
                     operation=op_val,
                     target=target,
-                    capability_id=matching_cap.capability_id,
+                    capability_id=matching_caps[0].capability_id,
                     violation_code="LEASE_REQUIRED",
                     timestamp=now_iso,
                 ))
@@ -509,7 +524,7 @@ class CapabilityManager:
                     agent_id=agent_id,
                     operation=op_val,
                     target=target,
-                    capability_id=matching_cap.capability_id,
+                    capability_id=matching_caps[0].capability_id,
                     violation_code="LEASE_OWNER_MISMATCH",
                     timestamp=now_iso,
                 ))
@@ -522,7 +537,7 @@ class CapabilityManager:
                     agent_id=agent_id,
                     operation=op_val,
                     target=target,
-                    capability_id=matching_cap.capability_id,
+                    capability_id=matching_caps[0].capability_id,
                     violation_code="LEASE_TOKEN_INVALID",
                     timestamp=now_iso,
                 ))
@@ -535,7 +550,7 @@ class CapabilityManager:
                     agent_id=agent_id,
                     operation=op_val,
                     target=target,
-                    capability_id=matching_cap.capability_id,
+                    capability_id=matching_caps[0].capability_id,
                     violation_code="LEASE_EXPIRED",
                     timestamp=now_iso,
                 ))
@@ -554,21 +569,144 @@ class CapabilityManager:
                         agent_id=agent_id,
                         operation=op_val,
                         target=target,
-                        capability_id=matching_cap.capability_id,
+                        capability_id=matching_caps[0].capability_id,
                         violation_code="LEASE_FILE_MISMATCH",
                         timestamp=now_iso,
                     ))
 
-        # All gates passed: ALLOW
-        decision = AccessDecision(
-            allowed=True,
-            reason=f"Capability '{matching_cap.capability_id}' authorizes {op_val} on '{target}' in {ring_val}",
+        # Check candidate capabilities against specialized policy gates
+        last_failure: Optional[AccessDecision] = None
+        for cap in matching_caps:
+            ref = cap.approval_ref.lower()
+
+            # 4. Ring 1 Policy Gate: Architecture & Governance mutation requires authorized ADR or design approval
+            if ring == ExecutionRing.RING_1_GOVERNANCE and op_val in (
+                CapabilityOperation.WRITE.value,
+                CapabilityOperation.DELETE.value,
+            ):
+                valid_approval = (
+                    ref.startswith("adr:")
+                    or ref.startswith("design:")
+                    or ref.startswith("gate:design")
+                    or ref.startswith("human:")
+                    or ref.startswith("tech_lead:")
+                    or "adr" in ref
+                )
+                if not valid_approval:
+                    last_failure = AccessDecision(
+                        allowed=False,
+                        reason="Ring 1 (Architecture & Governance) mutations require an approved ADR or design gate authorization ref",
+                        ring=ring_val,
+                        agent_id=agent_id,
+                        operation=op_val,
+                        target=target,
+                        capability_id=cap.capability_id,
+                        violation_code="RING_1_UNAUTHORIZED",
+                        timestamp=now_iso,
+                    )
+                    continue
+
+            # 6. Network Write Policy Gate: outbound write requires security or tech lead approval
+            if op_val == CapabilityOperation.NETWORK_WRITE.value:
+                valid_net = (
+                    ref.startswith(("human:", "sec_lead:", "security:", "tech_lead:", "system:"))
+                    or "adr:" in ref
+                )
+                if not valid_net:
+                    last_failure = AccessDecision(
+                        allowed=False,
+                        reason=f"NETWORK_WRITE requires approved security/tech_lead reference, got '{cap.approval_ref}'",
+                        ring=ring_val,
+                        agent_id=agent_id,
+                        operation=op_val,
+                        target=target,
+                        capability_id=cap.capability_id,
+                        violation_code="NETWORK_WRITE_UNAUTHORIZED",
+                        timestamp=now_iso,
+                    )
+                    continue
+
+            # 7. Secret Access Policy Gate: reading credentials/secrets requires security lead or system authorization
+            if op_val == CapabilityOperation.SECRET_READ.value:
+                valid_secret = (
+                    ref.startswith(("human:", "sec_lead:", "security:", "system:"))
+                )
+                if not valid_secret:
+                    last_failure = AccessDecision(
+                        allowed=False,
+                        reason=f"SECRET_READ requires security lead approval reference, got '{cap.approval_ref}'",
+                        ring=ring_val,
+                        agent_id=agent_id,
+                        operation=op_val,
+                        target=target,
+                        capability_id=cap.capability_id,
+                        violation_code="SECRET_ACCESS_UNAUTHORIZED",
+                        timestamp=now_iso,
+                    )
+                    continue
+
+            # 8. Cloud Mutate Policy Gate: cloud infrastructure mutation requires DevOps or Tech Lead approval
+            if op_val == CapabilityOperation.CLOUD_MUTATE.value:
+                valid_cloud = (
+                    ref.startswith(("human:", "devops:", "tech_lead:", "system:"))
+                    or "adr:" in ref
+                )
+                if not valid_cloud:
+                    last_failure = AccessDecision(
+                        allowed=False,
+                        reason=f"CLOUD_MUTATE requires DevOps/Tech Lead approval reference, got '{cap.approval_ref}'",
+                        ring=ring_val,
+                        agent_id=agent_id,
+                        operation=op_val,
+                        target=target,
+                        capability_id=cap.capability_id,
+                        violation_code="CLOUD_MUTATE_UNAUTHORIZED",
+                        timestamp=now_iso,
+                    )
+                    continue
+
+            # 9. GitHub Write Policy Gate: mutating external GitHub state requires maintainer or tech lead approval
+            if op_val == CapabilityOperation.GITHUB_WRITE.value:
+                valid_gh = (
+                    ref.startswith(("human:", "maintainer:", "tech_lead:", "system:"))
+                    or "adr:" in ref
+                )
+                if not valid_gh:
+                    last_failure = AccessDecision(
+                        allowed=False,
+                        reason=f"GITHUB_WRITE requires maintainer/tech lead approval reference, got '{cap.approval_ref}'",
+                        ring=ring_val,
+                        agent_id=agent_id,
+                        operation=op_val,
+                        target=target,
+                        capability_id=cap.capability_id,
+                        violation_code="GITHUB_WRITE_UNAUTHORIZED",
+                        timestamp=now_iso,
+                    )
+                    continue
+
+            # All gates passed: ALLOW
+            return _record_decision(AccessDecision(
+                allowed=True,
+                reason=f"Capability '{cap.capability_id}' authorizes {op_val} on '{target}' in {ring_val}",
+                ring=ring_val,
+                agent_id=agent_id,
+                operation=op_val,
+                target=target,
+                capability_id=cap.capability_id,
+                timestamp=now_iso,
+            ))
+
+        if last_failure:
+            return _record_decision(last_failure)
+
+        return _record_decision(AccessDecision(
+            allowed=False,
+            reason=f"No capability authorizes {op_val} on '{target}'",
             ring=ring_val,
             agent_id=agent_id,
             operation=op_val,
             target=target,
-            capability_id=matching_cap.capability_id,
+            violation_code="NO_CAPABILITY",
             timestamp=now_iso,
-        )
-
-        return _record_decision(decision)
+        ))
