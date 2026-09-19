@@ -319,6 +319,15 @@ class CapabilityManager:
         ring = self.classify_target_ring(target, op_val)
         ring_val = ring.value if hasattr(ring, "value") else str(ring)
 
+        def _record_decision(dec: AccessDecision) -> AccessDecision:
+            with FileLedgerStore.lock(self.repo_root):
+                ledger_mut = FileLedgerStore.load(self.repo_root, auto_sync=False)
+                ch_mut = ledger_mut.setdefault("changes", {}).setdefault(cid, {})
+                audit_log = ch_mut.setdefault("security_audit", [])
+                audit_log.append(dec.to_dict())
+                FileLedgerStore.save(self.repo_root, ledger_mut)
+            return dec
+
         ledger = FileLedgerStore.load(self.repo_root, auto_sync=False)
         change = ledger.get("changes", {}).get(cid, {})
 
@@ -329,7 +338,7 @@ class CapabilityManager:
             sessions = change.get("provenance", {}).get("sessions", {})
             has_agent_session = any(s.get("agent_id") == agent_id for s in sessions.values())
             if not has_agent_session:
-                return AccessDecision(
+                return _record_decision(AccessDecision(
                     allowed=False,
                     reason=f"Principal '{agent_id}' is not registered in the provenance ledger",
                     ring=ring_val,
@@ -338,7 +347,7 @@ class CapabilityManager:
                     target=target,
                     violation_code="UNKNOWN_PRINCIPAL",
                     timestamp=now_iso,
-                )
+                ))
 
         # 2. Ring 0 Policy Gate: Autonomous agents cannot mutate Hypervisor & Ledger directly
         if ring == ExecutionRing.RING_0_HYPERVISOR and op_val in (
@@ -367,7 +376,7 @@ class CapabilityManager:
                     break
 
             if not has_hypervisor_grant:
-                return AccessDecision(
+                return _record_decision(AccessDecision(
                     allowed=False,
                     reason="Ring 0 (Hypervisor & Ledger) direct write access restricted to hypervisor/human approval",
                     ring=ring_val,
@@ -376,7 +385,7 @@ class CapabilityManager:
                     target=target,
                     violation_code="RING_0_RESTRICTED",
                     timestamp=now_iso,
-                )
+                ))
 
         # 3. Capability Matching Gate: Must hold an active, matching capability
         caps = change.get("capabilities", {})
@@ -408,7 +417,7 @@ class CapabilityManager:
 
         if not matching_cap:
             if expired_match:
-                return AccessDecision(
+                return _record_decision(AccessDecision(
                     allowed=False,
                     reason=f"Capability '{expired_match.capability_id}' for {op_val} on '{target}' expired at {expired_match.expires_at}",
                     ring=ring_val,
@@ -418,8 +427,8 @@ class CapabilityManager:
                     capability_id=expired_match.capability_id,
                     violation_code="CAPABILITY_EXPIRED",
                     timestamp=now_iso,
-                )
-            return AccessDecision(
+                ))
+            return _record_decision(AccessDecision(
                 allowed=False,
                 reason=f"No active capability authorizes agent '{agent_id}' to perform {op_val} on '{target}'",
                 ring=ring_val,
@@ -428,7 +437,7 @@ class CapabilityManager:
                 target=target,
                 violation_code="NO_CAPABILITY",
                 timestamp=now_iso,
-            )
+            ))
 
         # 4. Ring 1 Policy Gate: Architecture & Governance mutation requires authorized ADR or design approval
         if ring == ExecutionRing.RING_1_GOVERNANCE and op_val in (
@@ -445,7 +454,7 @@ class CapabilityManager:
                 or "adr" in ref
             )
             if not valid_approval:
-                return AccessDecision(
+                return _record_decision(AccessDecision(
                     allowed=False,
                     reason="Ring 1 (Architecture & Governance) mutations require an approved ADR or design gate authorization ref",
                     ring=ring_val,
@@ -455,7 +464,7 @@ class CapabilityManager:
                     capability_id=matching_cap.capability_id,
                     violation_code="RING_1_UNAUTHORIZED",
                     timestamp=now_iso,
-                )
+                ))
 
         # 5. Ring 2 & Lease Gate: Production code mutation requires an active Task Lease covering target file
         if ring == ExecutionRing.RING_2_PRODUCTION and op_val in (
@@ -463,7 +472,7 @@ class CapabilityManager:
             CapabilityOperation.DELETE.value,
         ):
             if not task_id:
-                return AccessDecision(
+                return _record_decision(AccessDecision(
                     allowed=False,
                     reason=f"Ring 2 file mutation on '{target}' requires an explicit task_id binding",
                     ring=ring_val,
@@ -473,13 +482,13 @@ class CapabilityManager:
                     capability_id=matching_cap.capability_id,
                     violation_code="LEASE_REQUIRED",
                     timestamp=now_iso,
-                )
+                ))
 
             # Query lease in coordination store
             leases = change.get("coordination", {}).get("leases", {})
             lease_data = leases.get(task_id)
             if not lease_data:
-                return AccessDecision(
+                return _record_decision(AccessDecision(
                     allowed=False,
                     reason=f"No active task lease found for task '{task_id}'",
                     ring=ring_val,
@@ -489,11 +498,11 @@ class CapabilityManager:
                     capability_id=matching_cap.capability_id,
                     violation_code="LEASE_REQUIRED",
                     timestamp=now_iso,
-                )
+                ))
 
             lease = TaskLease.from_dict(lease_data)
             if lease.owner_id != agent_id:
-                return AccessDecision(
+                return _record_decision(AccessDecision(
                     allowed=False,
                     reason=f"Task lease for task '{task_id}' is owned by '{lease.owner_id}', not '{agent_id}'",
                     ring=ring_val,
@@ -503,10 +512,10 @@ class CapabilityManager:
                     capability_id=matching_cap.capability_id,
                     violation_code="LEASE_OWNER_MISMATCH",
                     timestamp=now_iso,
-                )
+                ))
 
             if lease_token and lease.lease_token != lease_token:
-                return AccessDecision(
+                return _record_decision(AccessDecision(
                     allowed=False,
                     reason="Provided lease token does not match active lease token",
                     ring=ring_val,
@@ -516,10 +525,10 @@ class CapabilityManager:
                     capability_id=matching_cap.capability_id,
                     violation_code="LEASE_TOKEN_INVALID",
                     timestamp=now_iso,
-                )
+                ))
 
             if _is_expired(lease.expires_at, now_dt):
-                return AccessDecision(
+                return _record_decision(AccessDecision(
                     allowed=False,
                     reason=f"Task lease for task '{task_id}' expired at {lease.expires_at}",
                     ring=ring_val,
@@ -529,7 +538,7 @@ class CapabilityManager:
                     capability_id=matching_cap.capability_id,
                     violation_code="LEASE_EXPIRED",
                     timestamp=now_iso,
-                )
+                ))
 
             # Check target files boundaries if lease has target_files specified
             if lease.target_files:
@@ -538,7 +547,7 @@ class CapabilityManager:
                     for tf in lease.target_files
                 )
                 if not file_covered:
-                    return AccessDecision(
+                    return _record_decision(AccessDecision(
                         allowed=False,
                         reason=f"Target '{target}' is outside the leased file boundaries {lease.target_files}",
                         ring=ring_val,
@@ -548,7 +557,7 @@ class CapabilityManager:
                         capability_id=matching_cap.capability_id,
                         violation_code="LEASE_FILE_MISMATCH",
                         timestamp=now_iso,
-                    )
+                    ))
 
         # All gates passed: ALLOW
         decision = AccessDecision(
@@ -562,12 +571,4 @@ class CapabilityManager:
             timestamp=now_iso,
         )
 
-        # Record audit event into ledger
-        with FileLedgerStore.lock(self.repo_root):
-            ledger_mut = FileLedgerStore.load(self.repo_root, auto_sync=False)
-            ch_mut = ledger_mut.setdefault("changes", {}).setdefault(cid, {})
-            audit_log = ch_mut.setdefault("security_audit", [])
-            audit_log.append(decision.to_dict())
-            FileLedgerStore.save(self.repo_root, ledger_mut)
-
-        return decision
+        return _record_decision(decision)

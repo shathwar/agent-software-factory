@@ -66,8 +66,18 @@ def _hash_payload(payload: Any) -> str:
     return hashlib.sha256(norm.encode("utf-8")).hexdigest()
 
 
+def _is_passing_evidence(ev: Dict[str, Any]) -> bool:
+    """Return True if evidence payload represents a clean passing check (not a failure/remediation loop)."""
+    if ev.get("verdict") in ("PASS", "VERIFIED", "APPROVED"):
+        if ev.get("critical_or_high_count", 0) == 0 and not ev.get("failed_tests"):
+            return True
+    if ev.get("tests_passed") is True and ev.get("exit_code", 0) == 0 and not ev.get("failed_tests"):
+        return True
+    return False
+
+
 def detect_same_evidence(turns: List[Dict[str, Any]], max_same: int = 2) -> Tuple[bool, str]:
-    """Detect if an agent produced identical evidence payloads across consecutive turns."""
+    """Detect if an agent produced identical failing/remediation evidence payloads across consecutive turns."""
     evidence_hashes: List[str] = []
     for t in turns:
         # Only evaluate evidence produced in execution/remediation/verification cycles
@@ -75,6 +85,8 @@ def detect_same_evidence(turns: List[Dict[str, Any]], max_same: int = 2) -> Tupl
             continue
         ev = t.get("evidence")
         if ev and isinstance(ev, dict) and ev:
+            if _is_passing_evidence(ev):
+                continue
             evidence_hashes.append(_hash_payload(ev))
 
     if len(evidence_hashes) < max_same:

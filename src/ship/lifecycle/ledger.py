@@ -588,6 +588,7 @@ class FileLedgerStore:
                     "findings_count": ev.get("findings_count", 0),
                     "critical_or_high_count": ev.get("critical_or_high_count", 0),
                     "test_evidence_passed": ev.get("test_evidence_passed"),
+                    "working_tree_fingerprint": ev.get("working_tree_fingerprint"),
                 },
                 "state_delta": {
                     "phase": entry["phase"],
