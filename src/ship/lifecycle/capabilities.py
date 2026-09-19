@@ -509,7 +509,26 @@ class CapabilityManager:
                     timestamp=now_iso,
                 ))
 
-        # 2. Ring 0 Policy Gate: Autonomous agents cannot mutate Hypervisor & Ledger directly
+        # 2. Resource & Budget Governor Gate: Reject actions if budget ceilings are breached
+        try:
+            from .resources import ResourceGovernor
+            res_gov = ResourceGovernor(self.repo_root)
+            budget_ok, budget_reason = res_gov.check_action_budget(cid, op_val, target)
+            if not budget_ok:
+                return _record_decision(AccessDecision(
+                    allowed=False,
+                    reason=f"Resource budget policy denied action: {budget_reason}",
+                    ring=ring_val,
+                    agent_id=agent_id,
+                    operation=op_val,
+                    target=target,
+                    violation_code="BUDGET_EXCEEDED",
+                    timestamp=now_iso,
+                ))
+        except Exception:
+            pass
+
+        # 3. Ring 0 Policy Gate: Autonomous agents cannot mutate Hypervisor & Ledger directly
         if ring == ExecutionRing.RING_0_HYPERVISOR and op_val in (
             CapabilityOperation.WRITE.value,
             CapabilityOperation.DELETE.value,

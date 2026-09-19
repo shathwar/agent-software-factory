@@ -60,6 +60,8 @@ CORE SUBCOMMANDS:
       Manage durable authorization objects and scope-limited human approvals.
   agentflow events <list|tail|verify> [options]
       Forensic audit trail: append-only cryptographic hash-chained execution event stream.
+  agentflow budget <show|set|record|check> [options]
+      Resource & Budget Governor: track and enforce ceilings across 7 economic dimensions.
   agentflow benchmark [--suite all|<category>] [--iterations N] [--json]
       System evaluation harness: run repeatable benchmark scenarios measuring AgentFlow itself.
   agentflow doctor [--path <dir>]
@@ -1280,6 +1282,150 @@ Actions:
         return 1
 
 
+def run_budget_cli(argv: Sequence[str]) -> int:
+    """Handle agentflow budget commands (show, set, record, check)."""
+    parser = argparse.ArgumentParser(prog="agentflow budget", description="Resource & Budget Governor CLI")
+    parser.add_argument("action", nargs="?", default="show", choices=["show", "set", "record", "check"], help="Budget action")
+    parser.add_argument("--path", default=".", help="Path to repository root")
+    parser.add_argument("--change", default=None, help="Target change ID")
+    parser.add_argument("--json", action="store_true", help="Output JSON format")
+
+    if not argv:
+        action = "show"
+        rem: List[str] = []
+    elif argv[0] in ("show", "set", "record", "check"):
+        action = argv[0]
+        rem = list(argv[1:])
+    else:
+        action = "show"
+        rem = list(argv)
+
+    from .lifecycle.resources import ResourceGovernor, ChangeBudget
+
+    if action == "show":
+        parser = argparse.ArgumentParser(prog="agentflow budget show", description="Show change resource budget status")
+        parser.add_argument("--path", default=".", help="Path to repository root")
+        parser.add_argument("--change", default=None, help="Target change ID")
+        parser.add_argument("--json", action="store_true", help="Output JSON format")
+        args = parser.parse_args(rem)
+
+        repo_root = Path(args.path).resolve()
+        gov = ResourceGovernor(repo_root)
+        cid = gov._resolve_change_id(args.change)
+        status = gov.evaluate(cid)
+
+        if args.json:
+            print(json.dumps(status.to_dict(), indent=2))
+        else:
+            print(gov.format_budget_report(cid))
+        return 0 if not status.is_exceeded else 1
+
+    elif action == "set":
+        parser = argparse.ArgumentParser(prog="agentflow budget set", description="Configure resource budget limits for a change")
+        parser.add_argument("--path", default=".", help="Path to repository root")
+        parser.add_argument("--change", required=True, help="Target change ID")
+        parser.add_argument("--tokens", type=int, default=None, help="Max tokens ceiling")
+        parser.add_argument("--model-calls", type=int, default=None, help="Max model calls ceiling")
+        parser.add_argument("--turns", type=int, default=None, help="Max turns ceiling")
+        parser.add_argument("--time", type=float, default=None, help="Max wall-clock seconds ceiling")
+        parser.add_argument("--dollars", type=float, default=None, help="Max monetary dollars (USD) ceiling")
+        parser.add_argument("--tools", type=int, default=None, help="Max tool executions ceiling")
+        parser.add_argument("--network", type=int, default=None, help="Max network operations ceiling")
+        parser.add_argument("--agent", default="human", help="Agent or supervisor setting budget")
+        parser.add_argument("--reason", default="Manual budget adjustment", help="Reason for setting budget")
+        parser.add_argument("--json", action="store_true", help="Output JSON format")
+        args = parser.parse_args(rem)
+
+        repo_root = Path(args.path).resolve()
+        gov = ResourceGovernor(repo_root)
+        current = gov.get_budget(args.change)
+
+        new_budget = ChangeBudget(
+            max_tokens=args.tokens if args.tokens is not None else current.max_tokens,
+            max_model_calls=args.model_calls if args.model_calls is not None else current.max_model_calls,
+            max_turns=args.turns if args.turns is not None else current.max_turns,
+            max_time_seconds=args.time if args.time is not None else current.max_time_seconds,
+            max_dollars=args.dollars if args.dollars is not None else current.max_dollars,
+            max_tool_executions=args.tools if args.tools is not None else current.max_tool_executions,
+            max_network_operations=args.network if args.network is not None else current.max_network_operations,
+            max_remediation_attempts=current.max_remediation_attempts,
+            max_same_failures=current.max_same_failures,
+        )
+        gov.set_budget(args.change, new_budget, agent_id=args.agent, reason=args.reason)
+
+        if args.json:
+            print(json.dumps({"status": "SUCCESS", "change": args.change, "budget": new_budget.to_dict()}, indent=2))
+        else:
+            print(f"✅ Resource budget updated for change '{args.change}'")
+            print(gov.format_budget_report(args.change))
+        return 0
+
+    elif action == "record":
+        parser = argparse.ArgumentParser(prog="agentflow budget record", description="Record resource consumption for a change")
+        parser.add_argument("--path", default=".", help="Path to repository root")
+        parser.add_argument("--change", required=True, help="Target change ID")
+        parser.add_argument("--tokens", type=int, default=0, help="Tokens consumed")
+        parser.add_argument("--model-calls", type=int, default=0, help="Model calls made")
+        parser.add_argument("--dollars", type=float, default=0.0, help="Monetary cost (USD) incurred")
+        parser.add_argument("--tools", type=int, default=0, help="Tool executions made")
+        parser.add_argument("--network", type=int, default=0, help="Network operations performed")
+        parser.add_argument("--turns", type=int, default=0, help="Turns completed")
+        parser.add_argument("--time", type=float, default=0.0, help="Wall-clock time elapsed (seconds)")
+        parser.add_argument("--agent", default="agent", help="Acting agent ID")
+        parser.add_argument("--reason", default="", help="Consumption description")
+        parser.add_argument("--json", action="store_true", help="Output JSON format")
+        args = parser.parse_args(rem)
+
+        repo_root = Path(args.path).resolve()
+        gov = ResourceGovernor(repo_root)
+        status = gov.record_consumption(
+            change_id=args.change,
+            tokens=args.tokens,
+            model_calls=args.model_calls,
+            dollars=args.dollars,
+            tool_executions=args.tools,
+            network_operations=args.network,
+            turns=args.turns,
+            time_seconds=args.time,
+            agent_id=args.agent,
+            reason=args.reason,
+        )
+
+        if args.json:
+            print(json.dumps(status.to_dict(), indent=2))
+        else:
+            if status.is_exceeded:
+                print(f"⛔ Consumption recorded, but resource budget EXCEEDED for '{args.change}': {status.reason}", file=sys.stderr)
+            else:
+                print(f"✅ Consumption recorded for change '{args.change}' (within budget)")
+        return 0 if not status.is_exceeded else 1
+
+    elif action == "check":
+        parser = argparse.ArgumentParser(prog="agentflow budget check", description="Check if change is within resource budget")
+        parser.add_argument("--path", default=".", help="Path to repository root")
+        parser.add_argument("--change", default=None, help="Target change ID")
+        parser.add_argument("--json", action="store_true", help="Output JSON format")
+        args = parser.parse_args(rem)
+
+        repo_root = Path(args.path).resolve()
+        gov = ResourceGovernor(repo_root)
+        cid = gov._resolve_change_id(args.change)
+        status = gov.evaluate(cid)
+
+        if args.json:
+            print(json.dumps({"within_budget": not status.is_exceeded, "reason": status.reason, "exceeded_metrics": status.exceeded_metrics}, indent=2))
+        else:
+            if status.is_exceeded:
+                print(f"❌ Budget exceeded for '{cid}': {status.reason}", file=sys.stderr)
+            else:
+                print(f"✅ Change '{cid}' is within resource budget")
+        return 0 if not status.is_exceeded else 1
+
+    else:
+        print(f"Unknown budget action: '{action}'. See 'agentflow budget --help'.", file=sys.stderr)
+        return 1
+
+
 def run_benchmark_cli(argv: Sequence[str]) -> int:
     """Handle agentflow benchmark / eval commands."""
     parser = argparse.ArgumentParser(prog="agentflow benchmark", description="Run repeatable benchmark scenarios measuring AgentFlow itself.")
@@ -1340,6 +1486,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if cmd in ("event", "events", "log", "audit"):
         return run_events_cli(sub_args)
+
+    if cmd in ("budget", "budgets", "resource", "resources"):
+        return run_budget_cli(sub_args)
 
     if cmd in ("benchmark", "bench", "eval", "evaluation"):
         return run_benchmark_cli(sub_args)

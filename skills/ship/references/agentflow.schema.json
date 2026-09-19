@@ -240,6 +240,58 @@
       },
       "additionalProperties": false
     },
+    "budget": {
+      "type": "object",
+      "description": "Change resource budget and governance ceilings.",
+      "properties": {
+        "max_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum total token consumption across all model calls."
+        },
+        "max_model_calls": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum number of model invocations."
+        },
+        "max_turns": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum total turn budget for a single change."
+        },
+        "max_time_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Maximum wall-clock duration in seconds for change remediation."
+        },
+        "max_dollars": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Maximum monetary cost in USD before halting autonomy."
+        },
+        "max_tool_executions": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum number of tool and command executions."
+        },
+        "max_network_operations": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum number of outbound network operations."
+        },
+        "max_remediation_attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum permitted remediation loops before halting autonomy."
+        },
+        "max_same_failures": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum permitted identical consecutive failures before halting autonomy."
+        }
+      },
+      "additionalProperties": false
+    },
     "coordination": {
       "type": "object",
       "description": "Multi-agent task leases and conflict detection settings.",

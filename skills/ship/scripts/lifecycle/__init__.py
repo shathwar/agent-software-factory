@@ -58,6 +58,13 @@ from .turns import get_next_turn_contract, format_turn_contract, format_turns_lo
 from .specs import OpenSpecRepository, merge_spec_requirements, normalize_req_title, parse_requirements_doc
 from .trailers import CommitTrailerGenerator, canonicalize_gate_name
 from .vcs import GIT_NOTES_REF, GitClient
+from .resources import (
+    BudgetStatus,
+    ChangeBudget,
+    ResourceGovernor,
+    ResourceMetric,
+    ResourceUsage,
+)
 from .evaluation import (
     BenchmarkDimension,
     EvaluationReport,
@@ -68,6 +75,11 @@ from .evaluation import (
 
 __all__ = [
     "BenchmarkDimension",
+    "BudgetStatus",
+    "ChangeBudget",
+    "ResourceGovernor",
+    "ResourceMetric",
+    "ResourceUsage",
     "EvaluationReport",
     "EvaluationRunner",
     "ScenarioResult",

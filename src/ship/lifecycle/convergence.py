@@ -306,6 +306,64 @@ def evaluate_convergence(
             details=[reason],
         )
 
+    # --- Resource Governor 7-Dimension Checks ---
+    from .resources import ChangeBudget, ResourceGovernor
+    budget = ChangeBudget.from_dict(config)
+    gov = ResourceGovernor(Path("."))
+    res_usage = gov.get_usage(change_entry=active_change)
+
+    if budget.max_tokens is not None and res_usage.tokens >= budget.max_tokens and budget.max_tokens > 0:
+        reason = f"Tokens limit exceeded ({res_usage.tokens:,} >= {budget.max_tokens:,})"
+        return ConvergenceStatus(
+            is_halted=True,
+            reason=reason,
+            stagnation_type=StagnationType.BUDGET_EXCEEDED.value,
+            remediation_attempts=remediation_attempts,
+            total_turns=len(turns),
+            elapsed_seconds=elapsed_seconds,
+            total_cost=total_cost,
+            details=[reason],
+        )
+
+    if budget.max_model_calls is not None and res_usage.model_calls >= budget.max_model_calls and budget.max_model_calls > 0:
+        reason = f"Model calls limit exceeded ({res_usage.model_calls} >= {budget.max_model_calls})"
+        return ConvergenceStatus(
+            is_halted=True,
+            reason=reason,
+            stagnation_type=StagnationType.BUDGET_EXCEEDED.value,
+            remediation_attempts=remediation_attempts,
+            total_turns=len(turns),
+            elapsed_seconds=elapsed_seconds,
+            total_cost=total_cost,
+            details=[reason],
+        )
+
+    if budget.max_tool_executions is not None and res_usage.tool_executions >= budget.max_tool_executions and budget.max_tool_executions > 0:
+        reason = f"Tool executions limit exceeded ({res_usage.tool_executions} >= {budget.max_tool_executions})"
+        return ConvergenceStatus(
+            is_halted=True,
+            reason=reason,
+            stagnation_type=StagnationType.BUDGET_EXCEEDED.value,
+            remediation_attempts=remediation_attempts,
+            total_turns=len(turns),
+            elapsed_seconds=elapsed_seconds,
+            total_cost=total_cost,
+            details=[reason],
+        )
+
+    if budget.max_network_operations is not None and res_usage.network_operations >= budget.max_network_operations and budget.max_network_operations > 0:
+        reason = f"Network operations limit exceeded ({res_usage.network_operations} >= {budget.max_network_operations})"
+        return ConvergenceStatus(
+            is_halted=True,
+            reason=reason,
+            stagnation_type=StagnationType.BUDGET_EXCEEDED.value,
+            remediation_attempts=remediation_attempts,
+            total_turns=len(turns),
+            elapsed_seconds=elapsed_seconds,
+            total_cost=total_cost,
+            details=[reason],
+        )
+
     # --- Stagnation Checks ---
     same_v, same_v_msg = detect_same_verifier_failure(turns, max_same=conv_cfg.max_same_failure_count)
     if same_v:

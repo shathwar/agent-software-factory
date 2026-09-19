@@ -56,6 +56,17 @@ class ShipConfigManager:
                 "max_time_seconds": 1800.0,
                 "max_cost_dollars": 10.0,
             },
+            "budget": {
+                "max_tokens": 1000000,
+                "max_model_calls": 100,
+                "max_turns": 25,
+                "max_time_seconds": 1800.0,
+                "max_dollars": 10.0,
+                "max_tool_executions": 200,
+                "max_network_operations": 50,
+                "max_remediation_attempts": 3,
+                "max_same_failures": 2,
+            },
             "coordination": {
                 "default_lease_ttl_seconds": 600,
                 "heartbeat_interval_seconds": 120,

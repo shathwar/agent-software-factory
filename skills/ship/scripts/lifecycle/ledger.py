@@ -56,7 +56,11 @@ def read_ledger_file(path: Path) -> Optional[Dict[str, Any]]:
             if not isinstance(cid, str) or not isinstance(entry, dict):
                 valid = False
                 break
-            for key, kind in (("task_status", dict), ("evidence", dict), ("verification", dict), ("checkpoints", dict), ("blockers", list), ("turns", list)):
+            for key, kind in (
+                ("task_status", dict), ("evidence", dict), ("verification", dict),
+                ("checkpoints", dict), ("blockers", list), ("turns", list),
+                ("budget", dict), ("coordination", dict), ("approvals", dict), ("capabilities", dict),
+            ):
                 if key in entry and not isinstance(entry[key], kind):
                     valid = False
             if isinstance(entry.get("blockers", []), list) and any(not isinstance(b, str) for b in entry.get("blockers", [])):
