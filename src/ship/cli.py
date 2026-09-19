@@ -60,6 +60,8 @@ CORE SUBCOMMANDS:
       Manage durable authorization objects and scope-limited human approvals.
   agentflow events <list|tail|verify> [options]
       Forensic audit trail: append-only cryptographic hash-chained execution event stream.
+  agentflow benchmark [--suite all|<category>] [--iterations N] [--json]
+      System evaluation harness: run repeatable benchmark scenarios measuring AgentFlow itself.
   agentflow doctor [--path <dir>]
       Run preflight diagnostics (runtime, git, skill directories, ledger).
 
@@ -1278,6 +1280,33 @@ Actions:
         return 1
 
 
+def run_benchmark_cli(argv: Sequence[str]) -> int:
+    """Handle agentflow benchmark / eval commands."""
+    parser = argparse.ArgumentParser(prog="agentflow benchmark", description="Run repeatable benchmark scenarios measuring AgentFlow itself.")
+    parser.add_argument("--suite", "--dim", default="all", help="Scenario suite/dimension to run (e.g. all, policy, convergence, verification, recovery, race, latency, cost)")
+    parser.add_argument("--iterations", type=int, default=1, help="Number of repetitions per scenario")
+    parser.add_argument("--json", action="store_true", help="Output JSON report")
+    parser.add_argument("--output", default=None, help="Save report to file path")
+    args = parser.parse_args(argv)
+
+    from .lifecycle.evaluation import EvaluationRunner, format_terminal_report
+
+    runner = EvaluationRunner()
+    report = runner.run_suite(dimension_filter=args.suite, iterations=args.iterations)
+
+    if args.output:
+        out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(report.to_dict(), indent=2), encoding="utf-8")
+
+    if args.json:
+        print(json.dumps(report.to_dict(), indent=2))
+    else:
+        print(format_terminal_report(report))
+
+    return 0 if report.failed_scenarios == 0 else 1
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """Unified entrypoint for ship CLI with subcommands, specialist tools, and MCP server."""
     if argv is None:
@@ -1311,6 +1340,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if cmd in ("event", "events", "log", "audit"):
         return run_events_cli(sub_args)
+
+    if cmd in ("benchmark", "bench", "eval", "evaluation"):
+        return run_benchmark_cli(sub_args)
 
     # Specialist tools dispatch
     if cmd == "tdd":

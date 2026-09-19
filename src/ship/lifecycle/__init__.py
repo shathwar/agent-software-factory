@@ -58,8 +58,20 @@ from .turns import get_next_turn_contract, format_turn_contract, format_turns_lo
 from .specs import OpenSpecRepository, merge_spec_requirements, normalize_req_title, parse_requirements_doc
 from .trailers import CommitTrailerGenerator, canonicalize_gate_name
 from .vcs import GIT_NOTES_REF, GitClient
+from .evaluation import (
+    BenchmarkDimension,
+    EvaluationReport,
+    EvaluationRunner,
+    ScenarioResult,
+    run_all_benchmarks,
+)
 
 __all__ = [
+    "BenchmarkDimension",
+    "EvaluationReport",
+    "EvaluationRunner",
+    "ScenarioResult",
+    "run_all_benchmarks",
     "AccessDecision",
     "ActionProvenance",
     "AgentIdentity",
