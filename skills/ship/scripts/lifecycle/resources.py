@@ -115,22 +115,31 @@ class ChangeBudget:
         if not data:
             return cls()
         # Check budget block, fallback to convergence block or root
-        budget = data.get("budget", data.get("convergence", data))
+        budget = data.get("budget")
+        conv = data.get("convergence", {})
+        if not budget:
+            budget = conv or data
         
-        # Max turns can come from max_turns or max_total_turns
+        # Max turns can come from budget.max_turns, or conv.max_total_turns, or budget.max_total_turns
         max_turns_val = budget.get("max_turns")
         if max_turns_val is None:
-            max_turns_val = budget.get("max_total_turns", 25)
+            max_turns_val = conv.get("max_total_turns") if conv.get("max_total_turns") is not None else budget.get("max_total_turns", 25)
+        elif conv.get("max_total_turns") is not None and max_turns_val == 25:
+            max_turns_val = conv.get("max_total_turns")
 
         # Max dollars can come from max_dollars or max_cost_dollars
         max_dollars_val = budget.get("max_dollars")
         if max_dollars_val is None:
-            max_dollars_val = budget.get("max_cost_dollars", 10.0)
+            max_dollars_val = conv.get("max_cost_dollars") if conv.get("max_cost_dollars") is not None else budget.get("max_cost_dollars", 10.0)
+        elif conv.get("max_cost_dollars") is not None and max_dollars_val == 10.0:
+            max_dollars_val = conv.get("max_cost_dollars")
 
         # Max same failures can come from max_same_failures or max_same_failure_count
         max_same_val = budget.get("max_same_failures")
         if max_same_val is None:
-            max_same_val = budget.get("max_same_failure_count", 2)
+            max_same_val = conv.get("max_same_failure_count") if conv.get("max_same_failure_count") is not None else budget.get("max_same_failure_count", 2)
+        elif conv.get("max_same_failure_count") is not None and max_same_val == 2:
+            max_same_val = conv.get("max_same_failure_count")
 
         def _opt_int(v: Any, default: Optional[int]) -> Optional[int]:
             if v is None:

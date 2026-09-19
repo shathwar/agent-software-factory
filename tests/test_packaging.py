@@ -25,6 +25,7 @@ class PackagingTests(unittest.TestCase):
         content = pyproject_path.read_text(encoding="utf-8")
         self.assertIn('name = "ship-sdlc"', content)
         self.assertIn('version = "1.0.0"', content)
+        self.assertIn('agentflow = "ship.cli:main"', content)
         self.assertIn('ship = "ship.cli:main"', content)
         self.assertIn('requires-python = ">=3.10"', content)
         self.assertIn('dependencies = []', content)
@@ -220,6 +221,44 @@ class PackagingTests(unittest.TestCase):
             f"Parity mismatch between src/ship and skills/:\n{res.stderr}\n{res.stdout}\nRun 'python3 scripts/sync_skills.py' to synchronize.",
         )
         self.assertIn("Parity check passed", res.stdout)
+
+
+    def test_agentflow_extended_subcommands(self):
+        """Extended agentflow subcommands (budget, events replay, benchmark) execute cleanly."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            # 1. agentflow budget show
+            buf = io.StringIO()
+            old_stdout = sys.stdout
+            try:
+                sys.stdout = buf
+                ret = ship_cli_main(["budget", "show", "--path", str(root)])
+            finally:
+                sys.stdout = old_stdout
+            self.assertEqual(ret, 0)
+            self.assertIn("RESOURCE BUDGET REPORT", buf.getvalue())
+
+            # 2. agentflow events replay --help
+            buf = io.StringIO()
+            try:
+                sys.stdout = buf
+                with self.assertRaises(SystemExit) as ctx:
+                    ship_cli_main(["events", "replay", "--help"])
+                self.assertEqual(ctx.exception.code, 0)
+            finally:
+                sys.stdout = old_stdout
+            self.assertIn("events replay", buf.getvalue())
+
+            # 3. agentflow benchmark --help
+            buf = io.StringIO()
+            try:
+                sys.stdout = buf
+                with self.assertRaises(SystemExit) as ctx:
+                    ship_cli_main(["benchmark", "--help"])
+                self.assertEqual(ctx.exception.code, 0)
+            finally:
+                sys.stdout = old_stdout
+            self.assertIn("benchmark", buf.getvalue())
 
 
 if __name__ == "__main__":

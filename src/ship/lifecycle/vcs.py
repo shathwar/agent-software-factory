@@ -125,10 +125,15 @@ class GitClient:
         info["commit"] = self.get_output(repo_root, "rev-parse", "HEAD") or None
         info["tree_hash"] = self.get_output(repo_root, "rev-parse", "HEAD^{tree}") or None
 
+        git_dir = self.get_git_common_dir(repo_root)
+        info["is_detached"] = (info["branch"] in ("HEAD", "", "unknown"))
+        info["is_index_locked"] = (git_dir / "index.lock").exists()
+
         try:
             status_res = self.run_cmd(repo_root, "status", "--porcelain")
             status_lines = [l for l in status_res.stdout.splitlines() if l.strip()]
             info["is_clean"] = len(status_lines) == 0
+            info["has_conflicts"] = any(l[:2] in ("UU", "AA", "DD", "AU", "UD", "UA", "DU") for l in status_lines)
             info["modified_count"] = sum(1 for l in status_lines if not l.startswith("??"))
             info["untracked_count"] = sum(1 for l in status_lines if l.startswith("??"))
 

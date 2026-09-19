@@ -58,6 +58,11 @@ from .turns import get_next_turn_contract, format_turn_contract, format_turns_lo
 from .specs import OpenSpecRepository, merge_spec_requirements, normalize_req_title, parse_requirements_doc
 from .trailers import CommitTrailerGenerator, canonicalize_gate_name
 from .vcs import GIT_NOTES_REF, GitClient
+from .events import (
+    EventLogger,
+    EventReplayer,
+    compute_event_hash,
+)
 from .resources import (
     BudgetStatus,
     ChangeBudget,
@@ -77,6 +82,8 @@ __all__ = [
     "BenchmarkDimension",
     "BudgetStatus",
     "ChangeBudget",
+    "EventLogger",
+    "EventReplayer",
     "ResourceGovernor",
     "ResourceMetric",
     "ResourceUsage",

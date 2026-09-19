@@ -1209,12 +1209,14 @@ Actions:
       Tail the most recent execution events.
   verify [--path <dir>] [--json]
       Verify the cryptographic hash-chain integrity of the append-only event log.
+  replay [--change <id>] [--verify] [--json]
+      Deterministically reconstruct and optionally verify ledger state from the event stream.
 """)
         return 0
 
     action = "list"
     rem = list(argv)
-    if argv and argv[0].lower() in ("list", "tail", "verify"):
+    if argv and argv[0].lower() in ("list", "tail", "verify", "replay"):
         action = argv[0].lower()
         rem = argv[1:]
 
@@ -1276,6 +1278,30 @@ Actions:
             else:
                 print(f"❌ Event log integrity broken at event #{broken_index}: {msg}", file=sys.stderr)
         return 0 if valid else 1
+
+    elif action == "replay":
+        parser.add_argument("--verify", action="store_true", help="Verify replayed state against authoritative ledger")
+        args = parser.parse_args(rem)
+        repo_root = Path(args.path).resolve()
+        from .lifecycle.events import EventReplayer, EventLogger
+        if args.verify:
+            matches, msg, diffs = EventReplayer.verify_state_matches_events(repo_root, change_id=args.change)
+            if args.json:
+                print(json.dumps({"matches": matches, "message": msg, "diffs": diffs}, indent=2))
+            else:
+                if matches:
+                    print(f"✅ {msg}")
+                else:
+                    print(f"❌ Replay divergence: {msg}", file=sys.stderr)
+                    for sec, d in diffs.items():
+                        print(f"   • {sec}: actual={d.get('actual')} vs replayed={d.get('replayed')}", file=sys.stderr)
+            return 0 if matches else 1
+        else:
+            logger = EventLogger(repo_root)
+            events = logger.query(change_id=args.change)
+            reconstructed = EventReplayer.replay(events, target_change=args.change)
+            print(json.dumps(reconstructed, indent=2))
+            return 0
 
     else:
         print(f"Unknown events action: '{action}'. See 'agentflow events --help'.", file=sys.stderr)

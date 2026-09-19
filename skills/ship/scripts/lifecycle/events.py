@@ -219,3 +219,248 @@ class EventLogger:
                 expected_prev_hash = event.event_hash
 
         return True, f"Cryptographic hash chain verified successfully ({idx} events)", None
+
+
+class EventReplayer:
+    """Deterministic state rebuilder from cryptographic execution event streams."""
+
+    @staticmethod
+    def replay(events: List[ExecutionEvent], target_change: Optional[str] = None) -> Dict[str, Any]:
+        """Reconstruct authoritative change state deterministically from events."""
+        reconstructed: Dict[str, Any] = {
+            "version": 1,
+            "active_change_id": target_change,
+            "changes": {},
+        }
+
+        for e in events:
+            cid = e.change_id or target_change or "default"
+            if target_change and e.change_id and e.change_id != target_change:
+                continue
+
+            ch = reconstructed["changes"].setdefault(cid, {
+                "phase": "INITIAL_PROPOSAL",
+                "revision_counter": 1,
+                "task_status": {},
+                "evidence": {},
+                "verification": {},
+                "checkpoints": {},
+                "blockers": [],
+                "turns": [],
+                "budget": {
+                    "limits": {},
+                    "consumed": {
+                        "tokens": 0,
+                        "model_calls": 0,
+                        "turns": 0,
+                        "time_seconds": 0.0,
+                        "dollars": 0.0,
+                        "tool_executions": 0,
+                        "network_operations": 0,
+                    },
+                    "history": [],
+                },
+                "provenance": {"identities": {}, "sessions": {}},
+                "capabilities": {},
+                "approvals": {"requests": {}, "authorizations": {}},
+                "coordination": {"leases": {}, "handoffs": []},
+            })
+
+            et = e.event_type.value if hasattr(e.event_type, "value") else str(e.event_type)
+            payload = e.payload or {}
+
+            # 1. Identity & Sessions
+            if et == EventType.AGENT_STARTED.value:
+                aid = e.agent_id or payload.get("agent_id")
+                if aid:
+                    ch["provenance"]["identities"][aid] = {
+                        "agent_id": aid,
+                        "role": payload.get("role", "worker"),
+                        "registered_at": e.timestamp,
+                    }
+            elif et == EventType.SESSION_CREATED.value:
+                sid = e.session_id or payload.get("session_id")
+                aid = e.agent_id or payload.get("agent_id")
+                if sid and aid:
+                    ch["provenance"]["sessions"][sid] = {
+                        "session_id": sid,
+                        "agent_id": aid,
+                        "created_at": e.timestamp,
+                        "active": True,
+                    }
+
+            # 2. Coordination & Leases
+            elif et in (EventType.TASK_CLAIMED.value, EventType.LEASE_GRANTED.value):
+                tid = e.task_id or payload.get("task_id")
+                if tid:
+                    ch["coordination"]["leases"][tid] = {
+                        "task_id": tid,
+                        "owner_id": e.agent_id or payload.get("owner_id"),
+                        "lease_token": payload.get("lease_token", f"token-{tid}"),
+                        "status": "ACTIVE",
+                        "acquired_at": e.timestamp,
+                        "expires_at": payload.get("expires_at"),
+                        "files": payload.get("files", []),
+                    }
+            elif et == EventType.LEASE_RELEASED.value:
+                tid = e.task_id or payload.get("task_id")
+                if tid and tid in ch["coordination"]["leases"]:
+                    ch["coordination"]["leases"][tid]["status"] = "RELEASED"
+            elif et == EventType.LEASE_EXPIRED.value:
+                tid = e.task_id or payload.get("task_id")
+                if tid and tid in ch["coordination"]["leases"]:
+                    ch["coordination"]["leases"][tid]["status"] = "EXPIRED"
+
+            # 3. Capabilities
+            elif et == EventType.CAPABILITY_GRANTED.value:
+                cap_id = payload.get("capability_id") or e.target
+                if cap_id:
+                    ch["capabilities"][cap_id] = {
+                        "capability_id": cap_id,
+                        "agent_id": e.agent_id,
+                        "operation": payload.get("operation"),
+                        "target": payload.get("target"),
+                        "revoked": False,
+                        "granted_at": e.timestamp,
+                        "expires_at": payload.get("expires_at"),
+                        "approval_ref": payload.get("approval_ref", ""),
+                    }
+            elif et == EventType.CAPABILITY_REVOKED.value:
+                cap_id = payload.get("capability_id") or e.target
+                if cap_id and cap_id in ch["capabilities"]:
+                    ch["capabilities"][cap_id]["revoked"] = True
+
+            # 4. Approvals
+            elif et == EventType.APPROVAL_REQUESTED.value:
+                req_id = payload.get("request_id") or e.target
+                if req_id:
+                    ch["approvals"]["requests"][req_id] = {
+                        "request_id": req_id,
+                        "agent_id": e.agent_id,
+                        "action": payload.get("action"),
+                        "scope": payload.get("scope"),
+                        "status": "PENDING",
+                        "requested_at": e.timestamp,
+                    }
+            elif et == EventType.APPROVAL_GRANTED.value:
+                appr_id = payload.get("approval_id") or e.target
+                req_id = payload.get("request_id")
+                if req_id and req_id in ch["approvals"]["requests"]:
+                    ch["approvals"]["requests"][req_id]["status"] = "APPROVED"
+                if appr_id:
+                    ch["approvals"]["authorizations"][appr_id] = {
+                        "approval_id": appr_id,
+                        "human": payload.get("human"),
+                        "agent": e.agent_id or payload.get("agent"),
+                        "action": payload.get("action"),
+                        "scope": payload.get("scope"),
+                        "expires_at": payload.get("expires_at"),
+                        "status": "ACTIVE",
+                    }
+            elif et == EventType.APPROVAL_REVOKED.value:
+                appr_id = payload.get("approval_id") or e.target
+                if appr_id and appr_id in ch["approvals"]["authorizations"]:
+                    ch["approvals"]["authorizations"][appr_id]["status"] = "REVOKED"
+
+            # 5. Checkpoints
+            elif et == EventType.CHECKPOINT_CREATED.value:
+                gate = payload.get("gate") or e.target
+                if gate:
+                    ch["checkpoints"][gate] = {
+                        "gate": gate,
+                        "timestamp": e.timestamp,
+                        "change": cid,
+                        "ref": payload.get("ref"),
+                    }
+
+            # 6. Blockers & Halts
+            elif et == EventType.HALT_TRIGGERED.value:
+                reason = payload.get("reason", "Unknown halt")
+                halt_str = f"Halt: {reason}"
+                if halt_str not in ch["blockers"]:
+                    ch["blockers"].append(halt_str)
+            elif et == EventType.RESUME_TRIGGERED.value:
+                ch["blockers"] = [b for b in ch["blockers"] if not b.startswith("Halt:")]
+
+            # 7. Budget & Consumption
+            elif et == EventType.BUDGET_UPDATED.value:
+                limits = payload.get("limits", {})
+                if limits:
+                    ch["budget"]["limits"] = dict(limits)
+            elif et == EventType.RESOURCE_CONSUMED.value:
+                delta = payload.get("delta", {})
+                con = ch["budget"]["consumed"]
+                for k in ("tokens", "model_calls", "turns", "tool_executions", "network_operations"):
+                    con[k] = con.get(k, 0) + int(delta.get(k, 0) or 0)
+                for k in ("dollars", "time_seconds"):
+                    con[k] = round(con.get(k, 0.0) + float(delta.get(k, 0.0) or 0.0), 4)
+                ch["budget"]["history"].append({
+                    "timestamp": e.timestamp,
+                    "agent_id": e.agent_id,
+                    "delta": delta,
+                    "reason": payload.get("reason", ""),
+                })
+
+            # 8. Verifications
+            elif et == EventType.VERIFICATION_PASSED.value:
+                tier = payload.get("tier") or "execution"
+                ch["verification"][tier] = {
+                    "verdict": "VERIFIED",
+                    "score": payload.get("score", 1.0),
+                    "timestamp": e.timestamp,
+                }
+            elif et == EventType.VERIFICATION_FAILED.value:
+                tier = payload.get("tier") or "execution"
+                ch["verification"][tier] = {
+                    "verdict": "NOT_VERIFIED",
+                    "reason": payload.get("reason", ""),
+                    "timestamp": e.timestamp,
+                }
+
+        return reconstructed
+
+    @classmethod
+    def verify_state_matches_events(
+        cls,
+        repo_root: Path,
+        change_id: Optional[str] = None,
+    ) -> Tuple[bool, str, Dict[str, Any]]:
+        """Verify that authoritative ledger state matches reconstructed event state."""
+        logger = EventLogger(repo_root)
+        valid, msg, broken_id = logger.verify_integrity()
+        if not valid:
+            return False, f"Event log integrity broken: {msg}", {"broken_event_id": broken_id}
+
+        events = logger.query(change_id=change_id)
+        cid = change_id or (FileLedgerStore.load(repo_root).get("active_change_id") or "default")
+        replayed = cls.replay(events, target_change=cid)
+
+        actual_ledger = FileLedgerStore.load(repo_root)
+        act_ch = actual_ledger.get("changes", {}).get(cid, {})
+        rep_ch = replayed.get("changes", {}).get(cid, {})
+
+        mismatches: Dict[str, Any] = {}
+
+        # Compare blockers
+        act_halts = sorted([b for b in act_ch.get("blockers", []) if b.startswith("Halt:")])
+        rep_halts = sorted([b for b in rep_ch.get("blockers", []) if b.startswith("Halt:")])
+        if act_halts != rep_halts:
+            mismatches["halt_blockers"] = {"actual": act_halts, "replayed": rep_halts}
+
+        # Compare consumption totals
+        act_con = act_ch.get("budget", {}).get("consumed", {})
+        rep_con = rep_ch.get("budget", {}).get("consumed", {})
+        for k in ("tokens", "model_calls", "dollars", "tool_executions", "network_operations"):
+            if act_con.get(k) != rep_con.get(k):
+                mismatches[f"budget_{k}"] = {"actual": act_con.get(k), "replayed": rep_con.get(k)}
+
+        # Compare active leases
+        act_leases = {k: v.get("status") for k, v in act_ch.get("coordination", {}).get("leases", {}).items()}
+        rep_leases = {k: v.get("status") for k, v in rep_ch.get("coordination", {}).get("leases", {}).items()}
+        if act_leases != rep_leases:
+            mismatches["leases"] = {"actual": act_leases, "replayed": rep_leases}
+
+        if mismatches:
+            return False, f"Ledger state diverges from event stream in {len(mismatches)} section(s)", mismatches
+
+        return True, f"Replay verified: ledger state for '{cid}' perfectly matches event stream ({len(events)} events)", {}

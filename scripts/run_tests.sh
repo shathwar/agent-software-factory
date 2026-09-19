@@ -25,7 +25,16 @@ bash -n scripts/install.sh
 echo "✓ Script syntax OK"
 echo ""
 
-echo "=== 2. Running Unit Tests with Python stdlib ==="
+echo "=== 2. Checking Distribution Parity ==="
+"$PYTHON" scripts/sync_skills.py --check
+echo "✓ Skill distribution parity OK"
+echo ""
+
+echo "=== 3. Running Unit Tests with Python stdlib ==="
 "$PYTHON" -m unittest discover -s tests -v
+echo ""
+
+echo "=== 4. Running AgentFlow Evaluation Benchmark Suite ==="
+"$PYTHON" -m ship.cli benchmark --suite all
 echo ""
 echo "All checks and tests passed successfully!"
