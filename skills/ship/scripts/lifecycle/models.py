@@ -502,6 +502,107 @@ class AccessDecision:
 
 
 @dataclass
+class DurableApproval:
+    approval_id: str
+    human: str
+    agent: str
+    change: str
+    action: str
+    scope: str
+    issued_at: str
+    expires_at: Optional[str] = None
+    reason: str = ""
+    revoked: bool = False
+    signature: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "approval_id": self.approval_id,
+            "human": self.human,
+            "agent": self.agent,
+            "change": self.change,
+            "action": self.action,
+            "scope": self.scope,
+            "issued_at": self.issued_at,
+            "expires_at": self.expires_at,
+            "reason": self.reason,
+            "revoked": self.revoked,
+            "signature": self.signature,
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "DurableApproval":
+        return cls(
+            approval_id=str(data.get("approval_id", "")),
+            human=str(data.get("human", "")),
+            agent=str(data.get("agent", "")),
+            change=str(data.get("change", "")),
+            action=str(data.get("action", "")),
+            scope=str(data.get("scope", "*")),
+            issued_at=str(data.get("issued_at", "")),
+            expires_at=data.get("expires_at"),
+            reason=str(data.get("reason", "")),
+            revoked=bool(data.get("revoked", False)),
+            signature=str(data.get("signature", "")),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
+@dataclass
+class ApprovalRequest:
+    request_id: str
+    agent: str
+    change: str
+    action: str
+    scope: str
+    reason: str
+    requested_at: str
+    status: str = "PENDING"  # PENDING, APPROVED, REJECTED, EXPIRED
+    approval_id: Optional[str] = None
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "request_id": self.request_id,
+            "agent": self.agent,
+            "change": self.change,
+            "action": self.action,
+            "scope": self.scope,
+            "reason": self.reason,
+            "requested_at": self.requested_at,
+            "status": self.status,
+            "approval_id": self.approval_id,
+            "reviewed_by": self.reviewed_by,
+            "reviewed_at": self.reviewed_at,
+            "rejection_reason": self.rejection_reason,
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ApprovalRequest":
+        return cls(
+            request_id=str(data.get("request_id", "")),
+            agent=str(data.get("agent", "")),
+            change=str(data.get("change", "")),
+            action=str(data.get("action", "")),
+            scope=str(data.get("scope", "*")),
+            reason=str(data.get("reason", "")),
+            requested_at=str(data.get("requested_at", "")),
+            status=str(data.get("status", "PENDING")),
+            approval_id=data.get("approval_id"),
+            reviewed_by=data.get("reviewed_by"),
+            reviewed_at=data.get("reviewed_at"),
+            rejection_reason=data.get("rejection_reason"),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
+@dataclass
 class TurnRecord:
     turn_id: str
     skill: str

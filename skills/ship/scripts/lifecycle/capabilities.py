@@ -104,6 +104,19 @@ def _target_matches(cap_pattern: str, requested_target: str) -> bool:
     return False
 
 
+def _op_matches(granted_op: str, req_op: str) -> bool:
+    """Evaluate whether granted_op matches req_op (with wildcard and network alias support)."""
+    granted = granted_op.strip().upper()
+    req = req_op.strip().upper()
+    if granted in (req, "*", "ALL"):
+        return True
+    if req in ("NETWORK_READ", "NETWORK_WRITE") and granted == "NETWORK":
+        return True
+    if req == "NETWORK" and granted in ("NETWORK_READ", "NETWORK_WRITE"):
+        return True
+    return False
+
+
 class CapabilityManager:
     """Manages creation, revocation, discovery, and enforcement of fine-grained capabilities."""
 
@@ -215,6 +228,23 @@ class CapabilityManager:
             exp_dt = datetime.fromtimestamp(now_dt.timestamp() + ttl_seconds, tz=timezone.utc)
             expires_at = exp_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
+        # Durable Authorization Validation (Step 2 -> Step 3)
+        if approval_ref and approval_ref.strip().startswith("appr-"):
+            from .approvals import ApprovalManager
+            appr_mgr = ApprovalManager(self.repo_root)
+            valid, code, appr = appr_mgr.validate_approval(
+                approval_id=approval_ref.strip(),
+                agent_id=agent_id,
+                change_id=cid,
+                operation=op_val,
+                target=target,
+            )
+            if not valid:
+                raise PermissionError(f"Cannot grant capability: durable approval check failed ({code})")
+            if appr and appr.expires_at:
+                if not expires_at or expires_at > appr.expires_at:
+                    expires_at = appr.expires_at
+
         cap_id = f"cap-{uuid.uuid4().hex[:12]}"
         cap = Capability(
             capability_id=cap_id,
@@ -260,6 +290,46 @@ class CapabilityManager:
 
             FileLedgerStore.save(self.repo_root, ledger)
             return cap
+
+    def grant_from_approval(
+        self,
+        approval_id: str,
+        target: Optional[str] = None,
+        task_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        ttl_seconds: Optional[int] = None,
+        change_id: Optional[str] = None,
+    ) -> Capability:
+        """Step 3: Convert a durable authorization object into an active capability."""
+        from .approvals import ApprovalManager
+        appr_mgr = ApprovalManager(self.repo_root)
+        cid = self._get_target_change(change_id)
+        appr = appr_mgr.get_approval(approval_id, change_id=cid)
+        if not appr:
+            raise KeyError(f"Approval '{approval_id}' not found in change '{cid}'")
+
+        effective_target = target or appr.scope
+        valid, code, _ = appr_mgr.validate_approval(
+            approval_id=approval_id,
+            agent_id=appr.agent,
+            change_id=cid,
+            operation=appr.action,
+            target=effective_target,
+        )
+        if not valid:
+            raise PermissionError(f"Cannot grant capability from approval '{approval_id}': {code}")
+
+        return self.grant_capability(
+            agent_id=appr.agent,
+            operation=appr.action,
+            target=effective_target,
+            change_id=cid,
+            task_id=task_id,
+            session_id=session_id,
+            ttl_seconds=ttl_seconds,
+            approval_ref=approval_id,
+            metadata={"source": "durable_approval", "approval_id": approval_id},
+        )
 
     def revoke_capability(
         self,
@@ -400,14 +470,21 @@ class CapabilityManager:
                     and not c.revoked
                     and not _is_expired(c.expires_at, now_dt)
                     and _target_matches(c.target, target)
-                    and (
+                ):
+                    if c.approval_ref.startswith("appr-"):
+                        from .approvals import ApprovalManager
+                        appr_mgr = ApprovalManager(self.repo_root)
+                        valid, _, _ = appr_mgr.validate_approval(c.approval_ref, agent_id, cid, op_val, target)
+                        if valid:
+                            has_hypervisor_grant = True
+                            break
+                    elif (
                         c.approval_ref.startswith("hypervisor:")
                         or c.approval_ref.startswith("system:")
                         or c.approval_ref.startswith("human:")
-                    )
-                ):
-                    has_hypervisor_grant = True
-                    break
+                    ):
+                        has_hypervisor_grant = True
+                        break
 
             if not has_hypervisor_grant:
                 return _record_decision(AccessDecision(
@@ -425,15 +502,6 @@ class CapabilityManager:
         caps = change.get("capabilities", {})
         matching_caps: List[Capability] = []
         expired_match: Optional[Capability] = None
-
-        def _op_matches(granted_op: str, req_op: str) -> bool:
-            if granted_op in (req_op, "*", "ALL"):
-                return True
-            if req_op in ("NETWORK_READ", "NETWORK_WRITE") and granted_op == "NETWORK":
-                return True
-            if req_op == "NETWORK" and granted_op in ("NETWORK_READ", "NETWORK_WRITE"):
-                return True
-            return False
 
         for d in caps.values():
             c = Capability.from_dict(d)
@@ -579,13 +647,41 @@ class CapabilityManager:
         for cap in matching_caps:
             ref = cap.approval_ref.lower()
 
+            # If capability is bound to a durable authorization object (appr-*), revalidate at execution time
+            is_durable = False
+            if cap.approval_ref.strip().startswith("appr-"):
+                from .approvals import ApprovalManager
+                appr_mgr = ApprovalManager(self.repo_root)
+                valid, code, appr = appr_mgr.validate_approval(
+                    approval_id=cap.approval_ref.strip(),
+                    agent_id=agent_id,
+                    change_id=cid,
+                    operation=op_val,
+                    target=target,
+                )
+                if not valid:
+                    last_failure = AccessDecision(
+                        allowed=False,
+                        reason=f"Durable authorization '{cap.approval_ref}' check failed: {code}",
+                        ring=ring_val,
+                        agent_id=agent_id,
+                        operation=op_val,
+                        target=target,
+                        capability_id=cap.capability_id,
+                        violation_code=code,
+                        timestamp=now_iso,
+                    )
+                    continue
+                is_durable = True
+
             # 4. Ring 1 Policy Gate: Architecture & Governance mutation requires authorized ADR or design approval
             if ring == ExecutionRing.RING_1_GOVERNANCE and op_val in (
                 CapabilityOperation.WRITE.value,
                 CapabilityOperation.DELETE.value,
             ):
                 valid_approval = (
-                    ref.startswith("adr:")
+                    is_durable
+                    or ref.startswith("adr:")
                     or ref.startswith("design:")
                     or ref.startswith("gate:design")
                     or ref.startswith("human:")
@@ -609,7 +705,8 @@ class CapabilityManager:
             # 6. Network Write Policy Gate: outbound write requires security or tech lead approval
             if op_val == CapabilityOperation.NETWORK_WRITE.value:
                 valid_net = (
-                    ref.startswith(("human:", "sec_lead:", "security:", "tech_lead:", "system:"))
+                    is_durable
+                    or ref.startswith(("human:", "sec_lead:", "security:", "tech_lead:", "system:"))
                     or "adr:" in ref
                 )
                 if not valid_net:
@@ -629,7 +726,8 @@ class CapabilityManager:
             # 7. Secret Access Policy Gate: reading credentials/secrets requires security lead or system authorization
             if op_val == CapabilityOperation.SECRET_READ.value:
                 valid_secret = (
-                    ref.startswith(("human:", "sec_lead:", "security:", "system:"))
+                    is_durable
+                    or ref.startswith(("human:", "sec_lead:", "security:", "system:"))
                 )
                 if not valid_secret:
                     last_failure = AccessDecision(
@@ -648,7 +746,8 @@ class CapabilityManager:
             # 8. Cloud Mutate Policy Gate: cloud infrastructure mutation requires DevOps or Tech Lead approval
             if op_val == CapabilityOperation.CLOUD_MUTATE.value:
                 valid_cloud = (
-                    ref.startswith(("human:", "devops:", "tech_lead:", "system:"))
+                    is_durable
+                    or ref.startswith(("human:", "devops:", "tech_lead:", "system:"))
                     or "adr:" in ref
                 )
                 if not valid_cloud:
@@ -668,7 +767,8 @@ class CapabilityManager:
             # 9. GitHub Write Policy Gate: mutating external GitHub state requires maintainer or tech lead approval
             if op_val == CapabilityOperation.GITHUB_WRITE.value:
                 valid_gh = (
-                    ref.startswith(("human:", "maintainer:", "tech_lead:", "system:"))
+                    is_durable
+                    or ref.startswith(("human:", "maintainer:", "tech_lead:", "system:"))
                     or "adr:" in ref
                 )
                 if not valid_gh:

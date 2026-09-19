@@ -56,6 +56,8 @@ CORE SUBCOMMANDS:
       Register and inspect agent identities and role assignments.
   agentflow capability <grant|revoke|list|check> [options]
       Evaluate capability policy for trusted host enforcement.
+  agentflow approval <request|approve|grant-direct|reject|revoke|list> [options]
+      Manage durable authorization objects and scope-limited human approvals.
   agentflow doctor [--path <dir>]
       Run preflight diagnostics (runtime, git, skill directories, ledger).
 
@@ -863,28 +865,44 @@ Actions:
     if action == "grant":
         parser.add_argument("agent_id", nargs="?", default=None, help="Agent ID holding capability")
         parser.add_argument("--agent", dest="agent_opt", default=None, help="Agent ID")
-        parser.add_argument("--op", "--operation", dest="operation", required=True, help="Capability operation (READ, WRITE, DELETE, EXECUTE, GIT, NETWORK, NETWORK_READ, NETWORK_WRITE, SECRET_READ, CLOUD_MUTATE, GITHUB_WRITE)")
-        parser.add_argument("--target", required=True, help="Target resource path, glob, or command pattern")
+        parser.add_argument("--op", "--operation", dest="operation", default=None, help="Capability operation (READ, WRITE, DELETE, EXECUTE, GIT, NETWORK, NETWORK_READ, NETWORK_WRITE, SECRET_READ, CLOUD_MUTATE, GITHUB_WRITE)")
+        parser.add_argument("--target", default=None, help="Target resource path, glob, or command pattern")
         parser.add_argument("--task", dest="task_id", default=None, help="Bound task ID (e.g. 1.1)")
         parser.add_argument("--session", dest="session_id", default=None, help="Bound session ID")
         parser.add_argument("--ttl", type=int, default=None, help="TTL duration in seconds")
         parser.add_argument("--approval", dest="approval_ref", default="", help="Authorization reference (e.g. adr:0002, lease:tok-123)")
+        parser.add_argument("--from-approval", dest="from_approval", default=None, help="Grant capability directly from durable authorization ID (e.g. appr-123)")
         args = parser.parse_args(rem)
-        agent_id = args.agent_opt or args.agent_id
-        if not agent_id:
-            parser.error("agent_id is required (positional or via --agent)")
         from .lifecycle.capabilities import CapabilityManager
         manager = CapabilityManager(Path(args.path).resolve())
-        cap = manager.grant_capability(
-            agent_id=agent_id,
-            operation=args.operation,
-            target=args.target,
-            change_id=args.change,
-            task_id=args.task_id,
-            session_id=args.session_id,
-            ttl_seconds=args.ttl,
-            approval_ref=args.approval_ref,
-        )
+
+        if args.from_approval:
+            cap = manager.grant_from_approval(
+                approval_id=args.from_approval,
+                target=args.target,
+                change_id=args.change,
+                task_id=args.task_id,
+                session_id=args.session_id,
+                ttl_seconds=args.ttl,
+            )
+        else:
+            agent_id = args.agent_opt or args.agent_id
+            if not agent_id:
+                parser.error("agent_id is required (positional or via --agent)")
+            if not args.operation:
+                parser.error("--op/--operation is required")
+            if not args.target:
+                parser.error("--target is required")
+            cap = manager.grant_capability(
+                agent_id=agent_id,
+                operation=args.operation,
+                target=args.target,
+                change_id=args.change,
+                task_id=args.task_id,
+                session_id=args.session_id,
+                ttl_seconds=args.ttl,
+                approval_ref=args.approval_ref,
+            )
         if args.json:
             print(json.dumps(cap.to_dict(), indent=2))
         else:
@@ -983,6 +1001,196 @@ Actions:
         return 1
 
 
+def run_approval_cli(argv: Sequence[str]) -> int:
+    """Handle durable authorization objects and approval lifecycle CLI commands."""
+    if not argv or argv[0] in ("-h", "--help"):
+        print("""Usage: agentflow approval <action> [options]
+
+Actions:
+  request --agent <id> --action <op> --scope <target> --reason <why>
+      Create a durable authorization request (status: PENDING).
+  approve <request_id> --human <name> [--ttl <sec>] [--reason <why>]
+      Human supervisor reviews and approves request, creating signed DurableApproval.
+  grant-direct --human <name> --agent <id> --action <op> --scope <target> [--ttl <sec>] [--reason <why>]
+      Directly issue a signed DurableApproval without prior request.
+  reject <request_id> --human <name> [--reason <why>]
+      Reject a pending authorization request.
+  revoke <approval_id> --human <name> [--reason <why>]
+      Revoke an active DurableApproval object.
+  list [--status <pending|approved|rejected>] [--active] [--json]
+      List approval requests and authorization objects.
+""")
+        return 0
+
+    action = argv[0].lower()
+    rem = argv[1:]
+
+    parser = argparse.ArgumentParser(prog=f"agentflow approval {action}")
+    parser.add_argument("--path", "--repo-root", dest="path", default=".", help="Repository root path")
+    parser.add_argument("--change", default=None, help="Target change ID")
+    parser.add_argument("--json", action="store_true", help="Output JSON format")
+
+    from .lifecycle.approvals import ApprovalManager
+
+    if action == "request":
+        parser.add_argument("--agent", required=True, help="Agent ID requesting authorization")
+        parser.add_argument("--action", required=True, help="Action/operation (e.g. SECRET_READ, NETWORK_WRITE)")
+        parser.add_argument("--scope", required=True, help="Resource scope pattern (e.g. AWS_*, https://api.slack.com/*)")
+        parser.add_argument("--reason", required=True, help="Justification/reason for request")
+        args = parser.parse_args(rem)
+        manager = ApprovalManager(Path(args.path).resolve())
+        req = manager.create_request(
+            agent=args.agent,
+            action=args.action,
+            scope=args.scope,
+            reason=args.reason,
+            change=args.change,
+        )
+        if args.json:
+            print(json.dumps(req.to_dict(), indent=2))
+        else:
+            print(f"📝 Created approval request '{req.request_id}'")
+            print(f"  • Agent   : {req.agent}")
+            print(f"  • Action  : {req.action}")
+            print(f"  • Scope   : {req.scope}")
+            print(f"  • Status  : {req.status}")
+            print(f"  • Reason  : {req.reason}")
+        return 0
+
+    elif action == "approve":
+        parser.add_argument("request_id", nargs="?", default=None, help="Request ID to approve")
+        parser.add_argument("--req", dest="req_opt", default=None, help="Request ID")
+        parser.add_argument("--human", required=True, help="Approving human supervisor")
+        parser.add_argument("--ttl", type=int, default=None, help="TTL duration in seconds")
+        parser.add_argument("--reason", default="", help="Approval justification")
+        args = parser.parse_args(rem)
+        req_id = args.req_opt or args.request_id
+        if not req_id:
+            parser.error("request_id is required")
+        manager = ApprovalManager(Path(args.path).resolve())
+        appr = manager.approve_request(
+            request_id=req_id,
+            human=args.human,
+            ttl_seconds=args.ttl,
+            reason=args.reason,
+            change_id=args.change,
+        )
+        if args.json:
+            print(json.dumps(appr.to_dict(), indent=2))
+        else:
+            print(f"✅ Approved request '{req_id}' -> Issued DurableApproval '{appr.approval_id}'")
+            print(f"  • Human    : {appr.human}")
+            print(f"  • Agent    : {appr.agent}")
+            print(f"  • Action   : {appr.action}")
+            print(f"  • Scope    : {appr.scope}")
+            print(f"  • Signature: {appr.signature[:16]}...")
+            if appr.expires_at:
+                print(f"  • Expires  : {appr.expires_at}")
+        return 0
+
+    elif action == "grant-direct":
+        parser.add_argument("--human", required=True, help="Issuing human supervisor")
+        parser.add_argument("--agent", required=True, help="Agent ID holding authorization")
+        parser.add_argument("--action", required=True, help="Action/operation (e.g. SECRET_READ)")
+        parser.add_argument("--scope", required=True, help="Scope pattern (e.g. AWS_*)")
+        parser.add_argument("--reason", required=True, help="Durable rationale")
+        parser.add_argument("--ttl", type=int, default=None, help="TTL duration in seconds")
+        args = parser.parse_args(rem)
+        manager = ApprovalManager(Path(args.path).resolve())
+        appr = manager.issue_direct_approval(
+            human=args.human,
+            agent=args.agent,
+            action=args.action,
+            scope=args.scope,
+            reason=args.reason,
+            ttl_seconds=args.ttl,
+            change=args.change,
+        )
+        if args.json:
+            print(json.dumps(appr.to_dict(), indent=2))
+        else:
+            print(f"🛡️  Issued DurableApproval '{appr.approval_id}' directly to agent '{appr.agent}'")
+            print(f"  • Human    : {appr.human}")
+            print(f"  • Action   : {appr.action}")
+            print(f"  • Scope    : {appr.scope}")
+            print(f"  • Signature: {appr.signature[:16]}...")
+            if appr.expires_at:
+                print(f"  • Expires  : {appr.expires_at}")
+        return 0
+
+    elif action == "reject":
+        parser.add_argument("request_id", nargs="?", default=None, help="Request ID to reject")
+        parser.add_argument("--req", dest="req_opt", default=None, help="Request ID")
+        parser.add_argument("--human", required=True, help="Rejecting human supervisor")
+        parser.add_argument("--reason", default="", help="Rejection rationale")
+        args = parser.parse_args(rem)
+        req_id = args.req_opt or args.request_id
+        if not req_id:
+            parser.error("request_id is required")
+        manager = ApprovalManager(Path(args.path).resolve())
+        req = manager.reject_request(
+            request_id=req_id,
+            human=args.human,
+            reason=args.reason,
+            change_id=args.change,
+        )
+        if args.json:
+            print(json.dumps(req.to_dict(), indent=2))
+        else:
+            print(f"❌ Rejected request '{req.request_id}' by {args.human}")
+            if req.rejection_reason:
+                print(f"  • Reason  : {req.rejection_reason}")
+        return 0
+
+    elif action == "revoke":
+        parser.add_argument("approval_id", nargs="?", default=None, help="Approval ID to revoke")
+        parser.add_argument("--appr", dest="appr_opt", default=None, help="Approval ID")
+        parser.add_argument("--human", required=True, help="Revoking human supervisor")
+        parser.add_argument("--reason", default="", help="Revocation rationale")
+        args = parser.parse_args(rem)
+        appr_id = args.appr_opt or args.approval_id
+        if not appr_id:
+            parser.error("approval_id is required")
+        manager = ApprovalManager(Path(args.path).resolve())
+        appr = manager.revoke_approval(
+            approval_id=appr_id,
+            human=args.human,
+            reason=args.reason,
+            change_id=args.change,
+        )
+        if args.json:
+            print(json.dumps(appr.to_dict(), indent=2))
+        else:
+            print(f"🛑 Revoked DurableApproval '{appr.approval_id}' for agent '{appr.agent}' by {args.human}")
+        return 0
+
+    elif action == "list":
+        parser.add_argument("--status", default=None, help="Filter requests by status (PENDING, APPROVED, REJECTED)")
+        parser.add_argument("--active", action="store_true", help="Only list active (unexpired, unrevoked) approvals")
+        args = parser.parse_args(rem)
+        manager = ApprovalManager(Path(args.path).resolve())
+        requests = manager.list_requests(status=args.status, change_id=args.change)
+        approvals = manager.list_approvals(active_only=args.active, change_id=args.change)
+        if args.json:
+            print(json.dumps({
+                "requests": [r.to_dict() for r in requests],
+                "authorizations": [a.to_dict() for a in approvals],
+            }, indent=2))
+        else:
+            print(f"📋 Requests ({len(requests)}):")
+            for r in requests:
+                print(f"  • {r.request_id} | Agent: {r.agent:12s} | {r.action:12s} -> {r.scope:20s} | Status: {r.status}")
+            print(f"\n🛡️  Authorizations ({len(approvals)}):")
+            for a in approvals:
+                status = "REVOKED" if a.revoked else "ACTIVE"
+                print(f"  • {a.approval_id} | Human: {a.human:12s} -> {a.agent:12s} | {a.action:12s} -> {a.scope:20s} | {status}")
+        return 0
+
+    else:
+        print(f"Unknown approval action: '{action}'. See 'agentflow approval --help'.", file=sys.stderr)
+        return 1
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """Unified entrypoint for ship CLI with subcommands, specialist tools, and MCP server."""
     if argv is None:
@@ -1010,6 +1218,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if cmd in ("capability", "capabilities", "cap"):
         return run_capability_cli(sub_args)
+
+    if cmd in ("approval", "approvals", "authz"):
+        return run_approval_cli(sub_args)
 
     # Specialist tools dispatch
     if cmd == "tdd":
