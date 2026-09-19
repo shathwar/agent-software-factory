@@ -36,7 +36,7 @@ A repository of local-first engineering skills for AI agents, covering the compl
 │          REVIEW: ADVERSARIAL REVIEW & AUTO-FIX (review)                       │
 │   • Stage 0: Spec Alignment (Verifies code directly against ADR/Spec)       │
 │   • Stages 1–9: Correctness, Concurrency, Failure, Craftsmanship, SOLID     │
-│   • Review Loop: Auto-fixes critical findings & proves zero regressions     │
+│   • Review Loop: Finds critical issues and checks for regressions            │
 └──────────────────────────────────────┬──────────────────────────────────────┘
                                        │
                                        ▼ (Judge Issues PASS)
@@ -60,7 +60,7 @@ This framework transforms AI from an unpredictable code generator into a **disci
 | **Hollow, Backfilled Unit Tests** | [**`tdd`**](./skills/tdd/SKILL.md) enforces the *Iron Law of Test-First* and an in-flight **Doubt Cycle**. Agents are strictly forbidden from writing production code before proving a behavioral test fails. | **Real regression safety; tests verify observable behavior instead of mock configurations.** |
 | **Vanishing Architectural Context** | [**`design`**](./skills/design/SKILL.md) enforces the *Facts vs. Decisions Law*, audits **Capability Closure**, and compiles an **ADR** and **OpenSpec package** directly into Git. | **Local decision and evidence records that teams can review alongside their existing controls.** |
 | **Multi-Agent Coordination & Crashes** | [**`ship`**](./skills/ship/SKILL.md) provides a **two-phase atomic transaction engine** (`.agentflow/archive-transaction.json`) and multi-change isolation (`--change <id>`) with automatic crash recovery. | **Recoverable archive operations and explicit change selection; parallel source editing still requires separate worktrees.** |
-| **Security & Compliance Hurdles** | **Zero external dependencies.** The entire test suite, inspector CLIs, debt scanners, and validators run on standard library Python 3.10+ and POSIX bash. | **No third-party runtime Python packages; Python, Git, build tooling, and agent hosts remain part of the supply chain.** |
+| **Security & Compliance Hurdles** | Local policy checks, scoped capabilities, audit records, and guarded MCP actions. | **Useful control points for a pilot. Not an OS sandbox, identity system, or compliance certification. Your host still controls permissions, secrets, and network access.** |
 | **LLM Token Costs & Latency** | All core skills and agent prompts are **token-optimized ("cavemanned")**, stripping conversational fluff while retaining strict technical constraints. | **Compact prompts; measure token use and instruction adherence with your own host and model.** |
 
 ### Team Rollout Playbook
@@ -103,7 +103,13 @@ Give your agent [ship SKILL.md](./skills/ship/SKILL.md) and feature request: `/s
 - **Cryptographic Design Receipts**: Binds authorization to exact specification digest; any requirements amendment invalidates approval and requests re-confirmation.
 - **Working Tree Fingerprinting**: SHA-256 snapshot of commit, tree hash, and uncommitted diff/untracked files; post-review modifications immediately flag `Ship-Review: STALE` and block delivery.
 - **Atomic Transactions & Crash Resilience**: Two-phase commit spec archiving (`.agentflow/archive-transaction.json`) with automatic self-healing recovery from interrupted sessions.
+- **Deterministic Recovery**: Crash points have explicit resume, rollback, reconcile, and abort outcomes. Recovery is recorded in the ledger.
 - **Re-Entrant State Machine**: Filesystem (`openspec/`, `tasks.md`, `docs/adr/`) is persistent state machine. Resumes exact active phase instantly.
+- **Scoped Authorization**: Durable approvals and capabilities bind an agent, change, operation, target, and expiry. Approvals cannot be reused across agents or changes.
+- **External Action Guard**: Network read/write, secret read, cloud mutation, and GitHub write are named operations. `CapabilityGuard` and `ExternalActionAdapter` check them before a provider callback runs.
+- **Tamper-Evident Events**: Append-only execution events use a hash chain and can replay change state for audit and recovery checks.
+- **Resource Governor**: Tracks tokens, model calls, turns, time, cost, tools, and network operations against per-change ceilings.
+- **Evaluation Harness**: Runs local regression scenarios for approvals, permissions, recovery, concurrency, budgets, and event integrity.
 - **Repository Manifest (`.agentflow.json`)**: Clean domain schema validated by [`agentflow.schema.json`](./skills/ship/references/agentflow.schema.json). Configures custom test commands (`gates.implementation.test`).
 - **Git Checkpoints & Safe Rollback**: Records private refs (`--checkpoint design`) and safely backs up broken code on architectural revisions (`--rollback design`).
 - **Zero-Loss State Migration**: Seamlessly upgrade legacy ledgers via `inspect_lifecycle.py --migrate-state` with byte-for-byte backups.
@@ -477,6 +483,10 @@ The test runner reports the current test count and includes nested adversarial p
 - **Operational Boundary Trials ([`test_agent_workflow_trials.py`](./tests/test_agent_workflow_trials.py))**: Simulated agent workflows across dirty trees, concurrent multi-change development, crash recovery, amended designs, and external installations.
 - **Atomic Transactions & Crash Recovery ([`test_archive_recovery.py`](./tests/test_archive_recovery.py))**: Two-phase commit spec archiving, orphan journal recovery, and atomic ledger transitions.
 - **Evidence Gates & Cryptographic Invariants ([`test_evidence_gates.py`](./tests/test_evidence_gates.py))**: Specification digest binding, contradictory result rejection, and post-review modification invalidation.
+- **Permissions & External Actions ([`test_network_secret_governance.py`](./tests/permissions/test_network_secret_governance.py), [`test_external_action_adapter.py`](./tests/test_external_action_adapter.py))**: Scoped network, secret, cloud, GitHub, and provider-callback checks.
+- **Durable Approvals & Identity ([`test_durable_approvals.py`](./tests/permissions/test_durable_approvals.py), [`test_identity_attacks.py`](./tests/identity/test_identity_attacks.py))**: Scope, expiry, revocation, non-transferability, and maker/checker rules.
+- **Resource & Evaluation Controls ([`test_resource_governance.py`](./tests/convergence/test_resource_governance.py), [`test_evaluation_harness.py`](./tests/evaluation/test_evaluation_harness.py))**: Seven resource ceilings and local regression scenarios.
+- **Event Replay & Integrity ([`test_event_stream.py`](./tests/verification/test_event_stream.py), [`test_deterministic_replay.py`](./tests/production/test_deterministic_replay.py))**: Hash-chain verification and deterministic state replay.
 - **Team Operations & Diagnostics ([`test_team_operations.py`](./tests/test_team_operations.py))**: Preflight doctor checks, workflow profile deep-merging, and zero-loss state migrations.
 - **Core Engine Mechanics ([`test_inspect_lifecycle.py`](./tests/test_inspect_lifecycle.py))**: Git checkpoints, safe rollback on renames, Git notes attachment, and RFC 5133 trailer generation.
 - **Document Integrity ([`test_documents.py`](./tests/test_documents.py))**: Validates that all relative Markdown link targets exist on disk and that schema document examples adhere to contract.
@@ -518,6 +528,17 @@ Validate a reviewer or Judge report against the formal 12-field schema:
 python3 skills/review/scripts/validate_report.py report.json
 ```
 
+Inspect the new AgentFlow control surfaces:
+```bash
+agentflow events verify --path .
+agentflow budget check --change <change>
+agentflow benchmark --suite all
+agentflow capability check <agent> --op NETWORK_READ --target "https://example.com/*"
+```
+
+These commands inspect or evaluate local state. They do not grant an agent access to
+the operating system, a secret store, a cloud account, or a remote API.
+
 Benchmark an empirical spike with warmup passes and latency percentiles (p50/p90/p95/p99):
 ```bash
 python3 skills/spike/scripts/run_spike.py --cmd "python3 -c 'pass'" --iterations 100
@@ -525,34 +546,33 @@ python3 skills/spike/scripts/run_spike.py --cmd "python3 -c 'pass'" --iterations
 
 ---
 
-## Enterprise & Team Rollout
+## Team Rollout
 
-The suite is designed for structured, low-risk adoption across engineering organizations:
+Start small. Run the skills locally on a few real tasks. Keep normal code review and host controls in place.
 
 - **Local Team Rollout Guide ([`team_rollout.md`](./skills/ship/references/team_rollout.md))**: Detailed guide covering `--doctor` preflight, workflow profiles (`small-fix`, `standard`, `high-risk`), host capability adaptations (`auto`, `sequential`, `parallel`), pinned distributions (`install.sh --mode copy --backup`), and zero-loss ledger migration.
 - **Behavioral Evaluation Cases & Pilot Benchmarks ([`skill_evaluations.md`](./tests/skill_evaluations.md))**: 12 realistic evaluation fixtures and acceptance criteria for benchmarking agent decisions, boundary respect, and defect detection before organizational distribution.
 - **Headless CI & Asynchronous Automation ([`headless_ci_guide.md`](./skills/ship/references/headless_ci_guide.md))**: Ready-to-use GitHub Actions and GitLab CI workflows decoupling feature development from active IDE chat sessions using issue-based approval gates (`ship:approved`).
-- **Zero-Telemetry Local Operation**: All ledgers, evidence, and logs remain strictly local or inside your private Git repository. No data or telemetry is transmitted externally.
+- **Local by default**: Ledgers, evidence, and logs stay on the machine or in the repository unless a host, command, or provider sends them elsewhere.
 
 ## Trust and execution boundaries
 
-AgentFlow is a local workflow coordinator. Ledger entries, identities, approvals, and
-capabilities are records controlled by the local user. Hashes detect changed content;
-they do not authenticate agents or create an immutable compliance log.
+AgentFlow is a local workflow coordinator. The local user controls the ledger, identities,
+approvals, and capabilities. Hashes detect changed content. They do not authenticate an
+agent or create an immutable compliance log.
 
-`agentflow capability check` evaluates policy and records a decision. A trusted host
-must enforce that decision before an action. The capability module does not intercept
-filesystem writes, shell commands, or network traffic. Adversarial policy tests exercise
-ALLOW/DENY decisions; they do not demonstrate OS isolation of malicious agents. Use the
-host's sandbox and permission system for containment. CLI commands run with the user's
-permissions. Do not give untrusted agents direct access to the CLI or writable ledger.
+`agentflow capability check` evaluates policy and records a decision. A trusted host must
+enforce it. The check does not stop a program that can ignore it. Use host permissions,
+OS sandboxing, secret managers, and network policy for real containment. CLI commands run
+with the user's permissions. Do not give untrusted agents direct access to the CLI or
+writable ledger.
 
-MCP tools that record evidence, approve, checkpoint, roll back, archive, or run shell
-benchmarks are disabled by default. To enable them, a trusted operator must set
+MCP tools that change state or run shell benchmarks are disabled by default. To enable
+them, a trusted operator must set
 `AGENTFLOW_MCP_ALLOW_MUTATIONS=1` in the server environment. This grants the connected
-client those operations; it is not per-agent capability isolation. Status inspection
-can still synchronize internal workflow state. Project test commands and benchmarks
-run locally with server/user privileges.
+client those operations; it is not a sandbox. Shell benchmarks also require an agent,
+operation, and target that pass the capability guard. Project test commands and
+benchmarks still run with server/user privileges.
 
 Install the CLI before `scripts/install.sh --mcp`, or use `--pip --mcp`. Registration
 stores the resolved executable path and preserves malformed existing configuration
