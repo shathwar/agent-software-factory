@@ -50,9 +50,9 @@ class PackagingTests(unittest.TestCase):
         finally:
             sys.stdout = old_stdout
         self.assertEqual(ret, 0)
-        self.assertIn("Ship SDLC CLI v1.0.0", buf.getvalue())
-        self.assertIn("ship status", buf.getvalue())
-        self.assertIn("ship turn", buf.getvalue())
+        self.assertIn("AgentFlow SDLC CLI v1.0.0", buf.getvalue())
+        self.assertIn("agentflow status", buf.getvalue())
+        self.assertIn("agentflow turn", buf.getvalue())
         self.assertIn("ship mcp", buf.getvalue())
 
     def test_cli_subcommands_and_flag_parity(self):

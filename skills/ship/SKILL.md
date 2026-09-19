@@ -19,7 +19,7 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 - Harness Independence: The workflow does NOT depend on recursive subagents. Specialist activities execute as independent agent turns orchestrated by the workflow controller, supporting sequential execution or parallel passes where supported. Subagents are an optional optimization, never a core dependency. Disclose the execution mode honestly.
 - Git Restrictions: Checkpoints and Git notes create internal commit objects. Respect explicit no-Git-mutation restrictions; use local evidence and disclose skipped checkpoint/note capabilities as described in [team rollout](./references/team_rollout.md#git-mutation-restrictions).
 - Design Checkpoint: Record `inspect_lifecycle.py --checkpoint design`. NEVER proceed to implementation without explicit user confirmation of the ADR/OpenSpec package.
-- Test-First Law: In implementation, every task MUST follow strict Red-Green-Refactor with failing behavioral tests before code. Enforce `.ship.json` test commands when present.
+- Test-First Law: In implementation, every task MUST follow strict Red-Green-Refactor with failing behavioral tests before code. Enforce `.agentflow.json` test commands when present.
 - Terminal Receipts: Gate transitions (implementation ➔ review and review ➔ delivery) REQUIRE pasting the raw terminal test runner output (exit code, test count, duration). Unsubstantiated claims of "tests pass" are rejected.
 - Rollback Guard: If Stage 0 or Judge in review detects a broken architectural invariant, execute `inspect_lifecycle.py --rollback design` and return to design.
 - Review Clearance: Delivery REQUIRES an explicit PASS report from the review Judge, zero open CRITICAL/HIGH defects, and verified test evidence bound to current code.
@@ -29,7 +29,7 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 Verify before ending the turn:
 ✓ 1. Turn Contract Inspected: Inspected `inspect_lifecycle.py --next-turn` before executing or advancing.
 ✓ 2. Receipts Pasted: Terminal receipts (command, exit code, test count, duration) pasted for any test or gate execution.
-✓ 3. Ledger Synchronized & Provenance Recorded: Gate transitions, design approvals, test runs, or evidence records committed to `.ship/state.json` with turn provenance.
+✓ 3. Ledger Synchronized & Provenance Recorded: Gate transitions, design approvals, test runs, or evidence records committed to `.agentflow/state.json` with turn provenance.
 ✓ 4. Zero Unsubstantiated Claims: No phase marked complete without verifiable filesystem or command evidence.
 </turn_contract>
 
@@ -43,7 +43,7 @@ User Request: "/ship <idea>"
       ▼
 Design: Specification & Architecture (design)
   • Facts vs. Decisions Law ➔ Frontier Rounds (Q1/Q2)
-  • If empirical blocker ➔ run spike in .scratch/
+  • If empirical blocker ➔ run spike in .agentflow/spikes/
   • Compile ADR (docs/adr/) & OpenSpec (openspec/changes/)
   • Checkpoint: User confirms specification
       │
@@ -78,7 +78,7 @@ The filesystem is the persistent state machine. Orient using the most direct ava
 | Gate | Indicators | Action |
 |---|---|---|
 | **Design** | No `openspec/changes/<change>/` or `docs/adr/`. | Launch [`design`](../design/SKILL.md). Discover facts, present Frontier Rounds. |
-| **Spike** | Design frontier hits ungrillable question. | Launch [`spike`](../spike/SKILL.md) in `.scratch/`. Report verdict. |
+| **Spike** | Design frontier hits ungrillable question. | Launch [`spike`](../spike/SKILL.md) in `.agentflow/spikes/`. Report verdict. |
 | **Implementation** | Current design approval exists and `tasks.md` has unchecked `[ ]` tasks. | Launch [`tdd`](../tdd/SKILL.md). Resume at first unchecked task. |
 | **Review** | All tasks `[x]`, no clean review report. | Launch [`review`](../review/SKILL.md) in `review-loop` mode. |
 | **Delivery** | All tasks `[x]`, all tests pass, Judge `PASS`. | Compile Delivery Walkthrough and prepare git commit. |
@@ -92,7 +92,7 @@ Read `workflow.profile` and `workflow.execution` from inspection output. Apply t
 ### Design: Specification & Architecture
 1. Discover facts autonomously from source files. Never ask code-discoverable questions.
 2. Present Frontier Rounds: `❓ Q[N]` with `➡️ Recommended Stance`.
-3. If empirical uncertainty arises, spike in `.scratch/` using [`spike`](../spike/SKILL.md).
+3. If empirical uncertainty arises, spike in `.agentflow/spikes/` using [`spike`](../spike/SKILL.md).
 4. Compile `docs/adr/ADR-<NNNN>-<change>.md` and `openspec/changes/<change>/`.
 5. Checkpoint specification: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --checkpoint design`.
 6. Capture the design digest before presenting the package for confirmation. After explicit authorization, record that same digest and the approver identity using [design approval receipts](./references/lifecycle_state_machine.md#local-workflow-and-design-approval). Explicit approval in the current conversation is sufficient; record it without asking again. Use the known session identity or `session-user`, and apply authorization only to the reviewed design. A checkpoint alone is not approval.
@@ -100,7 +100,7 @@ Read `workflow.profile` and `workflow.execution` from inspection output. Apply t
 ### Implementation: Test-First Development
 Iterate sequentially through `openspec/changes/<change>/tasks.md`:
 1. **Red**: [Test Driver](../tdd/agents/test_driver.md) writes failing behavioral test; prove assertion failure.
-2. **Green**: [Simplify Implementer](../tdd/agents/simplify_implementer.md) writes minimal code using [Laziness Ladder](../simplify/SKILL.md) and custom test commands defined in `.ship.json`.
+2. **Green**: [Simplify Implementer](../tdd/agents/simplify_implementer.md) writes minimal code using [Laziness Ladder](../simplify/SKILL.md) and custom test commands defined in `.agentflow.json`.
 3. **Refactor**: [Code Refactorer](../tdd/agents/code_refactorer.md) cleans code; adds [debt markers](../simplify/references/debt_tracking.md) with ceilings.
 4. Mark task completed `- [x]` and repeat.
 5. Checkpoint implementation: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --checkpoint implementation`.
@@ -111,7 +111,7 @@ Iterate sequentially through `openspec/changes/<change>/tasks.md`:
    - Execute `bash <resolved_path>/inspect_changes.sh --base <base-branch>` (default: `main`). Never restrict to `main...HEAD` as that omits uncommitted working-tree implementation edits.
 2. Launch [`review`](../review/SKILL.md) in `review-loop` mode.
 3. Stage 0 verifies code against OpenSpec/ADR; Stages 1–9 review concurrency, chaos, correctness.
-4. Auto-fix defects under green test protection until Judge issues an explicit `PASS` report. Package `.scratch/delivery_evidence.json` (Delivery Evidence Envelope) bundling the Judge report, verified test runner evidence, and reviewed commit/tree snapshot.
+4. Auto-fix defects under green test protection until Judge issues an explicit `PASS` report. Package `.agentflow/delivery_evidence.json` (Delivery Evidence Envelope) bundling the Judge report, verified test runner evidence, and reviewed commit/tree snapshot.
 5. **Rollback Guard**: If ADR invariant is fundamentally broken, execute `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --rollback design` and re-open Frontier Round in design.
 
 ### Delivery: Sign-Off & Handoff

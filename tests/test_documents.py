@@ -41,3 +41,29 @@ class DocumentTests(unittest.TestCase):
                 data = {"reviewer": "judge", "status": "complete", "findings": [data],
                         "coverage": [], "questions": [], "routing_notes": []}
             self.assertEqual(validator.validate_report(data), [])
+
+    def test_no_legacy_workspace_references(self):
+        """Ensure legacy .ship.json, .ship/, and .scratch/ in lifecycle docs never regress."""
+        result = subprocess.run(
+            ["git", "ls-files", "-z"],
+            cwd=ROOT, check=True, capture_output=True)
+        tracked_paths = [ROOT / path.decode() for path in result.stdout.split(b"\0") if path]
+
+        for p in tracked_paths:
+            if p == ROOT / "tests/test_documents.py":
+                continue
+            # 1. .ship.json must never appear in any tracked file
+            if p.suffix in (".md", ".py", ".json", ".sh", ".yml", ".yaml", ".toml"):
+                content = p.read_text(encoding="utf-8", errors="ignore")
+                self.assertNotIn(".ship.json", content, f"Found legacy .ship.json reference in {p.relative_to(ROOT)}")
+
+            # 2. .ship/ must never appear in any markdown or workflow file
+            if p.suffix in (".md", ".yml", ".yaml"):
+                content = p.read_text(encoding="utf-8", errors="ignore")
+                self.assertNotIn(".ship/", content, f"Found legacy .ship/ reference in {p.relative_to(ROOT)}")
+
+            # 3. .scratch/ must never appear in ship, review, or template workflow docs
+            rel_str = str(p.relative_to(ROOT))
+            if rel_str.startswith(("skills/ship/", "skills/review/", "templates/ci/")) and p.suffix in (".md", ".yml", ".yaml"):
+                content = p.read_text(encoding="utf-8", errors="ignore")
+                self.assertNotIn(".scratch/", content, f"Found legacy .scratch/ reference in {rel_str}")

@@ -5,10 +5,11 @@ from pathlib import Path
 import platform
 import shutil
 import sys
+from typing import Any, Dict, List, Optional
 import uuid
 
 from .config import ShipConfigManager
-from .ledger import FileLedgerStore, read_ledger_file
+from .ledger import FileLedgerStore, read_ledger_file, ensure_gitignore_has_agentflow
 from .paths import repository_path, get_state_file, get_journal_file, agentflow_path
 from .transactions import atomic_write
 
@@ -40,7 +41,7 @@ def doctor(root: Path):
         except OSError:
             installed = "missing"
         check(f"version:{name}", installed == version and installed != "unknown", installed)
-    check("schema", (ship / "references/ship.schema.json").is_file(), "Bundled configuration schema")
+    check("schema", (ship / "references/agentflow.schema.json").is_file(), "Bundled configuration schema")
     try:
         config = ShipConfigManager.load(root)
         check("configuration", True, f"profile={config['workflow']['profile']}, execution={config['workflow']['execution']}")
@@ -68,3 +69,74 @@ def migrate_state(root: Path):
         state["version"] = 1
         FileLedgerStore.save(root, state)
         return {"changed": True, "version": 1, "backup": str(backup)}
+
+
+def detect_test_command(repo_root: Path) -> str:
+    """Auto-detect test command from repository files."""
+    pkg_json = repo_root / "package.json"
+    if pkg_json.is_file():
+        try:
+            data = json.loads(pkg_json.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and "test" in data.get("scripts", {}):
+                if (repo_root / "pnpm-lock.yaml").exists():
+                    return "pnpm test"
+                if (repo_root / "yarn.lock").exists():
+                    return "yarn test"
+                return "npm test"
+        except Exception:
+            pass
+
+    if (repo_root / "Cargo.toml").is_file():
+        return "cargo test"
+
+    if (repo_root / "go.mod").is_file():
+        return "go test ./..."
+
+    if any((repo_root / f).exists() for f in ("pytest.ini", "pyproject.toml", "setup.cfg")) or (repo_root / "tests").is_dir():
+        return "pytest"
+
+    return ""
+
+
+def init_agentflow(
+    root: Path,
+    profile: str = "standard",
+    scope: str = ".",
+    test_cmd: Optional[str] = None,
+    force: bool = False,
+) -> Dict[str, Any]:
+    """Initialize an AgentFlow workflow in the repository."""
+    config_file = root / ".agentflow.json"
+    if config_file.exists() and not force:
+        raise FileExistsError(f"{config_file.name} already exists. Use force=True to overwrite.")
+
+    detected_test = test_cmd if test_cmd is not None else detect_test_command(root)
+    name = root.name or "project"
+
+    config_data = {
+        "$schema": "https://raw.githubusercontent.com/shathwar/skills/main/skills/ship/references/agentflow.schema.json",
+        "version": 1,
+        "workflow": {
+            "profile": profile,
+            "execution": "auto",
+        },
+        "project": {
+            "name": name,
+            "scope": scope,
+        },
+        "gates": {
+            "implementation": {
+                "test": detected_test,
+            },
+        },
+    }
+
+    config_file.write_text(json.dumps(config_data, indent=2) + "\n", encoding="utf-8")
+    ensure_gitignore_has_agentflow(root)
+
+    return {
+        "ok": True,
+        "path": str(config_file),
+        "profile": profile,
+        "test_command": detected_test,
+    }

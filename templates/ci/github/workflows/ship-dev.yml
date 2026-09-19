@@ -63,7 +63,7 @@ jobs:
             ## Operational Guidelines
 
             1. **Understand Architectural Context & Invariants**:
-               - Read `ARCHITECTURAL_INVARIANTS.md` and `.ship.json` if present in the repository root.
+               - Read `ARCHITECTURAL_INVARIANTS.md` and `.agentflow.json` if present in the repository root.
                - Respect the 4 Execution Rings model and "No Orphan Agents" accountability invariant.
                - Read existing files in affected directories to match style, naming conventions, and error handling.
                - Enforce zero third-party bloat (use stdlib or existing project dependencies).

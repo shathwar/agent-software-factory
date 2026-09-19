@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Ship Lifecycle Configuration",
-  "description": "Configuration schema for .ship.json engineering lifecycle manifests.",
+  "title": "AgentFlow Workflow Configuration",
+  "description": "Configuration schema for .agentflow.json engineering workflow manifests.",
   "type": "object",
   "required": [
     "version"

@@ -50,13 +50,13 @@ The headless workflow decouples the lifecycle gates into asynchronous CI steps:
 
 ---
 
-## 3. Configuration: `.ship.json`
+## 3. Configuration: `.agentflow.json`
 
-Every repository or monorepo service can include a `.ship.json` at its root or service directory:
+Every repository or monorepo service can include a `.agentflow.json` at its root or service directory:
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/shathwar/skills/main/skills/ship/references/ship.schema.json",
+  "$schema": "https://raw.githubusercontent.com/shathwar/skills/main/skills/ship/references/agentflow.schema.json",
   "version": 1,
   "project": {
     "name": "payment-gateway",
@@ -137,7 +137,7 @@ When integrating your organization's custom agent runner or CI infrastructure, a
 
 1. **Persist the design result.** Create an issue-specific branch and commit the ADR
    and OpenSpec package. Publish its exact commit SHA. Persist the checkpoint receipt,
-   checkpoint Git objects/private refs, and `.ship/state.json` in access-controlled
+   checkpoint Git objects/private refs, and `.agentflow/state.json` in access-controlled
    storage. Ordinary branch pushes do not carry `refs/ship/*` or Git notes, and the
    local ledger is ignored by Git. Do not post “specification ready” until all required
    artifacts have been saved successfully.
@@ -171,11 +171,11 @@ implementation, and evidence-publication failure, before enabling autonomous del
 | Command | Purpose in CI/CD |
 |---|---|
 | `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --status-check` | Exits `0` if ready for delivery, `1` if blocked, `2` if rollback required. Use in CI branch protection. |
-| `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --checkpoint <gate>` | Records immutable internal git refs (`refs/ship/...`) and JSON receipts in `.scratch/`. |
-| `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --rollback design` | Safely archives untracked/modified edits to `.scratch/backups/` and resets `tasks.md` for revision. |
+| `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --checkpoint <gate>` | Records immutable internal git refs (`refs/ship/...`) and JSON receipts in `.agentflow/`. |
+| `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --rollback design` | Safely archives untracked/modified edits to `.agentflow/backups/` and resets `tasks.md` for revision. |
 | `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --archive <change>` | Syncs delta specs into `openspec/specs/` and archives completed change packages. |
-| `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --generate-trailers` | Emits RFC 5133 Git commit trailers mapping to `.ship.json` gates. |
-| `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --sync-state` | Re-synchronizes `.ship/state.json` authoritative ledger from workspace artifacts. |
+| `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --generate-trailers` | Emits RFC 5133 Git commit trailers mapping to `.agentflow.json` gates. |
+| `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --sync-state` | Re-synchronizes `.agentflow/state.json` authoritative ledger from workspace artifacts. |
 
 
 ## Recovery boundaries
@@ -187,12 +187,12 @@ A matching checkpoint receipt and valid snapshot/base commits are required. A
 checkpoint recorded before the first Git commit cannot restore files.
 
 Rollback copies affected files, including task progress, before restoring or deleting
-anything. Backups live in `.scratch/rollback_<timestamp>/`, with new files also under
+anything. Backups live in `.agentflow/rollback_<timestamp>/`, with new files also under
 `untracked_removed/`. Backup failures stop the operation. If a later Git operation
 fails, the command reports failure and the backup location; inspect that backup and
 Git status before retrying. The ledger is not advanced on a failed rollback.
 
-A corrupt or unsupported `.ship/state.json` stops state operations and is left
+A corrupt or unsupported `.agentflow/state.json` stops state operations and is left
 unchanged. Restore a known-good copy. If none exists, explicitly move the damaged
 file to a recovery location before running `--sync-state`, then reconcile manual
 holds, test failures, and other records that workspace artifacts cannot reconstruct.
@@ -205,7 +205,7 @@ return an error rather than substituting HEAD for uncommitted work.
 
 ### Archive restart recovery and path boundaries
 
-Archive runs under the ledger lock and writes `.ship/archive-transaction.json`
+Archive runs under the ledger lock and writes `.agentflow/archive-transaction.json`
 before changing specs or moving the package. The journal holds an operation ID,
 original spec bytes, the prior ledger bytes, destination paths, and progress markers.
 Spec writes and ledger writes use atomic replacement; writes and directory updates

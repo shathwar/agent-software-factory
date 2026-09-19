@@ -61,11 +61,11 @@ Adapted from the **Microsoft Agent Governance Toolkit (AGT ADR 0002)**, system p
 ```text
  ┌─────────────────────────────────────────────────────────────────────────┐
  │ Ring 0: Hypervisor & Ledger (Immutable)                                │
- │ • .ship/state.json, Git notes, private refs (refs/ship/*), receipts     │
+ │ • .agentflow/state.json, Git notes, private refs (refs/ship/*), receipts│
  │ • Write Access: STRICTLY RESTRICTED to inspect_lifecycle.py & human merge│
  ├─────────────────────────────────────────────────────────────────────────┤
  │ Ring 1: Architecture & Governance (Design-Gate Locked)                  │
- │ • ARCHITECTURAL_INVARIANTS.md, .ship.json, ADRs, OpenSpec change specs  │
+ │ • ARCHITECTURAL_INVARIANTS.md, .agentflow.json, ADRs, OpenSpec change specs│
  │ • Write Access: ONLY during /design gate with explicit human approval   │
  ├─────────────────────────────────────────────────────────────────────────┤
  │ Ring 2: Production Code & Tests (TDD / Ship Dev)                        │
@@ -73,15 +73,15 @@ Adapted from the **Microsoft Agent Governance Toolkit (AGT ADR 0002)**, system p
  │ • Write Access: Autonomous dev agents governed by PreTool safety hooks   │
  ├─────────────────────────────────────────────────────────────────────────┤
  │ Ring 3: Disposable Workspace & Scratch (Sandboxed)                      │
- │ • .scratch/, build/, dist/, __pycache__, .pytest_cache, node_modules    │
+ │ • .agentflow/spikes/, build/, dist/, __pycache__, .pytest_cache, node_modules│
  │ • Write/Delete Access: Fully disposable; approved cleanup targets       │
  └─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Ring Enforcement Invariants
 
-1. **Ring 0 Invariant**: Autonomous coding agents (`ship-dev`, `ship-fix`) MUST NEVER directly write to `.ship/state.json` or synthesize `refs/ship/*` Git notes. All state transitions must be generated deterministically by `inspect_lifecycle.py`.
-2. **Ring 1 Invariant**: Invariant documents and `.ship.json` gate configs cannot be silently modified during implementation (`/tdd` or `/simplify`). Modifying an architectural invariant requires an authorized Architecture Decision Record (ADR) approved at the `/design` gate.
+1. **Ring 0 Invariant**: Autonomous coding agents (`ship-dev`, `ship-fix`) MUST NEVER directly write to `.agentflow/state.json` or synthesize `refs/ship/*` Git notes. All state transitions must be generated deterministically by `inspect_lifecycle.py`.
+2. **Ring 1 Invariant**: Invariant documents and `.agentflow.json` gate configs cannot be silently modified during implementation (`/tdd` or `/simplify`). Modifying an architectural invariant requires an authorized Architecture Decision Record (ADR) approved at the `/design` gate.
 3. **Ring 2 Invariant**: Changes to production code must strictly adhere to TDD Red-Green-Refactor, pass all lint/type checks, and remain within approved branch boundaries.
 4. **Ring 3 Invariant**: Disposable artifacts can be purged via `rm -rf` by agents, provided targets match the approved `SAFE_CLEANUP_TARGETS` allowlist.
 

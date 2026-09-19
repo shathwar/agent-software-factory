@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgentFlow Workflow Configuration",
+  "description": "Configuration schema for .agentflow.json engineering workflow manifests.",
+  "type": "object",
+  "required": [
+    "version"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "URL or path to the schema definition."
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Manifest schema version."
+    },
+    "project": {
+      "type": "object",
+      "description": "Project metadata and workspace boundaries.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable name or package identifier."
+        },
+        "root": {
+          "type": "string",
+          "description": "Root path of the repository workspace."
+        },
+        "scope": {
+          "type": "string",
+          "description": "Subdirectory path of the active service or package (for monorepos)."
+        }
+      },
+      "additionalProperties": false
+    },
+    "gates": {
+      "type": "object",
+      "description": "Lifecycle gate configurations across all phases.",
+      "properties": {
+        "design": {
+          "type": "object",
+          "description": "Design gate (Specification & Design) settings.",
+          "properties": {
+            "adr_dir": {
+              "type": "string",
+              "description": "Directory for Architecture Decision Records."
+            },
+            "specs_dir": {
+              "type": "string",
+              "description": "Directory for living specifications."
+            }
+          },
+          "additionalProperties": false
+        },
+        "spike": {
+          "type": "object",
+          "description": "Spike gate (Empirical Prototypes & Benchmarks) settings.",
+          "properties": {
+            "timeout": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Default timeout in seconds per benchmark iteration."
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Concurrent worker threads for benchmark execution."
+            }
+          },
+          "additionalProperties": false
+        },
+        "implementation": {
+          "type": "object",
+          "description": "Implementation gate (Implementation & TDD) commands and rules.",
+          "properties": {
+            "test": {
+              "type": "string",
+              "description": "Shell command to run unit and integration test suite."
+            },
+            "typecheck": {
+              "type": "string",
+              "description": "Shell command to execute static type checker."
+            },
+            "lint": {
+              "type": "string",
+              "description": "Shell command to run code formatters and linters."
+            }
+          },
+          "additionalProperties": false
+        },
+        "simplify": {
+          "type": "object",
+          "description": "Simplify gate (Simplification & Laziness Ladder) debt controls.",
+          "properties": {
+            "max_debt": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Maximum tolerated simplify technical debt markers."
+            },
+            "strict": {
+              "type": "boolean",
+              "description": "Enforce strict syntax validation for all debt markers."
+            }
+          },
+          "additionalProperties": false
+        },
+        "review": {
+          "type": "object",
+          "description": "Review gate (Adversarial Review) parameters.",
+          "properties": {
+            "base_branch": {
+              "type": "string",
+              "description": "Base Git branch to compute the review diff against."
+            },
+            "reviewers": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Active review perspectives to invoke."
+            },
+            "max_iterations": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Maximum remediation and re-review loops permitted."
+            },
+            "critical_paths": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Project paths the review should prioritize."
+            }
+          },
+          "additionalProperties": false
+        },
+        "delivery": {
+          "type": "object",
+          "description": "Delivery gate (Ready to Ship & Archiving) controls.",
+          "properties": {
+            "target_branch": {
+              "type": "string",
+              "description": "Target branch for delivery."
+            },
+            "clean_worktree": {
+              "type": "boolean",
+              "description": "Require a clean Git working tree before delivery clearance."
+            },
+            "sync_specs": {
+              "type": "boolean",
+              "description": "Sync delta requirements to living specs on archiving."
+            },
+            "archive_packages": {
+              "type": "boolean",
+              "description": "Archive completed OpenSpec packages on delivery."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "create_git_tag": {
+      "type": "boolean",
+      "description": "Whether to create immutable git tags for checkpoints."
+    },
+    "config_source": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Resolved path to the source configuration file."
+    },
+    "config_error": {
+      "type": "string",
+      "description": "Error message encountered when loading config file."
+    },
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "type": "string",
+          "enum": [
+            "small-fix",
+            "standard",
+            "high-risk"
+          ]
+        },
+        "execution": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "sequential",
+            "parallel"
+          ]
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

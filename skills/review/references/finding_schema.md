@@ -145,9 +145,9 @@ The following is an example of one object inside `findings`:
 
 ---
 
-## 6. Delivery Evidence Envelope (`.scratch/delivery_evidence.json`)
+## 6. Delivery Evidence Envelope (`.agentflow/delivery_evidence.json`)
 
-To prevent contaminating the specialist and Judge report contract with lifecycle metadata (which `validate_report.py` strictly rejects as unexpected properties), the engineering lifecycle handoff bundles delivery approval into a separate **Delivery Evidence Envelope** (`.scratch/delivery_evidence.json`):
+To prevent contaminating the specialist and Judge report contract with lifecycle metadata (which `validate_report.py` strictly rejects as unexpected properties), the engineering lifecycle handoff bundles delivery approval into a separate **Delivery Evidence Envelope** (`.agentflow/delivery_evidence.json`):
 
 ```json delivery_evidence
 {

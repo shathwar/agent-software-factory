@@ -1825,8 +1825,8 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(safety_dir_file.read_text(), "def helper(): return 42\n")
 
     def test_ship_schema_conformance(self):
-        """Verify load_ship_config default_config aligns with ship.schema.json structure."""
-        schema_file = Path(__file__).resolve().parent.parent / "skills" / "ship" / "references" / "ship.schema.json"
+        """Verify load_ship_config default_config aligns with agentflow.schema.json structure."""
+        schema_file = Path(__file__).resolve().parent.parent / "skills" / "ship" / "references" / "agentflow.schema.json"
         self.assertTrue(schema_file.exists())
         schema = json.loads(schema_file.read_text(encoding="utf-8"))
 

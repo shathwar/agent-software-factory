@@ -34,7 +34,7 @@ history_file = None
 if not velocity_disabled:
     max_calls = int(os.environ.get("AGT_MAX_TOOL_CALLS", "60"))
     window_secs = float(os.environ.get("AGT_TOOL_WINDOW_SECS", "60"))
-    state_dir = os.environ.get("SKILLS_VELOCITY_DIR", ".scratch/velocity")
+    state_dir = os.environ.get("SKILLS_VELOCITY_DIR", ".agentflow/velocity")
     os.makedirs(state_dir, exist_ok=True)
     history_file = os.path.join(state_dir, "calls.json")
 
@@ -88,7 +88,7 @@ if m:
     SAFE_TARGETS = {
         "node_modules", "dist", "build", ".next", "target",
         "__pycache__", ".pytest_cache", ".venv", "venv",
-        "coverage", ".turbo", "out", ".scratch"
+        "coverage", ".turbo", "out", ".agentflow"
     }
     targets_str = m.group(2).strip()
     targets = targets_str.split()
@@ -103,7 +103,7 @@ if m:
             is_safe = False
             break
     if not is_safe:
-        print(json.dumps({"decision": "block", "reason": "Recursive deletion outside approved safe targets (build/dist/__pycache__/.scratch) is blocked by AGT policy."}))
+        print(json.dumps({"decision": "block", "reason": "Recursive deletion outside approved safe targets (build/dist/__pycache__/.agentflow) is blocked by AGT policy."}))
         sys.exit(2)
 
 # All checks passed: record velocity timestamp if limiter enabled

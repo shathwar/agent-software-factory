@@ -25,7 +25,7 @@ subagents or whether project tests actually work; verify those in the pilot.
 
 ## Team profiles
 
-Configure `.ship.json` (existing repository conventions remain authoritative):
+Configure `.agentflow.json` (existing repository conventions remain authoritative):
 
 ```json
 {
@@ -96,7 +96,7 @@ The installed Ship `VERSION` and doctor report identify the release, while the
 pinned commit identifies its exact content. There is no remote update service.
 
 Before upgrading, stop active agents, record the installed version/commit, preserve
-the old distribution, and back up each consumer project's `.ship/` directory.
+the old distribution, and back up each consumer project's `.agentflow/` directory.
 Install from the pinned checkout with `scripts/install.sh --mode copy --backup
 --target <skills-directory>`. Keep the installer-reported backup paths. Run doctor
 and the representative smoke scenarios before restarting work. The installer does
@@ -160,7 +160,7 @@ overhead. These are rollout criteria, not claims that the pilot has already run.
 
 Checkpoint refs and Git notes create internal Git commit objects even though they
 do not advance the user's branch. If the user forbids all commits or Git mutations,
-skip those commands; retain local terminal output and review evidence in `.scratch/`
+skip those commands; retain local terminal output and review evidence in `.agentflow/`
 and explain the missing checkpoint/note capabilities. Do not imply that a rollback
 checkpoint exists when it was skipped. A narrower instruction to avoid committing
 the implementation does not authorize publishing anything. Respect explicit limits

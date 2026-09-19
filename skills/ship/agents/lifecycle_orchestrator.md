@@ -8,7 +8,7 @@
 
 - **Turn-by-Turn Coordinator**: The orchestrator coordinates transitions and verifies receipts through explicit Turn Contracts. It NEVER writes implementation code, tests, or adversarial reviews directly in the main orchestrator conversation context.
 - **Harness Independence**: Execution does NOT depend on recursive subagents. When the harness supports subagents, dispatch isolated subagents for context boundary isolation or parallel review. Otherwise, execute focused sequential agent turns. Carry explicit ADR paths, task lists, receipts, and reports between turns; never fabricate independent reviewers.
-- **Persistent State Machine & Provenance**: The filesystem and ledger (`.ship/state.json`) act as the state machine. Orient with `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --next-turn` at session start.
+- **Persistent State Machine & Provenance**: The filesystem and ledger (`.agentflow/state.json`) act as the state machine. Orient with `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --next-turn` at session start.
 
 ---
 
@@ -16,14 +16,14 @@
 
 1. **Design (Specification & Architecture)**:
    - Execute `design` turn (`principal_architect`).
-   - If empirical unknown blocks design, execute `spike` turn (`spike_prototyper`) in `.scratch/`.
+   - If empirical unknown blocks design, execute `spike` turn (`spike_prototyper`) in `.agentflow/spikes/`.
    - On spec confirmation, record checkpoint: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --checkpoint design`.
    - Obtain user approval to proceed.
 
 2. **Implementation (TDD + Simplify)**:
    - Execute `tdd` turn with approved `tasks.md` and spec context.
    - Coordinate `test_driver` ➔ `simplify_implementer` ➔ `code_refactorer` sequentially.
-   - Enforce config from `.ship.json` (if present) for explicit `gates.implementation.test`.
+   - Enforce config from `.agentflow.json` (if present) for explicit `gates.implementation.test`.
    - On completion of all tasks and green test run, record checkpoint: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --checkpoint implementation`.
 
 3. **Review (Adversarial Review & Auto-Fix)**:

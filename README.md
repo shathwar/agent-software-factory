@@ -104,13 +104,13 @@ Give your agent [ship SKILL.md](./skills/ship/SKILL.md) and feature request: `/s
 - **Working Tree Fingerprinting**: SHA-256 snapshot of commit, tree hash, and uncommitted diff/untracked files; post-review modifications immediately flag `Ship-Review: STALE` and block delivery.
 - **Atomic Transactions & Crash Resilience**: Two-phase commit spec archiving (`.agentflow/archive-transaction.json`) with automatic self-healing recovery from interrupted sessions.
 - **Re-Entrant State Machine**: Filesystem (`openspec/`, `tasks.md`, `docs/adr/`) is persistent state machine. Resumes exact active phase instantly.
-- **Repository Manifest (`.agentflow.json`)**: Clean domain schema validated by [`ship.schema.json`](./skills/ship/references/ship.schema.json). Configures custom test commands (`gates.implementation.test`).
+- **Repository Manifest (`.agentflow.json`)**: Clean domain schema validated by [`agentflow.schema.json`](./skills/ship/references/agentflow.schema.json). Configures custom test commands (`gates.implementation.test`).
 - **Git Checkpoints & Safe Rollback**: Records private refs (`--checkpoint design`) and safely backs up broken code on architectural revisions (`--rollback design`).
 - **Zero-Loss State Migration**: Seamlessly upgrade legacy ledgers via `inspect_lifecycle.py --migrate-state` with byte-for-byte backups.
 - **Modular SOLID Architecture**: Structured Python package under [`skills/ship/scripts/lifecycle/`](./skills/ship/scripts/lifecycle/) separating VCS, evidence, ledger, gate verification, and transaction journals.
 - **Headless CI & GitHub Actions**: Run headlessly in CI with issue-based approvals via [Headless CI Guide](./skills/ship/references/headless_ci_guide.md).
 - **Agent Roster**: Led by [Lifecycle Orchestrator](./skills/ship/agents/lifecycle_orchestrator.md).
-- **References**: [Lifecycle State Machine Guide](./skills/ship/references/lifecycle_state_machine.md), [Local Team Rollout Guide](./skills/ship/references/team_rollout.md), and [Formal JSON Schema](./skills/ship/references/ship.schema.json).
+- **References**: [Lifecycle State Machine Guide](./skills/ship/references/lifecycle_state_machine.md), [Local Team Rollout Guide](./skills/ship/references/team_rollout.md), and [Formal JSON Schema](./skills/ship/references/agentflow.schema.json).
 
 ---
 
@@ -330,7 +330,7 @@ skills/
 │       ├── lifecycle_state_machine.md
 │       ├── team_rollout.md
 │       ├── headless_ci_guide.md
-│       └── ship.schema.json
+│       └── agentflow.schema.json
 ├── design/
 │   ├── SKILL.md
 │   ├── VERSION

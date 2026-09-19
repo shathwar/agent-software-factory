@@ -14,6 +14,7 @@ keywords = ["ship", "sdlc", "agentic-lifecycle", "mcp", "tdd", "turn-contracts"]
 dependencies = []
 
 [project.scripts]
+agentflow = "ship.cli:main"
 ship = "ship.cli:main"
 
 [tool.setuptools.packages.find]

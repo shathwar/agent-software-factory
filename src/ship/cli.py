@@ -15,34 +15,36 @@ from ship.lifecycle.vcs import GitClient
 
 compute_working_tree_fingerprint = GitClient().compute_working_tree_fingerprint
 from ship.lifecycle.trailers import CommitTrailerGenerator
-from ship.lifecycle.operations import doctor, migrate_state
+from ship.lifecycle.operations import doctor, migrate_state, init_agentflow
 from ship.lifecycle.paths import repository_path
 from ship.lifecycle.turns import get_next_turn_contract, format_turn_contract, format_turns_log
 
 VERSION = "1.0.0"
 
-HELP_BANNER = f"""Ship SDLC CLI v{VERSION} — Autonomous Engineering Lifecycle & MCP Server
+HELP_BANNER = f"""AgentFlow SDLC CLI v{VERSION} — Autonomous Engineering Lifecycle & MCP Server
 
 USAGE:
+  agentflow <command> [options]
   ship <command> [options]
-  ship [legacy-options]
 
 CORE SUBCOMMANDS:
-  ship status [--change <id>] [--path <dir>]
+  agentflow init [--profile standard|small-fix|high-risk] [--path <dir>]
+      Initialize an AgentFlow workflow in repository (.agentflow.json and .gitignore).
+  agentflow status [--change <id>] [--path <dir>]
       Evaluate gate readiness (exits 0=ready, 1=blocked, 2=rollback required).
-  ship turn [--change <id>] [--format text|json]
+  agentflow turn [--change <id>] [--format text|json]
       Derive the deterministic Turn Contract for the active change.
-  ship checkpoint <gate> [--change <id>]
+  agentflow checkpoint <gate> [--change <id>]
       Create an immutable git ref and receipt for design or implementation.
-  ship rollback <gate> [--change <id>]
+  agentflow rollback <gate> [--change <id>]
       Safely revert workspace to a prior checkpoint with backup preservation.
-  ship approve <change> <fingerprint> [--approved-by <id>]
+  agentflow approve <change> <fingerprint> [--approved-by <id>]
       Record external design specification approval.
-  ship archive <change> [--force]
+  agentflow archive <change> [--force]
       Apply delta specs and archive completed change package to openspec/archive/.
-  ship trailers <change>
+  agentflow trailers <change>
       Generate RFC 5133 Git commit trailers based on current verified evidence.
-  ship doctor [--path <dir>]
+  agentflow doctor [--path <dir>]
       Run preflight diagnostics (runtime, git, skill directories, ledger).
 
 SPECIALIST TOOLS:
@@ -323,6 +325,19 @@ def run_lifecycle(argv: Sequence[str]) -> int:
         if args.format == "json":
             print(json.dumps(res_dict, indent=2))
         else:
+            cid_disp = evaluation.get("target_change") or "none"
+            gate_disp = evaluation.get("gate", "unknown")
+            header = f"┌─ AgentFlow Workflow: {cid_disp} "
+            header += "─" * max(0, 60 - len(header)) + "┐"
+            print(header)
+            print(f"│ Gate: {gate_disp:<18} State: {state_key:<27} │")
+            pkgs = evaluation.get("openspec_packages", [])
+            active_pkg = next((p for p in pkgs if p.get("change") == cid_disp), None) if pkgs else None
+            if active_pkg and active_pkg.get("has_tasks"):
+                comp = active_pkg.get("completed_tasks", 0)
+                tot = active_pkg.get("total_tasks", 0)
+                print(f"│ Tasks: [{comp}/{tot}] complete{' ' * max(0, 42 - len(f'{comp}/{tot}'))} │")
+            print("└" + "─" * 58 + "┘")
             if ready:
                 print("✅ READY: Repository satisfies all lifecycle delivery gates.")
             else:
@@ -430,6 +445,25 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return review_main(sub_args)
 
     # Subcommands mapping to lifecycle operations
+    if cmd == "init":
+        init_parser = argparse.ArgumentParser(prog="agentflow init", description="Initialize AgentFlow workflow in repository.")
+        init_parser.add_argument("--profile", choices=["standard", "small-fix", "high-risk"], default="standard")
+        init_parser.add_argument("--scope", default=".")
+        init_parser.add_argument("--test", "--test-cmd", default=None, dest="test_cmd", help="Custom test command.")
+        init_parser.add_argument("--path", default=".", help="Repository root path.")
+        init_parser.add_argument("-f", "--force", action="store_true", help="Overwrite existing .agentflow.json.")
+        init_args = init_parser.parse_args(sub_args)
+        target_root = Path(init_args.path).resolve()
+        try:
+            res = init_agentflow(target_root, profile=init_args.profile, scope=init_args.scope, test_cmd=init_args.test_cmd, force=init_args.force)
+            print(f"✅ Initialized AgentFlow workflow in {target_root}")
+            print(f"  • Created .agentflow.json (profile: {res['profile']}, test: \"{res['test_command']}\")")
+            print(f"  • Ensured .agentflow/ is in .gitignore")
+            return 0
+        except Exception as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+
     if cmd == "status":
         return run_lifecycle(["--status-check"] + sub_args)
 

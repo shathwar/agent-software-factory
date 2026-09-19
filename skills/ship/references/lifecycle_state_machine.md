@@ -64,7 +64,7 @@ A formal specification of the 4-gate engineering lifecycle state machine, its tr
 
 ### State 2: `FRONTIER_ROUNDS` ➔ `SPIKE_ACTIVE` (Optional Branch)
 - **Guard**: An architectural decision depends on an unmeasured empirical variable (e.g. third-party rate limits, lock contention, library compatibility).
-- **Action**: Pause grilling on that branch. Scaffold a 15-30 minute spike under `.scratch/<spike-name>/` using [spike](../../spike/SKILL.md).
+- **Action**: Pause grilling on that branch. Scaffold a 15-30 minute spike under `.agentflow/spikes/<spike-name>/` using [spike](../../spike/SKILL.md).
 - **Return Guard**: The spike report delivers a concrete verdict (latency, throughput, or behavior), settling the open question on the design tree.
 
 ### State 3: `FRONTIER_ROUNDS` ➔ `SPEC_CONFIRMED`
@@ -109,12 +109,12 @@ A formal specification of the 4-gate engineering lifecycle state machine, its tr
 
 The Ship Engine employs a tri-tier architecture combining working-tree agility with permanent Git immutability:
 
-1. **Tier 1: Explicit State Ledger (`.ship/state.json`)**:
+1. **Tier 1: Explicit State Ledger (`.agentflow/state.json`)**:
    - Authoritative workflow state tracking `change_id`, active phase (Gates 1–4), `task_status`, active `blockers`, a monotonic `revision_counter`, references to validation evidence, and a full `turns` provenance log.
    - Reconstructs turn-level history: which skill ran, against what inputs, what evidence it produced, and how the result affected workflow state (`inspect_lifecycle.py --turns`).
    - Fully supports multi-agent and multi-change isolation: distinct changes are stored under `changes[change_id]`.
    - Thread- and crash-safe atomic updates (`NamedTemporaryFile` + `os.replace`).
-   - Self-healing synchronization: if `.ship/state.json` is missing, `inspect_lifecycle.py` automatically reconstructs it from workspace artifacts.
+   - Self-healing synchronization: if `.agentflow/state.json` is missing, `inspect_lifecycle.py` automatically reconstructs it from workspace artifacts.
    - Preserved across rollbacks and excluded from Git commits via `.git/info/exclude` / `.gitignore`.
 
 2. **Tier 2: Git Notes (`refs/notes/ship-evidence`)**:
@@ -131,7 +131,7 @@ The Ship Engine employs a tri-tier architecture combining working-tree agility w
      Ship-Review: PASS (by judge)
      Ship-Delivery: ARCHIVED
      ```
-   - Dynamically mapped to gate names defined in `.ship.json`.
+   - Dynamically mapped to gate names defined in `.agentflow.json`.
 
 ```bash
 # Evaluate repository state and inspect active change ledger
@@ -144,7 +144,7 @@ python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --set-active-change <cha
 python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --sync-state
 
 # Attach review or test evidence to ledger and git notes
-python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --record-review .scratch/review_report.json
+python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --record-review .agentflow/review_report.json
 python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --record-tests pass
 
 # Generate commit trailers for delivery commit
@@ -157,7 +157,7 @@ python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --generate-trailers --ch
 If an agent run is aborted, timed out, or restarted in a new session:
 
 1. **Step 1: Check State Ledger & OpenSpec**:
-   - Check `.ship/state.json` for active change ID and phase.
+   - Check `.agentflow/state.json` for active change ID and phase.
    - Inspect `openspec/changes/` for the active feature directory.
    - If not found or if changes are already archived under `openspec/archive/`, resume at `INITIAL_PROPOSAL`.
 2. **Step 2: Inspect `tasks.md`**:
@@ -243,6 +243,6 @@ pointer is cleared on archive, and the command returns the saved trailer receipt
 instead of revalidating files that have moved. Without an active change or explicit
 ID, trailer generation fails visibly. Design approval preserves the active pointer.
 
-An absent `.ship.json` uses defaults. An unreadable, malformed, non-object, or
+An absent `.agentflow.json` uses defaults. An unreadable, malformed, non-object, or
 incorrectly typed configuration raises an error; an explicit `--config` path must
 exist. Fix the configuration before resuming workflow commands.

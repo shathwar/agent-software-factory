@@ -111,7 +111,7 @@ class ShipConfigManager:
                         target[k] = v
 
             deep_merge(default_config, loaded)
-            schema = json.loads((Path(__file__).resolve().parents[2] / "references/ship.schema.json").read_text(encoding="utf-8"))
+            schema = json.loads(get_schema_path().read_text(encoding="utf-8"))
             validate(default_config, schema, "config")
             try:
                 default_config["config_source"] = str(config_file.relative_to(repo_root))
@@ -121,3 +121,21 @@ class ShipConfigManager:
             raise ValueError(f"Invalid Ship configuration {config_file}: {e}") from e
 
         return default_config
+
+
+def get_schema_path() -> Path:
+    """Resolve the path to agentflow.schema.json across repo, skill, and package environments."""
+    current = Path(__file__).resolve()
+    # 1. From skills/ship/scripts/lifecycle/ -> skills/ship/references/agentflow.schema.json
+    p1 = current.parents[2] / "references" / "agentflow.schema.json"
+    if p1.is_file():
+        return p1
+    # 2. From src/ship/lifecycle/ -> skills/ship/references/agentflow.schema.json in repo
+    p2 = current.parents[3] / "skills" / "ship" / "references" / "agentflow.schema.json"
+    if p2.is_file():
+        return p2
+    # 3. From src/ship/references/agentflow.schema.json (bundled in src)
+    p3 = current.parent.parent / "references" / "agentflow.schema.json"
+    if p3.is_file():
+        return p3
+    return p1
