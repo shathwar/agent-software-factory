@@ -18,11 +18,9 @@ __pycache__/
 *.pyc
 .venv/
 
-# Agentflow Lifecycle Workspace & Scratch
+# Agentflow Lifecycle Workspace
 .agentflow/
 .agentflow
-.scratch/
-scratch/
 
 # Python packaging & builds
 build/

@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Provision an ephemeral disposable git workspace for manual AgentFlow testing
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PLAYGROUND_DIR="$REPO_ROOT/scratch/playground"
+PLAYGROUND_DIR="$REPO_ROOT/.agentflow/playground"
 
 rm -rf "$PLAYGROUND_DIR"
 mkdir -p "$PLAYGROUND_DIR"
@@ -35,7 +35,7 @@ echo "🚀 Ephemeral AgentFlow playground created at:"
 echo "   $PLAYGROUND_DIR"
 echo ""
 echo "To explore and test:"
-echo "   cd scratch/playground"
+echo "   cd .agentflow/playground"
 echo "   agentflow init"
 echo "   agentflow status"
 echo ""

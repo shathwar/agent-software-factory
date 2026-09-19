@@ -13,7 +13,7 @@ help:
 	@echo "  make sync            Synchronize src/ship/ into skills/*/scripts/"
 	@echo "  make verify-parity   Verify 100% byte-for-byte parity between src/ and skills/"
 	@echo "  make setup-hooks     Install git pre-commit hook for auto-sync"
-	@echo "  make playground      Provision an ephemeral git test repo in scratch/"
+	@echo "  make playground      Provision an ephemeral git test repo in .agentflow/playground"
 	@echo "  make doctor          Run preflight lifecycle diagnostic checks"
 	@echo "  make mcp             Launch the zero-dependency stdio MCP server"
 	@echo "  make install         Install ship package locally (pip install -e .)"
@@ -66,4 +66,4 @@ install:
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
-	rm -rf .pytest_cache build dist *.egg-info src/*.egg-info .agentflow scratch/playground
+	rm -rf .pytest_cache build dist *.egg-info src/*.egg-info .agentflow

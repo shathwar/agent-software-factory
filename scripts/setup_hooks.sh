@@ -20,11 +20,13 @@ cat << 'EOF' > "$PRE_COMMIT"
 #!/usr/bin/env bash
 set -e
 
-# Pre-commit hook: maintain byte-for-byte parity between src/ and skills/
+# Pre-commit hook: verify byte-for-byte parity between src/ and skills/
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 if [[ -f "$REPO_ROOT/scripts/sync_skills.py" ]]; then
-  python3 "$REPO_ROOT/scripts/sync_skills.py"
-  git add -u "$REPO_ROOT/skills"
+  if ! python3 "$REPO_ROOT/scripts/sync_skills.py" --check; then
+    echo "❌ Parity check failed. Run 'python3 scripts/sync_skills.py' and stage changes before committing."
+    exit 1
+  fi
 fi
 EOF
 
