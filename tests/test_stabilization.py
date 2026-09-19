@@ -11,7 +11,7 @@ from unittest.mock import patch
 from ship.lifecycle.gates import validate_delivery_readiness
 from ship.lifecycle.engine import LifecycleEngine
 from ship.lifecycle.convergence import ConvergenceConfig
-from ship.lifecycle.verification import execute_and_verify_tests, verify_test_quality
+from ship.lifecycle.verification import verify_test_quality
 from ship.mcp.tools import dispatch_tool
 
 
@@ -65,7 +65,6 @@ class StabilizationTests(unittest.TestCase):
         self.assertFalse(evaluate_convergence({'turns': turns}).is_halted)
 
     def test_installer_preserves_invalid_mcp_config(self):
-        import shutil
         repo = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / 'skills'

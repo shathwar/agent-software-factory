@@ -5,9 +5,7 @@ import tempfile
 import unittest
 
 from ship.lifecycle.models import (
-    ActionProvenance,
     AgentRole,
-    TaskLease,
     VerificationRecord,
 )
 from ship.lifecycle.provenance import (

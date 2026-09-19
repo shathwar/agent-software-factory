@@ -8,7 +8,7 @@ import re
 import shutil
 import tempfile
 import functools
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from .trailers import canonicalize_gate_name
 from .paths import (
@@ -174,7 +174,6 @@ class CheckpointManager:
         backup_dir = agentflow_path(repo_root, f"backups/rollback_{timestamp_str}")
 
         chk_file = get_checkpoints_dir(repo_root) / f"{resolved_change}_{canonical_tag}.json"
-        target_tag = f"ship/{resolved_change}/{canonical_tag}"
         target_ref = f"refs/ship/{resolved_change}/{canonical_tag}"
 
         from .ledger import read_json_file, make_default_review_evidence
@@ -291,7 +290,6 @@ class CheckpointManager:
                 except Exception as exc:
                     raise RuntimeError(f"Rollback failed; ledger unchanged. Backups are in {backup_dir}") from exc
 
-        pkg_dir = resolve_change_path(repo_root, resolved_change)
         tasks_file = repository_path(repo_root, f"openspec/changes/{resolved_change}/tasks.md")
         reset_tasks_count = 0
         if tasks_file.exists() and canonical_tag == "design":

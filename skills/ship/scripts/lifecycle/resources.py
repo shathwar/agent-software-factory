@@ -19,11 +19,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from .models import EventType, StagnationType
+from .models import EventType
 from .ledger import FileLedgerStore
 
 

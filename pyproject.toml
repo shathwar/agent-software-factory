@@ -22,3 +22,14 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 ship = ["references/*.json"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]

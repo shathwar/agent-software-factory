@@ -1,7 +1,6 @@
 """End-to-end workflow trials verifying real agent behavior across operational boundaries."""
 
 import json
-import os
 from pathlib import Path
 import subprocess
 import sys

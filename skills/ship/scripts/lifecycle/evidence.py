@@ -7,7 +7,6 @@ from pathlib import Path
 import re
 from typing import Any, Dict, List, Optional, Set
 
-from .models import VerificationResult
 
 NON_SPIKE_SCRATCH_DIRS = {
     "archive", "coverage", "logs", "cache", "tmp", "temp", "dist",

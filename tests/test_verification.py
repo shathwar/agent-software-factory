@@ -1,23 +1,19 @@
 """Unit tests for the independent verification engine (verification.py, models.py, ledger.py, gates.py)."""
 
-import json
 from pathlib import Path
 import tempfile
 import unittest
 
-from ship.lifecycle.models import VerificationRecord, VerificationTier, LifecyclePhase
+from ship.lifecycle.models import VerificationRecord
 from ship.lifecycle.verification import (
     parse_line_range,
     verify_finding_grounding,
     verify_review_grounding,
     execute_and_verify_tests,
-    verify_test_quality,
     verify_spec_coverage,
-    run_gate_verification,
-    format_verification_summary,
 )
 from ship.lifecycle.ledger import FileLedgerStore
-from ship.lifecycle.gates import validate_delivery_readiness, determine_lifecycle_state
+from ship.lifecycle.gates import validate_delivery_readiness
 from ship.lifecycle.turns import get_next_turn_contract
 
 

@@ -9,8 +9,6 @@ Covers:
 - CLI: grant, list, check, revoke
 """
 
-from datetime import datetime, timezone
-import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -21,7 +19,6 @@ from ship.lifecycle.models import (
     CapabilityOperation,
     ExecutionRing,
     AgentRole,
-    TaskLease,
 )
 from ship.lifecycle.capabilities import (
     CapabilityManager,

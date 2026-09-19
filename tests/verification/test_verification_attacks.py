@@ -5,7 +5,7 @@ import tempfile
 import unittest
 
 from ship.lifecycle.ledger import FileLedgerStore
-from ship.lifecycle.models import ActionProvenance, VerificationRecord
+from ship.lifecycle.models import VerificationRecord
 from ship.lifecycle.provenance import ProvenanceManager, compute_payload_digest
 from ship.lifecycle.verification import (
     execute_and_verify_tests,

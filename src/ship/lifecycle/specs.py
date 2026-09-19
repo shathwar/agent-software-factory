@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 import shutil
 import uuid
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .config import ShipConfigManager
 from .evidence import validate_design_approval

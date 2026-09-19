@@ -1,18 +1,14 @@
 """Deterministic crash recovery, reconciliation, and resumption engine for AgentFlow."""
 
 from datetime import datetime, timezone
-import json
-import os
 from pathlib import Path
-import shutil
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional
 
 from .checkpoints import get_checkpoints_dir
 from .gates import validate_delivery_readiness
 from .ledger import FileLedgerStore, validate_change_id
 from .models import RecoveryDecision, RecoveryStrategy
-from .paths import repository_path, resolve_change_path
 from .transactions import recover_archive
 from .vcs import GitClient
 

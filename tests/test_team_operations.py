@@ -1,6 +1,4 @@
 """Local deployment contracts: doctor, migration, profiles, and one readiness rule."""
-import contextlib
-import io
 import json
 from pathlib import Path
 import tempfile

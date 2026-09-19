@@ -1,13 +1,12 @@
 """Independent verification engine eliminating circular trust in AgentFlow lifecycle."""
 
 import hashlib
-import json
 from pathlib import Path
 import re
 import shutil
 import subprocess
 import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from .models import VerificationRecord, VerificationTier
 
@@ -92,7 +91,7 @@ def verify_finding_grounding(finding: Dict[str, Any], repo_root: Path) -> Tuple[
         return True, f"Evidence grounded near {file_rel}:{line_str} (tolerated minor line offset)"
 
     # 3. Check if first non-trivial line of evidence is anywhere near the window
-    ev_first_line = next((l.strip() for l in evidence.splitlines() if l.strip()), "")
+    ev_first_line = next((line.strip() for line in evidence.splitlines() if line.strip()), "")
     if ev_first_line and ev_first_line in slack_window:
         return True, f"Evidence partially grounded at {file_rel}:{line_str}"
 

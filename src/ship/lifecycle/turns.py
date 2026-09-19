@@ -1,11 +1,9 @@
 """Turn contract planning, execution boundaries, and provenance formatting."""
 
-from dataclasses import asdict
 import json
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .models import TurnContract, TurnRecord
+from .models import TurnContract
 
 
 def get_next_turn_contract(
@@ -14,7 +12,6 @@ def get_next_turn_contract(
 ) -> TurnContract:
     """Derive the deterministic Turn Contract for the next required specialist activity."""
     state_key = repo_eval.get("state_key", "INITIAL_PROPOSAL")
-    gate = repo_eval.get("gate", "design")
     target_change = (
         repo_eval.get("target_change")
         or (repo_eval.get("active_change") or {}).get("change_id")
@@ -233,7 +230,7 @@ def get_next_turn_contract(
                 f"Generate RFC 5133 commit trailers via inspect_lifecycle.py --change {target_change} --generate-trailers.",
                 "Present Delivery Walkthrough to user.",
             ],
-            output_evidence=f"OpenSpec package archived to openspec/archive/ and commit trailers generated",
+            output_evidence="OpenSpec package archived to openspec/archive/ and commit trailers generated",
             action_prompt=f"Execute delivery sign-off for '{target_change}' via ship orchestrator. Archive OpenSpec package, generate commit trailers, and compile Delivery Walkthrough.",
             suggested_command=f"ship archive {target_change}",
             suggested_mcp_tool="ship_archive",

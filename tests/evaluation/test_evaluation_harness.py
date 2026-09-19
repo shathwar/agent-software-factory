@@ -7,11 +7,9 @@ import unittest
 
 from ship.lifecycle.evaluation import (
     BenchmarkDimension,
-    EvaluationReport,
     EvaluationRunner,
     STANDARD_SCENARIOS,
     format_terminal_report,
-    run_all_benchmarks,
     scenario_false_approvals,
     scenario_false_blocks,
     scenario_policy_enforcement,

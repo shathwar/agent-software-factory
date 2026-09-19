@@ -84,6 +84,7 @@ __all__ = [
     "ChangeBudget",
     "EventLogger",
     "EventReplayer",
+    "compute_event_hash",
     "ResourceGovernor",
     "ResourceMetric",
     "ResourceUsage",

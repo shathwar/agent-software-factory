@@ -9,7 +9,6 @@ Covers:
 - CLI subcommands: session start/end/list, identity register/list, lease claim --session
 """
 
-import json
 from pathlib import Path
 import tempfile
 import unittest

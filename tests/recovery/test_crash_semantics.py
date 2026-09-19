@@ -13,23 +13,17 @@ Deliberately simulates unexpected process termination (os._exit(91)) at:
 Validates RESUME, ROLLBACK, RECONCILE, and ABORT semantics.
 """
 
-from datetime import datetime, timedelta, timezone
-import json
-import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
-import time
 import unittest
 
-from ship.lifecycle.checkpoints import CheckpointManager, get_checkpoints_dir
-from ship.lifecycle.coordination import CoordinationManager, TaskLease, LeaseStatus
-from ship.lifecycle.gates import validate_delivery_readiness
+from ship.lifecycle.coordination import CoordinationManager
 from ship.lifecycle.ledger import FileLedgerStore
-from ship.lifecycle.models import RecoveryStrategy, RecoveryDecision
+from ship.lifecycle.models import RecoveryStrategy
 from ship.lifecycle.recovery import RecoveryManager
-from ship.lifecycle.transactions import begin_archive, recover_archive
+from ship.lifecycle.transactions import begin_archive
 from ship.lifecycle.vcs import GitClient
 
 

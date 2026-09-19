@@ -9,7 +9,6 @@ from ship.lifecycle.approvals import ApprovalManager, compute_approval_signature
 from ship.lifecycle.capabilities import CapabilityManager
 from ship.lifecycle.ledger import FileLedgerStore
 from ship.lifecycle.models import CapabilityOperation, ExecutionRing
-from ship.lifecycle.provenance import ProvenanceManager
 
 
 class TestDurableApprovals(unittest.TestCase):
@@ -260,7 +259,7 @@ class TestDurableApprovals(unittest.TestCase):
             change=self.change_id,
         )
 
-        cap = self.cap_mgr.grant_from_approval(
+        self.cap_mgr.grant_from_approval(
             approval_id=appr.approval_id,
             change_id=self.change_id,
         )

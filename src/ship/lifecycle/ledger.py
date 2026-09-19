@@ -15,7 +15,7 @@ from .evidence import (
 )
 from .vcs import GitClient
 from .paths import (
-    repository_path, validate_change_id, agentflow_path,
+    validate_change_id, agentflow_path,
     get_state_file, get_lock_file, get_checkpoints_dir,
 )
 from .transactions import recover_archive, sync_directory
@@ -83,7 +83,7 @@ def ensure_gitignore_has_agentflow(repo_root: Path) -> None:
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
             content = target.read_text(encoding="utf-8") if target.exists() else ""
-            lines = [l.strip() for l in content.splitlines()]
+            lines = [line.strip() for line in content.splitlines()]
             if ".agentflow" not in lines and ".agentflow/" not in lines:
                 with target.open("a", encoding="utf-8") as f:
                     if content and not content.endswith("\n"):

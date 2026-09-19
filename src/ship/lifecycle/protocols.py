@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional, Protocol, Tuple
 
-from .models import GateResult, GitInfo, OpenSpecInfo, ShipConfig, VerificationResult
+from .models import GateResult, GitInfo, ShipConfig, VerificationResult
 
 
 class IVcsClient(Protocol):

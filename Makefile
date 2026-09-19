@@ -1,6 +1,6 @@
 # Makefile for shathwar/skills and ship-sdlc (AgentFlow SDLC)
 
-.PHONY: help check test test-fast test-lifecycle test-skills test-all sync verify-parity doctor mcp setup-hooks playground install clean
+.PHONY: help check test test-fast test-lifecycle test-skills test-all bench benchmark lint sync verify-parity doctor mcp setup-hooks playground install clean
 
 help:
 	@echo "Available commands:"
@@ -8,8 +8,10 @@ help:
 	@echo "  make test-fast       Fast in-memory unit tests (<4s: tools, docs, init)"
 	@echo "  make test-lifecycle  Focused AgentFlow lifecycle engine tests (~15s)"
 	@echo "  make test-skills     Focused specialist tools tests (~5s)"
-	@echo "  make test            Run the full test suite (syntax + 270+ tests)"
+	@echo "  make test            Run the full test suite (syntax + 480+ tests)"
 	@echo "  make test-all        Run the full test suite via scripts/run_tests.sh"
+	@echo "  make bench           Run the AgentFlow evaluation benchmark suite"
+	@echo "  make lint            Run ruff code hygiene check"
 	@echo "  make sync            Synchronize src/ship/ into skills/*/scripts/"
 	@echo "  make verify-parity   Verify 100% byte-for-byte parity between src/ and skills/"
 	@echo "  make setup-hooks     Install git pre-commit hook for auto-sync"
@@ -42,6 +44,14 @@ test: test-all
 test-all:
 	./scripts/run_tests.sh
 
+bench: benchmark
+
+benchmark:
+	PYTHONPATH=src python3 -m ship.cli benchmark --suite all
+
+lint:
+	ruff check src/ tests/
+
 sync:
 	python3 scripts/sync_skills.py
 
@@ -66,4 +76,4 @@ install:
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
-	rm -rf .pytest_cache build dist *.egg-info src/*.egg-info .agentflow
+	rm -rf .pytest_cache .ruff_cache build dist *.egg-info src/*.egg-info .agentflow

@@ -1,6 +1,5 @@
 """Unit tests for skills installation script (scripts/install.sh)."""
 
-import os
 from pathlib import Path
 import subprocess
 import tempfile

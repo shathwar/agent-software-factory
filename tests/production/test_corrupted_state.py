@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 from ship.lifecycle.events import EventLogger
-from ship.lifecycle.ledger import FileLedgerStore, read_ledger_file
+from ship.lifecycle.ledger import read_ledger_file
 from ship.lifecycle.paths import get_state_file, get_event_log_file
 
 

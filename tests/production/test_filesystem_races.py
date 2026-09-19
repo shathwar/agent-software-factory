@@ -5,8 +5,8 @@ import os
 import tempfile
 import unittest
 
-from ship.lifecycle.paths import validate_change_id, repository_path, get_state_file
-from ship.lifecycle.transactions import atomic_write, sync_directory
+from ship.lifecycle.paths import validate_change_id
+from ship.lifecycle.transactions import atomic_write
 from ship.lifecycle.capabilities import _target_matches
 
 

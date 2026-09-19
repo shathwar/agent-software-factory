@@ -1,7 +1,5 @@
 """Unit tests for Multi-Agent Coordination Engine (coordination.py, models.py, cli.py)."""
 
-from datetime import datetime, timezone
-import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -13,8 +11,6 @@ from ship.lifecycle.models import (
     TaskHandoff,
 )
 from ship.lifecycle.coordination import (
-    CoordinationConfig,
-    CoordinationResult,
     CoordinationManager,
     is_lease_expired,
 )

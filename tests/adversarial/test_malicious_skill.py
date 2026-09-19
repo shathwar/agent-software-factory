@@ -11,7 +11,6 @@ if str(_repo_root) not in sys.path:
 from ship.lifecycle.capabilities import CapabilityManager
 from ship.lifecycle.coordination import CoordinationManager
 from ship.lifecycle.ledger import FileLedgerStore
-from ship.lifecycle.models import CapabilityOperation
 from ship.lifecycle.provenance import ProvenanceManager
 
 # Import exploit runner from fixture

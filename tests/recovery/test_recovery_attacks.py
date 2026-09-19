@@ -7,7 +7,6 @@ import unittest
 from ship.lifecycle.convergence import ConvergenceController
 from ship.lifecycle.gates import validate_delivery_readiness
 from ship.lifecycle.ledger import FileLedgerStore
-from ship.lifecycle.models import ShipConfig
 
 
 class TestRecoveryAttacks(unittest.TestCase):

@@ -14,13 +14,12 @@ Guarantees:
 Autonomy is permitted to continue only while the system can demonstrate bounded progress toward a verifiable state.
 """
 
-import json
 from pathlib import Path
 import tempfile
 import unittest
 
 from ship.lifecycle.convergence import ConvergenceController, evaluate_convergence
-from ship.lifecycle.gates import determine_lifecycle_state, validate_delivery_readiness
+from ship.lifecycle.gates import validate_delivery_readiness
 from ship.lifecycle.ledger import FileLedgerStore
 from ship.lifecycle.models import StagnationType
 from ship.lifecycle.verification import (

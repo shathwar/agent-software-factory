@@ -7,14 +7,12 @@ from pathlib import Path
 import subprocess
 import threading
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional
 
 try:
     import fcntl
 except ImportError:
     fcntl = None  # type: ignore
-
-from .models import GitInfo
 
 GIT_NOTES_REF = "refs/notes/ship-evidence"
 _vcs_tls = threading.local()
@@ -131,16 +129,16 @@ class GitClient:
 
         try:
             status_res = self.run_cmd(repo_root, "status", "--porcelain")
-            status_lines = [l for l in status_res.stdout.splitlines() if l.strip()]
+            status_lines = [line for line in status_res.stdout.splitlines() if line.strip()]
             info["is_clean"] = len(status_lines) == 0
-            info["has_conflicts"] = any(l[:2] in ("UU", "AA", "DD", "AU", "UD", "UA", "DU") for l in status_lines)
-            info["modified_count"] = sum(1 for l in status_lines if not l.startswith("??"))
-            info["untracked_count"] = sum(1 for l in status_lines if l.startswith("??"))
+            info["has_conflicts"] = any(line[:2] in ("UU", "AA", "DD", "AU", "UD", "UA", "DU") for line in status_lines)
+            info["modified_count"] = sum(1 for line in status_lines if not line.startswith("??"))
+            info["untracked_count"] = sum(1 for line in status_lines if line.startswith("??"))
 
             ignored_prefixes = (".agentflow/", ".scratch/", "scratch/", ".ship/", "openspec/archive/", "openspec/.", ".gemini/", ".git/")
             modified_sources = []
-            for l in status_lines:
-                filename = l[3:].strip()
+            for line in status_lines:
+                filename = line[3:].strip()
                 if " -> " in filename:
                     filename = filename.split(" -> ", 1)[1].strip()
                 if filename.startswith('"') and filename.endswith('"'):

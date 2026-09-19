@@ -3,9 +3,10 @@
 import json
 import os
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 
 from ship.lifecycle.engine import LifecycleEngine
+from ship.lifecycle.execution import ActionContext, CapabilityGuard
 from ship.lifecycle.turns import format_turn_contract
 from ship.lifecycle.ledger import FileLedgerStore, record_test_run_to_ledger, record_review_to_ledger, record_turn_to_ledger
 from ship.lifecycle.checkpoints import CheckpointManager
@@ -287,6 +288,13 @@ def handle_ship_spike_run(args: Dict[str, Any]) -> Dict[str, Any]:
     warmup = int(args.get("warmup", 0))
     timeout = float(args.get("timeout_sec", 60.0))
     cwd = Path(args["path"]).resolve() if args.get("path") else None
+    if not args.get("agent_id") or not args.get("operation") or not args.get("target"):
+        raise PermissionError("ship_spike_run requires agent_id, operation, and target for capability enforcement.")
+    CapabilityGuard(cwd or Path.cwd()).require(ActionContext(
+        agent_id=str(args["agent_id"]), operation=str(args["operation"]), target=str(args["target"]),
+        change_id=args.get("change"), task_id=args.get("task_id"),
+        session_id=args.get("session_id"), lease_token=args.get("lease_token"),
+    ))
     result = run_benchmark(cmd, iterations=iterations, concurrency=concurrency, warmup=warmup, timeout_sec=timeout, cwd=cwd)
     table = format_markdown_table(result)
     return {

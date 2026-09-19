@@ -201,7 +201,12 @@ TOOLS_MANIFEST: List[Dict[str, Any]] = [
                 "concurrency": {"type": "integer", "description": "Concurrent workers (default: 1)"},
                 "warmup": {"type": "integer", "description": "Warmup iterations before recording (default: 0)"},
                 "timeout_sec": {"type": "number", "description": "Timeout per iteration in seconds (default: 60.0)"},
-                "path": {"type": "string", "description": "Working directory for benchmark execution"}
+                "path": {"type": "string", "description": "Working directory for benchmark execution"},
+                "agent_id": {"type": "string", "description": "Registered agent principal"},
+                "operation": {"type": "string", "description": "Capability operation, e.g. EXECUTE or NETWORK_READ"},
+                "target": {"type": "string", "description": "Scoped capability target"},
+                "change": {"type": "string"}, "task_id": {"type": "string"},
+                "session_id": {"type": "string"}, "lease_token": {"type": "string"}
             },
             "required": ["command"]
         }

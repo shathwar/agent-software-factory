@@ -10,22 +10,18 @@ Tests all 7 core resource dimensions:
   7. Network operations
 """
 
-import json
 from pathlib import Path
 import tempfile
 import unittest
 
 from ship.lifecycle.capabilities import CapabilityManager
-from ship.lifecycle.convergence import ConvergenceController, evaluate_convergence
+from ship.lifecycle.convergence import evaluate_convergence
 from ship.lifecycle.events import EventLogger
 from ship.lifecycle.ledger import FileLedgerStore
-from ship.lifecycle.models import EventType, StagnationType
+from ship.lifecycle.models import EventType
 from ship.lifecycle.resources import (
-    BudgetStatus,
     ChangeBudget,
     ResourceGovernor,
-    ResourceMetric,
-    ResourceUsage,
 )
 from ship.cli import main as cli_main
 
@@ -193,7 +189,7 @@ class TestResourceGovernance(unittest.TestCase):
 
         cap_mgr = CapabilityManager(self.repo_root)
         # Grant network capability
-        cap = cap_mgr.grant_capability(
+        cap_mgr.grant_capability(
             agent_id="agent-worker",
             operation="NETWORK_READ",
             target="https://api.github.com/*",

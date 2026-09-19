@@ -14,36 +14,30 @@ Measures AgentFlow across 10 core dimensions:
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from enum import Enum
 import json
 import math
-import os
 from pathlib import Path
 import statistics
 import tempfile
-import threading
 import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 from .approvals import ApprovalManager
 from .capabilities import CapabilityManager
-from .checkpoints import CheckpointManager
-from .convergence import ConvergenceConfig, ConvergenceController, evaluate_convergence
+from .convergence import ConvergenceController, evaluate_convergence
 from .coordination import CoordinationManager
 from .events import EventLogger
 from .ledger import FileLedgerStore
 from .models import (
     CapabilityOperation,
     EventType,
-    ExecutionRing,
     StagnationType,
-    VerificationRecord,
-    VerificationTier,
 )
 from .provenance import ProvenanceManager
 from .recovery import RecoveryManager
-from .verification import run_gate_verification, verify_finding_grounding, verify_review_grounding
+from .verification import verify_finding_grounding
 
 
 class BenchmarkDimension(str, Enum):

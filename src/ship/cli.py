@@ -7,17 +7,16 @@ import sys
 from typing import Any, Dict, List, Optional, Sequence
 
 from ship.lifecycle.engine import LifecycleEngine, format_summary
-from ship.lifecycle.ledger import FileLedgerStore, record_test_run_to_ledger, record_review_to_ledger, record_turn_to_ledger, read_ledger_file
+from ship.lifecycle.ledger import FileLedgerStore, record_test_run_to_ledger, record_review_to_ledger
 from ship.lifecycle.checkpoints import CheckpointManager
 from ship.lifecycle.config import ShipConfigManager
 from ship.lifecycle.evidence import design_fingerprint
 from ship.lifecycle.vcs import GitClient
-
-compute_working_tree_fingerprint = GitClient().compute_working_tree_fingerprint
 from ship.lifecycle.trailers import CommitTrailerGenerator
 from ship.lifecycle.operations import doctor, migrate_state, init_agentflow
-from ship.lifecycle.paths import repository_path
-from ship.lifecycle.turns import get_next_turn_contract, format_turn_contract, format_turns_log
+from ship.lifecycle.turns import format_turn_contract, format_turns_log
+
+compute_working_tree_fingerprint = GitClient().compute_working_tree_fingerprint
 
 VERSION = "1.0.0"
 
@@ -157,8 +156,8 @@ def run_lifecycle(argv: Sequence[str]) -> int:
         if args.format == "json":
             print(json.dumps(payload, indent=2))
         elif text_lines is not None:
-            for l in text_lines:
-                print(l)
+            for line in text_lines:
+                print(line)
 
     def banner(title: str, lines: Sequence[str]) -> List[str]:
         bar = "═" * 69
@@ -252,7 +251,7 @@ def run_lifecycle(argv: Sequence[str]) -> int:
                     print(f"Error reading test json: {exc}", file=sys.stderr)
                     return 1
             else:
-                print(f"Error: --record-tests accepts pass/fail or a path to a JSON file.", file=sys.stderr)
+                print("Error: --record-tests accepts pass/fail or a path to a JSON file.", file=sys.stderr)
                 return 1
         res_entry = record_test_run_to_ledger(repo_root, t_data, change_id=args.change)
         output_result(res_entry, [f"Recorded test results for change '{args.change or 'active'}': passed={t_data.get('passed')}"])
@@ -471,8 +470,8 @@ def run_lifecycle(argv: Sequence[str]) -> int:
         return 0
 
     text_lines = banner("ENGINEERING LIFECYCLE EVALUATION", format_summary(eval_dict))
-    for l in text_lines:
-        print(l)
+    for line in text_lines:
+        print(line)
     return 0
 
 
@@ -646,14 +645,14 @@ Actions:
         manager = CoordinationManager(Path(args.path).resolve())
         leases = manager.list_leases(change_id=cid, active_only=args.active)
         if args.json:
-            print(json.dumps([l.to_dict() for l in leases], indent=2))
+            print(json.dumps([lease.to_dict() for lease in leases], indent=2))
         else:
             print(f"📋 Task Leases for change '{cid or 'active'}':")
             if not leases:
                 print("  (No leases recorded)")
-            for l in leases:
-                files_str = f" [files: {', '.join(l.target_files)}]" if l.target_files else ""
-                print(f"  • Task {l.task_id:6s} | Owner: {l.owner_id:15s} | Status: {l.status:10s} | Expires: {l.expires_at}{files_str}")
+            for lease in leases:
+                files_str = f" [files: {', '.join(lease.target_files)}]" if lease.target_files else ""
+                print(f"  • Task {lease.task_id:6s} | Owner: {lease.owner_id:15s} | Status: {lease.status:10s} | Expires: {lease.expires_at}{files_str}")
         return 0
 
     elif action == "reap":
@@ -664,12 +663,12 @@ Actions:
         manager = CoordinationManager(Path(args.path).resolve())
         reaped = manager.reap_stale_leases(change_id=cid)
         if args.json:
-            print(json.dumps([l.to_dict() for l in reaped], indent=2))
+            print(json.dumps([lease.to_dict() for lease in reaped], indent=2))
         else:
             if reaped:
                 print(f"🧹 Reaped {len(reaped)} stale lease(s):")
-                for l in reaped:
-                    print(f"  • Task '{l.task_id}' (owner: '{l.owner_id}') expired at {l.expires_at}")
+                for lease in reaped:
+                    print(f"  • Task '{lease.task_id}' (owner: '{lease.owner_id}') expired at {lease.expires_at}")
             else:
                 print("🧹 No stale leases found.")
         return 0
@@ -1553,7 +1552,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             res = init_agentflow(target_root, profile=init_args.profile, scope=init_args.scope, test_cmd=init_args.test_cmd, force=init_args.force)
             print(f"✅ Initialized AgentFlow workflow in {target_root}")
             print(f"  • Created .agentflow.json (profile: {res['profile']}, test: \"{res['test_command']}\")")
-            print(f"  • Ensured .agentflow/ is in .gitignore")
+            print("  • Ensured .agentflow/ is in .gitignore")
             return 0
         except Exception as exc:
             print(f"Error: {exc}", file=sys.stderr)

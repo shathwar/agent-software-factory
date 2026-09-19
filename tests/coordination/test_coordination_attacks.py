@@ -7,7 +7,7 @@ import unittest
 from ship.lifecycle.capabilities import CapabilityManager
 from ship.lifecycle.coordination import CoordinationManager
 from ship.lifecycle.ledger import FileLedgerStore
-from ship.lifecycle.models import CapabilityOperation, CoordinationConflictType, LeaseStatus
+from ship.lifecycle.models import CapabilityOperation, CoordinationConflictType
 from ship.lifecycle.provenance import ProvenanceManager
 
 

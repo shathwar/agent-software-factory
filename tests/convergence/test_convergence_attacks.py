@@ -5,8 +5,6 @@ import tempfile
 import unittest
 
 from ship.lifecycle.convergence import (
-    ConvergenceConfig,
-    ConvergenceController,
     detect_oscillating_state,
     detect_same_evidence,
     detect_same_patch,

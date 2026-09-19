@@ -1,15 +1,11 @@
 """Unit tests for Convergence Control and Anti-Infinite Loop Guardrails (convergence.py, gates.py, turns.py, ledger.py)."""
 
-import json
 from pathlib import Path
 import tempfile
-import time
 import unittest
 
-from ship.lifecycle.models import LifecyclePhase, GateStatus, StagnationType
+from ship.lifecycle.models import StagnationType
 from ship.lifecycle.convergence import (
-    ConvergenceConfig,
-    ConvergenceStatus,
     evaluate_convergence,
     detect_same_evidence,
     detect_same_finding,

@@ -5,12 +5,10 @@ stale-agent reclamation, structured Maker-Checker handoffs, and resource/file co
 Zero external runtime dependencies: relies exclusively on standard library primitives.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
-import json
 from pathlib import Path
-import time
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 import uuid
 
 from .models import (
@@ -22,7 +20,6 @@ from .models import (
     TaskLease,
 )
 from .ledger import FileLedgerStore
-from .paths import repository_path
 
 
 def _now_utc() -> datetime:
@@ -224,13 +221,13 @@ class CoordinationManager:
 
             # 3. Check worker concurrency limit
             active_worker_count = len({
-                l["owner_id"] for l in leases_dict.values()
-                if not is_lease_expired(TaskLease.from_dict(l), now)
-                and l.get("status") in (LeaseStatus.ACTIVE.value, LeaseStatus.ACQUIRED.value, LeaseStatus.RENEWED.value)
+                lease_entry["owner_id"] for lease_entry in leases_dict.values()
+                if not is_lease_expired(TaskLease.from_dict(lease_entry), now)
+                and lease_entry.get("status") in (LeaseStatus.ACTIVE.value, LeaseStatus.ACQUIRED.value, LeaseStatus.RENEWED.value)
             })
             if active_worker_count >= self.config.max_concurrent_workers and owner_id not in {
-                l["owner_id"] for l in leases_dict.values()
-                if not is_lease_expired(TaskLease.from_dict(l), now)
+                lease_entry["owner_id"] for lease_entry in leases_dict.values()
+                if not is_lease_expired(TaskLease.from_dict(lease_entry), now)
             }:
                 return CoordinationResult(
                     success=False,
@@ -650,7 +647,7 @@ class CoordinationManager:
                     "harness": "stale-agent-reaper",
                     "execution_mode": "parallel",
                     "inputs": {"action": "reap_stale_leases", "reaped_count": len(reaped)},
-                    "evidence": {"reaped_tasks": [l.task_id for l in reaped]},
+                    "evidence": {"reaped_tasks": [lease.task_id for lease in reaped]},
                     "state_delta": {"stale_agents_reaped": len(reaped)},
                 })
                 FileLedgerStore.save(self.repo_root, ledger)
@@ -667,7 +664,7 @@ class CoordinationManager:
 
         leases = [TaskLease.from_dict(d) for d in leases_dict.values()]
         if active_only:
-            leases = [l for l in leases if l.status in (LeaseStatus.ACTIVE.value, LeaseStatus.ACQUIRED.value, LeaseStatus.RENEWED.value)]
+            leases = [lease for lease in leases if lease.status in (LeaseStatus.ACTIVE.value, LeaseStatus.ACQUIRED.value, LeaseStatus.RENEWED.value)]
         return leases
 
     def _mark_task_completed_in_markdown(self, change_id: str, task_id: str) -> None:

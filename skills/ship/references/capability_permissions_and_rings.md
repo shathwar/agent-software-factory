@@ -11,7 +11,13 @@ Adversarial fixtures test policy decisions, not containment of malicious code.
 
 MCP mutation and shell tools require an explicit server-environment opt-in,
 `AGENTFLOW_MCP_ALLOW_MUTATIONS=1`. That grants a trusted client access to those tools;
-it does not enforce per-agent capabilities. Use host permissions and OS sandboxing.
+the command execution adapter also requires an `agent_id`, operation, and scoped target
+and calls the host-side `CapabilityGuard` before starting a process. Use host permissions
+and OS sandboxing for containment beyond this policy check.
+
+Provider integrations should use `ExternalActionAdapter`: inject the SDK call through
+`network`, `secret`, `cloud`, or `github`. The adapter evaluates the scoped capability
+before invoking the callback, so denied actions never reach the provider implementation.
 
 ---
 
@@ -116,7 +122,11 @@ ALLOW (Security Decision logged to local ledger audit trail)
 | `EXECUTE` | Subprocess command execution | `cmd:pytest*`, `cmd:git diff` |
 | `GIT` | Manipulating git branches, commits, or refs | `ref:refs/heads/*` |
 | `NETWORK` | Out-of-band network communication | `net:api.github.com` |
+| `NETWORK_READ` | Read-only outbound network communication | `https://pypi.org/*` |
+| `NETWORK_WRITE` | Outbound network mutation | `https://api.github.com/repos/org/repo/*` |
 | `SECRET_READ` | Reading environment variables or vault keys | `secret:JWT_SECRET` |
+| `CLOUD_MUTATE` | Mutating a scoped cloud resource | `aws:s3:::bucket/*` |
+| `GITHUB_WRITE` | Mutating GitHub state | `github:pr:*` |
 
 ---
 

@@ -1,16 +1,15 @@
 """Local installation diagnostics and explicit, backed-up ledger migration."""
 import json
-import os
 from pathlib import Path
 import platform
 import shutil
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 import uuid
 
 from .config import ShipConfigManager
 from .ledger import FileLedgerStore, read_ledger_file, ensure_gitignore_has_agentflow
-from .paths import repository_path, get_state_file, get_journal_file, agentflow_path
+from .paths import get_state_file, get_journal_file, agentflow_path
 from .transactions import atomic_write
 
 
