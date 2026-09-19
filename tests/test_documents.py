@@ -50,7 +50,7 @@ class DocumentTests(unittest.TestCase):
         tracked_paths = [ROOT / path.decode() for path in result.stdout.split(b"\0") if path]
 
         for p in tracked_paths:
-            if p == ROOT / "tests/test_documents.py":
+            if p == ROOT / "tests/test_documents.py" or not p.exists():
                 continue
             # 1. .ship.json must never appear in any tracked file
             if p.suffix in (".md", ".py", ".json", ".sh", ".yml", ".yaml", ".toml"):

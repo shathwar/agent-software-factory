@@ -1,6 +1,6 @@
 {
   "name": "skills",
-  "version": "0.2.0-rc.1",
+  "version": "1.0.0",
   "description": "Deterministic engineering lifecycle skills for AI coding agents: design, spike, tdd, simplify, review, and ship.",
   "author": {
     "name": "Sumanth",

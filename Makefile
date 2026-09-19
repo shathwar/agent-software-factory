@@ -1,5 +1,9 @@
 # Makefile for shathwar/skills and ship-sdlc (AgentFlow SDLC)
 
+PYTHON ?= python3
+PYTEST ?= pytest
+RUFF ?= ruff
+
 .PHONY: help check test test-fast test-lifecycle test-skills test-all bench benchmark lint sync verify-parity doctor mcp setup-hooks playground install clean
 
 help:
@@ -9,7 +13,6 @@ help:
 	@echo "  make test-lifecycle  Focused AgentFlow lifecycle engine tests (~15s)"
 	@echo "  make test-skills     Focused specialist tools tests (~5s)"
 	@echo "  make test            Run the full test suite (syntax + 480+ tests)"
-	@echo "  make test-all        Run the full test suite via scripts/run_tests.sh"
 	@echo "  make bench           Run the AgentFlow evaluation benchmark suite"
 	@echo "  make lint            Run ruff code hygiene check"
 	@echo "  make sync            Synchronize src/ship/ into skills/*/scripts/"
@@ -22,41 +25,33 @@ help:
 	@echo "  make clean           Clean temporary files, build artifacts, and caches"
 
 check:
-	@echo "Running instant sanity check..."
-	python3 -m py_compile src/ship/*.py src/ship/lifecycle/*.py src/ship/tools/*.py
-	python3 scripts/sync_skills.py --check
-	PYTHONPATH=src:tests pytest tests/test_nano_rules.py -q
+	@PYTHON="$(PYTHON)" PYTEST="$(PYTEST)" bash scripts/check.sh
 
 test-fast:
-	@echo "Running fast unit tests..."
-	PYTHONPATH=src:tests pytest tests/test_scan_debt.py tests/test_verify_tdd.py tests/test_validate_report.py tests/test_documents.py tests/test_cli_init.py tests/test_verification.py tests/test_convergence.py -q
+	@PYTHON="$(PYTHON)" PYTEST="$(PYTEST)" bash scripts/test_fast.sh
 
 test-lifecycle:
 	@echo "Running AgentFlow lifecycle tests..."
-	PYTHONPATH=src:tests pytest tests/test_inspect_lifecycle.py tests/test_archive_recovery.py tests/test_evidence_gates.py tests/test_turn_regressions.py -q
+	PYTHONPATH=src:tests $(PYTEST) tests/test_inspect_lifecycle.py tests/test_archive_recovery.py tests/test_evidence_gates.py tests/test_turn_regressions.py -q
 
 test-skills:
 	@echo "Running specialist tools tests..."
-	PYTHONPATH=src:tests pytest tests/test_verify_tdd.py tests/test_scan_debt.py tests/test_validate_report.py tests/test_run_spike.py -q
+	PYTHONPATH=src:tests $(PYTEST) tests/test_verify_tdd.py tests/test_scan_debt.py tests/test_validate_report.py tests/test_run_spike.py -q
 
-test: test-all
+test test-all:
+	PYTHON="$(PYTHON)" bash scripts/run_tests.sh
 
-test-all:
-	./scripts/run_tests.sh
-
-bench: benchmark
-
-benchmark:
-	PYTHONPATH=src python3 -m ship.cli benchmark --suite all
+bench benchmark:
+	PYTHONPATH=src $(PYTHON) -m ship.cli benchmark --suite all
 
 lint:
-	ruff check src/ tests/
+	$(RUFF) check src/ tests/
 
 sync:
-	python3 scripts/sync_skills.py
+	$(PYTHON) scripts/sync_skills.py
 
 verify-parity:
-	python3 scripts/sync_skills.py --check
+	$(PYTHON) scripts/sync_skills.py --check
 
 setup-hooks:
 	bash scripts/setup_hooks.sh
@@ -65,10 +60,10 @@ playground:
 	bash scripts/playground.sh
 
 doctor:
-	python3 -m ship.cli doctor
+	$(PYTHON) -m ship.cli doctor
 
 mcp:
-	PYTHONPATH=src python3 -m ship.cli mcp
+	PYTHONPATH=src $(PYTHON) -m ship.cli mcp
 
 install:
 	pip install -e .
