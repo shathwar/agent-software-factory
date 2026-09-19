@@ -17,6 +17,10 @@ from .models import (
     VerificationRecord, VerificationTier, StagnationType, TurnContract, TurnRecord,
     LeaseStatus, CoordinationConflictType, TaskLease, TaskHandoff,
     AgentRole, AgentIdentity, AgentSession, ActionProvenance,
+    CapabilityOperation, ExecutionRing, Capability, AccessDecision,
+)
+from .capabilities import (
+    CapabilityManager,
 )
 from .provenance import (
     ProvenanceManager,
@@ -56,10 +60,15 @@ from .trailers import CommitTrailerGenerator, canonicalize_gate_name
 from .vcs import GIT_NOTES_REF, GitClient
 
 __all__ = [
+    "AccessDecision",
     "ActionProvenance",
     "AgentIdentity",
     "AgentRole",
     "AgentSession",
+    "Capability",
+    "CapabilityManager",
+    "CapabilityOperation",
+    "ExecutionRing",
     "CheckpointManager",
     "CommitTrailerGenerator",
     "CoordinationConfig",

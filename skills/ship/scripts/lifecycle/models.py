@@ -391,6 +391,112 @@ class ActionProvenance:
         )
 
 
+class CapabilityOperation(str, Enum):
+    READ = "READ"
+    WRITE = "WRITE"
+    DELETE = "DELETE"
+    EXECUTE = "EXECUTE"
+    GIT = "GIT"
+    NETWORK = "NETWORK"
+    SECRET_READ = "SECRET_READ"
+
+
+class ExecutionRing(str, Enum):
+    RING_0_HYPERVISOR = "RING_0_HYPERVISOR"
+    RING_1_GOVERNANCE = "RING_1_GOVERNANCE"
+    RING_2_PRODUCTION = "RING_2_PRODUCTION"
+    RING_3_WORKSPACE = "RING_3_WORKSPACE"
+
+
+@dataclass
+class Capability:
+    capability_id: str
+    agent_id: str
+    change_id: str
+    operation: str
+    target: str
+    task_id: Optional[str] = None
+    session_id: Optional[str] = None
+    granted_at: str = ""
+    expires_at: Optional[str] = None
+    approval_ref: str = ""
+    revoked: bool = False
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "capability_id": self.capability_id,
+            "agent_id": self.agent_id,
+            "change_id": self.change_id,
+            "operation": self.operation.value if hasattr(self.operation, "value") else str(self.operation),
+            "target": self.target,
+            "task_id": self.task_id,
+            "session_id": self.session_id,
+            "granted_at": self.granted_at,
+            "expires_at": self.expires_at,
+            "approval_ref": self.approval_ref,
+            "revoked": self.revoked,
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Capability":
+        return cls(
+            capability_id=str(data.get("capability_id", "")),
+            agent_id=str(data.get("agent_id", "")),
+            change_id=str(data.get("change_id", "")),
+            operation=str(data.get("operation", CapabilityOperation.READ.value)),
+            target=str(data.get("target", "*")),
+            task_id=data.get("task_id"),
+            session_id=data.get("session_id"),
+            granted_at=str(data.get("granted_at", "")),
+            expires_at=data.get("expires_at"),
+            approval_ref=str(data.get("approval_ref", "")),
+            revoked=bool(data.get("revoked", False)),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
+@dataclass
+class AccessDecision:
+    allowed: bool
+    reason: str
+    ring: str
+    agent_id: str
+    operation: str
+    target: str
+    capability_id: Optional[str] = None
+    violation_code: Optional[str] = None
+    timestamp: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "allowed": self.allowed,
+            "reason": self.reason,
+            "ring": self.ring,
+            "agent_id": self.agent_id,
+            "operation": self.operation,
+            "target": self.target,
+            "capability_id": self.capability_id,
+            "violation_code": self.violation_code,
+            "timestamp": self.timestamp,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "AccessDecision":
+        return cls(
+            allowed=bool(data.get("allowed", False)),
+            reason=str(data.get("reason", "")),
+            ring=str(data.get("ring", "")),
+            agent_id=str(data.get("agent_id", "")),
+            operation=str(data.get("operation", "")),
+            target=str(data.get("target", "")),
+            capability_id=data.get("capability_id"),
+            violation_code=data.get("violation_code"),
+            timestamp=str(data.get("timestamp", "")),
+        )
+
+
 @dataclass
 class TurnRecord:
     turn_id: str

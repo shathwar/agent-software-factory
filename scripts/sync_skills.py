@@ -20,6 +20,7 @@ from typing import List, Optional, Sequence, Tuple
 
 LIFECYCLE_MODULES = [
     "__init__.py",
+    "capabilities.py",
     "checkpoints.py",
     "config.py",
     "convergence.py",

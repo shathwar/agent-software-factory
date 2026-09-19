@@ -54,6 +54,8 @@ CORE SUBCOMMANDS:
       Manage agent sessions and track attributable execution lifecycles.
   agentflow identity <register|list> [options]
       Register and inspect agent identities and role assignments.
+  agentflow capability <grant|revoke|list|check> [options]
+      Manage fine-grained capabilities and enforce the 4-Ring execution lattice.
   agentflow doctor [--path <dir>]
       Run preflight diagnostics (runtime, git, skill directories, ledger).
 
@@ -827,6 +829,150 @@ Actions:
         return 1
 
 
+def run_capability_cli(argv: Sequence[str]) -> int:
+    """Handle fine-grained object capability and Ring authorization CLI commands."""
+    if not argv or argv[0] in ("-h", "--help"):
+        print("""Usage: agentflow capability <action> [options]
+
+Actions:
+  grant <agent_id> --op <operation> --target <target> [--task <id>] [--ttl <sec>] [--approval <ref>]
+  revoke <capability_id> [--reason <str>]
+  list [change] [--agent <id>] [--active] [--json]
+  check <agent_id> --op <operation> --target <target> [--task <id>] [--token <token>] [--json]
+""")
+        return 0
+
+    action = argv[0].lower()
+    rem = argv[1:]
+
+    parser = argparse.ArgumentParser(prog=f"agentflow capability {action}")
+    parser.add_argument("--path", "--repo-root", dest="path", default=".", help="Repository root path")
+    parser.add_argument("--change", default=None, help="Target change ID")
+    parser.add_argument("--json", action="store_true", help="Output JSON format")
+
+    if action == "grant":
+        parser.add_argument("agent_id", nargs="?", default=None, help="Agent ID holding capability")
+        parser.add_argument("--agent", dest="agent_opt", default=None, help="Agent ID")
+        parser.add_argument("--op", "--operation", dest="operation", required=True, help="Capability operation (READ, WRITE, DELETE, EXECUTE, GIT, NETWORK, SECRET_READ)")
+        parser.add_argument("--target", required=True, help="Target resource path, glob, or command pattern")
+        parser.add_argument("--task", dest="task_id", default=None, help="Bound task ID (e.g. 1.1)")
+        parser.add_argument("--session", dest="session_id", default=None, help="Bound session ID")
+        parser.add_argument("--ttl", type=int, default=None, help="TTL duration in seconds")
+        parser.add_argument("--approval", dest="approval_ref", default="", help="Authorization reference (e.g. adr:0002, lease:tok-123)")
+        args = parser.parse_args(rem)
+        agent_id = args.agent_opt or args.agent_id
+        if not agent_id:
+            parser.error("agent_id is required (positional or via --agent)")
+        from .lifecycle.capabilities import CapabilityManager
+        manager = CapabilityManager(Path(args.path).resolve())
+        cap = manager.grant_capability(
+            agent_id=agent_id,
+            operation=args.operation,
+            target=args.target,
+            change_id=args.change,
+            task_id=args.task_id,
+            session_id=args.session_id,
+            ttl_seconds=args.ttl,
+            approval_ref=args.approval_ref,
+        )
+        if args.json:
+            print(json.dumps(cap.to_dict(), indent=2))
+        else:
+            ring = manager.classify_target_ring(cap.target, cap.operation)
+            print(f"🔑 Granted capability '{cap.capability_id}' to agent '{cap.agent_id}'")
+            print(f"  • Operation : {cap.operation}")
+            print(f"  • Target    : {cap.target} ({ring.value})")
+            if cap.task_id:
+                print(f"  • Task      : {cap.task_id}")
+            if cap.expires_at:
+                print(f"  • Expires   : {cap.expires_at}")
+            if cap.approval_ref:
+                print(f"  • Approval  : {cap.approval_ref}")
+        return 0
+
+    elif action == "revoke":
+        parser.add_argument("capability_id", nargs="?", default=None, help="Capability ID to revoke")
+        parser.add_argument("--cap", dest="cap_opt", default=None, help="Capability ID")
+        parser.add_argument("--reason", default="", help="Revocation reason")
+        args = parser.parse_args(rem)
+        cap_id = args.cap_opt or args.capability_id
+        if not cap_id:
+            parser.error("capability_id is required (positional or via --cap)")
+        from .lifecycle.capabilities import CapabilityManager
+        manager = CapabilityManager(Path(args.path).resolve())
+        cap = manager.revoke_capability(cap_id, change_id=args.change, reason=args.reason)
+        if not cap:
+            print(f"❌ Capability '{cap_id}' not found.", file=sys.stderr)
+            return 1
+        if args.json:
+            print(json.dumps(cap.to_dict(), indent=2))
+        else:
+            print(f"🛑 Revoked capability '{cap.capability_id}' for agent '{cap.agent_id}'.")
+        return 0
+
+    elif action == "list":
+        parser.add_argument("target_change", nargs="?", default=None, help="Target change ID")
+        parser.add_argument("--agent", default=None, help="Filter by agent ID")
+        parser.add_argument("--active", action="store_true", help="Show active unexpired capabilities only")
+        args = parser.parse_args(rem)
+        cid = args.target_change or args.change
+        from .lifecycle.capabilities import CapabilityManager
+        manager = CapabilityManager(Path(args.path).resolve())
+        caps = manager.list_capabilities(change_id=cid, agent_id=args.agent, active_only=args.active)
+        if args.json:
+            print(json.dumps([c.to_dict() for c in caps], indent=2))
+        else:
+            print(f"📋 Capabilities for change '{cid or 'active'}':")
+            if not caps:
+                print("  (No capabilities granted)")
+            for c in caps:
+                status = "REVOKED" if c.revoked else "ACTIVE"
+                task_str = f" [task: {c.task_id}]" if c.task_id else ""
+                print(f"  • {c.capability_id} | Agent: {c.agent_id:15s} | {c.operation:10s} -> {c.target:25s} | Status: {status}{task_str}")
+        return 0
+
+    elif action == "check":
+        parser.add_argument("agent_id", nargs="?", default=None, help="Agent ID to evaluate")
+        parser.add_argument("--agent", dest="agent_opt", default=None, help="Agent ID")
+        parser.add_argument("--op", "--operation", dest="operation", required=True, help="Requested operation")
+        parser.add_argument("--target", required=True, help="Requested target resource")
+        parser.add_argument("--task", dest="task_id", default=None, help="Bound task ID")
+        parser.add_argument("--session", dest="session_id", default=None, help="Bound session ID")
+        parser.add_argument("--token", "--lease-token", dest="lease_token", default=None, help="Lease token")
+        args = parser.parse_args(rem)
+        agent_id = args.agent_opt or args.agent_id
+        if not agent_id:
+            parser.error("agent_id is required (positional or via --agent)")
+        from .lifecycle.capabilities import CapabilityManager
+        manager = CapabilityManager(Path(args.path).resolve())
+        decision = manager.evaluate_access(
+            agent_id=agent_id,
+            operation=args.operation,
+            target=args.target,
+            task_id=args.task_id,
+            session_id=args.session_id,
+            change_id=args.change,
+            lease_token=args.lease_token,
+        )
+        if args.json:
+            print(json.dumps(decision.to_dict(), indent=2))
+        else:
+            verdict_icon = "🛡️ ALLOW" if decision.allowed else "⛔ DENY"
+            print(f"{verdict_icon}: {decision.reason}")
+            print(f"  • Ring        : {decision.ring}")
+            print(f"  • Principal   : {decision.agent_id}")
+            print(f"  • Operation   : {decision.operation} on '{decision.target}'")
+            if decision.capability_id:
+                print(f"  • Capability  : {decision.capability_id}")
+            if decision.violation_code:
+                print(f"  • Violation   : {decision.violation_code}")
+        return 0 if decision.allowed else 1
+
+    else:
+        print(f"Unknown capability action: '{action}'. See 'agentflow capability --help'.", file=sys.stderr)
+        return 1
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """Unified entrypoint for ship CLI with subcommands, specialist tools, and MCP server."""
     if argv is None:
@@ -851,6 +997,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if cmd in ("identity", "identities"):
         return run_identity_cli(sub_args)
+
+    if cmd in ("capability", "capabilities", "cap"):
+        return run_capability_cli(sub_args)
 
     # Specialist tools dispatch
     if cmd == "tdd":
