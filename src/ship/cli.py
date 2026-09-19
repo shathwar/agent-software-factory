@@ -296,8 +296,18 @@ def run_lifecycle(argv: Sequence[str]) -> int:
     if args.resume is not None:
         cid = (args.resume.strip() if args.resume else "") or args.change or ledger_store.get_active_change(repo_root) or "default"
         try:
-            res_entry = ledger_store.resume_change(repo_root, cid)
-            output_result(res_entry, [f"Halt blocker cleared and autonomy resumed for change '{cid}'."])
+            from .lifecycle.recovery import RecoveryManager
+            decision = RecoveryManager(repo_root).reconcile_and_recover(cid)
+            res_entry = ledger_store.load(repo_root, auto_sync=False).get("changes", {}).get(cid, {})
+            msg = [
+                f"Halt blocker cleared and autonomy resumed for change '{cid}'.",
+                f"Recovery strategy: {decision.strategy}",
+                f"Restored phase: {decision.restored_phase}",
+                f"Next step: {decision.next_step}",
+            ]
+            if decision.reconciled_items:
+                msg.append(f"Reconciled items: {'; '.join(decision.reconciled_items)}")
+            output_result(res_entry, msg)
             return 0
         except Exception as exc:
             print(f"Error: {exc}", file=sys.stderr)

@@ -200,7 +200,7 @@ class FileLedgerStore:
                             break
                         time.sleep(0.01)
             _tls.locks[lock_key] = 1
-            recover_archive(repo_root)
+            _tls.last_archive_recovery = recover_archive(repo_root)
             yield
         finally:
             _tls.locks[lock_key] = 0
@@ -764,27 +764,20 @@ class FileLedgerStore:
         repo_root: Path,
         change_id: Optional[str] = None,
         sync_fn: Optional[Callable[[Path], Dict[str, Any]]] = None,
+        intervened_by: Optional[str] = None,
+        notes: str = "",
     ) -> Dict[str, Any]:
-        """Clear Halt blockers and resume workflow execution after human intervention."""
+        """Deterministically reconcile divergence, clear Halt blockers, and resume workflow execution."""
+        from .recovery import RecoveryManager
         cid = change_id or cls.get_active_change(repo_root) or "default"
         validate_change_id(cid)
-
-        def updater(entry: Dict[str, Any]) -> None:
-            entry["blockers"] = [b for b in entry.get("blockers", []) if not b.startswith("Halt:")]
-            turns = entry.setdefault("turns", [])
-            turn_idx = len(turns) + 1
-            turns.append({
-                "turn_id": f"turn-{turn_idx:03d}",
-                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "skill": "human",
-                "harness": "human-supervisor",
-                "execution_mode": "manual",
-                "inputs": {"action": "resume", "cleared_halt": True},
-                "evidence": {"resumed": True},
-                "state_delta": {"halt_cleared": True},
-            })
-
-        return cls.mutate_change(repo_root, cid, updater, sync_fn=sync_fn)
+        RecoveryManager(repo_root).reconcile_and_recover(
+            change_id=cid,
+            intervened_by=intervened_by,
+            notes=notes,
+        )
+        ledger = cls.load(repo_root, auto_sync=False)
+        return ledger.get("changes", {}).get(cid, {})
 
     @classmethod
     def record_turn(

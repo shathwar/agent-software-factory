@@ -700,4 +700,35 @@ class TaskHandoff:
         )
 
 
+class RecoveryStrategy(str, Enum):
+    RESUME = "RESUME"
+    ROLLBACK = "ROLLBACK"
+    RECONCILE = "RECONCILE"
+    ABORT = "ABORT"
+
+
+@dataclass
+class RecoveryDecision:
+    strategy: str  # RecoveryStrategy
+    change_id: str
+    reconciled_items: List[str] = field(default_factory=list)
+    restored_phase: str = ""
+    next_step: str = ""
+    details: Dict[str, Any] = field(default_factory=dict)
+    timestamp: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        st = self.strategy.value if hasattr(self.strategy, "value") else str(self.strategy)
+        return {
+            "strategy": st,
+            "change_id": self.change_id,
+            "reconciled_items": self.reconciled_items,
+            "restored_phase": self.restored_phase,
+            "next_step": self.next_step,
+            "details": self.details,
+            "timestamp": self.timestamp,
+        }
+
+
+
 
