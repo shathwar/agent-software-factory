@@ -55,7 +55,7 @@ CORE SUBCOMMANDS:
   agentflow identity <register|list> [options]
       Register and inspect agent identities and role assignments.
   agentflow capability <grant|revoke|list|check> [options]
-      Manage fine-grained capabilities and enforce the 4-Ring execution lattice.
+      Evaluate capability policy for trusted host enforcement.
   agentflow doctor [--path <dir>]
       Run preflight diagnostics (runtime, git, skill directories, ledger).
 

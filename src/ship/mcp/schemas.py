@@ -219,3 +219,15 @@ TOOLS_MANIFEST: List[Dict[str, Any]] = [
         }
     }
 ]
+
+TOOLS_MANIFEST.append({
+    "name": "ship_verify",
+    "description": "Execute configured project tests and record independent verification. Requires trusted MCP mutation opt-in.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "path": {"type": "string"}, "change": {"type": "string"},
+            "tiers": {"type": "array", "items": {"type": "string", "enum": ["execution", "grounding", "coverage", "mutation", "all"]}},
+        },
+    },
+})

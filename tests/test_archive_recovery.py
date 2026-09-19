@@ -10,6 +10,7 @@ import unittest
 SCRIPTS = Path(__file__).resolve().parents[1] / "skills/ship/scripts"
 sys.path.insert(0, str(SCRIPTS))
 import inspect_lifecycle as lifecycle
+from verification_fixture import verify_fixture
 
 CHILD = r'''
 import os, sys
@@ -99,6 +100,7 @@ class ArchiveRecoveryTests(unittest.TestCase):
         from lifecycle.ledger import FileLedgerStore
         FileLedgerStore.approve_design(root, "alpha", design_fingerprint(root, "alpha"), "test-reviewer")
         lifecycle.sync_ledger_from_workspace(root)
+        verify_fixture(root)
         return living.read_bytes(), (root / '.agentflow/state.json').read_bytes()
 
     def stop_process(self, root, step):

@@ -14,6 +14,7 @@ INSPECT_LIFECYCLE = ROOT / "skills" / "ship" / "scripts" / "inspect_lifecycle.py
 
 sys.path.insert(0, str(INSPECT_LIFECYCLE.parent))
 import inspect_lifecycle
+from verification_fixture import verify_fixture
 
 
 class TestInspectLifecycle(unittest.TestCase):
@@ -23,6 +24,7 @@ class TestInspectLifecycle(unittest.TestCase):
         for package in (root / "openspec/changes").glob("*"):
             if package.is_dir():
                 FileLedgerStore.approve_design(root, package.name, design_fingerprint(root, package.name), "test-reviewer")
+        verify_fixture(root)
 
     def _init_git_repo(self, tmppath: Path, branch: str = "main") -> None:
         subprocess.run(["git", "init", "-b", branch], cwd=tmppath, check=True, capture_output=True)
@@ -3094,6 +3096,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 "test_evidence": True, "working_tree_fingerprint": tree_fp,
             }))
             inspect_lifecycle.record_review_to_ledger(root, str(rev_file), change_id="alpha")
+            verify_fixture(root, "alpha")
             contract5 = inspect_lifecycle.get_next_turn(root, target_change="alpha")
             self.assertEqual(contract5.skill, "delivery")
             self.assertEqual(contract5.phase, "DELIVERY_READY")

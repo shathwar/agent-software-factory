@@ -1,11 +1,11 @@
-"""Capability-Based Permissions & Execution Ring Enforcement Engine.
+"""Capability policy evaluation for trusted host integrations.
 
 Evolves the security model from coarse role-based permissions:
   "Agent is allowed to write Ring 2"
 to fine-grained object capabilities (OCAP):
   "This agent, in this session, for this task, currently holds this capability."
 
-Enforcement Pipeline:
+Policy evaluation pipeline (the host must enforce returned decisions):
 Agent -> Identity -> Capability -> Ring policy -> Lease -> Action -> ALLOW / DENY
 
 Zero external dependencies: 100% Python 3.10+ standard library.
@@ -308,7 +308,7 @@ class CapabilityManager:
         change_id: Optional[str] = None,
         lease_token: Optional[str] = None,
     ) -> AccessDecision:
-        """Enforce the 6-stage capability & ring security lattice:
+        """Evaluate the capability policy; this method does not execute or intercept actions:
         Agent -> Identity -> Capability -> Ring policy -> Lease -> Action -> ALLOW / DENY
         """
         cid = self._get_target_change(change_id)

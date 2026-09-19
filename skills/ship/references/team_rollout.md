@@ -166,3 +166,14 @@ checkpoint exists when it was skipped. A narrower instruction to avoid committin
 the implementation does not authorize publishing anything. Respect explicit limits
 on modifying the ledger or archive as well; present a resumable handoff when those
 limits prevent completing a gate.
+
+## Verification and host permissions
+
+Before delivery, run `agentflow verify --tier execution` on the current working tree.
+Missing, inconclusive, or stale execution receipts block delivery. Changes to source
+require a new verification run. Existing workspaces need a new receipt on upgrade.
+
+Capability checks return policy decisions for a trusted host to enforce. They do not
+sandbox agents or authenticate local ledger writers. MCP mutation and shell tools
+require the operator to set `AGENTFLOW_MCP_ALLOW_MUTATIONS=1` in the server environment;
+enable this only for trusted clients. Keep host sandbox and authorization controls.

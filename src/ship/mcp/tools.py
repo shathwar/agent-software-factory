@@ -1,6 +1,7 @@
 """Dispatch handlers for Ship MCP tools."""
 
 import json
+import os
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
@@ -223,6 +224,12 @@ def handle_ship_trailers(args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def handle_ship_verify(args: Dict[str, Any]) -> Dict[str, Any]:
+    records = LifecycleEngine().verify_change(
+        _get_root(args), change=args.get("change"), tiers=args.get("tiers") or ["execution"])
+    return {tier: record.to_dict() for tier, record in records.items()}
+
+
 def handle_ship_doctor(args: Dict[str, Any]) -> Dict[str, Any]:
     root = _get_root(args)
     return doctor(root)
@@ -315,6 +322,7 @@ HANDLERS: Dict[str, Any] = {
     "ship_archive": handle_ship_archive,
     "ship_trailers": handle_ship_trailers,
     "ship_doctor": handle_ship_doctor,
+    "ship_verify": handle_ship_verify,
     "ship_tdd_verify": handle_ship_tdd_verify,
     "ship_simplify_scan": handle_ship_simplify_scan,
     "ship_spike_run": handle_ship_spike_run,
@@ -326,4 +334,10 @@ def dispatch_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
     handler = HANDLERS.get(name)
     if not handler:
         raise ValueError(f"Unknown tool: '{name}'. Available tools: {list(HANDLERS.keys())}")
+    privileged = {
+        "ship_record_turn", "ship_checkpoint", "ship_rollback", "ship_approve_design",
+        "ship_record_tests", "ship_record_review", "ship_archive", "ship_spike_run", "ship_verify",
+    }
+    if name in privileged and os.environ.get("AGENTFLOW_MCP_ALLOW_MUTATIONS") != "1":
+        raise PermissionError("MCP mutations and shell execution are disabled. A trusted host must set AGENTFLOW_MCP_ALLOW_MUTATIONS=1 in the server environment.")
     return handler(arguments)

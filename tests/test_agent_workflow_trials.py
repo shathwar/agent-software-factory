@@ -9,6 +9,7 @@ import tempfile
 import unittest
 import uuid
 
+from verification_fixture import verify_fixture
 import test_archive_recovery as fixtures
 lifecycle = fixtures.lifecycle
 from lifecycle.evidence import design_fingerprint
@@ -56,6 +57,7 @@ class AgentWorkflowTrialTests(unittest.TestCase):
             report = json.loads(report_path.read_text())
             report["working_tree_fingerprint"] = compute_working_tree_fingerprint(root)
             report_path.write_text(json.dumps(report))
+            verify_fixture(root)
             lifecycle.record_review_to_ledger(root, report_path, change_id="alpha")
 
             # Now delivery is ready
@@ -78,6 +80,7 @@ class AgentWorkflowTrialTests(unittest.TestCase):
             # Re-reviewing the updated working tree restores delivery readiness
             report["working_tree_fingerprint"] = compute_working_tree_fingerprint(root)
             report_path.write_text(json.dumps(report))
+            verify_fixture(root)
             lifecycle.record_review_to_ledger(root, report_path, change_id="alpha")
             archive_res = lifecycle.apply_and_archive_openspec(root, "alpha")
             self.assertEqual(archive_res["change"], "alpha")
@@ -104,6 +107,7 @@ class AgentWorkflowTrialTests(unittest.TestCase):
             report = json.loads(report_path.read_text())
             report["working_tree_fingerprint"] = compute_working_tree_fingerprint(root)
             report_path.write_text(json.dumps(report))
+            verify_fixture(root)
             lifecycle.record_review_to_ledger(root, report_path, change_id="alpha")
 
             # Simulate concurrent work on beta: record failing tests, inspect beta
@@ -221,6 +225,7 @@ class AgentWorkflowTrialTests(unittest.TestCase):
             report = json.loads(report_path.read_text())
             report["working_tree_fingerprint"] = compute_working_tree_fingerprint(root)
             report_path.write_text(json.dumps(report))
+            verify_fixture(root)
             lifecycle.record_review_to_ledger(root, report_path, change_id="alpha")
 
             res = lifecycle.evaluate_repository(root, target_change="alpha")
@@ -332,6 +337,7 @@ class AgentWorkflowTrialTests(unittest.TestCase):
             cli("--change", "billing", "--record-review", str(review_file))
 
             # 4. Verify delivery readiness via status check
+            verify_fixture(project_dir, "billing")
             cli("--status-check")
 
             # 5. Archive change package
@@ -429,6 +435,7 @@ class AgentWorkflowTrialTests(unittest.TestCase):
                 "findings": [], "coverage": ["stock.md", "inventory.py"], "questions": [], "routing_notes": [],
                 "test_evidence": True, "working_tree_fingerprint": tree_fp,
             }))
+            verify_fixture(root)
             lifecycle.record_review_to_ledger(root, str(review_file), change_id=change_id)
 
             # ------------------------------------------------------------------

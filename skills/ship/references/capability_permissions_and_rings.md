@@ -1,6 +1,17 @@
 # Capability-Based Permissions & The Execution Ring Model
 
-This document specifies the **Object-Capability (OCAP)** security architecture and execution ring lattice for the AgentFlow SDLC lifecycle.
+This document describes AgentFlow's local capability policy evaluator and target classifications.
+
+**Enforcement boundary:** `evaluate_access` returns ALLOW/DENY and writes an audit record.
+It does not intercept filesystem, shell, CLI, MCP, or network operations. A trusted
+host must enforce the decision at execution time and protect its policy store from
+untrusted writers. Local identities and approval references are supplied by callers;
+they are not authenticated identities. The ledger is mutable by the local user.
+Adversarial fixtures test policy decisions, not containment of malicious code.
+
+MCP mutation and shell tools require an explicit server-environment opt-in,
+`AGENTFLOW_MCP_ALLOW_MUTATIONS=1`. That grants a trusted client access to those tools;
+it does not enforce per-agent capabilities. Use host permissions and OS sandboxing.
 
 ---
 
@@ -26,7 +37,7 @@ Blast radius and asset criticality are organized into four execution rings:
 
 ```text
  ┌─────────────────────────────────────────────────────────────────────────┐
- │ Ring 0: Hypervisor & Ledger (Immutable)                                │
+ │ Ring 0: Hypervisor & Ledger (Policy-protected)                                │
  │ • .agentflow/ledger.json, state.json, checkpoints/, refs/ship/*         │
  │ • Default Access: READ allowed; WRITE/DELETE/GIT STRICTLY RESTRICTED.   │
  │ • Requires: Explicit hypervisor/system or human authorization ref.      │
@@ -41,7 +52,7 @@ Blast radius and asset criticality are organized into four execution rings:
  │ • Default Access: Scoped WRITE/DELETE strictly bound to TaskLease.      │
  │ • Requires: Active capability grant AND valid unexpired TaskLease.      │
  ├─────────────────────────────────────────────────────────────────────────┤
- │ Ring 3: Disposable Workspace & Scratch (Sandboxed)                      │
+ │ Ring 3: Disposable Workspace & Scratch (Host-isolated)                      │
  │ • .agentflow/spikes/**, scratch/**, build/**, dist/**, caches           │
  │ • Default Access: Disposable; broad WRITE/DELETE within sandbox targets.│
  └─────────────────────────────────────────────────────────────────────────┘
@@ -51,7 +62,7 @@ Blast radius and asset criticality are organized into four execution rings:
 
 ## 3. The 6-Stage Access Enforcement Chain
 
-Every operation request traverses six consecutive security gates before execution:
+Each explicit capability check evaluates the following policy stages; execution is a separate host responsibility:
 
 ```
 Agent Action Request (agent_id, operation, target, task_id, session_id, lease_token)
@@ -90,7 +101,7 @@ Is operation mutating Ring 2 production code or tests?
   └─► PASS
   │
   ▼
-ALLOW (Security Decision logged to tamper-evident ledger audit trail)
+ALLOW (Security Decision logged to local ledger audit trail)
 ```
 
 ---

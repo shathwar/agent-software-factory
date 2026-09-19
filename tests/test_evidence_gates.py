@@ -35,6 +35,8 @@ class EvidenceGateTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     lifecycle.apply_and_archive_openspec(root, "alpha")
                 lifecycle.record_test_run_to_ledger(root, {"passed": True, "tests_run": 4, "failed_count": 0, "exit_code": 0}, change_id="alpha")
+                from verification_fixture import verify_fixture
+                verify_fixture(root, "alpha")
                 self.assertEqual(lifecycle.evaluate_repository(root, target_change="alpha")["state_key"], "DELIVERY_READY")
 
     def test_design_approval_and_reapproval_use_reviewed_digest(self):
@@ -55,6 +57,8 @@ class EvidenceGateTests(unittest.TestCase):
             args = ["--path", str(root), "--change", "alpha", "--approve-design", digest, "--approved-by", "reviewer@example.org"]
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(lifecycle.main(args), 0)
+            from verification_fixture import verify_fixture
+            verify_fixture(root, "alpha")
             self.assertEqual(lifecycle.evaluate_repository(root, target_change="alpha")["state_key"], "DELIVERY_READY")
             tasks = root / "openspec/changes/alpha/tasks.md"
             tasks.write_text("- [ ] Done\n")
@@ -73,6 +77,8 @@ class EvidenceGateTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Design changed"):
                 lifecycle.apply_and_archive_openspec(root, "alpha")
             FileLedgerStore.approve_design(root, "alpha", design_fingerprint(root, "alpha"), "reviewer@example.org")
+            from verification_fixture import verify_fixture
+            verify_fixture(root, "alpha")
             self.assertEqual(lifecycle.evaluate_repository(root, target_change="alpha")["state_key"], "DELIVERY_READY")
 
     def test_design_files_and_adrs_invalidate_but_source_changes_do_not(self):

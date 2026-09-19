@@ -18,29 +18,6 @@ import sys
 from typing import List, Optional, Sequence, Tuple
 
 
-LIFECYCLE_MODULES = [
-    "__init__.py",
-    "capabilities.py",
-    "checkpoints.py",
-    "config.py",
-    "convergence.py",
-    "coordination.py",
-    "engine.py",
-    "evidence.py",
-    "gates.py",
-    "ledger.py",
-    "models.py",
-    "operations.py",
-    "paths.py",
-    "protocols.py",
-    "provenance.py",
-    "specs.py",
-    "trailers.py",
-    "transactions.py",
-    "turns.py",
-    "vcs.py",
-    "verification.py",
-]
 
 TOOL_MODULES = {
     "simplify": ("src/ship/tools/simplify.py", "skills/simplify/scripts/scan_debt.py"),
@@ -57,7 +34,7 @@ def get_file_mappings(repo_root: Path) -> List[Tuple[Path, Path]]:
     # Lifecycle package
     src_lifecycle = repo_root / "src/ship/lifecycle"
     skills_lifecycle = repo_root / "skills/ship/scripts/lifecycle"
-    for module in LIFECYCLE_MODULES:
+    for module in sorted(p.name for p in src_lifecycle.glob("*.py")):
         mappings.append((src_lifecycle / module, skills_lifecycle / module))
 
     # Specialist tools

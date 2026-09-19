@@ -1,6 +1,8 @@
 """Tests for Ship stdio Model Context Protocol (MCP) server."""
 
 import io
+import os
+from unittest.mock import patch
 import json
 from pathlib import Path
 import subprocess
@@ -19,6 +21,9 @@ from ship.mcp.server import handle_request, run_stdio_server
 
 class MCPServerTests(unittest.TestCase):
     def setUp(self):
+        self.environment = patch.dict(os.environ, {"AGENTFLOW_MCP_ALLOW_MUTATIONS": "1"})
+        self.environment.start()
+        self.addCleanup(self.environment.stop)
         self.stdout_buf = io.StringIO()
         self.stderr_buf = io.StringIO()
         self._orig_stdout = sys.stdout
@@ -39,7 +44,7 @@ class MCPServerTests(unittest.TestCase):
 
     def test_tools_manifest_has_all_ship_tools(self):
         """TOOLS_MANIFEST contains all 16 standard ship_* tools with valid schemas."""
-        self.assertEqual(len(TOOLS_MANIFEST), 16)
+        self.assertEqual(len(TOOLS_MANIFEST), 17)
         tool_names = {t["name"] for t in TOOLS_MANIFEST}
         expected_tools = {
             "ship_next_turn",
@@ -54,6 +59,7 @@ class MCPServerTests(unittest.TestCase):
             "ship_archive",
             "ship_trailers",
             "ship_doctor",
+            "ship_verify",
             "ship_tdd_verify",
             "ship_simplify_scan",
             "ship_spike_run",
@@ -104,7 +110,7 @@ class MCPServerTests(unittest.TestCase):
         resps = self._get_responses()
         self.assertEqual(len(resps), 1)
         tools = resps[0]["result"]["tools"]
-        self.assertEqual(len(tools), 16)
+        self.assertEqual(len(tools), 17)
 
     def test_unknown_method_returns_error(self):
         """Unknown methods return JSON-RPC -32601 Method not found."""

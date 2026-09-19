@@ -58,10 +58,10 @@ This framework transforms AI from an unpredictable code generator into a **disci
 | **AI Dependency & Boilerplate Bloat** | [**`simplify`**](./skills/simplify/SKILL.md) enforces the *Laziness Ladder* (YAGNI, codebase reuse, stdlib built-ins, zero unrequested abstractions). Automated CI scanning via `scan_debt.py`. | **Leaner codebases, zero unneeded npm/pip dependencies, lower maintenance overhead.** |
 | **Reviewer Fatigue on AI PRs** | [**`review`**](./skills/review/SKILL.md) performs a 10-stage systems review (Correctness, Concurrency, Security, WebPerf, Failure, Craftsmanship) with an evidence-based Judge that rejects hallucinations. | **Senior/Staff engineers stop wasting hours catching basic race conditions, unindexed queries, and missing timeouts.** |
 | **Hollow, Backfilled Unit Tests** | [**`tdd`**](./skills/tdd/SKILL.md) enforces the *Iron Law of Test-First* and an in-flight **Doubt Cycle**. Agents are strictly forbidden from writing production code before proving a behavioral test fails. | **Real regression safety; tests verify observable behavior instead of mock configurations.** |
-| **Vanishing Architectural Context** | [**`design`**](./skills/design/SKILL.md) enforces the *Facts vs. Decisions Law*, audits **Capability Closure**, and compiles an **ADR** and **OpenSpec package** directly into Git. | **Full audit trails for SOC2/compliance, clean RFC records, and effortless onboarding.** |
-| **Multi-Agent Coordination & Crashes** | [**`ship`**](./skills/ship/SKILL.md) provides a **two-phase atomic transaction engine** (`.agentflow/archive-transaction.json`) and multi-change isolation (`--change <id>`) with automatic crash recovery. | **Zero corrupted project state, self-healing archive journals, and safe concurrent feature branches.** |
-| **Security & Compliance Hurdles** | **Zero external dependencies.** The entire test suite, inspector CLIs, debt scanners, and validators run on standard library Python 3.10+ and POSIX bash. | **Simplifies internal enterprise security audits; zero supply chain or third-party package vulnerabilities.** |
-| **LLM Token Costs & Latency** | All core skills and agent prompts are **token-optimized ("cavemanned")**, stripping conversational fluff while retaining strict technical constraints. | **Measured 30–50% reduction in reference token overhead, lower prompt costs, and sharper model instruction adherence.** |
+| **Vanishing Architectural Context** | [**`design`**](./skills/design/SKILL.md) enforces the *Facts vs. Decisions Law*, audits **Capability Closure**, and compiles an **ADR** and **OpenSpec package** directly into Git. | **Local decision and evidence records that teams can review alongside their existing controls.** |
+| **Multi-Agent Coordination & Crashes** | [**`ship`**](./skills/ship/SKILL.md) provides a **two-phase atomic transaction engine** (`.agentflow/archive-transaction.json`) and multi-change isolation (`--change <id>`) with automatic crash recovery. | **Recoverable archive operations and explicit change selection; parallel source editing still requires separate worktrees.** |
+| **Security & Compliance Hurdles** | **Zero external dependencies.** The entire test suite, inspector CLIs, debt scanners, and validators run on standard library Python 3.10+ and POSIX bash. | **No third-party runtime Python packages; Python, Git, build tooling, and agent hosts remain part of the supply chain.** |
+| **LLM Token Costs & Latency** | All core skills and agent prompts are **token-optimized ("cavemanned")**, stripping conversational fluff while retaining strict technical constraints. | **Compact prompts; measure token use and instruction adherence with your own host and model.** |
 
 ### Team Rollout Playbook
 
@@ -85,7 +85,7 @@ Teams can adopt skills incrementally without changing their entire workflow:
 | [**`tdd`**](./skills/tdd/SKILL.md) | `/tdd`, `"tdd"`, `"red-green-refactor"` | Implementation | Dual-speed TDD engine (fast fakes & ephemeral DBs), legacy characterization wrapping, in-flight **Doubt Cycle** ([`doubt_cycle.md`](./skills/tdd/references/doubt_cycle.md)), and `verify_tdd.py` CI parity auditor. |
 | [**`design`**](./skills/design/SKILL.md) | `/design`, `"design"`, `"grill me on this design"` | Pre-implementation | Relentlessly stress-tests architectures using frontier rounds, enforces **Capability Closure** ([`capability_closure.md`](./skills/design/references/capability_closure.md)), detects ungrillable questions, and compiles an ADR & OpenSpec. |
 | [**`spike`**](./skills/spike/SKILL.md) | `/spike`, `"spike"`, `"throwaway spike"` | Empirical Validation | Rapid disposable spikes with automated statistical benchmarking (`run_spike.py` p50/p90/p95/p99/max, RPS, RSS memory delta), ephemeral Docker sandboxes, and ADR bridge. |
-| [**`ship`**](./skills/ship/SKILL.md) | `/ship`, `"ship"`, `/lifecycle` | Full Lifecycle Orchestrator | **Battle-Ready**. Chains all 5 skills into an autonomous pipeline with 4 transition gates, git checkpoints, safe rollback, team profiles, preflight doctor, and working tree fingerprinting. |
+| [**`ship`**](./skills/ship/SKILL.md) | `/ship`, `"ship"`, `/lifecycle` | Full Lifecycle Orchestrator | **Pilot workflow**. Chains all 5 skills into an autonomous pipeline with 4 transition gates, git checkpoints, safe rollback, team profiles, preflight doctor, and working tree fingerprinting. |
 
 ---
 
@@ -301,7 +301,7 @@ nano/                           # High-density, ultra-compact (<50 lines) rules 
 
 scripts/
 ├── install.sh                  # Portable skill installer (symlink/copy to target environments)
-└── run_tests.sh                # Complete CI test runner (230 tests, zero external dependencies)
+└── run_tests.sh                # Standard-library validation and regression runner
 
 skills/
 ├── ship/
@@ -473,8 +473,8 @@ Run all checks from the repository root (100% Python 3.10+ standard library, zer
 ./scripts/run_tests.sh
 ```
 
-The test runner executes **230 automated unit and integration tests** in ~45 seconds across Linux and macOS, verifying:
-- **Operational Boundary Trials ([`test_agent_workflow_trials.py`](./tests/test_agent_workflow_trials.py))**: Real agent workflows across dirty trees, concurrent multi-change development, crash recovery, amended designs, and external installations.
+The test runner reports the current test count and includes nested adversarial policy tests, verifying:
+- **Operational Boundary Trials ([`test_agent_workflow_trials.py`](./tests/test_agent_workflow_trials.py))**: Simulated agent workflows across dirty trees, concurrent multi-change development, crash recovery, amended designs, and external installations.
 - **Atomic Transactions & Crash Recovery ([`test_archive_recovery.py`](./tests/test_archive_recovery.py))**: Two-phase commit spec archiving, orphan journal recovery, and atomic ledger transitions.
 - **Evidence Gates & Cryptographic Invariants ([`test_evidence_gates.py`](./tests/test_evidence_gates.py))**: Specification digest binding, contradictory result rejection, and post-review modification invalidation.
 - **Team Operations & Diagnostics ([`test_team_operations.py`](./tests/test_team_operations.py))**: Preflight doctor checks, workflow profile deep-merging, and zero-loss state migrations.
@@ -533,3 +533,35 @@ The suite is designed for structured, low-risk adoption across engineering organ
 - **Behavioral Evaluation Cases & Pilot Benchmarks ([`skill_evaluations.md`](./tests/skill_evaluations.md))**: 12 realistic evaluation fixtures and acceptance criteria for benchmarking agent decisions, boundary respect, and defect detection before organizational distribution.
 - **Headless CI & Asynchronous Automation ([`headless_ci_guide.md`](./skills/ship/references/headless_ci_guide.md))**: Ready-to-use GitHub Actions and GitLab CI workflows decoupling feature development from active IDE chat sessions using issue-based approval gates (`ship:approved`).
 - **Zero-Telemetry Local Operation**: All ledgers, evidence, and logs remain strictly local or inside your private Git repository. No data or telemetry is transmitted externally.
+
+## Trust and execution boundaries
+
+AgentFlow is a local workflow coordinator. Ledger entries, identities, approvals, and
+capabilities are records controlled by the local user. Hashes detect changed content;
+they do not authenticate agents or create an immutable compliance log.
+
+`agentflow capability check` evaluates policy and records a decision. A trusted host
+must enforce that decision before an action. The capability module does not intercept
+filesystem writes, shell commands, or network traffic. Adversarial policy tests exercise
+ALLOW/DENY decisions; they do not demonstrate OS isolation of malicious agents. Use the
+host's sandbox and permission system for containment. CLI commands run with the user's
+permissions. Do not give untrusted agents direct access to the CLI or writable ledger.
+
+MCP tools that record evidence, approve, checkpoint, roll back, archive, or run shell
+benchmarks are disabled by default. To enable them, a trusted operator must set
+`AGENTFLOW_MCP_ALLOW_MUTATIONS=1` in the server environment. This grants the connected
+client those operations; it is not per-agent capability isolation. Status inspection
+can still synchronize internal workflow state. Project test commands and benchmarks
+run locally with server/user privileges.
+
+Install the CLI before `scripts/install.sh --mcp`, or use `--pip --mcp`. Registration
+stores the resolved executable path and preserves malformed existing configuration
+by failing without overwriting it. Pin a reviewed commit for a team pilot.
+
+Delivery requires an independent execution receipt with verdict `VERIFIED`, matching
+the current Git working-tree fingerprint. Run `agentflow verify --tier execution`
+after source changes and before delivery. An empty or inconclusive receipt cannot pass.
+Mutation verification is currently advisory and cannot claim success without execution.
+
+Run the full suite with `PYTHON=python3.12 ./scripts/run_tests.sh` (or another supported
+Python interpreter). Packaging and source imports are separate validation surfaces.

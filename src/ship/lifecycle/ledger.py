@@ -565,11 +565,12 @@ class FileLedgerStore:
             if design_error:
                 blockers.append(f"Design: {design_error}")
             from .gates import validate_delivery_readiness
+            from .config import ShipConfigManager
             from .specs import OpenSpecRepository
             from .paths import resolve_change_path
             packages = OpenSpecRepository().inspect_openspec(repo_root, target_change=cid) if resolve_change_path(repo_root, cid).is_dir() else []
             package = packages[0] if packages else {"change": cid, "has_tasks": False, "total_tasks": 0}
-            entry["phase"] = validate_delivery_readiness(ev, package, git_info, entry, design_error=design_error, spikes=inspect_spikes(repo_root))[0]
+            entry["phase"] = validate_delivery_readiness(ev, package, git_info, entry, design_error=design_error, spikes=inspect_spikes(repo_root), verification_config=ShipConfigManager.load(repo_root))[0]
 
             turns = entry.setdefault("turns", [])
             turn_idx = len(turns) + 1

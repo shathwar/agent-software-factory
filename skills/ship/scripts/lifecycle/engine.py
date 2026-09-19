@@ -170,7 +170,7 @@ class LifecycleEngine:
         gate, state_key, next_action = determine_lifecycle_state(
             git_info, adrs, openspec_packages, spikes, review_report,
             active_change=active_change, repo_root=repo_root,
-            verification_config=config.get("gates"),
+            verification_config=config,
         )
 
         return {

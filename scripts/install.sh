@@ -136,6 +136,11 @@ if [[ "$INSTALL_MODE" != "symlink" && "$INSTALL_MODE" != "copy" ]]; then
     exit 1
 fi
 
+if [[ $INSTALL_MCP -eq 1 && $INSTALL_PIP -eq 0 && $DRY_RUN -eq 0 ]] && ! command -v ship >/dev/null 2>&1; then
+    echo "Error: --mcp requires the ship CLI. Install it first or pass --pip --mcp." >&2
+    exit 1
+fi
+
 echo "====================================================================="
 echo " Installing Skills Suite"
 echo "====================================================================="
@@ -236,17 +241,26 @@ if [[ $INSTALL_MCP -eq 1 ]]; then
     if [[ $DRY_RUN -eq 0 ]]; then
         mkdir -p "$(dirname "$MCP_CONF")"
         python3 -c "
-import json, sys
+import json, sys, shutil, os, tempfile
 p = sys.argv[1]
+executable = shutil.which('ship')
+if not executable:
+    raise SystemExit('ship executable unavailable on PATH; MCP config was not changed')
 try:
     with open(p, 'r') as f:
         data = json.load(f)
-except Exception:
+except FileNotFoundError:
     data = {}
 servers = data.setdefault('mcpServers', {})
-servers['ship'] = {'command': 'ship', 'args': ['mcp']}
-with open(p, 'w') as f:
-    json.dump(data, f, indent=2)
+servers['ship'] = {'command': executable, 'args': ['mcp']}
+fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(p), prefix='.ship-mcp-')
+try:
+    with os.fdopen(fd, 'w') as f:
+        json.dump(data, f, indent=2)
+    os.replace(temp_path, p)
+finally:
+    if os.path.exists(temp_path):
+        os.unlink(temp_path)
 print(f' ✓ Registered ship MCP server in {p}')
 " "$MCP_CONF"
     else

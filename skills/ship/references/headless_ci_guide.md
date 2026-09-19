@@ -99,7 +99,7 @@ Every repository or monorepo service can include a `.agentflow.json` at its root
 
 ## 4. Turnkey CI/CD Templates & Integration Contract
 
-To enable fast enterprise adoption, this repository includes turnkey, production-grade GitHub Actions workflows, issue forms, and safety hooks in `templates/ci/`:
+To enable fast enterprise adoption, this repository includes example GitHub Actions workflows requiring host-specific configuration and validation, issue forms, and safety hooks in `templates/ci/`:
 
 ```text
 templates/ci/

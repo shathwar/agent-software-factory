@@ -243,6 +243,7 @@ def get_next_turn_contract(
     if state_key == "VERIFICATION_FAILED":
         verif_ev = active_change.get("verification", {})
         failed_tiers = [t for t, v in verif_ev.items() if isinstance(v, dict) and v.get("verdict") == "NOT_VERIFIED"]
+        verify_option = "--all" if any(t != "execution" for t in failed_tiers) else "--tier execution"
         skill_target = "tdd" if ("execution" in failed_tiers or "mutation" in failed_tiers) else "review"
         return TurnContract(
             change_id=target_change,
@@ -263,14 +264,14 @@ def get_next_turn_contract(
             ],
             exit_criteria=[
                 "Identified root cause of verification failure resolved.",
-                f"Independent verification re-run via 'agentflow verify {target_change} --all'.",
-                "All verification tiers report VERIFIED.",
+                f"Independent verification re-run via 'agentflow verify {target_change} {verify_option}'.",
+                "Execution verification reports VERIFIED; resolve any other recorded verification failures.",
             ],
             output_evidence=f"Clean verification records in .agentflow/state.json for '{target_change}'",
-            action_prompt=f"Remediate verification failure ({', '.join(failed_tiers) if failed_tiers else 'unverified claims'}) for '{target_change}'. Fix root cause and re-verify via 'agentflow verify {target_change} --all'.",
-            suggested_command=f"agentflow verify {target_change} --all",
-            suggested_mcp_tool="agentflow_verify",
-            suggested_mcp_args={"change": target_change, "all": True},
+            action_prompt=f"Remediate verification failure ({', '.join(failed_tiers) if failed_tiers else 'unverified claims'}) for '{target_change}'. Fix root cause and re-verify via 'agentflow verify {target_change} {verify_option}'.",
+            suggested_command=f"agentflow verify {target_change} {verify_option}",
+            suggested_mcp_tool="ship_verify",
+            suggested_mcp_args={"change": target_change, "tiers": sorted(set(failed_tiers) | {"execution"})},
         )
 
     if state_key == "AUTONOMY_HALTED":

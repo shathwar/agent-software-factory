@@ -9,7 +9,8 @@ import os
 import re
 import subprocess
 from pathlib import Path
-import pytest
+import unittest
+import tempfile
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = REPO_ROOT / "templates" / "ci"
@@ -28,7 +29,7 @@ def parse_simple_yaml_keys(text: str) -> set[str]:
     return keys
 
 
-class TestWorkflowTemplates:
+class TestWorkflowTemplates(unittest.TestCase):
     """Validate syntax, structural properties, and safety rules of CI workflows."""
 
     def test_ship_dev_workflow_structure(self):
@@ -102,7 +103,7 @@ class TestWorkflowTemplates:
         assert "🛑" in content or "limit" in content
 
 
-class TestIssueTemplate:
+class TestIssueTemplate(unittest.TestCase):
     """Validate the GitHub Issue specification form."""
 
     def test_ship_story_issue_form(self):
@@ -121,7 +122,7 @@ class TestIssueTemplate:
         assert "id: invariants-checklist" in content
 
 
-class TestSafetyHooks:
+class TestSafetyHooks(unittest.TestCase):
     """Validate PreToolUse bash guard scripts."""
 
     def run_script(self, script_name: str, input_text: str, env: dict = None) -> subprocess.CompletedProcess:
@@ -229,7 +230,10 @@ class TestSafetyHooks:
             res = self.run_script("block-destructive.sh", cmd)
             assert res.returncode == 0, f"Expected safe command '{cmd}' to pass (exit 0), got {res.returncode}. Output: {res.stdout}"
 
-    def test_pre_tool_branch_guard(self, monkeypatch, tmp_path):
+    def test_pre_tool_branch_guard(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        tmp_path = Path(temp.name)
         # Create a temporary git repo to test branch guard
         subprocess.run(["git", "init", "-b", "main", str(tmp_path)], check=True, capture_output=True)
         subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "tester"], check=True)
@@ -263,7 +267,10 @@ class TestSafetyHooks:
         denied = settings["permissions"]["deny"]
         assert any(".env" in d for d in denied), "Must deny access to .env"
 
-    def test_tool_velocity_limiter(self, tmp_path):
+    def test_tool_velocity_limiter(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        tmp_path = Path(temp.name)
         vel_dir = tmp_path / "velocity"
         env = {
             "SKILLS_VELOCITY_DIR": str(vel_dir),
@@ -287,7 +294,7 @@ class TestSafetyHooks:
         assert res_allowed.returncode == 0
 
 
-class TestGovernanceInvariants:
+class TestGovernanceInvariants(unittest.TestCase):
     """Validate codified privilege lattices, ceiling clamping, and sponsorship rules."""
 
     def test_architectural_invariants_codification(self):

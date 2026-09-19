@@ -8,22 +8,24 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
+export PYTHONPATH="$REPO_ROOT/src:$REPO_ROOT/tests${PYTHONPATH:+:$PYTHONPATH}"
+PYTHON="${PYTHON:-python3}"
 
 echo "=== 1. Checking Bash & Python Syntax ==="
 bash -n skills/review/scripts/inspect_changes.sh
 bash -n scripts/install.sh
-python3 -m py_compile skills/review/scripts/validate_report.py
-python3 -m py_compile skills/simplify/scripts/scan_debt.py
-python3 -m py_compile skills/ship/scripts/inspect_lifecycle.py
-python3 -m py_compile skills/ship/scripts/lifecycle/*.py
-python3 -m py_compile src/ship/*.py src/ship/lifecycle/*.py src/ship/mcp/*.py src/ship/tools/*.py
-python3 -m py_compile skills/tdd/scripts/verify_tdd.py
-python3 -m py_compile skills/spike/scripts/run_spike.py
-python3 -m py_compile scripts/sync_skills.py
+"$PYTHON" -m py_compile skills/review/scripts/validate_report.py
+"$PYTHON" -m py_compile skills/simplify/scripts/scan_debt.py
+"$PYTHON" -m py_compile skills/ship/scripts/inspect_lifecycle.py
+"$PYTHON" -m py_compile skills/ship/scripts/lifecycle/*.py
+"$PYTHON" -m py_compile src/ship/*.py src/ship/lifecycle/*.py src/ship/mcp/*.py src/ship/tools/*.py
+"$PYTHON" -m py_compile skills/tdd/scripts/verify_tdd.py
+"$PYTHON" -m py_compile skills/spike/scripts/run_spike.py
+"$PYTHON" -m py_compile scripts/sync_skills.py
 echo "✓ Script syntax OK"
 echo ""
 
 echo "=== 2. Running Unit Tests with Python stdlib ==="
-python3 -m unittest discover -s tests -v
+"$PYTHON" -m unittest discover -s tests -v
 echo ""
 echo "All checks and tests passed successfully!"

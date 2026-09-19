@@ -199,6 +199,8 @@ def execute_and_verify_tests(
             timestamp=now_iso,
         )
 
+    from .vcs import GitClient
+    before_fingerprint = GitClient().compute_working_tree_fingerprint(repo_root)
     start_time = time.time()
     try:
         proc = subprocess.run(
@@ -236,7 +238,8 @@ def execute_and_verify_tests(
             metadata={"command": cmd, "error": str(exc)},
         )
 
-    passed = (exit_code == 0)
+    after_fingerprint = GitClient().compute_working_tree_fingerprint(repo_root)
+    passed = (exit_code == 0 and before_fingerprint == after_fingerprint)
     stdout_hash = hashlib.sha256(stdout.encode("utf-8")).hexdigest()
     output_tail = stdout[-1000:] if len(stdout) > 1000 else stdout
 
@@ -268,6 +271,7 @@ def execute_and_verify_tests(
         timestamp=now_iso,
         metadata={
             "command": cmd,
+            "snapshot_fingerprint": after_fingerprint,
             "exit_code": exit_code,
             "duration_seconds": round(duration, 3),
             "stdout_sha256": stdout_hash,
@@ -331,10 +335,10 @@ def verify_test_quality(
         claim="Test suite kills injected code mutations (assertion rigor)",
         gate="implementation",
         tier=VerificationTier.MUTATION.value,
-        verdict="VERIFIED",
+        verdict="INCONCLUSIVE",
         method="mutation_testing",
-        findings=[f"Targeted {len(py_files)} file(s) for mutation analysis."],
-        score=1.0,
+        findings=["Mutation execution is not implemented; finding candidate files does not verify test quality."],
+        score=0.0,
         timestamp=now_iso,
         metadata={"target_files": py_files, "threshold": threshold},
     )

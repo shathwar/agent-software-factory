@@ -10,6 +10,7 @@ import shutil
 import uuid
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
+from .config import ShipConfigManager
 from .evidence import validate_design_approval
 from .paths import repository_path, resolve_change_path, validate_change_id, get_state_file
 from .transactions import atomic_write, begin_archive, record_archive_progress, recover_archive, sync_directory
@@ -379,6 +380,7 @@ class OpenSpecRepository:
                 design_error=validate_design_approval(repo_root, change_name, current),
                 package_spec_names={path.name for path in specs.glob("*.md")},
                 spikes=inspect_spikes(repo_root),
+                repo_root=repo_root, verification_config=ShipConfigManager.load(repo_root),
             )
             if decision[1] != "DELIVERY_READY":
                 raise RuntimeError(f"Cannot archive '{change_name}': {decision[2]}")

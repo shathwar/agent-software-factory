@@ -27,21 +27,29 @@ def doctor(root: Path):
         ship = cur_file.parents[3] / "skills" / "ship"
     else:
         ship = cur_file.parents[2]
-    version_file = ship / "VERSION"
-    version = version_file.read_text().strip() if version_file.exists() else "unknown"
-    check("version", version != "unknown", version)
-    for skill, script in {"ship": "inspect_lifecycle.py", "review": "validate_report.py", "tdd": "verify_tdd.py", "simplify": "scan_debt.py", "spike": "run_spike.py"}.items():
-        folder = ship.parent / skill
-        check(f"skill:{skill}", (folder / "SKILL.md").is_file() and (folder / "scripts" / script).is_file(), str(folder))
-    check("skill:design", (ship.parent / "design/SKILL.md").is_file(), str(ship.parent / "design"))
-    for name in ("ship", "design", "review", "tdd", "simplify", "spike"):
-        receipt = ship.parent / name / "VERSION"
-        try:
-            installed = receipt.read_text().strip()
-        except OSError:
-            installed = "missing"
-        check(f"version:{name}", installed == version and installed != "unknown", installed)
-    check("schema", (ship / "references/agentflow.schema.json").is_file(), "Bundled configuration schema")
+    if (ship / "SKILL.md").is_file():
+        version_file = ship / "VERSION"
+        version = version_file.read_text().strip() if version_file.exists() else "unknown"
+        check("version", version != "unknown", version)
+        for skill, script in {"ship": "inspect_lifecycle.py", "review": "validate_report.py", "tdd": "verify_tdd.py", "simplify": "scan_debt.py", "spike": "run_spike.py"}.items():
+            folder = ship.parent / skill
+            check(f"skill:{skill}", (folder / "SKILL.md").is_file() and (folder / "scripts" / script).is_file(), str(folder))
+        check("skill:design", (ship.parent / "design/SKILL.md").is_file(), str(ship.parent / "design"))
+        for name in ("ship", "design", "review", "tdd", "simplify", "spike"):
+            receipt = ship.parent / name / "VERSION"
+            try:
+                installed = receipt.read_text().strip()
+            except OSError:
+                installed = "missing"
+            check(f"version:{name}", installed == version and installed != "unknown", installed)
+        check("schema", (ship / "references/agentflow.schema.json").is_file(), "Bundled configuration schema")
+    else:
+        from ship import __version__
+        from .config import get_schema_path
+        version = __version__
+        check("version", True, version)
+        check("schema", get_schema_path().is_file(), "Packaged configuration schema")
+        check("distribution", True, "CLI package; install prompt skills separately in the agent host")
     try:
         config = ShipConfigManager.load(root)
         check("configuration", True, f"profile={config['workflow']['profile']}, execution={config['workflow']['execution']}")

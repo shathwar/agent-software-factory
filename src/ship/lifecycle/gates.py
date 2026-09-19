@@ -77,6 +77,15 @@ def validate_delivery_readiness(
         if grounding.verdict == "NOT_VERIFIED":
             return ("review", "VERIFICATION_FAILED", f"Review grounding verification failed: {'; '.join(grounding.findings[:2])}")
 
+    verification = (active_change or {}).get("verification", {})
+    execution = verification.get("execution", {}) if isinstance(verification, dict) else {}
+    if not isinstance(execution, dict) or execution.get("verdict") != "VERIFIED":
+        return ("review", "VERIFICATION_FAILED", "Independent execution verification is required. Run 'agentflow verify'.")
+    fingerprint = git_info.get("working_tree_fingerprint")
+    metadata = execution.get("metadata")
+    if fingerprint and (not isinstance(metadata, dict) or metadata.get("snapshot_fingerprint") != fingerprint):
+        return ("review", "VERIFICATION_FAILED", "Independent execution verification is stale. Run 'agentflow verify' on the current working tree.")
+
     # VERIFIED -> Convergence Controller -> Gate Decision (PASS / DELIVERY_READY)
     from .convergence import ConvergenceController
     controller = ConvergenceController(config=verification_config)

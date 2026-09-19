@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 
+from verification_fixture import verify_fixture
 import test_archive_recovery as fixtures
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -49,6 +50,7 @@ class LocalRolloutTests(unittest.TestCase):
             report = json.loads(report_path.read_text())
             report['working_tree_fingerprint'] = cli('--fingerprint').stdout.strip()
             report_path.write_text(json.dumps(report))
+            verify_fixture(project, 'alpha')
             cli('--change', 'alpha', '--record-review', str(report_path))
             cli('--change', 'alpha', '--status-check')
             archive = json.loads(cli('--archive', 'alpha', '--format', 'json').stdout)

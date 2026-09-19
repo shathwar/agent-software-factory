@@ -73,7 +73,8 @@ def _is_passing_evidence(ev: Dict[str, Any]) -> bool:
             return True
     if ev.get("tests_passed") is True and ev.get("exit_code", 0) == 0 and not ev.get("failed_tests"):
         return True
-    return False
+    records = [v for v in ev.values() if isinstance(v, dict) and "verdict" in v]
+    return bool(records) and all(v.get("verdict") == "VERIFIED" for v in records)
 
 
 def detect_same_evidence(turns: List[Dict[str, Any]], max_same: int = 2) -> Tuple[bool, str]:
@@ -86,6 +87,7 @@ def detect_same_evidence(turns: List[Dict[str, Any]], max_same: int = 2) -> Tupl
         ev = t.get("evidence")
         if ev and isinstance(ev, dict) and ev:
             if _is_passing_evidence(ev):
+                evidence_hashes.clear()
                 continue
             evidence_hashes.append(_hash_payload(ev))
 
@@ -178,7 +180,12 @@ def detect_same_verifier_failure(turns: List[Dict[str, Any]], max_same: int = 2)
 
 def detect_oscillating_state(turns: List[Dict[str, Any]], min_cycle_len: int = 2) -> Tuple[bool, str]:
     """Detect thrashing/oscillation between two states (e.g. A -> B -> A -> B)."""
-    skills: List[str] = [t.get("skill", "") for t in turns if t.get("skill")]
+    skills: List[str] = []
+    for turn in turns:
+        if _is_passing_evidence(turn.get("evidence", {})):
+            skills.clear()
+        elif turn.get("skill"):
+            skills.append(turn["skill"])
     if len(skills) < 4:
         return False, ""
 
@@ -412,7 +419,7 @@ class ConvergenceController:
             PASS / DELIVERY_READY
         """
         if not active_change or not isinstance(active_change, dict):
-            return True, "No active change ledger entry to certify"
+            return False, "No active change ledger entry to certify"
 
         # 1. Check for explicit halt blockers
         blockers = active_change.get("blockers", [])
@@ -427,6 +434,8 @@ class ConvergenceController:
 
         # 3. Verify no lingering verification failures
         verif = verification_records or active_change.get("verification", {})
+        if not isinstance(verif, dict) or not isinstance(verif.get("execution"), dict) or verif["execution"].get("verdict") != "VERIFIED":
+            return False, "Independent execution verification is required; run agentflow verify"
         if verif:
             for tier, rec in verif.items():
                 if isinstance(rec, dict) and rec.get("verdict") == "NOT_VERIFIED":
