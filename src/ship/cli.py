@@ -48,6 +48,8 @@ CORE SUBCOMMANDS:
       Run independent multi-tier verification eliminating circular trust.
   agentflow resume <change>
       Clear non-convergence halt blockers and resume autonomous workflow execution.
+  agentflow lease <claim|heartbeat|release|handoff|list|reap> [options]
+      Multi-agent coordination: claim exclusive task leases, manage TTLs, and hand off tasks.
   agentflow doctor [--path <dir>]
       Run preflight diagnostics (runtime, git, skill directories, ledger).
 
@@ -450,6 +452,174 @@ def run_lifecycle(argv: Sequence[str]) -> int:
     return 0
 
 
+def run_lease_cli(argv: Sequence[str]) -> int:
+    """Handle multi-agent task lease coordination CLI commands."""
+    if not argv or argv[0] in ("-h", "--help"):
+        print("""Usage: agentflow lease <action> [options]
+
+Actions:
+  claim <task_id> --owner <agent_id> [--files <f1,f2>] [--ttl <seconds>]
+  heartbeat <task_id> --token <lease_token>
+  release <task_id> --token <lease_token> [--completed]
+  handoff <task_id> --from <agent_id> --to <agent_id> --token <token> [--reason <str>]
+  list [change] [--active] [--json]
+  reap [change]
+""")
+        return 0
+
+    action = argv[0].lower()
+    rem = argv[1:]
+
+    parser = argparse.ArgumentParser(prog=f"agentflow lease {action}")
+    parser.add_argument("--path", "--repo-root", dest="path", default=".", help="Repository root path")
+    parser.add_argument("--change", default=None, help="Target change ID")
+    parser.add_argument("--json", action="store_true", help="Output JSON format")
+
+    if action == "claim":
+        parser.add_argument("task_id", nargs="?", default=None, help="Task ID to lease (e.g. 1.1 or T1)")
+        parser.add_argument("--task", dest="task_opt", default=None, help="Task ID")
+        parser.add_argument("--owner", required=True, help="Worker / agent identity claiming the task")
+        parser.add_argument("--files", default="", help="Comma-separated target files")
+        parser.add_argument("--ttl", type=int, default=None, help="Lease TTL duration in seconds")
+        args = parser.parse_args(rem)
+        task_id = args.task_opt or args.task_id
+        if not task_id:
+            parser.error("task_id is required (positional or via --task)")
+        target_files = [f.strip() for f in args.files.split(",") if f.strip()]
+        from .lifecycle.coordination import CoordinationManager
+        manager = CoordinationManager(Path(args.path).resolve())
+        res = manager.claim_task(task_id, args.owner, change_id=args.change, target_files=target_files, ttl_seconds=args.ttl)
+        if args.json:
+            print(json.dumps(res.to_dict(), indent=2))
+        elif res.success and res.lease:
+            print(f"✅ Lease acquired for task '{task_id}' by '{args.owner}'")
+            print(f"  • Lease Token : {res.lease.lease_token}")
+            print(f"  • Expires At  : {res.lease.expires_at} (TTL: {res.lease.ttl_seconds}s)")
+            if res.lease.target_files:
+                print(f"  • Files       : {', '.join(res.lease.target_files)}")
+        else:
+            print(f"❌ Failed to claim task '{task_id}': {res.error}", file=sys.stderr)
+        return 0 if res.success else 1
+
+    elif action == "heartbeat":
+        parser.add_argument("task_id", nargs="?", default=None, help="Task ID being heartbeated")
+        parser.add_argument("--task", dest="task_opt", default=None, help="Task ID")
+        parser.add_argument("--token", required=True, help="Active lease token")
+        parser.add_argument("--ttl", type=int, default=None, help="Extended TTL in seconds")
+        args = parser.parse_args(rem)
+        task_id = args.task_opt or args.task_id
+        if not task_id:
+            parser.error("task_id is required (positional or via --task)")
+        from .lifecycle.coordination import CoordinationManager
+        manager = CoordinationManager(Path(args.path).resolve())
+        res = manager.heartbeat_lease(task_id, args.token, change_id=args.change, ttl_seconds=args.ttl)
+        if args.json:
+            print(json.dumps(res.to_dict(), indent=2))
+        elif res.success and res.lease:
+            print(f"💓 Heartbeat received for task '{task_id}'. Renewed until {res.lease.expires_at}.")
+        else:
+            print(f"❌ Heartbeat rejected: {res.error}", file=sys.stderr)
+        return 0 if res.success else 1
+
+    elif action == "release":
+        parser.add_argument("task_id", nargs="?", default=None, help="Task ID being released")
+        parser.add_argument("--task", dest="task_opt", default=None, help="Task ID")
+        parser.add_argument("--token", required=True, help="Active lease token")
+        parser.add_argument("--completed", action="store_true", help="Mark task completed [x] in tasks.md")
+        args = parser.parse_args(rem)
+        task_id = args.task_opt or args.task_id
+        if not task_id:
+            parser.error("task_id is required (positional or via --task)")
+        from .lifecycle.coordination import CoordinationManager
+        manager = CoordinationManager(Path(args.path).resolve())
+        res = manager.release_task(task_id, args.token, change_id=args.change, completed=args.completed)
+        if args.json:
+            print(json.dumps(res.to_dict(), indent=2))
+        elif res.success:
+            status_str = "completed and released" if args.completed else "released"
+            print(f"✅ Task '{task_id}' {status_str}.")
+        else:
+            print(f"❌ Failed to release task: {res.error}", file=sys.stderr)
+        return 0 if res.success else 1
+
+    elif action == "handoff":
+        parser.add_argument("task_id", nargs="?", default=None, help="Task ID being handed off")
+        parser.add_argument("--task", dest="task_opt", default=None, help="Task ID")
+        parser.add_argument("--from", dest="from_owner", required=True, help="Current lease owner")
+        parser.add_argument("--to", dest="to_owner", required=True, help="New lease owner")
+        parser.add_argument("--token", required=True, help="Current lease token")
+        parser.add_argument("--reason", default="", help="Reason for handoff")
+        parser.add_argument("--notes", default="", help="Handoff notes")
+        parser.add_argument("--checklist", default="", help="Comma-separated checklist items")
+        args = parser.parse_args(rem)
+        task_id = args.task_opt or args.task_id
+        if not task_id:
+            parser.error("task_id is required (positional or via --task)")
+        checklist = [c.strip() for c in args.checklist.split(",") if c.strip()]
+        from .lifecycle.coordination import CoordinationManager
+        manager = CoordinationManager(Path(args.path).resolve())
+        res = manager.handoff_task(
+            task_id=task_id,
+            from_owner=args.from_owner,
+            to_owner=args.to_owner,
+            lease_token=args.token,
+            change_id=args.change,
+            reason=args.reason or args.notes,
+            verification_checklist=checklist,
+            notes=args.notes or args.reason,
+        )
+        if args.json:
+            print(json.dumps(res.to_dict(), indent=2))
+        elif res.success and res.lease:
+            print(f"🤝 Task '{task_id}' handed off from '{args.from_owner}' -> '{args.to_owner}'")
+            print(f"  • New Lease Token : {res.lease.lease_token}")
+            print(f"  • Expires At      : {res.lease.expires_at}")
+        else:
+            print(f"❌ Handoff failed: {res.error}", file=sys.stderr)
+        return 0 if res.success else 1
+
+    elif action == "list":
+        parser.add_argument("target_change", nargs="?", default=None, help="Target change ID")
+        parser.add_argument("--active", action="store_true", help="Show active unexpired leases only")
+        args = parser.parse_args(rem)
+        cid = args.target_change or args.change
+        from .lifecycle.coordination import CoordinationManager
+        manager = CoordinationManager(Path(args.path).resolve())
+        leases = manager.list_leases(change_id=cid, active_only=args.active)
+        if args.json:
+            print(json.dumps([l.to_dict() for l in leases], indent=2))
+        else:
+            print(f"📋 Task Leases for change '{cid or 'active'}':")
+            if not leases:
+                print("  (No leases recorded)")
+            for l in leases:
+                files_str = f" [files: {', '.join(l.target_files)}]" if l.target_files else ""
+                print(f"  • Task {l.task_id:6s} | Owner: {l.owner_id:15s} | Status: {l.status:10s} | Expires: {l.expires_at}{files_str}")
+        return 0
+
+    elif action == "reap":
+        parser.add_argument("target_change", nargs="?", default=None, help="Target change ID")
+        args = parser.parse_args(rem)
+        cid = args.target_change or args.change
+        from .lifecycle.coordination import CoordinationManager
+        manager = CoordinationManager(Path(args.path).resolve())
+        reaped = manager.reap_stale_leases(change_id=cid)
+        if args.json:
+            print(json.dumps([l.to_dict() for l in reaped], indent=2))
+        else:
+            if reaped:
+                print(f"🧹 Reaped {len(reaped)} stale lease(s):")
+                for l in reaped:
+                    print(f"  • Task '{l.task_id}' (owner: '{l.owner_id}') expired at {l.expires_at}")
+            else:
+                print("🧹 No stale leases found.")
+        return 0
+
+    else:
+        print(f"Unknown lease action: '{action}'. See 'agentflow lease --help'.", file=sys.stderr)
+        return 1
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """Unified entrypoint for ship CLI with subcommands, specialist tools, and MCP server."""
     if argv is None:
@@ -465,6 +635,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if cmd == "mcp":
         from ship.mcp.server import main as mcp_main
         return mcp_main()
+
+    if cmd in ("lease", "coordinate"):
+        return run_lease_cli(sub_args)
 
     # Specialist tools dispatch
     if cmd == "tdd":

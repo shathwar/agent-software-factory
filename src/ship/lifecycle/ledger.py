@@ -839,6 +839,19 @@ class FileLedgerStore:
                     data["active_change_id"] = None
                     cls.save(repo_root, data)
 
+    @classmethod
+    def get_coordination(cls, repo_root: Path, change_id: Optional[str] = None) -> Dict[str, Any]:
+        """Get the multi-agent coordination data (leases, handoffs) for a change."""
+        with cls.lock(repo_root):
+            ledger = cls.load(repo_root, auto_sync=False)
+            cid = change_id or ledger.get("active_change_id")
+            if not cid and ledger.get("changes"):
+                cid = list(ledger["changes"].keys())[0]
+            if not cid:
+                return {"leases": {}, "handoffs": []}
+            entry = ledger.get("changes", {}).get(cid, {})
+            return dict(entry.get("coordination", {"leases": {}, "handoffs": []}))
+
 get_ledger_path = FileLedgerStore.get_ledger_path
 ledger_lock = FileLedgerStore.lock
 get_active_change = FileLedgerStore.get_active_change

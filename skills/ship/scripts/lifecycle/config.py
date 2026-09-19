@@ -56,6 +56,12 @@ class ShipConfigManager:
                 "max_time_seconds": 1800.0,
                 "max_cost_dollars": 10.0,
             },
+            "coordination": {
+                "default_lease_ttl_seconds": 600,
+                "heartbeat_interval_seconds": 120,
+                "allow_file_overlap": False,
+                "max_concurrent_workers": 4,
+            },
             "create_git_tag": False,
             "config_source": None,
         }

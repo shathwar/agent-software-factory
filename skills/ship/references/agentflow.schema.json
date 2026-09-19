@@ -240,6 +240,32 @@
       },
       "additionalProperties": false
     },
+    "coordination": {
+      "type": "object",
+      "description": "Multi-agent task leases and conflict detection settings.",
+      "properties": {
+        "default_lease_ttl_seconds": {
+          "type": "integer",
+          "minimum": 10,
+          "description": "Default lease duration in seconds."
+        },
+        "heartbeat_interval_seconds": {
+          "type": "integer",
+          "minimum": 5,
+          "description": "Recommended heartbeat renewal frequency in seconds."
+        },
+        "allow_file_overlap": {
+          "type": "boolean",
+          "description": "Whether concurrent tasks are permitted to claim overlapping files."
+        },
+        "max_concurrent_workers": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of distinct active workers holding leases simultaneously."
+        }
+      },
+      "additionalProperties": false
+    },
     "create_git_tag": {
       "type": "boolean",
       "description": "Whether to create immutable git tags for checkpoints."

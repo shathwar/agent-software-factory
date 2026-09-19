@@ -23,6 +23,7 @@ LIFECYCLE_MODULES = [
     "checkpoints.py",
     "config.py",
     "convergence.py",
+    "coordination.py",
     "engine.py",
     "evidence.py",
     "gates.py",

@@ -15,6 +15,13 @@ from .gates import determine_lifecycle_state, validate_delivery_readiness
 from .models import (
     GateResult, GateStatus, GitInfo, LifecyclePhase, OpenSpecInfo, ShipConfig, VerificationResult,
     VerificationRecord, VerificationTier, StagnationType, TurnContract, TurnRecord,
+    LeaseStatus, CoordinationConflictType, TaskLease, TaskHandoff,
+)
+from .coordination import (
+    CoordinationConfig,
+    CoordinationManager,
+    CoordinationResult,
+    is_lease_expired,
 )
 from .convergence import (
     ConvergenceConfig,
@@ -46,6 +53,9 @@ from .vcs import GIT_NOTES_REF, GitClient
 __all__ = [
     "CheckpointManager",
     "CommitTrailerGenerator",
+    "CoordinationConfig",
+    "CoordinationManager",
+    "CoordinationResult",
     "ConvergenceConfig",
     "ConvergenceController",
     "ConvergenceStatus",
@@ -55,6 +65,11 @@ __all__ = [
     "GateStatus",
     "GitClient",
     "GitInfo",
+    "LeaseStatus",
+    "CoordinationConflictType",
+    "TaskLease",
+    "TaskHandoff",
+    "is_lease_expired",
     "LifecycleEngine",
     "LifecyclePhase",
     "OpenSpecInfo",

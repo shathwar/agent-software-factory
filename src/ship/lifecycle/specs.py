@@ -220,19 +220,37 @@ class OpenSpecRepository:
             total_tasks = 0
             completed_tasks = 0
             next_task = None
+            task_list = []
 
             if tasks_file.exists():
                 tasks_found = True
                 content = tasks_file.read_text(encoding="utf-8", errors="replace")
+                task_counter = 0
                 for line in content.splitlines():
                     stripped = line.strip()
-                    if stripped.startswith("- [ ]") or stripped.startswith("* [ ]"):
+                    is_pending = stripped.startswith(("- [ ]", "* [ ]"))
+                    is_done = stripped.startswith(("- [x]", "- [X]", "* [x]", "* [X]"))
+                    if is_pending or is_done:
+                        task_counter += 1
                         total_tasks += 1
-                        if next_task is None:
-                            next_task = stripped[5:].strip()
-                    elif stripped.startswith(("- [x]", "- [X]", "* [x]", "* [X]")):
-                        total_tasks += 1
-                        completed_tasks += 1
+                        task_text = stripped[5:].strip()
+                        m = re.match(r"^([A-Za-z0-9_.-]+)\b(?:\s*[:.-])?\s*(.*)", task_text)
+                        if m and any(c.isdigit() for c in m.group(1)):
+                            tid = m.group(1)
+                            desc = m.group(2).strip() or task_text
+                        else:
+                            tid = f"T{task_counter}"
+                            desc = task_text
+                        task_list.append({
+                            "task_id": tid,
+                            "description": desc,
+                            "completed": is_done,
+                            "raw": stripped,
+                        })
+                        if is_done:
+                            completed_tasks += 1
+                        elif next_task is None:
+                            next_task = task_text
 
             proposal_file = change_dir / "proposal.md"
             specs_dir = change_dir / "specs"
@@ -252,6 +270,7 @@ class OpenSpecRepository:
                 "completed_tasks": completed_tasks,
                 "pending_tasks": total_tasks - completed_tasks,
                 "next_task": next_task,
+                "task_list": task_list,
                 "mtime": mtime,
                 "is_active_target": (change_dir.name == active_persisted),
             })
