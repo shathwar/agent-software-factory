@@ -1830,7 +1830,7 @@ class TestInspectLifecycle(unittest.TestCase):
         """Verify load_ship_config default_config aligns with agentflow.schema.json structure."""
         schema_file = Path(__file__).resolve().parent.parent / "skills" / "ship" / "references" / "agentflow.schema.json"
         self.assertTrue(schema_file.exists())
-        schema = json.loads(schema_file.read_text(encoding="utf-8"))
+        self.assertIn("properties", json.loads(schema_file.read_text(encoding="utf-8")))
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cfg = inspect_lifecycle.load_ship_config(Path(tmpdir))
@@ -1956,7 +1956,7 @@ class TestInspectLifecycle(unittest.TestCase):
             self._init_git_repo(tmppath)
             (tmppath / "code.py").write_text("print('hello')\n")
             subprocess.run(["git", "add", "code.py"], cwd=tmppath, check=True)
-            commit_res = subprocess.run(
+            subprocess.run(
                 ["git", "commit", "-m", "Initial"], cwd=tmppath, check=True, capture_output=True, text=True
             )
             head_sha = subprocess.run(
@@ -3068,7 +3068,6 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertEqual(contract2.phase, "DESIGN_APPROVAL_REQUIRED")
 
             # Phase 3: Approved design with unchecked tasks -> tdd turn
-            fp = inspect_lifecycle.compute_working_tree_fingerprint(root)
             from lifecycle.evidence import design_fingerprint
             dfp = design_fingerprint(root, "alpha")
             inspect_lifecycle.FileLedgerStore.approve_design(root, "alpha", dfp, "architect")

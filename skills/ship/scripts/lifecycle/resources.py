@@ -118,7 +118,7 @@ class ChangeBudget:
         conv = data.get("convergence", {})
         if not budget:
             budget = conv or data
-        
+
         # Max turns can come from budget.max_turns, or conv.max_total_turns, or budget.max_total_turns
         max_turns_val = budget.get("max_turns")
         if max_turns_val is None:

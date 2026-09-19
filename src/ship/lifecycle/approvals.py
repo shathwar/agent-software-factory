@@ -433,7 +433,7 @@ class ApprovalManager:
         target: str,
     ) -> Tuple[bool, str, Optional[DurableApproval]]:
         """Validate an approval object against agent, change, action, and scope boundaries.
-        
+
         Returns:
             (valid, violation_code_or_ok, approval_object)
         """

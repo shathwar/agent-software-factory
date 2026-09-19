@@ -5,7 +5,7 @@ import argparse
 import json
 from pathlib import Path
 import sys
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence
 
 # Enable both direct script execution and package import
 _current_dir = Path(__file__).resolve().parent
@@ -48,16 +48,49 @@ from lifecycle import (
     validate_judge_report_contract,
     validate_review_approval,
 )
-from lifecycle.checkpoints import _backup_path
 from lifecycle.evidence import is_evidence_dir, parse_review_report_file
-from lifecycle.ledger import (
-    create_empty_change_entry,
-    ensure_gitignore_has_ship,
-    get_ledger_path,
-    make_default_evidence,
-    make_default_review_evidence,
-    read_json_file,
-)
+from lifecycle.ledger import create_empty_change_entry, ensure_gitignore_has_ship
+
+__all__ = [
+    "CheckpointManager",
+    "CommitTrailerGenerator",
+    "FileLedgerStore",
+    "GIT_NOTES_REF",
+    "GateResult",
+    "GateStatus",
+    "GitClient",
+    "GitInfo",
+    "LifecycleEngine",
+    "LifecyclePhase",
+    "OpenSpecInfo",
+    "OpenSpecRepository",
+    "ShipConfig",
+    "ShipConfigManager",
+    "VerificationResult",
+    "canonicalize_gate_name",
+    "determine_lifecycle_state",
+    "format_summary",
+    "format_turn_contract",
+    "format_turns_log",
+    "get_next_turn_contract",
+    "get_turns_from_ledger",
+    "inspect_review_reports",
+    "inspect_spikes",
+    "is_spike_completed",
+    "is_test_evidence_passing",
+    "merge_spec_requirements",
+    "normalize_req_title",
+    "parse_requirements_doc",
+    "record_turn_to_ledger",
+    "resolve_skill_name",
+    "validate_delivery_readiness",
+    "validate_judge_report_contract",
+    "validate_review_approval",
+    "parse_review_report_file",
+    "create_empty_change_entry",
+    "is_evidence_dir",
+    "ensure_gitignore_has_ship",
+]
 
 # Shared singleton instances for default facade delegation
 _vcs = GitClient()
@@ -445,8 +478,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.format == "json":
             print(json.dumps(payload, indent=2))
         elif text_lines is not None:
-            for l in text_lines:
-                print(l)
+            for line in text_lines:
+                print(line)
 
     def banner(title: str, lines: Sequence[str]) -> List[str]:
         bar = "═" * 69

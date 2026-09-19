@@ -55,7 +55,7 @@ def validate_delivery_readiness(
             return review_blocked(f"Review verdict recorded in ledger is '{review_ev.get('verdict')}'. Remediate findings or re-run review.")
         if review_ev.get("critical_or_high_count", 0) > 0:
             return review_blocked(f"Ledger records {review_ev['critical_or_high_count']} unresolved CRITICAL/HIGH finding(s). Remediate defects before shipping.")
-        
+
         # Check recorded verification failures
         verif_ev = active_change.get("verification", {})
         for tier, v in verif_ev.items():
