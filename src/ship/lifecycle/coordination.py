@@ -14,6 +14,8 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import uuid
 
 from .models import (
+    ActionProvenance,
+    AgentRole,
     CoordinationConflictType,
     LeaseStatus,
     TaskHandoff,
@@ -142,6 +144,11 @@ class CoordinationManager:
         files: Optional[List[str]] = None,
         ttl_seconds: Optional[int] = None,
         force: bool = False,
+        session_id: Optional[str] = None,
+        runtime: Optional[str] = None,
+        model: Optional[str] = None,
+        role: Optional[str] = None,
+        parent_agent_id: Optional[str] = None,
     ) -> CoordinationResult:
         """Atomically claim an exclusive task lease for a worker agent."""
         cid = self._get_target_change(change_id)
@@ -168,6 +175,8 @@ class CoordinationManager:
                     existing_lease.expires_at = exp_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
                     existing_lease.heartbeat_at = now_iso
                     existing_lease.status = LeaseStatus.RENEWED.value
+                    if session_id:
+                        existing_lease.session_id = session_id
                     if req_files:
                         existing_lease.target_files = list(set(existing_lease.target_files) | set(req_files))
                     leases_dict[task_id] = existing_lease.to_dict()
@@ -230,9 +239,32 @@ class CoordinationManager:
                     conflict_type=CoordinationConflictType.CONCURRENT_LEASE.value,
                 )
 
-            # 4. Issue new lease
+            # 4. Issue new lease with attributable ActionProvenance
             token = uuid.uuid4().hex
             exp_dt = datetime.fromtimestamp(now.timestamp() + ttl, tz=timezone.utc)
+            sess_id = session_id or f"sess-{owner_id}"
+
+            from .provenance import compute_payload_digest
+            prov = ActionProvenance(
+                action_id=f"act-{uuid.uuid4().hex[:12]}",
+                action_name="claim_task",
+                agent_id=owner_id,
+                session_id=sess_id,
+                change_id=cid,
+                role=role or AgentRole.MAKER.value,
+                task_id=task_id,
+                lease_token=token,
+                timestamp=now_iso,
+                runtime=runtime or "antigravity",
+                model=model or "unknown",
+                skill="coordination",
+                skill_version="1.0.0",
+                agentflow_version="1.0.0",
+                parent_agent_id=parent_agent_id,
+                inputs_digest=compute_payload_digest({"task_id": task_id, "files": req_files, "ttl": ttl}),
+                evidence_digest=compute_payload_digest({"lease_token": token, "expires_at": exp_dt.strftime("%Y-%m-%dT%H:%M:%SZ")}),
+            )
+
             new_lease = TaskLease(
                 task_id=task_id,
                 owner_id=owner_id,
@@ -243,6 +275,8 @@ class CoordinationManager:
                 ttl_seconds=ttl,
                 target_files=req_files,
                 status=LeaseStatus.ACQUIRED.value,
+                session_id=sess_id,
+                provenance=prov.to_dict(),
             )
             leases_dict[task_id] = new_lease.to_dict()
 
@@ -254,6 +288,7 @@ class CoordinationManager:
                 "skill": "coordination",
                 "harness": "coordination-manager",
                 "execution_mode": "parallel",
+                "session_id": sess_id,
                 "inputs": {
                     "action": "claim_task",
                     "task_id": task_id,
@@ -263,6 +298,7 @@ class CoordinationManager:
                 },
                 "evidence": {"lease_token": token, "expires_at": new_lease.expires_at},
                 "state_delta": {"task_leased": task_id, "owner": owner_id},
+                "provenance": prov.to_dict(),
             })
 
             FileLedgerStore.save(self.repo_root, ledger)
@@ -311,6 +347,9 @@ class CoordinationManager:
         completed: bool = False,
         evidence: Optional[Dict[str, Any]] = None,
         summary: str = "",
+        session_id: Optional[str] = None,
+        runtime: Optional[str] = None,
+        model: Optional[str] = None,
     ) -> CoordinationResult:
         """Release a task lease, optionally completing the task in tasks.md and state ledger."""
         cid = self._get_target_change(change_id)
@@ -329,6 +368,8 @@ class CoordinationManager:
 
             now_iso = _now_iso()
             lease.status = LeaseStatus.RELEASED.value
+            if session_id:
+                lease.session_id = session_id
             leases_dict[task_id] = lease.to_dict()
 
             ev = dict(evidence or {})
@@ -341,6 +382,27 @@ class CoordinationManager:
                 task_st["completed"] = min(task_st.get("total", 1), task_st.get("completed", 0) + 1)
                 task_st["pending"] = max(0, task_st.get("total", 1) - task_st["completed"])
 
+            from .provenance import compute_payload_digest
+            sess_id = session_id or lease.session_id or f"sess-{lease.owner_id}"
+            prov = ActionProvenance(
+                action_id=f"act-{uuid.uuid4().hex[:12]}",
+                action_name="release_task",
+                agent_id=lease.owner_id,
+                session_id=sess_id,
+                change_id=cid,
+                role=AgentRole.MAKER.value,
+                task_id=task_id,
+                lease_token=lease_token,
+                timestamp=now_iso,
+                runtime=runtime or "antigravity",
+                model=model or "unknown",
+                skill="coordination",
+                skill_version="1.0.0",
+                agentflow_version="1.0.0",
+                inputs_digest=compute_payload_digest({"task_id": task_id, "completed": completed}),
+                evidence_digest=compute_payload_digest(ev),
+            )
+
             turns = change.setdefault("turns", [])
             turns.append({
                 "turn_id": f"turn-{len(turns)+1:03d}",
@@ -348,6 +410,7 @@ class CoordinationManager:
                 "skill": "coordination",
                 "harness": "coordination-manager",
                 "execution_mode": "parallel",
+                "session_id": sess_id,
                 "inputs": {
                     "action": "release_task",
                     "task_id": task_id,
@@ -356,6 +419,7 @@ class CoordinationManager:
                 },
                 "evidence": ev,
                 "state_delta": {"task_released": task_id, "completed": completed},
+                "provenance": prov.to_dict(),
             })
 
             FileLedgerStore.save(self.repo_root, ledger)
@@ -373,6 +437,9 @@ class CoordinationManager:
         verification_checklist: Optional[List[str]] = None,
         notes: str = "",
         new_ttl_seconds: Optional[int] = None,
+        session_id: Optional[str] = None,
+        runtime: Optional[str] = None,
+        model: Optional[str] = None,
         **kwargs: Any,
     ) -> CoordinationResult:
         """Atomically hand off task ownership from one agent (e.g. Maker) to another (e.g. Checker)."""
@@ -412,9 +479,49 @@ class CoordinationManager:
             new_token = uuid.uuid4().hex
             ttl = new_ttl_seconds or old_lease.ttl_seconds
             exp_dt = datetime.fromtimestamp(now.timestamp() + ttl, tz=timezone.utc)
+            sess_id = session_id or old_lease.session_id or f"sess-{actual_to}"
 
             # Invalidate old lease
             old_lease.status = LeaseStatus.HANDED_OFF.value
+
+            from .provenance import compute_payload_digest
+            from_prov = ActionProvenance(
+                action_id=f"act-{uuid.uuid4().hex[:12]}",
+                action_name="handoff_release",
+                agent_id=actual_from,
+                session_id=session_id or old_lease.session_id or f"sess-{actual_from}",
+                change_id=cid,
+                role=AgentRole.MAKER.value,
+                task_id=task_id,
+                lease_token=actual_token,
+                timestamp=now_iso,
+                runtime=runtime or "antigravity",
+                model=model or "unknown",
+                skill="coordination",
+                skill_version="1.0.0",
+                agentflow_version="1.0.0",
+                inputs_digest=compute_payload_digest({"task_id": task_id, "to_owner": actual_to, "reason": actual_reason}),
+                evidence_digest=compute_payload_digest({"checklist": checklist, "artifacts": artifacts or []}),
+            )
+            to_prov = ActionProvenance(
+                action_id=f"act-{uuid.uuid4().hex[:12]}",
+                action_name="handoff_acquire",
+                agent_id=actual_to,
+                session_id=sess_id,
+                change_id=cid,
+                role=AgentRole.CHECKER.value,
+                task_id=task_id,
+                lease_token=new_token,
+                timestamp=now_iso,
+                runtime=runtime or "antigravity",
+                model=model or "unknown",
+                skill="coordination",
+                skill_version="1.0.0",
+                agentflow_version="1.0.0",
+                parent_agent_id=actual_from,
+                inputs_digest=compute_payload_digest({"task_id": task_id, "from_owner": actual_from, "reason": actual_reason}),
+                evidence_digest=compute_payload_digest({"new_lease_token": new_token, "expires_at": exp_dt.strftime("%Y-%m-%dT%H:%M:%SZ")}),
+            )
 
             # Issue new lease to recipient
             new_lease = TaskLease(
@@ -427,7 +534,9 @@ class CoordinationManager:
                 ttl_seconds=ttl,
                 target_files=list(old_lease.target_files),
                 status=LeaseStatus.ACTIVE.value,
+                session_id=sess_id,
                 metadata={"handed_off_from": actual_from, "reason": actual_reason},
+                provenance=to_prov.to_dict(),
             )
             leases_dict[task_id] = new_lease.to_dict()
 
@@ -443,6 +552,9 @@ class CoordinationManager:
                 artifacts=artifacts or [],
                 verification_checklist=checklist,
                 notes=actual_reason,
+                session_id=sess_id,
+                from_provenance=from_prov.to_dict(),
+                to_provenance=to_prov.to_dict(),
             )
             handoffs_list.append(handoff_record.to_dict())
 
@@ -454,6 +566,7 @@ class CoordinationManager:
                 "skill": "coordination",
                 "harness": "coordination-manager",
                 "execution_mode": "parallel",
+                "session_id": sess_id,
                 "inputs": {
                     "action": "handoff_task",
                     "task_id": task_id,
@@ -463,6 +576,7 @@ class CoordinationManager:
                 },
                 "evidence": {"new_lease_token": new_token, "artifacts": artifacts or []},
                 "state_delta": {"handoff": f"{actual_from} -> {actual_to}"},
+                "provenance": to_prov.to_dict(),
             })
 
             FileLedgerStore.save(self.repo_root, ledger)

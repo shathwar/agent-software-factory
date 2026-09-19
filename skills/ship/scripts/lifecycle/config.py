@@ -62,6 +62,11 @@ class ShipConfigManager:
                 "allow_file_overlap": False,
                 "max_concurrent_workers": 4,
             },
+            "provenance": {
+                "enforce_principal_attribution": True,
+                "enforce_maker_checker_separation": True,
+                "default_runtime": "antigravity",
+            },
             "create_git_tag": False,
             "config_source": None,
         }

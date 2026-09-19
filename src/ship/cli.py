@@ -50,6 +50,10 @@ CORE SUBCOMMANDS:
       Clear non-convergence halt blockers and resume autonomous workflow execution.
   agentflow lease <claim|heartbeat|release|handoff|list|reap> [options]
       Multi-agent coordination: claim exclusive task leases, manage TTLs, and hand off tasks.
+  agentflow session <start|end|list> [options]
+      Manage agent sessions and track attributable execution lifecycles.
+  agentflow identity <register|list> [options]
+      Register and inspect agent identities and role assignments.
   agentflow doctor [--path <dir>]
       Run preflight diagnostics (runtime, git, skill directories, ledger).
 
@@ -481,6 +485,11 @@ Actions:
         parser.add_argument("--owner", required=True, help="Worker / agent identity claiming the task")
         parser.add_argument("--files", default="", help="Comma-separated target files")
         parser.add_argument("--ttl", type=int, default=None, help="Lease TTL duration in seconds")
+        parser.add_argument("--session", default=None, help="Active agent session ID")
+        parser.add_argument("--runtime", default=None, help="Agent runtime environment")
+        parser.add_argument("--model", default=None, help="Agent model identifier")
+        parser.add_argument("--role", default=None, help="Agent role (e.g. MAKER, CHECKER, SPECIALIST)")
+        parser.add_argument("--parent-agent", dest="parent_agent", default=None, help="Parent agent ID for delegated subagents")
         args = parser.parse_args(rem)
         task_id = args.task_opt or args.task_id
         if not task_id:
@@ -488,13 +497,26 @@ Actions:
         target_files = [f.strip() for f in args.files.split(",") if f.strip()]
         from .lifecycle.coordination import CoordinationManager
         manager = CoordinationManager(Path(args.path).resolve())
-        res = manager.claim_task(task_id, args.owner, change_id=args.change, target_files=target_files, ttl_seconds=args.ttl)
+        res = manager.claim_task(
+            task_id,
+            args.owner,
+            change_id=args.change,
+            target_files=target_files,
+            ttl_seconds=args.ttl,
+            session_id=args.session,
+            runtime=args.runtime,
+            model=args.model,
+            role=args.role,
+            parent_agent_id=args.parent_agent,
+        )
         if args.json:
             print(json.dumps(res.to_dict(), indent=2))
         elif res.success and res.lease:
             print(f"✅ Lease acquired for task '{task_id}' by '{args.owner}'")
             print(f"  • Lease Token : {res.lease.lease_token}")
             print(f"  • Expires At  : {res.lease.expires_at} (TTL: {res.lease.ttl_seconds}s)")
+            if res.lease.session_id:
+                print(f"  • Session ID  : {res.lease.session_id}")
             if res.lease.target_files:
                 print(f"  • Files       : {', '.join(res.lease.target_files)}")
         else:
@@ -526,13 +548,24 @@ Actions:
         parser.add_argument("--task", dest="task_opt", default=None, help="Task ID")
         parser.add_argument("--token", required=True, help="Active lease token")
         parser.add_argument("--completed", action="store_true", help="Mark task completed [x] in tasks.md")
+        parser.add_argument("--session", default=None, help="Active agent session ID")
+        parser.add_argument("--runtime", default=None, help="Agent runtime environment")
+        parser.add_argument("--model", default=None, help="Agent model identifier")
         args = parser.parse_args(rem)
         task_id = args.task_opt or args.task_id
         if not task_id:
             parser.error("task_id is required (positional or via --task)")
         from .lifecycle.coordination import CoordinationManager
         manager = CoordinationManager(Path(args.path).resolve())
-        res = manager.release_task(task_id, args.token, change_id=args.change, completed=args.completed)
+        res = manager.release_task(
+            task_id,
+            args.token,
+            change_id=args.change,
+            completed=args.completed,
+            session_id=args.session,
+            runtime=args.runtime,
+            model=args.model,
+        )
         if args.json:
             print(json.dumps(res.to_dict(), indent=2))
         elif res.success:
@@ -551,6 +584,9 @@ Actions:
         parser.add_argument("--reason", default="", help="Reason for handoff")
         parser.add_argument("--notes", default="", help="Handoff notes")
         parser.add_argument("--checklist", default="", help="Comma-separated checklist items")
+        parser.add_argument("--session", default=None, help="Active agent session ID")
+        parser.add_argument("--runtime", default=None, help="Agent runtime environment")
+        parser.add_argument("--model", default=None, help="Agent model identifier")
         args = parser.parse_args(rem)
         task_id = args.task_opt or args.task_id
         if not task_id:
@@ -567,6 +603,9 @@ Actions:
             reason=args.reason or args.notes,
             verification_checklist=checklist,
             notes=args.notes or args.reason,
+            session_id=args.session,
+            runtime=args.runtime,
+            model=args.model,
         )
         if args.json:
             print(json.dumps(res.to_dict(), indent=2))
@@ -620,6 +659,174 @@ Actions:
         return 1
 
 
+def run_session_cli(argv: Sequence[str]) -> int:
+    """Handle agent execution session lifecycle CLI commands."""
+    if not argv or argv[0] in ("-h", "--help"):
+        print("""Usage: agentflow session <action> [options]
+
+Actions:
+  start <agent_id> [--role <role>] [--model <model>] [--runtime <runtime>] [--skill <skill>]
+  end <session_id> [--status <status>]
+  list [change] [--active] [--json]
+""")
+        return 0
+
+    action = argv[0].lower()
+    rem = argv[1:]
+
+    parser = argparse.ArgumentParser(prog=f"agentflow session {action}")
+    parser.add_argument("--path", "--repo-root", dest="path", default=".", help="Repository root path")
+    parser.add_argument("--change", default=None, help="Target change ID")
+    parser.add_argument("--json", action="store_true", help="Output JSON format")
+
+    if action == "start":
+        parser.add_argument("agent_id", nargs="?", default=None, help="Agent ID principal starting session")
+        parser.add_argument("--agent", dest="agent_opt", default=None, help="Agent ID principal")
+        parser.add_argument("--role", default="maker", help="Agent role (maker, checker, architect, etc.)")
+        parser.add_argument("--model", default="unknown", help="Model identifier")
+        parser.add_argument("--runtime", default="cli", help="Agent runtime environment")
+        parser.add_argument("--skill", default="", help="Active skill")
+        parser.add_argument("--skill-version", default="1.0.0", help="Active skill version")
+        parser.add_argument("--parent-session", dest="parent_session", default=None, help="Parent session ID")
+        args = parser.parse_args(rem)
+        agent_id = args.agent_opt or args.agent_id
+        if not agent_id:
+            parser.error("agent_id is required (positional or via --agent)")
+        from .lifecycle.provenance import ProvenanceManager
+        manager = ProvenanceManager(Path(args.path).resolve())
+        sess = manager.start_session(
+            agent_id=agent_id,
+            role=args.role,
+            change_id=args.change,
+            runtime=args.runtime,
+            model=args.model,
+            skill=args.skill,
+            skill_version=args.skill_version,
+            parent_session_id=args.parent_session,
+        )
+        if args.json:
+            print(json.dumps(sess.to_dict(), indent=2))
+        else:
+            print(f"🚀 Started session '{sess.session_id}' for agent '{agent_id}'")
+            print(f"  • Role    : {sess.role}")
+            print(f"  • Runtime : {sess.runtime} ({sess.model})")
+            if sess.skill:
+                print(f"  • Skill   : {sess.skill}@{sess.skill_version}")
+        return 0
+
+    elif action == "end":
+        parser.add_argument("session_id", nargs="?", default=None, help="Session ID to end")
+        parser.add_argument("--session", dest="session_opt", default=None, help="Session ID to end")
+        parser.add_argument("--status", default="COMPLETED", help="Final status (COMPLETED, FAILED, CANCELLED)")
+        args = parser.parse_args(rem)
+        session_id = args.session_opt or args.session_id
+        if not session_id:
+            parser.error("session_id is required (positional or via --session)")
+        from .lifecycle.provenance import ProvenanceManager
+        manager = ProvenanceManager(Path(args.path).resolve())
+        sess = manager.end_session(session_id, change_id=args.change, status=args.status)
+        if not sess:
+            print(f"❌ Session '{session_id}' not found.", file=sys.stderr)
+            return 1
+        if args.json:
+            print(json.dumps(sess.to_dict(), indent=2))
+        else:
+            print(f"🛑 Ended session '{session_id}' (status: {sess.status}).")
+        return 0
+
+    elif action == "list":
+        parser.add_argument("target_change", nargs="?", default=None, help="Target change ID")
+        parser.add_argument("--active", action="store_true", help="Show active sessions only")
+        args = parser.parse_args(rem)
+        cid = args.target_change or args.change
+        from .lifecycle.provenance import ProvenanceManager
+        manager = ProvenanceManager(Path(args.path).resolve())
+        sessions = manager.list_sessions(change_id=cid, active_only=args.active)
+        if args.json:
+            print(json.dumps([s.to_dict() for s in sessions], indent=2))
+        else:
+            print(f"📋 Agent Sessions for change '{cid or 'active'}':")
+            if not sessions:
+                print("  (No sessions recorded)")
+            for s in sessions:
+                ended_str = f" | Ended: {s.ended_at}" if s.ended_at else ""
+                print(f"  • {s.session_id} | Agent: {s.agent_id:15s} | Role: {s.role:10s} | Status: {s.status:10s}{ended_str}")
+        return 0
+
+    else:
+        print(f"Unknown session action: '{action}'. See 'agentflow session --help'.", file=sys.stderr)
+        return 1
+
+
+def run_identity_cli(argv: Sequence[str]) -> int:
+    """Handle agent identity principal registration and discovery CLI commands."""
+    if not argv or argv[0] in ("-h", "--help"):
+        print("""Usage: agentflow identity <action> [options]
+
+Actions:
+  register <agent_id> [--role <role>] [--runtime <runtime>] [--model <model>] [--parent <agent_id>]
+  list [change] [--json]
+""")
+        return 0
+
+    action = argv[0].lower()
+    rem = argv[1:]
+
+    parser = argparse.ArgumentParser(prog=f"agentflow identity {action}")
+    parser.add_argument("--path", "--repo-root", dest="path", default=".", help="Repository root path")
+    parser.add_argument("--change", default=None, help="Target change ID")
+    parser.add_argument("--json", action="store_true", help="Output JSON format")
+
+    if action == "register":
+        parser.add_argument("agent_id", nargs="?", default=None, help="Agent identity ID to register")
+        parser.add_argument("--agent", dest="agent_opt", default=None, help="Agent identity ID")
+        parser.add_argument("--role", default="maker", help="Agent role (maker, checker, architect, etc.)")
+        parser.add_argument("--runtime", default="cli", help="Agent runtime environment")
+        parser.add_argument("--model", default="unknown", help="Model identifier")
+        parser.add_argument("--parent", dest="parent_agent", default=None, help="Parent agent ID")
+        args = parser.parse_args(rem)
+        agent_id = args.agent_opt or args.agent_id
+        if not agent_id:
+            parser.error("agent_id is required (positional or via --agent)")
+        from .lifecycle.provenance import ProvenanceManager
+        manager = ProvenanceManager(Path(args.path).resolve())
+        ident = manager.register_identity(
+            agent_id=agent_id,
+            role=args.role,
+            runtime=args.runtime,
+            model=args.model,
+            parent_agent_id=args.parent_agent,
+            change_id=args.change,
+        )
+        if args.json:
+            print(json.dumps(ident.to_dict(), indent=2))
+        else:
+            print(f"👤 Registered agent identity '{ident.agent_id}' (role: {ident.role}, runtime: {ident.runtime}, model: {ident.model})")
+        return 0
+
+    elif action == "list":
+        parser.add_argument("target_change", nargs="?", default=None, help="Target change ID")
+        args = parser.parse_args(rem)
+        cid = args.target_change or args.change
+        from .lifecycle.provenance import ProvenanceManager
+        manager = ProvenanceManager(Path(args.path).resolve())
+        identities = manager.list_identities(change_id=cid)
+        if args.json:
+            print(json.dumps([i.to_dict() for i in identities], indent=2))
+        else:
+            print(f"📋 Registered Agent Principals for change '{cid or 'active'}':")
+            if not identities:
+                print("  (No identities registered)")
+            for i in identities:
+                parent_str = f" (parent: {i.parent_agent_id})" if i.parent_agent_id else ""
+                print(f"  • {i.agent_id:15s} | Role: {i.role:10s} | Runtime: {i.runtime:12s} | Model: {i.model}{parent_str}")
+        return 0
+
+    else:
+        print(f"Unknown identity action: '{action}'. See 'agentflow identity --help'.", file=sys.stderr)
+        return 1
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """Unified entrypoint for ship CLI with subcommands, specialist tools, and MCP server."""
     if argv is None:
@@ -638,6 +845,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if cmd in ("lease", "coordinate"):
         return run_lease_cli(sub_args)
+
+    if cmd in ("session", "sessions"):
+        return run_session_cli(sub_args)
+
+    if cmd in ("identity", "identities"):
+        return run_identity_cli(sub_args)
 
     # Specialist tools dispatch
     if cmd == "tdd":

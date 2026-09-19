@@ -266,6 +266,25 @@
       },
       "additionalProperties": false
     },
+    "provenance": {
+      "type": "object",
+      "description": "Agent identity and cryptographic action provenance tracking.",
+      "properties": {
+        "enforce_principal_attribution": {
+          "type": "boolean",
+          "description": "Require every meaningful action to be attributed to a registered principal."
+        },
+        "enforce_maker_checker_separation": {
+          "type": "boolean",
+          "description": "Mechanically reject verification where maker and verifier principals are identical."
+        },
+        "default_runtime": {
+          "type": "string",
+          "description": "Default agent runtime platform identifier."
+        }
+      },
+      "additionalProperties": false
+    },
     "create_git_tag": {
       "type": "boolean",
       "description": "Whether to create immutable git tags for checkpoints."

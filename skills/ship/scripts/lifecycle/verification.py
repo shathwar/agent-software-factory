@@ -419,6 +419,10 @@ def run_gate_verification(
     config: Optional[Dict[str, Any]] = None,
     tiers: Optional[List[str]] = None,
     test_command: Optional[str] = None,
+    verifier_id: str = "agentflow-verifier",
+    session_id: Optional[str] = None,
+    runtime: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> Dict[str, VerificationRecord]:
     """Coordinate multi-tier independent verification for a change.
 
@@ -446,6 +450,7 @@ def run_gate_verification(
                 method="source_grounding_inspection",
                 findings=["No review report found to ground."],
                 timestamp=now_iso,
+                verifier_id=verifier_id,
             )
 
     # Tier 3: Execution
@@ -467,6 +472,43 @@ def run_gate_verification(
     # Tier 5: Coverage
     if "coverage" in requested or "all" in requested:
         results["coverage"] = verify_spec_coverage(repo_root, change, review_report=review_report)
+
+    # Stamp ActionProvenance onto all records
+    from .models import ActionProvenance, AgentRole
+    from .provenance import compute_payload_digest
+    import uuid
+    now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+    # Check for target evidence producer provenance in active_change turns
+    turns = (active_change or {}).get("turns", [])
+    target_prov = None
+    for t in reversed(turns):
+        if t.get("provenance"):
+            target_prov = t["provenance"]
+            break
+
+    for tier_name, rec in results.items():
+        rec.verifier_id = verifier_id
+        if not rec.provenance:
+            prov = ActionProvenance(
+                action_id=f"act-{uuid.uuid4().hex[:12]}",
+                action_name=f"verify_{tier_name}",
+                agent_id=verifier_id,
+                session_id=session_id or f"sess-{verifier_id}",
+                change_id=change or "active",
+                role=AgentRole.VERIFIER.value,
+                timestamp=rec.timestamp or now_iso,
+                runtime=runtime or "antigravity",
+                model=model or "unknown",
+                skill="verification",
+                skill_version="1.0.0",
+                agentflow_version="1.0.0",
+                inputs_digest=compute_payload_digest({"claim": rec.claim, "tier": rec.tier, "method": rec.method}),
+                evidence_digest=compute_payload_digest({"verdict": rec.verdict, "findings": rec.findings, "score": rec.score}),
+            )
+            rec.provenance = prov.to_dict()
+        if not rec.target_provenance and target_prov:
+            rec.target_provenance = target_prov
 
     return results
 

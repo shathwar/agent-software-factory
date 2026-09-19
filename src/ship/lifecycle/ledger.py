@@ -852,6 +852,19 @@ class FileLedgerStore:
             entry = ledger.get("changes", {}).get(cid, {})
             return dict(entry.get("coordination", {"leases": {}, "handoffs": []}))
 
+    @classmethod
+    def get_provenance(cls, repo_root: Path, change_id: Optional[str] = None) -> Dict[str, Any]:
+        """Get the identity and provenance data (identities, sessions, actions) for a change."""
+        with cls.lock(repo_root):
+            ledger = cls.load(repo_root, auto_sync=False)
+            cid = change_id or ledger.get("active_change_id")
+            if not cid and ledger.get("changes"):
+                cid = list(ledger["changes"].keys())[0]
+            if not cid:
+                return {"identities": {}, "sessions": {}, "actions": []}
+            entry = ledger.get("changes", {}).get(cid, {})
+            return dict(entry.get("provenance", {"identities": {}, "sessions": {}, "actions": []}))
+
 get_ledger_path = FileLedgerStore.get_ledger_path
 ledger_lock = FileLedgerStore.lock
 get_active_change = FileLedgerStore.get_active_change

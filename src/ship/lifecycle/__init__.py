@@ -16,6 +16,11 @@ from .models import (
     GateResult, GateStatus, GitInfo, LifecyclePhase, OpenSpecInfo, ShipConfig, VerificationResult,
     VerificationRecord, VerificationTier, StagnationType, TurnContract, TurnRecord,
     LeaseStatus, CoordinationConflictType, TaskLease, TaskHandoff,
+    AgentRole, AgentIdentity, AgentSession, ActionProvenance,
+)
+from .provenance import (
+    ProvenanceManager,
+    compute_payload_digest,
 )
 from .coordination import (
     CoordinationConfig,
@@ -51,6 +56,10 @@ from .trailers import CommitTrailerGenerator, canonicalize_gate_name
 from .vcs import GIT_NOTES_REF, GitClient
 
 __all__ = [
+    "ActionProvenance",
+    "AgentIdentity",
+    "AgentRole",
+    "AgentSession",
     "CheckpointManager",
     "CommitTrailerGenerator",
     "CoordinationConfig",
@@ -67,8 +76,10 @@ __all__ = [
     "GitInfo",
     "LeaseStatus",
     "CoordinationConflictType",
+    "ProvenanceManager",
     "TaskLease",
     "TaskHandoff",
+    "compute_payload_digest",
     "is_lease_expired",
     "LifecycleEngine",
     "LifecyclePhase",

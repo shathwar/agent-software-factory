@@ -32,6 +32,7 @@ LIFECYCLE_MODULES = [
     "operations.py",
     "paths.py",
     "protocols.py",
+    "provenance.py",
     "specs.py",
     "trailers.py",
     "transactions.py",

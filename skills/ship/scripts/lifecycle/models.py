@@ -117,9 +117,11 @@ class VerificationRecord:
     timestamp: str = ""
     verifier_id: str = "agentflow-verifier"
     metadata: Dict[str, Any] = field(default_factory=dict)
+    provenance: Optional[Any] = None
+    target_provenance: Optional[Any] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        res = {
             "claim": self.claim,
             "gate": self.gate,
             "tier": self.tier,
@@ -131,6 +133,28 @@ class VerificationRecord:
             "verifier_id": self.verifier_id,
             "metadata": self.metadata,
         }
+        if self.provenance:
+            res["provenance"] = self.provenance.to_dict() if hasattr(self.provenance, "to_dict") else self.provenance
+        if self.target_provenance:
+            res["target_provenance"] = self.target_provenance.to_dict() if hasattr(self.target_provenance, "to_dict") else self.target_provenance
+        return res
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "VerificationRecord":
+        return cls(
+            claim=str(data.get("claim", "")),
+            gate=str(data.get("gate", "")),
+            tier=str(data.get("tier", "")),
+            verdict=str(data.get("verdict", "")),
+            method=str(data.get("method", "")),
+            findings=list(data.get("findings", [])),
+            score=data.get("score"),
+            timestamp=str(data.get("timestamp", "")),
+            verifier_id=str(data.get("verifier_id", "agentflow-verifier")),
+            metadata=dict(data.get("metadata", {})),
+            provenance=data.get("provenance"),
+            target_provenance=data.get("target_provenance"),
+        )
 
 
 @dataclass
@@ -199,6 +223,174 @@ class TurnContract:
         }
 
 
+class AgentRole(str, Enum):
+    ARCHITECT = "ARCHITECT"
+    TECH_LEAD = "TECH_LEAD"
+    MAKER = "MAKER"
+    CHECKER = "CHECKER"
+    VERIFIER = "VERIFIER"
+    REMEDIATOR = "REMEDIATOR"
+    SUPERVISOR = "SUPERVISOR"
+    COORDINATOR = "COORDINATOR"
+    SPECIALIST = "SPECIALIST"
+
+
+@dataclass
+class AgentIdentity:
+    agent_id: str
+    role: str = AgentRole.SPECIALIST.value
+    runtime: str = "antigravity"
+    model: str = "unknown"
+    parent_agent_id: Optional[str] = None
+    created_at: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "agent_id": self.agent_id,
+            "role": self.role.value if hasattr(self.role, "value") else str(self.role),
+            "runtime": self.runtime,
+            "model": self.model,
+            "parent_agent_id": self.parent_agent_id,
+            "created_at": self.created_at,
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "AgentIdentity":
+        return cls(
+            agent_id=str(data.get("agent_id", "")),
+            role=str(data.get("role", AgentRole.SPECIALIST.value)),
+            runtime=str(data.get("runtime", "antigravity")),
+            model=str(data.get("model", "unknown")),
+            parent_agent_id=data.get("parent_agent_id"),
+            created_at=str(data.get("created_at", "")),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
+@dataclass
+class AgentSession:
+    session_id: str
+    agent_id: str
+    change_id: str
+    role: str = AgentRole.SPECIALIST.value
+    started_at: str = ""
+    ended_at: Optional[str] = None
+    agentflow_version: str = "1.0.0"
+    skill: str = ""
+    skill_version: str = "1.0.0"
+    runtime: str = "antigravity"
+    model: str = "unknown"
+    status: str = "ACTIVE"
+    parent_session_id: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "session_id": self.session_id,
+            "agent_id": self.agent_id,
+            "change_id": self.change_id,
+            "role": self.role.value if hasattr(self.role, "value") else str(self.role),
+            "started_at": self.started_at,
+            "ended_at": self.ended_at,
+            "agentflow_version": self.agentflow_version,
+            "skill": self.skill,
+            "skill_version": self.skill_version,
+            "runtime": self.runtime,
+            "model": self.model,
+            "status": self.status,
+            "parent_session_id": self.parent_session_id,
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "AgentSession":
+        return cls(
+            session_id=str(data.get("session_id", "")),
+            agent_id=str(data.get("agent_id", "")),
+            change_id=str(data.get("change_id", "")),
+            role=str(data.get("role", AgentRole.SPECIALIST.value)),
+            started_at=str(data.get("started_at", "")),
+            ended_at=data.get("ended_at"),
+            agentflow_version=str(data.get("agentflow_version", "1.0.0")),
+            skill=str(data.get("skill", "")),
+            skill_version=str(data.get("skill_version", "1.0.0")),
+            runtime=str(data.get("runtime", "antigravity")),
+            model=str(data.get("model", "unknown")),
+            status=str(data.get("status", "ACTIVE")),
+            parent_session_id=data.get("parent_session_id"),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
+@dataclass
+class ActionProvenance:
+    action_id: str
+    action_name: str
+    agent_id: str
+    session_id: str
+    change_id: str
+    role: str = AgentRole.SPECIALIST.value
+    task_id: Optional[str] = None
+    lease_token: Optional[str] = None
+    timestamp: str = ""
+    runtime: str = "antigravity"
+    model: str = "unknown"
+    skill: str = ""
+    skill_version: str = "1.0.0"
+    agentflow_version: str = "1.0.0"
+    parent_agent_id: Optional[str] = None
+    inputs_digest: str = ""
+    evidence_digest: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "action_id": self.action_id,
+            "action_name": self.action_name,
+            "agent_id": self.agent_id,
+            "session_id": self.session_id,
+            "change_id": self.change_id,
+            "role": self.role.value if hasattr(self.role, "value") else str(self.role),
+            "task_id": self.task_id,
+            "lease_token": self.lease_token,
+            "timestamp": self.timestamp,
+            "runtime": self.runtime,
+            "model": self.model,
+            "skill": self.skill,
+            "skill_version": self.skill_version,
+            "agentflow_version": self.agentflow_version,
+            "parent_agent_id": self.parent_agent_id,
+            "inputs_digest": self.inputs_digest,
+            "evidence_digest": self.evidence_digest,
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ActionProvenance":
+        return cls(
+            action_id=str(data.get("action_id", "")),
+            action_name=str(data.get("action_name", "")),
+            agent_id=str(data.get("agent_id", "")),
+            session_id=str(data.get("session_id", "")),
+            change_id=str(data.get("change_id", "")),
+            role=str(data.get("role", AgentRole.SPECIALIST.value)),
+            task_id=data.get("task_id"),
+            lease_token=data.get("lease_token"),
+            timestamp=str(data.get("timestamp", "")),
+            runtime=str(data.get("runtime", "antigravity")),
+            model=str(data.get("model", "unknown")),
+            skill=str(data.get("skill", "")),
+            skill_version=str(data.get("skill_version", "1.0.0")),
+            agentflow_version=str(data.get("agentflow_version", "1.0.0")),
+            parent_agent_id=data.get("parent_agent_id"),
+            inputs_digest=str(data.get("inputs_digest", "")),
+            evidence_digest=str(data.get("evidence_digest", "")),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
 @dataclass
 class TurnRecord:
     turn_id: str
@@ -209,9 +401,11 @@ class TurnRecord:
     inputs: Dict[str, Any] = field(default_factory=dict)
     evidence: Dict[str, Any] = field(default_factory=dict)
     state_delta: Dict[str, Any] = field(default_factory=dict)
+    provenance: Optional[Any] = None
+    session_id: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        res = {
             "turn_id": self.turn_id,
             "skill": self.skill,
             "timestamp": self.timestamp,
@@ -220,7 +414,26 @@ class TurnRecord:
             "inputs": self.inputs,
             "evidence": self.evidence,
             "state_delta": self.state_delta,
+            "session_id": self.session_id,
         }
+        if self.provenance:
+            res["provenance"] = self.provenance.to_dict() if hasattr(self.provenance, "to_dict") else self.provenance
+        return res
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TurnRecord":
+        return cls(
+            turn_id=str(data.get("turn_id", "")),
+            skill=str(data.get("skill", "")),
+            timestamp=str(data.get("timestamp", "")),
+            harness=str(data.get("harness", "generic")),
+            execution_mode=str(data.get("execution_mode", "sequential")),
+            inputs=dict(data.get("inputs", {})),
+            evidence=dict(data.get("evidence", {})),
+            state_delta=dict(data.get("state_delta", {})),
+            provenance=data.get("provenance"),
+            session_id=data.get("session_id"),
+        )
 
 
 class LeaseStatus(str, Enum):
@@ -255,6 +468,8 @@ class TaskLease:
     change_id: Optional[str] = None
     files: Optional[List[str]] = None
     acquired_at: Optional[str] = None
+    session_id: Optional[str] = None
+    provenance: Optional[Any] = None
 
     def __post_init__(self):
         if self.acquired_at and not self.claimed_at:
@@ -270,7 +485,7 @@ class TaskLease:
 
     def to_dict(self) -> Dict[str, Any]:
         st = self.status.value if hasattr(self.status, "value") else str(self.status)
-        return {
+        res = {
             "task_id": self.task_id,
             "owner_id": self.owner_id,
             "lease_token": self.lease_token,
@@ -283,7 +498,11 @@ class TaskLease:
             "status": st,
             "metadata": self.metadata,
             "change_id": self.change_id,
+            "session_id": self.session_id,
         }
+        if self.provenance:
+            res["provenance"] = self.provenance.to_dict() if hasattr(self.provenance, "to_dict") else self.provenance
+        return res
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "TaskLease":
@@ -301,6 +520,8 @@ class TaskLease:
             status=st_val,
             metadata=dict(data.get("metadata", {})),
             change_id=data.get("change_id"),
+            session_id=data.get("session_id"),
+            provenance=data.get("provenance"),
         )
 
 
@@ -318,6 +539,9 @@ class TaskHandoff:
     handed_off_at: Optional[str] = None
     verification_checklist: List[str] = field(default_factory=list)
     notes: str = ""
+    session_id: Optional[str] = None
+    from_provenance: Optional[Any] = None
+    to_provenance: Optional[Any] = None
 
     def __post_init__(self):
         if self.handed_off_at and not self.timestamp:
@@ -330,7 +554,7 @@ class TaskHandoff:
             self.notes = self.reason
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        res = {
             "task_id": self.task_id,
             "from_owner": self.from_owner,
             "to_owner": self.to_owner,
@@ -343,7 +567,13 @@ class TaskHandoff:
             "artifacts": self.artifacts,
             "verification_checklist": self.verification_checklist,
             "metadata": self.metadata,
+            "session_id": self.session_id,
         }
+        if self.from_provenance:
+            res["from_provenance"] = self.from_provenance.to_dict() if hasattr(self.from_provenance, "to_dict") else self.from_provenance
+        if self.to_provenance:
+            res["to_provenance"] = self.to_provenance.to_dict() if hasattr(self.to_provenance, "to_dict") else self.to_provenance
+        return res
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "TaskHandoff":
@@ -358,6 +588,10 @@ class TaskHandoff:
             artifacts=list(data.get("artifacts", [])),
             verification_checklist=list(data.get("verification_checklist", [])),
             metadata=dict(data.get("metadata", {})),
+            session_id=data.get("session_id"),
+            from_provenance=data.get("from_provenance"),
+            to_provenance=data.get("to_provenance"),
         )
+
 
 
