@@ -44,6 +44,10 @@ CORE SUBCOMMANDS:
       Apply delta specs and archive completed change package to openspec/archive/.
   agentflow trailers <change>
       Generate RFC 5133 Git commit trailers based on current verified evidence.
+  agentflow verify [change] [--tier execution|grounding|mutation|coverage|all] [--all]
+      Run independent multi-tier verification eliminating circular trust.
+  agentflow resume <change>
+      Clear non-convergence halt blockers and resume autonomous workflow execution.
   agentflow doctor [--path <dir>]
       Run preflight diagnostics (runtime, git, skill directories, ledger).
 
@@ -107,6 +111,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--harness", default=None, help="Harness identifier for recorded turn.")
     parser.add_argument("--doctor", action="store_true", help="Check local installation and workspace.")
     parser.add_argument("--migrate-state", action="store_true", help="Migrate legacy versionless ledger to v1.")
+    parser.add_argument("--verify", action="store_true", help="Run independent multi-tier verification.")
+    parser.add_argument("--tier", choices=["execution", "grounding", "mutation", "coverage", "all"], default=None, help="Specific verification tier.")
+    parser.add_argument("--all", dest="verify_all", action="store_true", help="Verify all tiers.")
+    parser.add_argument("--resume", nargs="?", const="", default=None, metavar="CHANGE", help="Clear non-convergence halt blockers and resume workflow.")
     return parser
 
 
@@ -248,10 +256,44 @@ def run_lifecycle(argv: Sequence[str]) -> int:
         output_result(res_ledger, ["State ledger synchronized from workspace."])
         return 0
 
+    if args.verify:
+        tiers = ["all"] if args.verify_all or args.tier == "all" else ([args.tier] if args.tier else ["grounding", "execution", "coverage"])
+        try:
+            records = engine.verify_change(
+                repo_root,
+                change=args.change,
+                tiers=tiers,
+                record_to_ledger=True,
+            )
+            from ship.lifecycle.verification import format_verification_summary
+            if args.format == "json":
+                payload = {k: (v.to_dict() if hasattr(v, "to_dict") else v) for k, v in records.items()}
+                print(json.dumps(payload, indent=2))
+            else:
+                print(format_verification_summary(records, change=args.change or ""))
+            any_failed = any(getattr(r, "verdict", None) == "NOT_VERIFIED" or (isinstance(r, dict) and r.get("verdict") == "NOT_VERIFIED") for r in records.values())
+            return 1 if any_failed else 0
+        except Exception as exc:
+            if args.format == "json":
+                print(json.dumps({"error": str(exc)}, indent=2))
+            else:
+                print(f"Error: {exc}", file=sys.stderr)
+            return 1
+
     if args.set_active_change:
         ledger_store.set_active_change(repo_root, args.set_active_change)
         output_result({"active_change_id": args.set_active_change}, [f"Active change set to '{args.set_active_change}'."])
         return 0
+
+    if args.resume is not None:
+        cid = (args.resume.strip() if args.resume else "") or args.change or ledger_store.get_active_change(repo_root) or "default"
+        try:
+            res_entry = ledger_store.resume_change(repo_root, cid)
+            output_result(res_entry, [f"Halt blocker cleared and autonomy resumed for change '{cid}'."])
+            return 0
+        except Exception as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
 
     if args.fingerprint:
         tfp = compute_working_tree_fingerprint(repo_root)
@@ -536,6 +578,25 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if cmd == "fingerprint":
         return run_lifecycle(["--fingerprint"] + sub_args)
+
+    if cmd == "verify":
+        change_arg = None
+        rem = []
+        if sub_args and not sub_args[0].startswith("-"):
+            change_arg = sub_args[0]
+            rem = sub_args[1:]
+        else:
+            rem = sub_args
+        args_to_run = ["--verify"]
+        if change_arg:
+            args_to_run.extend(["--change", change_arg])
+        args_to_run.extend(rem)
+        return run_lifecycle(args_to_run)
+
+    if cmd == "resume":
+        if sub_args and not sub_args[0].startswith("-"):
+            return run_lifecycle(["--resume", sub_args[0]] + sub_args[1:])
+        return run_lifecycle(["--resume", ""] + sub_args)
 
     # If starts with '-' or not a known subcommand, pass directly to lifecycle parser
     return run_lifecycle(argv)

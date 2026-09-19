@@ -22,6 +22,7 @@ LIFECYCLE_MODULES = [
     "__init__.py",
     "checkpoints.py",
     "config.py",
+    "convergence.py",
     "engine.py",
     "evidence.py",
     "gates.py",
@@ -35,6 +36,7 @@ LIFECYCLE_MODULES = [
     "transactions.py",
     "turns.py",
     "vcs.py",
+    "verification.py",
 ]
 
 TOOL_MODULES = {

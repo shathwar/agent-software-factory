@@ -49,6 +49,13 @@ class ShipConfigManager:
                     "archive_packages": True,
                 },
             },
+            "convergence": {
+                "max_remediation_attempts": 3,
+                "max_same_failure_count": 2,
+                "max_total_turns": 25,
+                "max_time_seconds": 1800.0,
+                "max_cost_dollars": 10.0,
+            },
             "create_git_tag": False,
             "config_source": None,
         }

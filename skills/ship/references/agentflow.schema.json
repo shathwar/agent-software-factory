@@ -86,6 +86,37 @@
             "lint": {
               "type": "string",
               "description": "Shell command to run code formatters and linters."
+            },
+            "verification": {
+              "type": "object",
+              "description": "Independent verification settings for implementation.",
+              "properties": {
+                "execution": {
+                  "type": "boolean",
+                  "description": "Independently re-execute tests to verify claims."
+                },
+                "mutation": {
+                  "type": "object",
+                  "description": "Mutation testing configuration.",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean",
+                      "description": "Enable mutation testing verification."
+                    },
+                    "threshold": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Minimum acceptable mutation score (0.0 to 1.0)."
+                    },
+                    "scope": {
+                      "type": "string",
+                      "description": "Scope of mutation testing (e.g. changed_files_only)."
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
             }
           },
           "additionalProperties": false
@@ -132,6 +163,21 @@
                 "type": "string"
               },
               "description": "Project paths the review should prioritize."
+            },
+            "verification": {
+              "type": "object",
+              "description": "Independent verification settings for review.",
+              "properties": {
+                "grounding": {
+                  "type": "boolean",
+                  "description": "Independently verify review finding quotes against source files."
+                },
+                "spec_coverage": {
+                  "type": "boolean",
+                  "description": "Verify spec requirements are covered by tests and reviews."
+                }
+              },
+              "additionalProperties": false
             }
           },
           "additionalProperties": false
@@ -158,6 +204,38 @@
             }
           },
           "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "convergence": {
+      "type": "object",
+      "description": "Convergence controls and anti-infinite loop guardrails.",
+      "properties": {
+        "max_remediation_attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum permitted remediation loops before halting autonomy."
+        },
+        "max_same_failure_count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum permitted identical consecutive failures before halting autonomy."
+        },
+        "max_total_turns": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum total turn budget for a single change."
+        },
+        "max_time_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Maximum wall-clock duration in seconds for change remediation."
+        },
+        "max_cost_dollars": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Maximum token/LLM cost in USD before halting autonomy."
         }
       },
       "additionalProperties": false

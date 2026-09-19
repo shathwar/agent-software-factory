@@ -56,7 +56,7 @@ def read_ledger_file(path: Path) -> Optional[Dict[str, Any]]:
             if not isinstance(cid, str) or not isinstance(entry, dict):
                 valid = False
                 break
-            for key, kind in (("task_status", dict), ("evidence", dict), ("checkpoints", dict), ("blockers", list), ("turns", list)):
+            for key, kind in (("task_status", dict), ("evidence", dict), ("verification", dict), ("checkpoints", dict), ("blockers", list), ("turns", list)):
                 if key in entry and not isinstance(entry[key], kind):
                     valid = False
             if isinstance(entry.get("blockers", []), list) and any(not isinstance(b, str) for b in entry.get("blockers", [])):
@@ -149,6 +149,7 @@ def create_empty_change_entry(change_id: str) -> Dict[str, Any]:
         "blockers": [],
         "revision_counter": 0,
         "evidence": make_default_evidence(),
+        "verification": {},
         "checkpoints": {},
         "turns": [],
     }
@@ -606,6 +607,9 @@ class FileLedgerStore:
             if fingerprint != design_fingerprint(repo_root, change):
                 raise ValueError("Design changed: reviewed fingerprint does not match current design")
             def updater(entry: Dict[str, Any]) -> None:
+                existing_app = entry.get("evidence", {}).get("design", {}).get("approval", {})
+                if existing_app.get("fingerprint") == fingerprint and existing_app.get("approved_by") == approved_by.strip():
+                    return
                 entry.setdefault("evidence", {}).setdefault("design", {})["approval"] = {
                     "change": change, "fingerprint": fingerprint,
                     "approved_by": approved_by.strip(), "approved_at": time.time(),
@@ -702,6 +706,85 @@ class FileLedgerStore:
         return cls.mutate_change(repo_root, cid, updater, sync_fn=sync_fn)
 
     @classmethod
+    def record_verification(
+        cls,
+        repo_root: Path,
+        verification_records: Dict[str, Any],
+        change_id: Optional[str] = None,
+        sync_fn: Optional[Callable[[Path], Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        cid = change_id or cls.get_active_change(repo_root) or "default"
+        validate_change_id(cid)
+
+        def updater(entry: Dict[str, Any]) -> None:
+            verif = entry.setdefault("verification", {})
+            has_failure = False
+            failed_tiers = []
+
+            for tier, rec in verification_records.items():
+                if hasattr(rec, "to_dict"):
+                    rec_dict = rec.to_dict()
+                elif isinstance(rec, dict):
+                    rec_dict = rec
+                else:
+                    rec_dict = {"verdict": str(rec)}
+                verif[tier] = rec_dict
+                if rec_dict.get("verdict") == "NOT_VERIFIED":
+                    has_failure = True
+                    failed_tiers.append(tier)
+
+            blockers = [b for b in entry.get("blockers", []) if not b.startswith("Verification:")]
+            if has_failure:
+                blockers.append(f"Verification: {', '.join(failed_tiers)} verification tier(s) failed")
+            entry["blockers"] = blockers
+
+            turns = entry.setdefault("turns", [])
+            turn_idx = len(turns) + 1
+            turns.append({
+                "turn_id": f"turn-{turn_idx:03d}",
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "skill": "verification",
+                "harness": "independent-verifier",
+                "execution_mode": "sequential",
+                "inputs": {"tiers": list(verification_records.keys())},
+                "evidence": {k: (v.to_dict() if hasattr(v, "to_dict") else v) for k, v in verification_records.items()},
+                "state_delta": {
+                    "verification_passed": not has_failure,
+                    "failed_tiers": failed_tiers,
+                },
+            })
+
+        return cls.mutate_change(repo_root, cid, updater, sync_fn=sync_fn)
+
+    @classmethod
+    def resume_change(
+        cls,
+        repo_root: Path,
+        change_id: Optional[str] = None,
+        sync_fn: Optional[Callable[[Path], Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """Clear Halt blockers and resume workflow execution after human intervention."""
+        cid = change_id or cls.get_active_change(repo_root) or "default"
+        validate_change_id(cid)
+
+        def updater(entry: Dict[str, Any]) -> None:
+            entry["blockers"] = [b for b in entry.get("blockers", []) if not b.startswith("Halt:")]
+            turns = entry.setdefault("turns", [])
+            turn_idx = len(turns) + 1
+            turns.append({
+                "turn_id": f"turn-{turn_idx:03d}",
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "skill": "human",
+                "harness": "human-supervisor",
+                "execution_mode": "manual",
+                "inputs": {"action": "resume", "cleared_halt": True},
+                "evidence": {"resumed": True},
+                "state_delta": {"halt_cleared": True},
+            })
+
+        return cls.mutate_change(repo_root, cid, updater, sync_fn=sync_fn)
+
+    @classmethod
     def record_turn(
         cls,
         repo_root: Path,
@@ -766,7 +849,9 @@ save_ledger = FileLedgerStore.save
 mutate_change_state = FileLedgerStore.mutate_change
 record_review_to_ledger = FileLedgerStore.record_review
 record_test_run_to_ledger = FileLedgerStore.record_test_run
+record_verification_to_ledger = FileLedgerStore.record_verification
 record_turn_to_ledger = FileLedgerStore.record_turn
+resume_change_in_ledger = FileLedgerStore.resume_change
 get_turns_from_ledger = FileLedgerStore.get_turns
 sync_ledger_from_workspace = FileLedgerStore.sync_from_workspace
 

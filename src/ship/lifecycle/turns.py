@@ -240,6 +240,77 @@ def get_next_turn_contract(
             suggested_mcp_args={"change": target_change},
         )
 
+    if state_key == "VERIFICATION_FAILED":
+        verif_ev = active_change.get("verification", {})
+        failed_tiers = [t for t, v in verif_ev.items() if isinstance(v, dict) and v.get("verdict") == "NOT_VERIFIED"]
+        skill_target = "tdd" if ("execution" in failed_tiers or "mutation" in failed_tiers) else "review"
+        return TurnContract(
+            change_id=target_change,
+            phase=state_key,
+            skill=skill_target,
+            role="Verification Remediation Craftsperson",
+            execution_mode="sequential",
+            inputs={
+                "change_id": target_change,
+                "failed_tiers": failed_tiers,
+                "blockers": blockers,
+                "verification_details": verif_ev,
+            },
+            hard_constraints=[
+                "Evidence Verification Mandate: Never self-attest success when independent verification failed.",
+                "Root Cause Remediation: Fix failing assertions, code logic, or ungrounded claims in source.",
+                "Re-run Verification: Execute 'agentflow verify' to obtain an independent VERIFIED verdict.",
+            ],
+            exit_criteria=[
+                "Identified root cause of verification failure resolved.",
+                f"Independent verification re-run via 'agentflow verify {target_change} --all'.",
+                "All verification tiers report VERIFIED.",
+            ],
+            output_evidence=f"Clean verification records in .agentflow/state.json for '{target_change}'",
+            action_prompt=f"Remediate verification failure ({', '.join(failed_tiers) if failed_tiers else 'unverified claims'}) for '{target_change}'. Fix root cause and re-verify via 'agentflow verify {target_change} --all'.",
+            suggested_command=f"agentflow verify {target_change} --all",
+            suggested_mcp_tool="agentflow_verify",
+            suggested_mcp_args={"change": target_change, "all": True},
+        )
+
+    if state_key == "AUTONOMY_HALTED":
+        next_act = repo_eval.get("next_action", "")
+        halt_reason = next_act.replace("Autonomy halted: NON_CONVERGING_REMEDIATION: ", "").strip()
+        if not halt_reason and blockers:
+            halt_b = [b for b in blockers if b.startswith("Halt:")]
+            if halt_b:
+                halt_reason = halt_b[0].replace("Halt:", "").strip()
+        if not halt_reason:
+            halt_reason = "Non-converging remediation detected"
+        return TurnContract(
+            change_id=target_change,
+            phase=state_key,
+            skill="human",
+            role="Human Systems Lead & Escalation Arbiter",
+            execution_mode="sequential",
+            inputs={
+                "change_id": target_change,
+                "halt_reason": halt_reason,
+                "blockers": blockers,
+                "turn_history_count": len(active_change.get("turns", [])),
+            },
+            hard_constraints=[
+                "AUTONOMY HALTED: Automated remediation has ceased due to non-converging cycles or budget exhaustion.",
+                "DO NOT attempt automated self-remediation without human supervisor direction.",
+                "Review the turn provenance history via 'agentflow turns' to inspect the failure trajectory.",
+                "Once contradictory constraints or code bugs are manually resolved, execute 'agentflow resume' to clear the halt.",
+            ],
+            exit_criteria=[
+                "Human supervisor manually intervenes and diagnoses non-convergence.",
+                f"State unlocked via 'agentflow resume {target_change}' or rolled back via 'agentflow rollback <gate>'.",
+            ],
+            output_evidence="Human supervision clearance recorded in ledger",
+            action_prompt=f"Autonomy is halted for '{target_change}': {halt_reason}. A human supervisor must review the failure trajectory and resume via 'agentflow resume {target_change}' or rollback via 'agentflow rollback <gate>'.",
+            suggested_command=f"agentflow resume {target_change}",
+            suggested_mcp_tool="agentflow_resume",
+            suggested_mcp_args={"change": target_change},
+        )
+
     if state_key != "ARCHIVED":
         raise ValueError(f"Unsupported lifecycle state: {state_key!r}; cannot derive a safe next turn")
 
@@ -366,7 +437,9 @@ def format_turns_log(turns: List[Dict[str, Any]], change_id: Optional[str] = Non
 
 def resolve_skill_name(skill: str) -> str:
     """Map lifecycle gate activity to installed skill directory name."""
-    if skill == "delivery":
+    if skill in ("delivery", "convergence", "human"):
         return "ship"
+    if skill == "verification":
+        return "review"
     return skill
 

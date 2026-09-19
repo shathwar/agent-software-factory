@@ -89,6 +89,16 @@ def format_summary(data: Dict[str, Any]) -> str:
         crit_str = f" critical/high={report.get('critical_or_high_count')}"
         lines.append(f"• Review Report   : {report['path']}{env_str} (by {report['reviewer']},{verdict_str},{ev_str},{crit_str})")
 
+    verif = (data.get("active_change") or {}).get("verification", {})
+    if verif:
+        parts = []
+        for tier_name, item in verif.items():
+            if isinstance(item, dict):
+                v_str = item.get("verdict", "UNKNOWN")
+                parts.append(f"{tier_name}={v_str}")
+        if parts:
+            lines.append(f"• Verification    : {', '.join(parts)}")
+
     if data.get("config", {}).get("config_source"):
         cfg = data["config"]
         t_cmd = cfg.get("gates", {}).get("implementation", {}).get("test") or "autodetect"
@@ -158,7 +168,9 @@ class LifecycleEngine:
                 active_change["blockers"].append(f"Design: {design_error}")
 
         gate, state_key, next_action = determine_lifecycle_state(
-            git_info, adrs, openspec_packages, spikes, review_report, active_change=active_change
+            git_info, adrs, openspec_packages, spikes, review_report,
+            active_change=active_change, repo_root=repo_root,
+            verification_config=config.get("gates"),
         )
 
         return {
@@ -230,3 +242,42 @@ class LifecycleEngine:
             ),
             get_active_fn=self.ledger.get_active_change,
         )
+
+    def verify_change(
+        self,
+        repo_root: Path,
+        change: Optional[str] = None,
+        tiers: Optional[List[str]] = None,
+        record_to_ledger: bool = True,
+        test_command: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Perform multi-tier independent verification of a change."""
+        from .verification import run_gate_verification
+        from .operations import detect_test_command
+
+        eval_data = self.evaluate_repository(repo_root, target_change=change)
+        cid = change or eval_data.get("target_change") or "default"
+        config = eval_data.get("config", {})
+        active_pkg = eval_data["openspec_packages"][0] if eval_data.get("openspec_packages") else None
+        review_report = eval_data.get("review_report")
+        active_change = eval_data.get("active_change")
+
+        cmd = test_command or config.get("gates", {}).get("implementation", {}).get("test")
+        if not cmd:
+            cmd = detect_test_command(repo_root)
+
+        records = run_gate_verification(
+            repo_root=repo_root,
+            change=cid,
+            active_pkg=active_pkg,
+            review_report=review_report,
+            active_change=active_change,
+            config=config,
+            tiers=tiers,
+            test_command=cmd,
+        )
+
+        if record_to_ledger:
+            self.ledger.record_verification(repo_root, records, change_id=cid)
+
+        return records

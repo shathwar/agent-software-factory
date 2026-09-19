@@ -15,6 +15,8 @@ class LifecyclePhase(str, Enum):
     REVIEW_ACTIVE = "REVIEW_ACTIVE"
     DELIVERY_READY = "DELIVERY_READY"
     ARCHIVED = "ARCHIVED"
+    VERIFICATION_FAILED = "VERIFICATION_FAILED"
+    AUTONOMY_HALTED = "AUTONOMY_HALTED"
 
 
 class GateStatus(str, Enum):
@@ -23,6 +25,25 @@ class GateStatus(str, Enum):
     FAILED = "FAILED"
     BLOCKED = "BLOCKED"
     SKIPPED = "SKIPPED"
+    VERIFICATION_FAILED = "VERIFICATION_FAILED"
+    AUTONOMY_HALTED = "AUTONOMY_HALTED"
+
+
+class VerificationTier(str, Enum):
+    STRUCTURAL = "structural"
+    GROUNDING = "grounding"
+    EXECUTION = "execution"
+    MUTATION = "mutation"
+    COVERAGE = "coverage"
+
+
+class StagnationType(str, Enum):
+    SAME_EVIDENCE = "SAME_EVIDENCE"
+    SAME_FINDING = "SAME_FINDING"
+    SAME_PATCH = "SAME_PATCH"
+    SAME_VERIFIER_FAILURE = "SAME_VERIFIER_FAILURE"
+    OSCILLATING_STATE = "OSCILLATING_STATE"
+    BUDGET_EXCEEDED = "BUDGET_EXCEEDED"
 
 
 @dataclass
@@ -81,6 +102,35 @@ class VerificationResult:
     passed: bool
     details: Dict[str, Any] = field(default_factory=dict)
     blockers: List[str] = field(default_factory=list)
+
+
+@dataclass
+class VerificationRecord:
+    """Independent verification record for a claim-evidence pair."""
+    claim: str
+    gate: str
+    tier: str
+    verdict: str  # "VERIFIED" | "NOT_VERIFIED" | "INCONCLUSIVE" | "SKIPPED"
+    method: str
+    findings: List[str] = field(default_factory=list)
+    score: Optional[float] = None
+    timestamp: str = ""
+    verifier_id: str = "agentflow-verifier"
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "claim": self.claim,
+            "gate": self.gate,
+            "tier": self.tier,
+            "verdict": self.verdict,
+            "method": self.method,
+            "findings": self.findings,
+            "score": self.score,
+            "timestamp": self.timestamp,
+            "verifier_id": self.verifier_id,
+            "metadata": self.metadata,
+        }
 
 
 @dataclass

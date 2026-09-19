@@ -184,6 +184,27 @@ class PackagingTests(unittest.TestCase):
             self.assertEqual(ret, 0)
             self.assertIn("Recorded review report", buf.getvalue())
 
+            # 8. ship verify
+            (root / "openspec" / "changes" / "feat-test").mkdir(parents=True, exist_ok=True)
+            buf = io.StringIO()
+            try:
+                sys.stdout = buf
+                ret = ship_cli_main(["verify", "feat-test", "--tier", "grounding", "--path", str(root)])
+            finally:
+                sys.stdout = old_stdout
+            self.assertEqual(ret, 0)
+            self.assertIn("INDEPENDENT VERIFICATION SUMMARY", buf.getvalue())
+
+            # 9. ship resume
+            buf = io.StringIO()
+            try:
+                sys.stdout = buf
+                ret = ship_cli_main(["resume", "feat-test", "--path", str(root)])
+            finally:
+                sys.stdout = old_stdout
+            self.assertEqual(ret, 0)
+            self.assertIn("Halt blocker cleared and autonomy resumed", buf.getvalue())
+
     def test_skills_and_src_byte_for_byte_parity(self):
         """All mapped files between src/ship/ and skills/ must be 100% byte-for-byte identical."""
         sync_script = ROOT / "scripts" / "sync_skills.py"
