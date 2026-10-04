@@ -12,6 +12,7 @@ Validates:
 from __future__ import annotations
 
 import argparse
+import ast
 from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
@@ -174,6 +175,39 @@ def check_anti_patterns(file_path: Path) -> list[Finding]:
         re.IGNORECASE
     )
 
+    is_py = file_path.suffix == ".py"
+    ast_checked = False
+    if is_py:
+        try:
+            tree = ast.parse(content, filename=str(file_path))
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test"):
+                    has_assert = False
+                    for child in ast.walk(node):
+                        if isinstance(child, ast.Assert):
+                            has_assert = True
+                            break
+                        if isinstance(child, ast.Call):
+                            call_name = ""
+                            if isinstance(child.func, ast.Name):
+                                call_name = child.func.id
+                            elif isinstance(child.func, ast.Attribute):
+                                call_name = child.func.attr
+                            if call_name.startswith("assert") or call_name in {"raises", "warns", "fail"}:
+                                has_assert = True
+                                break
+                    if not has_assert:
+                        findings.append(Finding(
+                            category="assertless_test",
+                            file=str(file_path),
+                            line=node.lineno,
+                            message=f"Test '{node.name}' contains no detectable assertion. Tests must verify observable behavior.",
+                            severity="ERROR"
+                        ))
+            ast_checked = True
+        except SyntaxError:
+            ast_checked = False
+
     for i, line in enumerate(lines, 1):
         stripped = line.strip()
         if stripped.startswith(("#", "//", "/*", "*")):
@@ -196,24 +230,25 @@ def check_anti_patterns(file_path: Path) -> list[Finding]:
         if mock_pattern.search(line):
             mock_count += 1
 
-        if m := test_def_pattern.search(line):
-            if in_test_func and not func_has_assertion:
-                findings.append(Finding(
-                    category="assertless_test",
-                    file=str(file_path),
-                    line=current_func_line,
-                    message=f"Test '{current_func_name}' contains no detectable assertion. Tests must verify observable behavior.",
-                    severity="ERROR"
-                ))
-            in_test_func = True
-            current_func_name = next(filter(None, m.groups()), "unknown_test")
-            current_func_line = i
-            func_has_assertion = False
+        if not ast_checked:
+            if m := test_def_pattern.search(line):
+                if in_test_func and not func_has_assertion:
+                    findings.append(Finding(
+                        category="assertless_test",
+                        file=str(file_path),
+                        line=current_func_line,
+                        message=f"Test '{current_func_name}' contains no detectable assertion. Tests must verify observable behavior.",
+                        severity="ERROR"
+                    ))
+                in_test_func = True
+                current_func_name = next(filter(None, m.groups()), "unknown_test")
+                current_func_line = i
+                func_has_assertion = False
 
-        if in_test_func and assertion_pattern.search(line):
-            func_has_assertion = True
+            if in_test_func and assertion_pattern.search(line):
+                func_has_assertion = True
 
-    if in_test_func and not func_has_assertion:
+    if not ast_checked and in_test_func and not func_has_assertion:
         findings.append(Finding(
             category="assertless_test",
             file=str(file_path),

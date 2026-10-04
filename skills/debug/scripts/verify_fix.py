@@ -47,6 +47,11 @@ SYMPTOM_MASKING_PATTERNS = [
     (re.compile(r"^\+\s*catch\s*\{\s*\}"), "Empty catch block swallows errors silently."),
 ]
 
+MULTILINE_SYMPTOM_MASKING_PATTERNS = [
+    (re.compile(r"except(?:\s+[\w\.]+)?\s*:\s*(?:\n\s*(?:#[^\n]*)?)*\n\s*pass\b", re.MULTILINE), "Swallowed exception with pass masks root cause."),
+    (re.compile(r"catch\s*(?:\([^)]*\))?\s*\{(?:\s*|\s*//[^\n]*\s*|\s*/\*.*?\*/\s*)*\}", re.DOTALL), "Empty catch block swallows errors silently."),
+]
+
 
 @dataclass
 class BugfixAuditResult:
@@ -124,6 +129,7 @@ def audit_diff(diff_text: str) -> BugfixAuditResult:
     is_current_test = False
     deleted_assertions_count = 0
     added_assertions_count = 0
+    file_added_lines: dict[str, list[str]] = {}
 
     lines = diff_text.splitlines()
     for line in lines:
@@ -149,6 +155,8 @@ def audit_diff(diff_text: str) -> BugfixAuditResult:
             for pat, desc in SYMPTOM_MASKING_PATTERNS:
                 if pat.search(line):
                     violations.append(f"[{current_file}] Symptom Masking Anti-Pattern: {desc}")
+            if line.startswith("+") and not line.startswith("+++"):
+                file_added_lines.setdefault(current_file, []).append(line[1:])
 
         # Check test weakening in test files
         if is_current_test:
@@ -163,6 +171,15 @@ def audit_diff(diff_text: str) -> BugfixAuditResult:
             elif line.startswith("+") and not line.startswith("+++"):
                 if re.search(r"\bassert\b|\bexpect\(|self\.assert", line):
                     added_assertions_count += 1
+
+    # Check multiline symptom masking
+    for p_file, added_lines in file_added_lines.items():
+        added_text = "\n".join(added_lines)
+        for pat, desc in MULTILINE_SYMPTOM_MASKING_PATTERNS:
+            if pat.search(added_text):
+                msg = f"[{p_file}] Symptom Masking Anti-Pattern: {desc}"
+                if msg not in violations:
+                    violations.append(msg)
 
     repro_test_found = len(test_files) > 0
 

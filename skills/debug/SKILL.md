@@ -13,7 +13,7 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 > **Zero Conversational Filler**: Never say "Certainly", "I'd be happy to", or provide conversational preamble. Start directly with error inspection, reproduction test execution, backward tracing, or surgical fix.
 
 <hard_constraints>
-- The Reproduction Mandate: NEVER modify production code before creating an automated reproduction test (or script) that reliably fails on current code.
+- The Reproduction Mandate: NEVER modify production code before creating an automated reproduction test (or script) that reliably fails on current code. *Justified Exception*: For demonstrably non-deterministic bugs (heisenbugs, distributed split-brain, high-concurrency races, hardware/OS signal interrupts), multi-layer boundary logging, statistical stress scripts, or environment characterization tests may fulfill the mandate when a binary unit test is infeasible.
 - Root Cause Over Symptom: NEVER apply defensive masking (e.g. `if obj is not None:` at crash site, `except: pass`, raw fallbacks) that leaves corrupted state upstream. Fix at the origin.
 - Zero Test Weakening: NEVER loosen, delete, skip (`@pytest.mark.skip`, `xit`), or comment out existing test assertions to make the test suite pass.
 - The 2-Strike Rethink Rule: If 2 hypotheses fail at the same location, STOP. Your mental model is wrong. Discard theories, re-read the code from scratch, and form a fundamentally new hypothesis.
@@ -23,7 +23,7 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 
 <turn_contract>
 Verify before ending the turn:
-✓ 1. Reproduction Test Proven Failing: Isolated test executed and confirmed Red on current code before production edits.
+✓ 1. Reproduction Test Proven Failing: Isolated test (or non-deterministic stress script/boundary log trace) executed and confirmed Red on current code before production edits.
 ✓ 2. Root Cause Traced: Bad state traced backward to origin; not patched at crash site.
 ✓ 3. Surgical Fix Applied: Minimal diff addresses root cause without symptom masking.
 ✓ 4. Full Verification Passed: Repro test passes, full suite passes, and `verify_fix.py --strict` confirms zero test weakening.

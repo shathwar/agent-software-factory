@@ -111,6 +111,27 @@ diff --git a/src/worker.py b/src/worker.py
         self.assertFalse(result.passed)
         self.assertTrue(any("Assertion Degradation" in v for v in result.violations))
 
+    def test_audit_diff_multiline_symptom_masking(self):
+        """Multiline except Exception: with comments and pass flags symptom masking."""
+        diff = """diff --git a/src/worker.py b/src/worker.py
+--- a/src/worker.py
++++ b/src/worker.py
+@@ -10,1 +10,4 @@
++    try:
++        run()
++    except Exception:
++        # swallowed error
++        pass
+diff --git a/tests/test_worker.py b/tests/test_worker.py
+--- a/tests/test_worker.py
++++ b/tests/test_worker.py
+@@ -5,1 +5,2 @@
++    assert True
+"""
+        result = verify_fix.audit_diff(diff)
+        self.assertFalse(result.passed)
+        self.assertTrue(any("Symptom Masking" in v for v in result.violations))
+
 
 if __name__ == "__main__":
     unittest.main()

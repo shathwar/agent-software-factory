@@ -175,6 +175,7 @@ def evaluate_calibration(
             "p_obs": p_obs,
             "corrected_rate": theta_hat,
             "ci_95": [ci_lower, ci_upper] if (ci_lower is not None and ci_upper is not None) else None,
+            "warning": "Evaluator is statistically uninformative (TPR + TNR ≈ 1.0; denominator near zero). Rogan-Gladen correction cannot estimate true prevalence reliably." if theta_hat is None else None,
         }
 
     return res
@@ -217,8 +218,11 @@ def format_report(result: Dict[str, Any]) -> str:
             "",
             "### Rogan-Gladen Bias Correction (Production Prevalence)",
             f"- **Observed Production Pass Rate (`p_obs`)**: {bc['p_obs']:.2%}",
-            f"- **Corrected True Pass Rate (`theta_hat`)**: {bc['corrected_rate']:.2%}" if bc['corrected_rate'] is not None else "- **Corrected Rate**: Incalculable (judge uninformative)",
         ])
+        if bc["corrected_rate"] is not None:
+            lines.append(f"- **Corrected True Pass Rate (`theta_hat`)**: {bc['corrected_rate']:.2%}")
+        else:
+            lines.append("- **Corrected True Pass Rate (`theta_hat`)**: ⚠️ Undefined (Judge TPR + TNR ≈ 1.0; performance is indistinguishable from random chance)")
         if bc.get("ci_95"):
             lines.append(f"- **Bootstrap 95% Confidence Interval**: [{bc['ci_95'][0]:.2%}, {bc['ci_95'][1]:.2%}]")
 

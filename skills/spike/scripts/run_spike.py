@@ -18,6 +18,7 @@ from dataclasses import asdict, dataclass
 import json
 import os
 from pathlib import Path
+import shlex
 import signal
 import statistics
 import subprocess
@@ -44,14 +45,29 @@ class BenchmarkMetrics:
     stddev_ms: float
 
 
-def run_single_iteration(cmd: str, cwd: Path | None = None, timeout_sec: float | None = 60.0) -> tuple[float, bool]:
+def run_single_iteration(cmd: str | Sequence[str], cwd: Path | None = None, timeout_sec: float | None = 60.0) -> tuple[float, bool]:
     """Execute a single run of the command in an isolated process group and measure elapsed time in milliseconds."""
     start = time.perf_counter()
     proc = None
     try:
+        use_shell = False
+        if isinstance(cmd, str):
+            shell_chars = {"|", "&", ";", ">", "<", "`", "$"}
+            if any(sc in cmd for sc in shell_chars):
+                args: str | list[str] = cmd
+                use_shell = True
+            else:
+                try:
+                    args = shlex.split(cmd)
+                except Exception:
+                    args = cmd
+                    use_shell = True
+        else:
+            args = list(cmd)
+
         proc = subprocess.Popen(
-            cmd,
-            shell=True,
+            args,
+            shell=use_shell,
             cwd=cwd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -167,19 +183,32 @@ def run_benchmark(
                     except Exception:
                         failures += 1
     else:
-        # Iteration-based run
+        # Iteration-based run with bounded in-flight window to prevent OOM
         with ThreadPoolExecutor(max_workers=concurrency) as executor:
-            futures = [executor.submit(run_single_iteration, cmd, cwd, timeout_sec) for _ in range(iterations)]
-            for f in as_completed(futures):
-                try:
-                    elapsed_ms, ok = f.result()
-                    latencies.append(elapsed_ms)
-                    if ok:
-                        successes += 1
-                    else:
+            futures: set = set()
+            submitted = 0
+            window_size = max(concurrency * 4, 32)
+            while submitted < iterations and len(futures) < window_size:
+                futures.add(executor.submit(run_single_iteration, cmd, cwd, timeout_sec))
+                submitted += 1
+
+            while futures:
+                done, not_done = wait(futures, timeout=0.1, return_when=FIRST_COMPLETED)
+                futures = set(not_done)
+                for f in done:
+                    try:
+                        elapsed_ms, ok = f.result()
+                        latencies.append(elapsed_ms)
+                        if ok:
+                            successes += 1
+                        else:
+                            failures += 1
+                    except Exception:
                         failures += 1
-                except Exception:
-                    failures += 1
+
+                while submitted < iterations and len(futures) < window_size:
+                    futures.add(executor.submit(run_single_iteration, cmd, cwd, timeout_sec))
+                    submitted += 1
 
     total_duration_sec = time.perf_counter() - start_total
     total_runs = len(latencies)

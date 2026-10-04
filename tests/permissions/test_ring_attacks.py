@@ -126,6 +126,36 @@ class TestRingAttacks(unittest.TestCase):
         self.assertFalse(dec.allowed)
         self.assertEqual(dec.violation_code, "NO_CAPABILITY")
 
+    def test_path_traversal_ring_0_escape_prevented(self):
+        """Attack: Agent attempts to write to Ring 0 ledger using path traversal (tests/../.agentflow/ledger.json)."""
+        self.cap_mgr.grant_capability(
+            agent_id="agent-attacker",
+            operation=CapabilityOperation.WRITE,
+            target="tests/../.agentflow/ledger.json",
+            change_id=self.change_id,
+            approval_ref="self-approved",
+        )
+        dec = self.cap_mgr.evaluate_access(
+            agent_id="agent-attacker",
+            operation=CapabilityOperation.WRITE,
+            target="tests/../.agentflow/ledger.json",
+            change_id=self.change_id,
+        )
+        self.assertFalse(dec.allowed)
+        self.assertEqual(dec.ring, ExecutionRing.RING_0_HYPERVISOR.value)
+        self.assertEqual(dec.violation_code, "RING_0_RESTRICTED")
+
+    def test_path_traversal_ring_1_secret_escape_prevented(self):
+        """Attack: Agent attempts to write to Ring 1 governance via path traversal."""
+        dec = self.cap_mgr.evaluate_access(
+            agent_id="agent-attacker",
+            operation=CapabilityOperation.WRITE,
+            target="src/../../.env",
+            change_id=self.change_id,
+        )
+        self.assertFalse(dec.allowed)
+        self.assertEqual(dec.ring, ExecutionRing.RING_1_GOVERNANCE.value)
+
 
 if __name__ == "__main__":
     unittest.main()

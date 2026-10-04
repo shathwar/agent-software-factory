@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import fnmatch
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urlparse
@@ -63,6 +64,15 @@ def _target_matches(cap_pattern: str, requested_target: str) -> bool:
         p = p[2:]
     if t.startswith("./"):
         t = t[2:]
+
+    # Normalize relative path traversal if not a URI or scheme-prefixed resource
+    if not (p.startswith(("secret:", "env:", "aws:", "azure:", "gcp:", "db:", "github:")) or "://" in p):
+        if not p.endswith("*") and not p.endswith("/"):
+            p = os.path.normpath(p).replace("\\", "/")
+    if not (t.startswith(("secret:", "env:", "aws:", "azure:", "gcp:", "db:", "github:")) or "://" in t):
+        t = os.path.normpath(t).replace("\\", "/")
+        while t.startswith("../"):
+            t = t[3:]
 
     # Exact match
     if p == t:
@@ -136,6 +146,10 @@ class CapabilityManager:
         """
         op = str(operation.value if hasattr(operation, "value") else operation).upper()
         norm = target.replace("\\", "/").strip()
+        if not (norm.startswith(("secret:", "env:", "aws:", "azure:", "gcp:", "db:", "github:")) or "://" in norm):
+            norm = os.path.normpath(norm).replace("\\", "/")
+            while norm.startswith("../"):
+                norm = norm[3:]
         if norm.startswith("./"):
             norm = norm[2:]
 
@@ -671,10 +685,10 @@ class CapabilityManager:
                     timestamp=now_iso,
                 ))
 
-            if lease_token and lease.lease_token != lease_token:
+            if not lease_token or lease.lease_token != lease_token:
                 return _record_decision(AccessDecision(
                     allowed=False,
-                    reason="Provided lease token does not match active lease token",
+                    reason="Missing or invalid lease token for active task lease",
                     ring=ring_val,
                     agent_id=agent_id,
                     operation=op_val,
