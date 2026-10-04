@@ -22,6 +22,7 @@ bash -n scripts/install.sh
 "$PYTHON" -m py_compile skills/tdd/scripts/verify_tdd.py
 "$PYTHON" -m py_compile skills/spike/scripts/run_spike.py
 "$PYTHON" -m py_compile scripts/sync_skills.py
+"$PYTHON" -m py_compile scripts/ci_gate.py
 echo "✓ Script syntax OK"
 echo ""
 

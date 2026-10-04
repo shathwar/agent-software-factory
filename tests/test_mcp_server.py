@@ -221,7 +221,7 @@ class MCPServerTests(unittest.TestCase):
                 "jsonrpc": "2.0",
                 "id": 10,
                 "method": "tools/call",
-                "params": {"name": "ship_rollback", "arguments": {"path": str(root), "gate": "design", "change": "mcp-feat"}},
+                "params": {"name": "ship_rollback", "arguments": {"path": str(root), "gate": "design", "change": "mcp-feat", "force": True}},
             }
             handle_request(req_rb)
             resps = self._get_responses()

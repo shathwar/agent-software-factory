@@ -109,7 +109,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--format", choices=["text", "json"], default="text", help="Output format (default: text).")
     parser.add_argument("--json", action="store_true", help="Shortcut for --format json.")
     parser.add_argument("--archive", nargs="?", const="", default=None, metavar="CHANGE", help="Archive change package.")
-    parser.add_argument("--force", action="store_true", help="Force archive even if checks fail.")
+    parser.add_argument("--force", action="store_true", help="Explicitly authorize whole-checkout rollback, or force archive workflow checks.")
     parser.add_argument("--fingerprint", action="store_true", help="Print working tree fingerprint SHA-256 and exit.")
     parser.add_argument("--create-git-tag", action="store_true", help="Also create git tag in refs/tags/.")
     parser.add_argument("--set-active-change", default=None, metavar="CHANGE_ID", help="Set active change ID in ledger.")
@@ -272,7 +272,7 @@ def run_lifecycle(argv: Sequence[str]) -> int:
         return 0
 
     if args.verify:
-        tiers = ["all"] if args.verify_all or args.tier == "all" else ([args.tier] if args.tier else ["grounding", "execution", "coverage"])
+        tiers = ["all"] if args.verify_all or args.tier == "all" else ([args.tier] if args.tier else ["grounding", "execution"])
         try:
             records = engine.verify_change(
                 repo_root,
@@ -286,8 +286,7 @@ def run_lifecycle(argv: Sequence[str]) -> int:
                 print(json.dumps(payload, indent=2))
             else:
                 print(format_verification_summary(records, change=args.change or ""))
-            any_failed = any(getattr(r, "verdict", None) == "NOT_VERIFIED" or (isinstance(r, dict) and r.get("verdict") == "NOT_VERIFIED") for r in records.values())
-            return 1 if any_failed else 0
+            return 0 if records and all(r.verdict == "VERIFIED" for r in records.values()) else 1
         except Exception as exc:
             if args.format == "json":
                 print(json.dumps({"error": str(exc)}, indent=2))

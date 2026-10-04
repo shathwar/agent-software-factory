@@ -191,7 +191,7 @@ def get_next_turn_contract(
                 "Judge Adjudication: Reject hallucinations; all findings must be evidenced against actual code.",
                 "Schema Compliance: Every reported finding must strictly adhere to the 12-field schema contract.",
                 f"Repair Ceiling: In review-loop, never exceed {max_iterations} repair iterations.",
-                "Rollback Guard: If an ADR architectural invariant is broken, trigger rollback to design.",
+                "Replan Guard: If an ADR invariant breaks, preserve current edits and return to design. Whole-checkout rollback requires explicit operator authorization.",
             ],
             exit_criteria=[
                 f"Applicable review stages executed using configured perspectives: {', '.join(reviewers)}.",
@@ -440,4 +440,3 @@ def resolve_skill_name(skill: str) -> str:
     if skill == "verification":
         return "review"
     return skill
-

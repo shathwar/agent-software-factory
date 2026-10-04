@@ -17,15 +17,15 @@
    - Spec alignment against ADR & OpenSpec.
    - 10-stage review (correctness, concurrency, resilience, DDIA/Release It!).
    - Bounded review-loop auto-fixes defects (max 3 rounds).
-   - Rollback Guard: If architectural invariant breaks, rollback to `design`.
+   - Replan Guard: If an architectural invariant breaks, preserve edits and return to design.
    - Judge issues PASS verdict.
 4. **Delivery**:
-   - Verify ready: `inspect_lifecycle.py --status-check`.
+   - Run `inspect_lifecycle.py --verify --tier execution --change <change>`; require `VERIFIED` with positive test counts. Then run `--status-check --change <change>` on the same snapshot.
    - Archive OpenSpec package: `inspect_lifecycle.py --archive <change>`.
    - Tri-Tier state sync: Authoritative ledger `.agentflow/state.json`, Git notes evidence (`refs/notes/ship-evidence`), RFC 5133 commit trailers (`Ship-Change`, `Ship-<Gate>`).
 
 ## Hard Rules
 - Turn Contracts: Execute specialist skills through explicit Turn Contracts. Subagents are an optional optimization; sequential independent turns enforce identical gates and state.
 - Multi-Change Isolation: Support parallel changes via `--change <id>` in `.agentflow/state.json`.
-- Rollback Guard: On invariant violation in review, rollback code cleanly to `design`.
+- Recovery: Whole-checkout `--rollback design --force` requires explicit operator authorization after inspecting affected files, including unrelated work.
 - Manifest Support: Honors repository `.agentflow.json`.

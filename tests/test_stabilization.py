@@ -27,7 +27,8 @@ class StabilizationTests(unittest.TestCase):
                 change = {'change_id': 'demo', 'verification': {'execution': execution}}
                 self.assertEqual(validate_delivery_readiness(report, pkg, git, change)[1], 'VERIFICATION_FAILED')
         change = {'change_id': 'demo', 'verification': {'execution': {
-            'verdict': 'VERIFIED', 'metadata': {'snapshot_fingerprint': 'current'}}}}
+            'verdict': 'VERIFIED', 'metadata': {'snapshot_fingerprint': 'current',
+                'tests_run': 1, 'exit_code': 0, 'failed_count': 0}}}}
         self.assertEqual(validate_delivery_readiness(report, pkg, git, change)[1], 'DELIVERY_READY')
 
     def test_engine_passes_custom_convergence_limits(self):

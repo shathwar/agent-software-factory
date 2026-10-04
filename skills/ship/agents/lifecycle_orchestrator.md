@@ -29,13 +29,14 @@
 3. **Review (Adversarial Review & Auto-Fix)**:
    - Execute `review` turn in `review-loop` mode (run perspectives in parallel if supported, or sequentially).
    - Stage 0 verifies code against OpenSpec/ADR; Stages 1–9 review concurrency, correctness, and failure modes.
-   - If ADR invariants fundamentally broken, execute rollback:
-     `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --rollback design`
+   - If ADR invariants fundamentally break, preserve current edits and return to design.
+     Whole-checkout rollback requires explicit operator authorization after inspecting affected files; never add `--force` merely to unblock review.
      and re-open Frontier Rounds in design.
    - Auto-fix defects under test protection until Judge issues official `PASS` verdict.
 
 4. **Delivery (Sign-Off & Archive)**:
-   - Verify repository readiness: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --status-check`.
+   - Execute and record final test verification: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --verify --tier execution --change <change>`. Stop unless the receipt is `VERIFIED` with positive executed-test counts.
+   - Verify repository readiness on the same snapshot: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --status-check --change <change>`.
    - Archive OpenSpec package: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --archive <change>`.
    - Attach commit trailers (`--generate-trailers`) and local Git notes evidence.
    - Deliver Walkthrough with ADR links, Judge verdict, and debt ledger.

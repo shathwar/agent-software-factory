@@ -124,7 +124,7 @@ def handle_ship_rollback(args: Dict[str, Any]) -> Dict[str, Any]:
     gate = args["gate"]
     change = args.get("change")
     mgr = CheckpointManager()
-    res = mgr.perform_rollback(root, gate, change=change)
+    res = mgr.perform_rollback(root, gate, change=change, force=args.get("force") is True)
     if change:
         FileLedgerStore.set_active_change(root, change)
     return {

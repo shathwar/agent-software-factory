@@ -21,7 +21,7 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 - Design Checkpoint: Record `inspect_lifecycle.py --checkpoint design`. NEVER proceed to implementation without explicit user confirmation of the ADR/OpenSpec package.
 - Test-First Law: In implementation, every task MUST follow strict Red-Green-Refactor with failing behavioral tests before code. Enforce `.agentflow.json` test commands when present.
 - Terminal Receipts: Gate transitions (implementation ➔ review and review ➔ delivery) REQUIRE pasting the raw terminal test runner output (exit code, test count, duration). Unsubstantiated claims of "tests pass" are rejected.
-- Rollback Guard: If Stage 0 or Judge in review detects a broken architectural invariant, execute `inspect_lifecycle.py --rollback design` and return to design.
+- Replan Guard: If review detects a broken architectural invariant, preserve the working tree and return to design. Whole-checkout rollback is operator-authorized recovery, not an automatic review action; see [recovery boundaries](./references/headless_ci_guide.md#recovery-boundaries).
 - Review Clearance: Delivery REQUIRES an explicit PASS report from the review Judge, zero open CRITICAL/HIGH defects, and verified test evidence bound to current code.
 </hard_constraints>
 
@@ -112,11 +112,11 @@ Iterate sequentially through `openspec/changes/<change>/tasks.md`:
 2. Launch [`review`](../review/SKILL.md) in `review-loop` mode.
 3. Stage 0 verifies code against OpenSpec/ADR; Stages 1–9 review concurrency, chaos, correctness.
 4. Auto-fix defects under green test protection until Judge issues an explicit `PASS` report. Package `.agentflow/delivery_evidence.json` (Delivery Evidence Envelope) bundling the Judge report, verified test runner evidence, and reviewed commit/tree snapshot.
-5. **Rollback Guard**: If ADR invariant is fundamentally broken, execute `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --rollback design` and re-open Frontier Round in design.
+5. **Replan Guard**: If an ADR invariant is fundamentally broken, retain current edits and re-open design. Do not restore the checkpoint automatically: it includes unrelated work. Use `--rollback design --force --change <change>` only when the operator has explicitly authorized the inspected whole-checkout restoration.
 
 ### Delivery: Sign-Off & Handoff
-1. Verify gate status: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --status-check`.
-2. Run full test suite.
+1. After the final source edit, execute the configured full test suite and record its independent receipt: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --verify --tier execution --change <change>`. Packaged equivalent: `agentflow verify --tier execution --change <change>`. The path command works with a copy-only installation; no CLI package is required. Stop on any nonzero exit or non-`VERIFIED` receipt.
+2. Verify gate status on that same snapshot: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --status-check --change <change>`. A later source edit requires fresh test and review evidence. Verification must report positive executed-test counts; no-op commands and entirely skipped suites cannot pass. See [supported runners and non-test work](./references/team_rollout.md#verification-and-host-permissions).
 3. Deliver Walkthrough: changes summary, ADR links, review scorecard, `scan_debt.py` ledger.
 4. Apply & Archive OpenSpec: Sync delta specs to `openspec/specs/` and move completed package to `openspec/archive/<YYYY-MM-DD>-<change>/` via `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --archive [change]`.
 5. Attach Git Notes & Commit Trailers:

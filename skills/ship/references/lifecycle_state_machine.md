@@ -88,14 +88,14 @@ A formal specification of the 4-gate engineering lifecycle state machine, its tr
 
 ### State 5b: `REVIEW_ACTIVE` ➔ `FRONTIER_ROUNDS` (Spec Amendment & Rollback Gate)
 - **Guard**: Stage 0 (Spec Alignment) or the Judge discovers that an ADR invariant is fundamentally broken, impossible to satisfy within existing constraints, or requires an architectural trade-off that cannot be resolved with local code fixes.
-- **Action**: Halt implementation. Roll back or feature-flag the affected code path. Formulate a new Frontier Round in [design](../../design/SKILL.md) to settle the revised architecture with the user. Update the ADR and OpenSpec package before resuming implementation.
+- **Action**: Halt implementation and preserve the working tree. Formulate a new Frontier Round in [design](../../design/SKILL.md) to settle the revised architecture with the user. Update the ADR and OpenSpec package before resuming implementation. Whole-checkout restoration is an explicit operator recovery operation (`--rollback design --force`), never an automatic response to review findings.
 
 ### State 6: `REVIEW_ACTIVE` ➔ `DELIVERY_READY`
 - **Guard**:
   - Stage 0 confirms 100% compliance with `openspec/` and ADR invariants.
   - Stages 1–9 identify zero Critical or High production defects.
   - Review Judge issues an official `PASS` verdict report (`reviewer == "judge"`).
-  - Explicit test runner evidence is verified against the reviewed commit snapshot.
+  - Run `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --verify --tier execution --change <change>` after the final source edit. The receipt must be `VERIFIED` with positive executed-test counts and match the reviewed snapshot; then run `--status-check --change <change>`.
 - **Output**: Delivery Walkthrough, summary scorecard, and clean commit recommendation.
 
 ### State 7: `DELIVERY_READY` ➔ `ARCHIVED` (OpenSpec Apply & Archive)

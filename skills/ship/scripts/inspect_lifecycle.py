@@ -398,7 +398,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Force archive even if review report or task completion checks fail.",
+        help="Explicitly authorize whole-checkout rollback, or force archive workflow checks.",
     )
     parser.add_argument(
         "--fingerprint",
@@ -470,6 +470,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--doctor", action="store_true", help="Check the local installation and workspace without modifying them.")
     parser.add_argument("--migrate-state", action="store_true", help="Back up and migrate a supported legacy versionless ledger to v1.")
     parser.add_argument("--version", action="store_true", help="Print the installed suite version.")
+    parser.add_argument("--verify", action="store_true", help="Execute independent verification and record its receipt.")
+    parser.add_argument("--tier", choices=["execution", "grounding", "mutation", "coverage", "all"],
+                        default="execution", help="Verification tier (default: execution).")
 
     args = parser.parse_args(argv)
     repo_root = Path(args.path).resolve()
@@ -508,6 +511,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
+
+    if args.verify:
+        from lifecycle.verification import format_verification_summary
+        try:
+            records = _engine.verify_change(repo_root, change=args.change, tiers=[args.tier])
+            output_result({k: v.to_dict() for k, v in records.items()},
+                          [format_verification_summary(records, change=args.change or "")])
+            return 0 if records and all(r.verdict == "VERIFIED" for r in records.values()) else 1
+        except Exception as exc:
+            print(f"Error during verification: {exc}", file=sys.stderr)
+            return 1
 
     if args.next_turn:
         try:

@@ -173,6 +173,27 @@ Before delivery, run `agentflow verify --tier execution` on the current working 
 Missing, inconclusive, or stale execution receipts block delivery. Changes to source
 require a new verification run. Existing workspaces need a new receipt on upgrade.
 
+For a copy-only installation, use
+`python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --verify --tier execution --change <change>`.
+Then run the same inspector with `--status-check --change <change>`; only archive after
+both commands succeed. The verifier recognizes unittest, pytest, Jest/Vitest, and
+TAP/node:test summary counts from stdout and stderr. It requires at least one
+non-skipped test, no failures, exit code zero, and an unchanged working tree.
+Unknown or suppressed summaries are `INCONCLUSIVE`; enable a supported reporter or
+add a reviewed runner adapter. Do not replace a runner with `true` or fabricated output.
+This verifies the configured trusted runner's report, not the honesty of arbitrary code.
+Old receipts without executed-test counts must be regenerated.
+
+For documentation/configuration-only changes, use `simplify` or `review` and the
+repository's normal non-test checks. Do not manufacture a passing `/ship` test receipt.
+The coverage tier is advisory: it returns `INCONCLUSIVE` until requirement-to-test
+mapping can actually be verified (or `SKIPPED` without a change package). File counts
+never prove specification coverage. Review acceptance criteria against tests manually,
+regardless of language. Explicitly requested inconclusive verification exits nonzero;
+use `--tier execution` for the automated delivery prerequisite. The packaged command's
+default checks grounding and execution; request advisory coverage explicitly with
+`--tier coverage` or `--all`.
+
 Capability checks return policy decisions for a trusted host to enforce. They do not
 sandbox agents or authenticate local ledger writers. MCP mutation and shell tools
 require the operator to set `AGENTFLOW_MCP_ALLOW_MUTATIONS=1` in the server environment;

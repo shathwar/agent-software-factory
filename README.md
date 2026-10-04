@@ -72,7 +72,7 @@ Teams can adopt skills incrementally without changing their entire workflow:
 1. **Phase 1: Pre-PR Defense ([`review`](./skills/review/SKILL.md))**: Run `/review` on pull requests before requesting senior peer review. Catch race conditions, unindexed queries, and missing error paths early.
 2. **Phase 2: Anti-Bloat Coding ([`simplify`](./skills/simplify/SKILL.md))**: Use `/simplify` on everyday tasks to enforce standard-library reuse. Add `python3 skills/simplify/scripts/scan_debt.py --strict` to CI to enforce documented debt ceilings.
 3. **Phase 3: Autonomous Lifecycle ([`ship`](./skills/ship/SKILL.md))**: Run `/ship "<feature>"` to drive complete features from architectural grilling (ADRs) through TDD to reviewed PRs. Configure project manifests (`.agentflow.json`) for team workflow profiles (`small-fix`, `standard`, `high-risk`).
-4. **Phase 4: Headless CI Orchestration**: Automate the lifecycle in CI/CD (GitHub Actions / GitLab CI) via issue comments (`ship:approved`) using the [Headless CI Guide](./skills/ship/references/headless_ci_guide.md).
+4. **Phase 4: Headless CI Orchestration**: Pilot the GitHub Actions workflow by explicitly dispatching an approved design commit and digest using the [Headless CI Guide](./skills/ship/references/headless_ci_guide.md).
 
 ---
 
@@ -111,10 +111,10 @@ Give your agent [ship SKILL.md](./skills/ship/SKILL.md) and feature request: `/s
 - **Resource Governor**: Tracks tokens, model calls, turns, time, cost, tools, and network operations against per-change ceilings.
 - **Evaluation Harness**: Runs local regression scenarios for approvals, permissions, recovery, concurrency, budgets, and event integrity.
 - **Repository Manifest (`.agentflow.json`)**: Clean domain schema validated by [`agentflow.schema.json`](./skills/ship/references/agentflow.schema.json). Configures custom test commands (`gates.implementation.test`).
-- **Git Checkpoints & Safe Rollback**: Records private refs (`--checkpoint design`) and safely backs up broken code on architectural revisions (`--rollback design`).
+- **Git Checkpoints & Safe Rollback**: Records private refs (`--checkpoint design`) and supports operator-authorized whole-checkout recovery (`--rollback design --force`); architectural revisions preserve current edits by default.
 - **Zero-Loss State Migration**: Seamlessly upgrade legacy ledgers via `inspect_lifecycle.py --migrate-state` with byte-for-byte backups.
 - **Modular SOLID Architecture**: Structured Python package under [`skills/ship/scripts/lifecycle/`](./skills/ship/scripts/lifecycle/) separating VCS, evidence, ledger, gate verification, and transaction journals.
-- **Headless CI & GitHub Actions**: Run headlessly in CI with issue-based approvals via [Headless CI Guide](./skills/ship/references/headless_ci_guide.md).
+- **Headless CI & GitHub Actions**: Run headlessly in CI with explicit design commit/digest approvals via [Headless CI Guide](./skills/ship/references/headless_ci_guide.md).
 - **Agent Roster**: Led by [Lifecycle Orchestrator](./skills/ship/agents/lifecycle_orchestrator.md).
 - **References**: [Lifecycle State Machine Guide](./skills/ship/references/lifecycle_state_machine.md), [Local Team Rollout Guide](./skills/ship/references/team_rollout.md), and [Formal JSON Schema](./skills/ship/references/agentflow.schema.json).
 
@@ -275,7 +275,7 @@ The checklist has ten stages, grounded in classical systems engineering (*DDIA*,
 Reviewers consult authoritative domain reference guides:
 - [**Security Hardening & Zero-Trust Defense**](./skills/review/references/handbook_security.md): Injection defenses (SQL, shell, XSS), authentication, authorization, cryptographic hygiene, secrets management, SSRF, and IDOR.
 - [**Web Performance & Resource Optimization**](./skills/review/references/handbook_webperf.md): Core Web Vitals (LCP, INP, CLS), render blocking, bundle splitting, memory lifecycles, and caching headers.
-- [**Architectural Invariants Contract**](./skills/review/references/architectural_invariants.md): Verifies repo-wide architectural invariants. Violations trigger the **Rollback Guard** (`inspect_lifecycle.py --rollback design`) to restore working state safely.
+- [**Architectural Invariants Contract**](./skills/review/references/architectural_invariants.md): Verifies repo-wide architectural invariants. Violations return to design with current edits preserved. Whole-checkout restoration requires explicit operator authorization.
 - [**Production Risk Matrix**](./skills/review/references/production_risk_matrix.md): Blast radius evaluation, rollback safety, and observability gates.
 
 ## What you get
@@ -552,7 +552,7 @@ Start small. Run the skills locally on a few real tasks. Keep normal code review
 
 - **Local Team Rollout Guide ([`team_rollout.md`](./skills/ship/references/team_rollout.md))**: Detailed guide covering `--doctor` preflight, workflow profiles (`small-fix`, `standard`, `high-risk`), host capability adaptations (`auto`, `sequential`, `parallel`), pinned distributions (`install.sh --mode copy --backup`), and zero-loss ledger migration.
 - **Behavioral Evaluation Cases & Pilot Benchmarks ([`skill_evaluations.md`](./tests/skill_evaluations.md))**: 12 realistic evaluation fixtures and acceptance criteria for benchmarking agent decisions, boundary respect, and defect detection before organizational distribution.
-- **Headless CI & Asynchronous Automation ([`headless_ci_guide.md`](./skills/ship/references/headless_ci_guide.md))**: Ready-to-use GitHub Actions and GitLab CI workflows decoupling feature development from active IDE chat sessions using issue-based approval gates (`ship:approved`).
+- **Headless CI & Asynchronous Automation ([`headless_ci_guide.md`](./skills/ship/references/headless_ci_guide.md))**: Pilot GitHub Actions templates with explicit design commit/digest approval and mandatory checks outside agent prompts. Repair proposals reuse the same gated workflow.
 - **Local by default**: Ledgers, evidence, and logs stay on the machine or in the repository unless a host, command, or provider sends them elsewhere.
 
 ## Trust and execution boundaries

@@ -10,5 +10,6 @@ def verify_fixture(root, change=None):
     for cid in changes:
         FileLedgerStore.record_verification(root, {'execution': {
             'verdict': 'VERIFIED', 'method': 'synthetic_test_fixture',
-            'metadata': {'snapshot_fingerprint': GitClient().compute_working_tree_fingerprint(root)},
+            'metadata': {'snapshot_fingerprint': GitClient().compute_working_tree_fingerprint(root),
+                         'tests_run': 1, 'exit_code': 0, 'failed_count': 0},
         }}, change_id=cid)

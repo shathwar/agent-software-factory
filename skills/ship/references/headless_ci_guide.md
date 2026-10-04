@@ -1,207 +1,109 @@
-# Headless CI & Multi-Team Automation Guide
+# Headless CI integration
 
-Commands below assume `SKILLS_DIR` is set to the absolute parent directory of the installed `ship` folder. Keep the working directory set to the consumer project.
+These are pilot templates for an explicitly approved design, not an issue-to-production
+service. Local approval receipts do not authenticate people or sandbox agents. Keep
+human PR review and the repository's protected merge checks.
 
+## Configure the templates
 
-A production guide for running the **Ship Lifecycle Engine** headlessly in CI/CD (GitHub Actions, GitLab CI) and decoupling agent execution from synchronous chat sessions.
+1. Copy `templates/ci/github/workflows/ship-dev.yml` and, optionally, `ship-fix.yml`
+   into the consumer repository's `.github/workflows/` directory. Keep these workflow
+   files on the protected default branch. `ship-review.yml` remains a separate review
+   example; validate its host permissions before enabling it.
+2. Set repository variable `SHIP_SKILLS_SHA` to a reviewed **full commit SHA** of this
+   skills repository containing `scripts/ci_gate.py`. Missing or non-SHA values stop
+   the workflow. The tools are checked out separately under `.agentflow/toolchain`.
+3. Configure the `ship-approved` GitHub environment with required reviewers and
+   protected deployment branches. Configure the chosen agent provider secret. Review
+   action versions and pin them according to your organization's supply-chain policy.
+4. Configure `.agentflow.json` in the consumer repository, including
+   `gates.implementation.test`, to run its real full test suite. Supply dependencies
+   and services through the consumer's normal CI setup; the template only sets up
+   Python for the lifecycle tools. Run project commands with your host's sandbox and
+   credential restrictions. Tool allowlists are not an OS sandbox.
 
----
+## Approve an exact design
 
-## 1. The Headless Problem & Solution
+Prepare and review the ADR and `openspec/changes/<change>/` package first. Commit the
+reviewed package on a branch and obtain its full SHA. From that exact checkout, get
+its digest with the installed inspector:
 
-In standard interactive sessions, `/ship` prompts the engineer for approval at **design (Specification Checkpoint)**. In enterprise teams with multiple squads, running long-running features inside a local IDE chat is inconvenient.
-
-The headless workflow decouples the lifecycle gates into asynchronous CI steps:
-
-```text
-               1. Engineer files Issue: "/ship Add Stripe Webhook Idempotency"
-                                      │
-                                      ▼
-                      GitHub Action triggers design gate
-                                      │
-                                      ▼
-               2. Agent compiles ADR & OpenSpec Change Package
-                  Posts Architecture Decision to Issue Comment
-                                      │
-                                      ▼
-                   Tech Lead labels: "ship:approved"
-                                      │
-                                      ▼
-                       GitHub Action triggers implementation & review gates
-                   • TDD: Red-Green-Refactor tasks.md
-                   • Simplify: stdlib-first anti-bloat
-                   • Adversarial Review: Judge PASS review
-                                       │
-                                       ▼
-                3. Action opens Pull Request with:
-                   • Delivery Walkthrough Report
-                   • Judge PASS Evidence Envelope
-                   • Zero-regression terminal receipts
+```bash
+python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --design-fingerprint --change <change>
 ```
 
----
+Dispatch **Ship Dev Agent** with the issue number, change ID, full design commit SHA,
+and the reviewed digest. The workflow checks the initiating operator's current write,
+maintain, or admin permission through GitHub's API. The environment reviewer must
+verify these inputs before allowing the job. A label, issue assignment, issue body,
+or bot comment is never approval. Requirements changed after approval need a new
+review and dispatch; task checkbox completion alone does not change the design digest.
 
-## 2. Architecture: Agent Runner vs. Lifecycle Inspector
+## Execution and publication
 
-> [!IMPORTANT]
-> **Separation of Concerns**:
-> - **The Agent Runner / Harness** (`agy run`, Claude Code CLI, Gemini CLI, or LLM agent worker) generates code, architectures ADRs, runs TDD cycles, and interacts with LLMs.
-> - **The Lifecycle Inspector** (`inspect_lifecycle.py`) is an autonomous, zero-dependency state machine, gate assertion engine, and git ref recorder. It verifies that criteria for each gate are strictly satisfied before allowing transitions.
+The workflow checks out the approved commit and pinned toolchain, then calls
+`scripts/ci_gate.py prepare` **before** starting the agent. This independently checks
+the supplied digest, creates the checkpoint, and records approval for that design.
+Missing or mismatched design artifacts stop execution. The runner gets one selected
+change and bounded turns; it leaves the reviewed change package active.
 
----
+After the agent finishes, the workflow restores the pinned toolchain and calls
+`scripts/ci_gate.py delivery` as a normal workflow step. It rechecks the original
+digest, executes the configured test command, requires a `VERIFIED` execution receipt
+with positive test counts, and checks full lifecycle readiness, including Judge PASS.
+No script-exists condition or agent decision can skip this step. An absent toolchain,
+no-op command, stale review, failed test, or changed design prevents publication.
 
-## 3. Configuration: `.agentflow.json`
+Only the next workflow step commits, pushes a fresh branch, and opens a **draft** PR.
+Git credentials are not persisted in the checkout during agent execution. The PR
+records the design SHA/digest and sponsor; its evidence describes the snapshot checked
+before the publishing commit. The template does not archive the package or merge the PR.
+Keep normal independent tests on the final PR commit as protected merge checks.
 
-Every repository or monorepo service can include a `.agentflow.json` at its root or service directory:
+**Ship Repair Proposal** delegates to exactly the same workflow and gates. It is
+manually dispatched against a reviewed repair package and creates a new draft PR.
+Automatic bot-triggered edits/pushes and the commit-message-based five-iteration loop
+have been removed; there is no implicit authorization or recurring feedback loop.
 
-```json
-{
-  "$schema": "https://raw.githubusercontent.com/shathwar/skills/main/skills/ship/references/agentflow.schema.json",
-  "version": 1,
-  "project": {
-    "name": "payment-gateway",
-    "scope": "services/payment"
-  },
-  "gates": {
-    "design": {
-      "adr_dir": "docs/adr",
-      "specs_dir": "openspec/specs"
-    },
-    "spike": {
-      "timeout": 60.0,
-      "concurrency": 1
-    },
-    "implementation": {
-      "test": "pytest -q tests/unit",
-      "typecheck": "mypy services/payment",
-      "lint": "ruff check ."
-    },
-    "simplify": {
-      "max_debt": 0,
-      "strict": true
-    },
-    "review": {
-      "base_branch": "main",
-      "reviewers": ["correctness", "concurrency", "design", "judge"],
-      "max_iterations": 3
-    },
-    "delivery": {
-      "target_branch": "main",
-      "clean_worktree": true,
-      "sync_specs": true,
-      "archive_packages": true
-    }
-  }
-}
+Evidence artifacts are retained on success or failure. They are diagnostic records,
+not a complete resumable checkout: they do not include Git checkpoint objects or
+unpublished source edits. Use a persistent isolated worktree or an organization-owned
+artifact mechanism when interruption recovery is required. Validate two-runner recovery,
+permission failures, artifact loss, and publication failures before enabling that use.
+
+## Local delivery and recovery
+
+Commands run from the consumer project; `SKILLS_DIR` is the absolute installed parent
+of `ship`. Copy-only installations support the same verification prerequisite:
+
+```bash
+python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --verify --tier execution --change <change>
+python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --status-check --change <change>
+python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --archive <change>
 ```
 
----
-
-## 4. Turnkey CI/CD Templates & Integration Contract
-
-To enable fast enterprise adoption, this repository includes example GitHub Actions workflows requiring host-specific configuration and validation, issue forms, and safety hooks in `templates/ci/`:
-
-```text
-templates/ci/
-├── github/
-│   ├── ISSUE_TEMPLATE/
-│   │   └── ship-story.yml          # Agent-parseable story specification form
-│   └── workflows/
-│       ├── ship-dev.yml            # Implementation agent with live checkbox telemetry
-│       ├── ship-review.yml         # Read-only principal review agent (invariants & security)
-│       └── ship-fix.yml            # Autonomous auto-fix loop with 5-iteration cap guardrail
-└── safety/
-    ├── block-destructive.sh        # PreToolUse destructive bash command blocker
-    ├── pre-tool-branch-guard.sh    # PreToolUse main branch edit blocker
-    └── settings.example.json       # Example configuration wiring safety hooks & deny rules
-```
-
-### The Autonomous Triad Pipeline
-
-1. **`ship-dev.yml` (Implementation & Telemetry)**:
-   - Triggers when an issue is assigned or labeled `ship:ready` (or `@ship` issue comment).
-   - **Real-Time Checkbox Telemetry**: Actively mutates task checkboxes (`- [ ]` to `- [x]`) in the GitHub Issue body via `gh issue edit` as requirements pass, offering live execution visibility without checking console logs.
-   - Enforces TDD Red-Green-Refactor cycles and verifies zero regressions.
-   - Executes `python3 skills/ship/scripts/inspect_lifecycle.py --status-check` before opening a PR referencing `Closes #<N>`.
-2. **`ship-review.yml` (Sandboxed Invariant Review)**:
-   - Triggers on PR open, reopen, or synchronization.
-   - Strictly sandboxed with read-only tools (`Read`, `Glob`, `Grep`, `git diff`, `git log`, `git show`). Code execution is prohibited.
-   - Evaluates diffs against `ARCHITECTURAL_INVARIANTS.md`, correctness, security handbooks, and test coverage.
-3. **`ship-fix.yml` (Feedback Loop with Iteration Cap)**:
-   - Triggers strictly on Bot review feedback (`user.type == 'Bot'`), ignoring humans to prevent unintended feedback loops.
-   - **Safety Iteration Limit (5/5)**: Inspects PR commits for headlines matching `[autofix N/5]`. If the iteration count reaches 5, the workflow posts an alert comment requiring human intervention and terminates cleanly, protecting token budgets.
-
-### Enterprise Integration Contract
-
-When integrating your organization's custom agent runner or CI infrastructure, adhere to the following contract:
-
-1. **Persist the design result.** Create an issue-specific branch and commit the ADR
-   and OpenSpec package. Publish its exact commit SHA. Persist the checkpoint receipt,
-   checkpoint Git objects/private refs, and `.agentflow/state.json` in access-controlled
-   storage. Ordinary branch pushes do not carry `refs/ship/*` or Git notes, and the
-   local ledger is ignored by Git. Do not post “specification ready” until all required
-   artifacts have been saved successfully.
-2. **Bind approval to that result.** Record the issue ID, change ID, branch, design
-   commit SHA, artifact/run ID, and approver identity. Verify the approver's current
-   repository permissions through the hosting API. A label alone must not approve
-   a later revision of the design or work from another issue.
-3. **Restore before implementation.** Check out the approved SHA on the issue's branch,
-   restore the matching ledger and checkpoint data, and verify that receipt commit
-   objects exist. Reject missing or mismatched state. Pass `--change <change-id>` to
-   lifecycle commands instead of relying on a fresh runner's active-change pointer.
-4. **Run the configured harness.** Install the pinned skill release and run design,
-   implementation, and review through your chosen agent runner. The inspector checks
-   state; it does not execute those agent stages. Persist failed/interrupted runs so
-   another runner can resume them without reconstructing approval from checkboxes.
-5. **Serialize delivery.** Use per-repository/per-branch CI concurrency controls in
-   addition to local ledger locking. Run `--status-check --change <change-id>`, archive
-   the change, persist the updated ledger, commit the final files, and publish evidence
-   with an explicit Git-notes fetch/merge/push policy. Validate the final delivery
-   snapshot before opening the PR; avoid force-overwriting another runner's notes.
-
-Use minimal job permissions, separate trusted approval handling from untrusted issue
-text, and keep human PR review enabled during the pilot. Validate a full run across
-**two separate runners**, including artifact loss, expired approval, an interrupted
-implementation, and evidence-publication failure, before enabling autonomous delivery.
-
----
-
-## 5. State Machine Automation Commands
-
-| Command | Purpose in CI/CD |
-|---|---|
-| `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --status-check` | Exits `0` if ready for delivery, `1` if blocked, `2` if rollback required. Use in CI branch protection. |
-| `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --checkpoint <gate>` | Records immutable internal git refs (`refs/ship/...`) and JSON receipts in `.agentflow/`. |
-| `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --rollback design` | Safely archives untracked/modified edits to `.agentflow/backups/` and resets `tasks.md` for revision. |
-| `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --archive <change>` | Syncs delta specs into `openspec/specs/` and archives completed change packages. |
-| `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --generate-trailers` | Emits RFC 5133 Git commit trailers mapping to `.agentflow.json` gates. |
-| `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --sync-state` | Re-synchronizes `.agentflow/state.json` authoritative ledger from workspace artifacts. |
-
+Stop after any failing command. Source changes after verification require fresh test
+and review evidence. See [supported runners](./team_rollout.md#verification-and-host-permissions).
 
 ## Recovery boundaries
 
-Rollback restores a whole checkout snapshot. Use one active change per checkout and
-separate Git worktrees for parallel changes. Rollback refuses a checkout containing
-other active ledger changes or OpenSpec packages, including with `--force`.
-A matching checkpoint receipt and valid snapshot/base commits are required. A
-checkpoint recorded before the first Git commit cannot restore files.
+A broken architectural invariant returns the agent to design **without changing the
+working tree**. Rollback is a separate, whole-checkout restoration operation; it cannot
+infer which post-checkpoint edits belong to the agent. The CLI and MCP refuse it by
+default. Inspect the checkpoint diff, untracked files, and any HEAD movement; preserve
+unrelated user work before authorizing `--rollback design --force --change <change>`
+(or MCP `force: true`). Agents must not add this flag merely to unblock themselves.
 
-Rollback copies affected files, including task progress, before restoring or deleting
-anything. Backups live in `.agentflow/rollback_<timestamp>/`, with new files also under
-`untracked_removed/`. Backup failures stop the operation. If a later Git operation
-fails, the command reports failure and the backup location; inspect that backup and
-Git status before retrying. The ledger is not advanced on a failed rollback.
+Use one active change per checkout and separate worktrees for parallel changes.
+Even with `--force`, competing active changes, missing checkpoint commits, or a
+mismatched receipt stop restoration. A checkpoint made before the first commit cannot
+restore files. Backups are written under `.agentflow/backups/rollback_<timestamp>/`
+before restoration. Backup failures stop the operation. A later Git failure reports
+the backup location and leaves the ledger unadvanced; inspect the working tree before
+retrying. Backup availability is not permission to remove unrelated edits.
 
-A corrupt or unsupported `.agentflow/state.json` stops state operations and is left
-unchanged. Restore a known-good copy. If none exists, explicitly move the damaged
-file to a recovery location before running `--sync-state`, then reconcile manual
-holds, test failures, and other records that workspace artifacts cannot reconstruct.
-Do not automate that move or treat inferred state as restored approval evidence.
-
-Evidence recording fails if its Git note cannot be saved; fix the Git write error
-and retry before considering the ledger updated. Checkpoint snapshot failures also
-return an error rather than substituting HEAD for uncommitted work.
-
+A corrupt or unsupported ledger stops operations and is preserved. Restore a known-good
+copy or explicitly reconcile it; never infer approval from completed task checkboxes.
 
 ### Archive restart recovery and path boundaries
 

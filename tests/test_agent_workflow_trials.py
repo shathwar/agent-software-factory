@@ -1,4 +1,4 @@
-"""End-to-end workflow trials verifying real agent behavior across operational boundaries."""
+"""Deterministic lifecycle integration trials; these do not execute an LLM agent."""
 
 import json
 from pathlib import Path
@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class AgentWorkflowTrialTests(unittest.TestCase):
-    """Realistic trials testing agent workflow adherence, state guards, and error boundaries."""
+    """Test lifecycle state guards and error boundaries with synthetic agent evidence."""
 
     def test_trial_1_existing_uncommitted_work(self):
         """Trial 1: Uncommitted work must block delivery until reviewed; subsequent edits invalidate review."""

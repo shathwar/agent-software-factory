@@ -173,6 +173,44 @@ def verify_review_grounding(review_report: Dict[str, Any], repo_root: Path) -> V
     )
 
 
+def runner_test_counts(output: str) -> Tuple[Optional[int], int]:
+    """Read completed-test counts from supported runners; unknown formats fail closed.
+
+    ponytail: summary parsing trusts the configured runner; add an adapter when a
+    supported team's runner differs. This is not authentication of process output.
+    """
+    output = re.sub(r"\x1b\[[0-9;]*m", "", output)
+    count = None
+    failures = 0
+    unit = re.findall(r"^Ran (\d+) tests? in [\d.]+s\s*$", output, re.M)
+    if unit:
+        failed = bool(re.search(r"^FAILED\b", output, re.M))
+        if not failed and len(re.findall(r"^OK(?: \([^\n]*\))?\s*$", output, re.M)) != len(unit):
+            return None, 0
+        skipped = sum(int(n) for n in re.findall(r"^OK \(skipped=(\d+)\)", output, re.M))
+        count = sum(map(int, unit)) - skipped
+        failures = int(failed)
+
+    # pytest terminal summaries, and Jest/Vitest's Tests (not Test Suites) line.
+    summaries = re.findall(
+        r"^=*[ \t]*((?:\d+ \w+[ ,]*)+) in [\d.]+s[^\n]*$|"
+        r"^[ \t]*Tests[: \t]+([^\n]+)$", output, re.M)
+    if summaries:
+        text = " ".join(a or b for a, b in summaries)
+        passed = sum(int(n) for n in re.findall(r"(\d+) passed\b", text))
+        failed = sum(int(n) for n in re.findall(r"(\d+) (?:failed|error|errors)\b", text))
+        count = (count or 0) + passed
+        failures += failed
+
+    # TAP / node:test summary: require both pass and fail counters.
+    passed = re.findall(r"^[#ℹ][ \t]+pass (\d+)[ \t]*$", output, re.M)
+    failed = re.findall(r"^[#ℹ][ \t]+fail (\d+)[ \t]*$", output, re.M)
+    if passed and failed:
+        count = (count or 0) + sum(map(int, passed))
+        failures += sum(map(int, failed))
+    return count, failures
+
+
 def execute_and_verify_tests(
     repo_root: Path,
     test_command: str,
@@ -238,19 +276,29 @@ def execute_and_verify_tests(
         )
 
     after_fingerprint = GitClient().compute_working_tree_fingerprint(repo_root)
-    passed = (exit_code == 0 and before_fingerprint == after_fingerprint)
+    tests_run, failed_count = runner_test_counts(stdout + "\n" + stderr)
+    passed = (exit_code == 0 and before_fingerprint == after_fingerprint
+              and tests_run is not None and tests_run > 0 and failed_count == 0)
     stdout_hash = hashlib.sha256(stdout.encode("utf-8")).hexdigest()
-    output_tail = stdout[-1000:] if len(stdout) > 1000 else stdout
+    output_tail = (stdout + "\n" + stderr)[-1000:]
 
     findings = []
-    if not passed:
+    if exit_code != 0:
         err_msg = f"Test execution failed with OS exit code {exit_code} (command: '{cmd}')."
         findings.append(err_msg)
         if stderr:
             stderr_snip = stderr[-400:].strip()
             findings.append(f"Stderr: {stderr_snip}")
-    else:
-        findings.append(f"Independent test run completed with exit code 0 in {duration:.2f}s.")
+    if before_fingerprint != after_fingerprint:
+        findings.append("Working tree changed during test execution; re-run on a stable snapshot.")
+    if tests_run is None:
+        findings.append("No supported test-runner summary found; cannot verify that tests executed.")
+    elif tests_run <= 0:
+        findings.append("No non-skipped tests executed; empty or entirely skipped suites cannot pass.")
+    elif failed_count:
+        findings.append("Runner summary reports test failures despite the command exit status.")
+    if passed:
+        findings.append(f"Independent test run executed {tests_run} test(s) with exit code 0 in {duration:.2f}s.")
 
     # Check for circular trust contradiction: did agent claim tests passed while engine failed?
     if claimed_evidence:
@@ -259,6 +307,8 @@ def execute_and_verify_tests(
             findings.append("CONTRADICTION DETECTED: Agent claimed tests passed, but independent execution failed.")
 
     verdict = "VERIFIED" if passed else "NOT_VERIFIED"
+    if exit_code == 0 and before_fingerprint == after_fingerprint and tests_run is None:
+        verdict = "INCONCLUSIVE"
     try:
         from .events import EventLogger
         from .models import EventType
@@ -290,6 +340,8 @@ def execute_and_verify_tests(
             "command": cmd,
             "snapshot_fingerprint": after_fingerprint,
             "exit_code": exit_code,
+            "tests_run": tests_run,
+            "failed_count": failed_count,
             "duration_seconds": round(duration, 3),
             "stdout_sha256": stdout_hash,
             "output_tail": output_tail,
@@ -366,11 +418,7 @@ def verify_spec_coverage(
     change: str,
     review_report: Optional[Dict[str, Any]] = None,
 ) -> VerificationRecord:
-    """Verify that OpenSpec requirements have corresponding tests and review coverage (Tier 5).
-
-    Inspired by SWE-bench gold-test and gatecheck threshold model:
-    Verifies that specifications are not merely ticked off without corresponding test code.
-    """
+    """Report the absence of automated requirement-to-test verification honestly."""
     now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     pkg_dir = repo_root / "openspec" / "changes" / change
     if not pkg_dir.exists() or not pkg_dir.is_dir():
@@ -378,56 +426,21 @@ def verify_spec_coverage(
             claim="Specifications and requirements are covered by tests and review",
             gate="delivery",
             tier=VerificationTier.COVERAGE.value,
-            verdict="VERIFIED",
+            verdict="SKIPPED",
             method="spec_coverage_cross_reference",
             findings=[f"No OpenSpec directory for change '{change}'; skipping spec check."],
             timestamp=now_iso,
         )
 
-    specs_dir = pkg_dir / "specs"
-    spec_files = list(specs_dir.glob("*.md")) if specs_dir.exists() else []
-    tasks_file = pkg_dir / "tasks.md"
-
-    if not spec_files and not tasks_file.exists():
-        return VerificationRecord(
-            claim="Specifications and requirements are covered by tests and review",
-            gate="delivery",
-            tier=VerificationTier.COVERAGE.value,
-            verdict="VERIFIED",
-            method="spec_coverage_cross_reference",
-            findings=["OpenSpec package contains no spec files or tasks."],
-            timestamp=now_iso,
-        )
-
-    # Check tests directory
-    tests_dir = repo_root / "tests"
-    test_files = list(tests_dir.rglob("test_*.py")) if tests_dir.exists() else []
-
-    findings = []
-    if spec_files and not test_files:
-        findings.append(f"Change '{change}' declares {len(spec_files)} spec(s) but no test files were found in tests/.")
-        return VerificationRecord(
-            claim="Specifications and requirements are covered by tests and review",
-            gate="delivery",
-            tier=VerificationTier.COVERAGE.value,
-            verdict="NOT_VERIFIED",
-            method="spec_coverage_cross_reference",
-            findings=findings,
-            score=0.0,
-            timestamp=now_iso,
-        )
-
-    findings.append(f"Found {len(spec_files)} spec file(s) and {len(test_files)} test file(s).")
     return VerificationRecord(
         claim="Specifications and requirements are covered by tests and review",
         gate="delivery",
         tier=VerificationTier.COVERAGE.value,
-        verdict="VERIFIED",
+        verdict="INCONCLUSIVE",
         method="spec_coverage_cross_reference",
-        findings=findings,
-        score=1.0,
+        findings=["Requirement-to-test mapping is not verified automatically. "
+                  "Review each acceptance criterion against executed tests; file presence is not coverage."],
         timestamp=now_iso,
-        metadata={"specs_count": len(spec_files), "test_files_count": len(test_files)},
     )
 
 
@@ -455,7 +468,7 @@ def run_gate_verification(
     """
     cfg = config or {}
     results: Dict[str, VerificationRecord] = {}
-    requested = set(tiers) if tiers else {"grounding", "execution", "coverage"}
+    requested = set(tiers) if tiers else {"grounding", "execution"}
 
     try:
         from .events import EventLogger

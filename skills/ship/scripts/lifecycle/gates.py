@@ -83,6 +83,11 @@ def validate_delivery_readiness(
         return ("review", "VERIFICATION_FAILED", "Independent execution verification is required. Run 'agentflow verify'.")
     fingerprint = git_info.get("working_tree_fingerprint")
     metadata = execution.get("metadata")
+    if (not isinstance(metadata, dict) or type(metadata.get("tests_run")) is not int
+            or metadata["tests_run"] <= 0 or type(metadata.get("exit_code")) is not int
+            or metadata["exit_code"] != 0 or type(metadata.get("failed_count")) is not int
+            or metadata["failed_count"] != 0):
+        return ("review", "VERIFICATION_FAILED", "Execution receipt lacks positive executed-test counts and zero failures. Re-run verification.")
     if fingerprint and (not isinstance(metadata, dict) or metadata.get("snapshot_fingerprint") != fingerprint):
         return ("review", "VERIFICATION_FAILED", "Independent execution verification is stale. Run 'agentflow verify' on the current working tree.")
 

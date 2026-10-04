@@ -1420,7 +1420,7 @@ class TestInspectLifecycle(unittest.TestCase):
             tasks_file.write_text("- [x] Task 1: Setup stripe\n- [x] Task 2: Webhooks\n")
 
             # Perform rollback to design
-            rb = inspect_lifecycle.perform_rollback(tmppath, "design", change="payment")
+            rb = inspect_lifecycle.perform_rollback(tmppath, "design", change="payment", force=True)
             self.assertEqual(rb["status"], "success")
             self.assertEqual(rb["target_gate"], "design")
             self.assertEqual(rb["reset_tasks_count"], 2)
@@ -1466,7 +1466,7 @@ class TestInspectLifecycle(unittest.TestCase):
             subprocess.run(["git", "commit", "-m", "Broken implementation"], cwd=tmppath, check=True)
 
             # Perform rollback to design
-            rb = inspect_lifecycle.perform_rollback(tmppath, "design", change="payment")
+            rb = inspect_lifecycle.perform_rollback(tmppath, "design", change="payment", force=True)
             self.assertEqual(rb["status"], "success")
             self.assertIn("service.py", rb["restored_files"])
             self.assertIn("extra.py", rb["removed_files"])
@@ -1570,7 +1570,7 @@ class TestInspectLifecycle(unittest.TestCase):
             new_impl_file.write_text("temp = 1\n")
 
             # 5. Perform rollback to design
-            rb = inspect_lifecycle.perform_rollback(tmppath, "design", change="payment")
+            rb = inspect_lifecycle.perform_rollback(tmppath, "design", change="payment", force=True)
             self.assertEqual(rb["status"], "success")
 
             # 6. Verify unrelated file reverted to CHECKPOINT content (not initial commit content!)
@@ -1605,7 +1605,7 @@ class TestInspectLifecycle(unittest.TestCase):
             service_file.write_text("def pay(): raise RuntimeError('broken')\n")
 
             # 4. Perform rollback
-            rb = inspect_lifecycle.perform_rollback(tmppath, "design", change="payment")
+            rb = inspect_lifecycle.perform_rollback(tmppath, "design", change="payment", force=True)
             self.assertEqual(rb["status"], "success")
 
             # 5. Verify tracked.cfg is NOT deleted!
@@ -1736,7 +1736,7 @@ class TestInspectLifecycle(unittest.TestCase):
             self.assertTrue((tmppath / "renamed.py").exists())
 
             # Perform rollback
-            rb = inspect_lifecycle.perform_rollback(tmppath, target_gate="implementation", change="feature")
+            rb = inspect_lifecycle.perform_rollback(tmppath, target_gate="implementation", change="feature", force=True)
             self.assertEqual(rb["status"], "success")
             self.assertIn("original.py", rb["restored_files"])
             self.assertIn("renamed.py", rb["removed_files"])
@@ -1810,7 +1810,7 @@ class TestInspectLifecycle(unittest.TestCase):
             (new_dir / "module.py").write_text("def helper(): return 42\n")
 
             # Perform rollback
-            rb = inspect_lifecycle.perform_rollback(tmppath, "design", change="data-safety")
+            rb = inspect_lifecycle.perform_rollback(tmppath, "design", change="data-safety", force=True)
             self.assertEqual(rb["status"], "success")
 
             # Verify working tree no longer has new files
@@ -2298,7 +2298,7 @@ class TestInspectLifecycle(unittest.TestCase):
                 })
             )
 
-            inspect_lifecycle.perform_rollback(tmppath, target_gate="implementation", change="auth")
+            inspect_lifecycle.perform_rollback(tmppath, target_gate="implementation", change="auth", force=True)
             ledger = inspect_lifecycle.load_ledger(tmppath, auto_sync=False)
             auth_entry = ledger["changes"]["auth"]
             self.assertEqual(auth_entry["phase"], "implementation")
@@ -2855,7 +2855,7 @@ class TestInspectLifecycle(unittest.TestCase):
             before = (root / ".agentflow/state.json").read_bytes()
             with patch("lifecycle.checkpoints.shutil.copy2", side_effect=OSError("disk full")):
                 with self.assertRaisesRegex(RuntimeError, "Rollback failed"):
-                    inspect_lifecycle.perform_rollback(root, "design", change="alpha")
+                    inspect_lifecycle.perform_rollback(root, "design", change="alpha", force=True)
             self.assertEqual((root / "alpha.py").read_text(), "alpha = 2\n")
             self.assertEqual((root / "new.py").read_text(), "precious new code\n")
             self.assertEqual((root / ".agentflow/state.json").read_bytes(), before)
@@ -2890,7 +2890,7 @@ class TestInspectLifecycle(unittest.TestCase):
             subprocess.run(["git", "commit", "-m", "filename"], cwd=root, check=True, capture_output=True)
             inspect_lifecycle.create_checkpoint(root, "design", change="alpha")
             (root / name).write_text("changed\n")
-            result = inspect_lifecycle.perform_rollback(root, "design", change="alpha")
+            result = inspect_lifecycle.perform_rollback(root, "design", change="alpha", force=True)
             self.assertEqual((root / name).read_text(), "original\n")
             self.assertEqual((root / result["backup_directory"] / name).read_text(), "changed\n")
 
@@ -3293,7 +3293,6 @@ class TestInspectLifecycle(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
 
 
 

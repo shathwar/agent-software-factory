@@ -46,11 +46,8 @@ During code review ([`review/SKILL.md`](../SKILL.md)), the orchestrator inspects
      - `severity`: `CRITICAL` (P0) or `HIGH` (P1)
      - `confidence`: 1.0 (CERTAIN)
      - `problem`: Cites the specific invariant ID (e.g. `INV-001`) and the contradictory code trigger.
-4. **Rollback Guard**:
-   - If an invariant is broken fundamentally, the Review Judge issues a `FAIL` report, halting delivery and triggering:
-     ```bash
-     python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --rollback design
-     ```
+4. **Replan Guard**:
+   - If an invariant is broken fundamentally, the Review Judge issues a `FAIL` report and halts delivery. Preserve all current edits and return to design. Whole-checkout rollback requires explicit operator authorization after inspecting affected files; never restore it automatically or add `--force` to unblock review.
 
 ---
 
@@ -102,5 +99,4 @@ Adapted from **Agent Guard (`docs/DESIGN.md`)**, every autonomous agent executio
    - Un-sponsored or un-attributable automated actions in production repositories are strictly prohibited and fail closed.
 3. **Responsibility Invariance**:
    - An autonomous agent can draft code, execute tests, and package commits, but authority and accountability remain invariant: the human sponsor is accountable for the correctness, architectural integrity, and production safety of the merged artifact.
-
 

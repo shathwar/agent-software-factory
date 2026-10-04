@@ -43,23 +43,27 @@ class TestWorkflowTemplates(unittest.TestCase):
         assert "jobs" in top_keys
 
         assert "name: Ship Dev Agent" in content
-        assert "issues:" in content
-        assert "issue_comment:" in content
+        assert "workflow_dispatch:" in content
+        assert "issue_comment:" not in content
         assert "ship-dev-" in content, "Must configure concurrency per issue"
-        assert "cancel-in-progress: true" in content
+        assert "cancel-in-progress: false" in content
 
         # Check permissions
         assert "contents: write" in content
-        assert "pull-requests: write"
-        assert "issues: write" in content
+        assert "pull-requests: write" in content
+        assert "issues: read" in content
 
         # Verify real-time checkbox telemetry, sponsor attribution, and lifecycle checks
-        assert "gh issue edit" in content, "Must feature real-time issue checkbox editing"
-        assert "gh issue view" in content, "Must read issue body for telemetry"
-        assert "inspect_lifecycle.py" in content, "Must invoke inspect_lifecycle.py"
+        assert '"$CI_GATE" prepare' in content
+        assert '"$CI_GATE" delivery' in content
+        assert 'SHIP_SKILLS_SHA' in content
+        assert 'environment: ship-approved' in content
+        assert content.index('"$CI_GATE" prepare') < content.index('name: Run Ship Agent Harness')
+        assert content.index('"$CI_GATE" delivery') < content.index('git commit -m')
+        assert '--body-file' in content
         assert "Closes #" in content, "Must reference issue closure"
         assert "Sponsored-By" in content, "Must embed human sponsor attribution (No Orphan Agents)"
-        assert "sponsor" in content, "Must pass sponsor actor context"
+        assert "APPROVER" in content, "Must pass authenticated actor context"
 
     def test_ship_review_workflow_structure(self):
         workflow_file = WORKFLOWS_DIR / "ship-review.yml"
@@ -92,15 +96,11 @@ class TestWorkflowTemplates(unittest.TestCase):
         assert "on" in top_keys
         assert "jobs" in top_keys
 
-        assert "name: Ship Auto-Fix" in content
-        assert "pull_request_review:" in content
-        assert "user.type == 'Bot'" in content, "Must filter strictly for bot reviews"
-
-        # Concurrency: cancel-in-progress must be false to avoid corrupting git commits
-        assert "cancel-in-progress: false" in content
-        assert "autofix" in content
-        assert "5/5" in content, "Must enforce 5-iteration cap"
-        assert "🛑" in content or "limit" in content
+        assert "workflow_dispatch:" in content
+        assert "pull_request_review:" not in content
+        assert "uses: ./.github/workflows/ship-dev.yml" in content
+        assert "repair: true" in content
+        assert "design_digest:" in content
 
 
 class TestIssueTemplate(unittest.TestCase):
@@ -320,4 +320,3 @@ class TestGovernanceInvariants(unittest.TestCase):
         assert "Deterministic Policy Ceiling" in content
         assert "Invariant Ceiling Rule" in content
         assert "Evidence Ceiling Rule" in content
-

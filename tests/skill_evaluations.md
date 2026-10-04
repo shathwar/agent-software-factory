@@ -27,7 +27,7 @@ For publication idempotency, a further stubbed case can return an uncertain post
 
 ## Realistic End-to-End Workflow Trials
 
-These trials evaluate full multi-step workflow transitions, boundary enforcement, and crash recovery across real repository lifecycles (automated in `tests/test_agent_workflow_trials.py`).
+These deterministic integration trials evaluate workflow transitions, boundary enforcement, and crash recovery in temporary repositories (`tests/test_agent_workflow_trials.py`). They call Python lifecycle APIs with synthetic agent evidence; they do not run an LLM or establish host/model instruction adherence. Execute the manual agent cases above separately before broad rollout.
 
 | Trial | Scenario & Boundary Condition | Expected Agent Workflow & Outcome |
 |---|---|---|
@@ -37,4 +37,3 @@ These trials evaluate full multi-step workflow transitions, boundary enforcement
 | Rejected & amended design | Requirements or tasks amended after initial design approval. | Rejection/amendment invalidates approval digest; lifecycle drops to `DESIGN_APPROVAL_REQUIRED`; blocks archive and delivery; stale digest rejected; explicit re-approval unblocks TDD. |
 | Failed tests block advancement | All tasks in `tasks.md` checked `[x]`, but test suite reports failure. | Enforces test-first invariant; refuses to advance to Review or Delivery; recommends Red-Green-Refactor; emits `Ship-Implementation: FAILED` and blocks archive until clean green evidence is recorded. |
 | External installation & consumer project | Skills installed via `scripts/install.sh --target <dir> --mode copy` and run in an independent external repository. | Runs cleanly with zero path or import errors; passes `doctor`; executes full lifecycle from design fingerprint through approval, TDD, review, status check, and archive. |
-

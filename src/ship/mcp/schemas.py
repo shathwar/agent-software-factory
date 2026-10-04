@@ -73,11 +73,12 @@ TOOLS_MANIFEST: List[Dict[str, Any]] = [
     },
     {
         "name": "ship_rollback",
-        "description": "Safely rollback workspace to a prior gate checkpoint, backing up uncommitted changes to .agentflow/backups/.",
+        "description": "Restore a whole checkout checkpoint only after explicit operator authorization, backing up affected files. Refuses by default.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "gate": {"type": "string", "description": "Gate checkpoint to restore ('design' or 'implementation')"},
+                "force": {"type": "boolean", "description": "True only after the operator authorizes whole-checkout restoration, including unrelated edits."},
                 "path": {"type": "string", "description": "Path to repository root (default: current working directory)"},
                 "change": {"type": "string", "description": "Target change ID"}
             },

@@ -147,7 +147,7 @@ class PackagingTests(unittest.TestCase):
             buf = io.StringIO()
             try:
                 sys.stdout = buf
-                ret = ship_cli_main(["rollback", "design", "--change", "feat-test", "--path", str(root)])
+                ret = ship_cli_main(["rollback", "design", "--change", "feat-test", "--path", str(root), "--force"])
             finally:
                 sys.stdout = old_stdout
             self.assertEqual(ret, 0)
@@ -192,7 +192,9 @@ class PackagingTests(unittest.TestCase):
                 ret = ship_cli_main(["verify", "feat-test", "--tier", "grounding", "--path", str(root)])
             finally:
                 sys.stdout = old_stdout
-            self.assertEqual(ret, 0)
+            # An unbound review is inconclusive, not a successful verification.
+            self.assertEqual(ret, 1)
+            self.assertIn("INCONCLUSIVE", buf.getvalue())
             self.assertIn("INDEPENDENT VERIFICATION SUMMARY", buf.getvalue())
 
             # 9. ship resume

@@ -162,9 +162,9 @@ class TestExecuteAndVerifyTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_passing_test_command(self):
+    def test_noop_command_is_inconclusive(self):
         rec = execute_and_verify_tests(self.root, "true")
-        self.assertEqual(rec.verdict, "VERIFIED")
+        self.assertEqual(rec.verdict, "INCONCLUSIVE")
         self.assertEqual(rec.gate, "implementation")
         self.assertEqual(rec.tier, "execution")
         self.assertEqual(rec.metadata["exit_code"], 0)
@@ -195,20 +195,20 @@ class TestSpecCoverage(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_no_specs_passes(self):
+    def test_no_specs_skips(self):
         rec = verify_spec_coverage(self.root, "test-change")
-        self.assertEqual(rec.verdict, "VERIFIED")
+        self.assertEqual(rec.verdict, "SKIPPED")
 
-    def test_specs_without_tests_fails(self):
+    def test_specs_without_mapping_are_inconclusive(self):
         specs_dir = self.root / "openspec" / "changes" / "feature-x" / "specs"
         specs_dir.mkdir(parents=True, exist_ok=True)
         (specs_dir / "auth.md").write_text("# Spec\nRequirements: R1, R2")
 
         rec = verify_spec_coverage(self.root, "feature-x")
-        self.assertEqual(rec.verdict, "NOT_VERIFIED")
-        self.assertIn("no test files were found", rec.findings[0])
+        self.assertEqual(rec.verdict, "INCONCLUSIVE")
+        self.assertIn("mapping is not verified", rec.findings[0])
 
-    def test_specs_with_tests_passes(self):
+    def test_specs_with_unrelated_tests_are_inconclusive(self):
         specs_dir = self.root / "openspec" / "changes" / "feature-x" / "specs"
         specs_dir.mkdir(parents=True, exist_ok=True)
         (specs_dir / "auth.md").write_text("# Spec")
@@ -218,7 +218,7 @@ class TestSpecCoverage(unittest.TestCase):
         (tests_dir / "test_auth.py").write_text("def test_ok(): pass")
 
         rec = verify_spec_coverage(self.root, "feature-x")
-        self.assertEqual(rec.verdict, "VERIFIED")
+        self.assertEqual(rec.verdict, "INCONCLUSIVE")
 
 
 class TestLedgerVerification(unittest.TestCase):

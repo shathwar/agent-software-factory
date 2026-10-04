@@ -81,7 +81,8 @@ class TestGitFailures(unittest.TestCase):
                 "pending_tasks": 0,
             },
             git_info=info,
-            active_change={"verification": {"execution": {"verdict": "VERIFIED", "metadata": {"snapshot_fingerprint": "clean_fp"}}}},
+            active_change={"verification": {"execution": {"verdict": "VERIFIED", "metadata": {
+                "snapshot_fingerprint": "clean_fp", "tests_run": 1, "exit_code": 0, "failed_count": 0}}}},
             repo_root=self.repo_root,
         )
         self.assertNotEqual(gate, "delivery")

@@ -58,6 +58,7 @@ Universal high-density engineering instructions for AI coding agents. Grounded i
 
 ## 6. Delivery Lifecycle (`ship`)
 - **Deterministic Gates**: Design (Spec & ADR) ➔ Implementation (TDD + Simplify) ➔ Review (Adversarial Code Review) ➔ Delivery.
-- **Git Checkpoints & Rollback**: Tag refs at `design` and `implementation`. Safe rollback to `design` if invariants break during review.
+- **Git Checkpoints & Recovery**: Record refs at `design` and `implementation`. Broken invariants return to design with edits preserved; whole-checkout rollback needs explicit operator authorization.
+- **Delivery Evidence**: Run installed `inspect_lifecycle.py --verify --tier execution --change <id>` before `--status-check`; require positive executed-test counts on the reviewed snapshot.
 - **Tri-Tier State**: Authoritative ledger `.agentflow/state.json`, deep commit evidence in Git notes (`refs/notes/ship-evidence`), RFC 5133 commit trailers (`Ship-Change`, `Ship-<Gate>`).
 - **Harness Independence & Turn Contracts**: Orchestrate specialist gates via explicit Turn Contracts as independent turns. Subagents are an optional optimization; sequential independent turns preserve identical state and governance.

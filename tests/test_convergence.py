@@ -207,7 +207,8 @@ class TestConvergenceControllerClosedLoop(unittest.TestCase):
             "change_id": "c-gate",
             "turns": [{"skill": "tdd"}],
             "blockers": [],
-            "verification": {"execution": {"verdict": "VERIFIED"}},
+            "verification": {"execution": {"verdict": "VERIFIED", "metadata": {
+                "tests_run": 1, "exit_code": 0, "failed_count": 0}}},
         }
         report = {
             "status": "complete",

@@ -207,6 +207,14 @@ class CheckpointManager:
         if competing:
             raise RuntimeError(f"Rollback requires one active change per checkout; use isolated worktrees. Other changes: {', '.join(sorted(competing))}")
 
+        if not force:
+            raise RuntimeError(
+                "Rollback requires explicit operator authorization (--force): it restores the whole "
+                "checkout, removes new files, resets task progress, and may move HEAD. "
+                f"Inspect 'git diff {snapshot}' and 'git ls-files --others --exclude-standard' "
+                "first, including unrelated user work. No rollback performed; preserve the tree and replan."
+            )
+
         backed_up_files: List[str] = []
         restored_files: List[str] = []
         removed_files: List[str] = []
@@ -348,4 +356,3 @@ class CheckpointManager:
     ) -> Dict[str, Any]:
         """Alias for perform_rollback supporting both parameter naming conventions."""
         return self.perform_rollback(repo_root, gate_name, change=change or change_id, force=force)
-
