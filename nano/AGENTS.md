@@ -62,3 +62,19 @@ Universal high-density engineering instructions for AI coding agents. Grounded i
 - **Delivery Evidence**: Run installed `inspect_lifecycle.py --verify --tier execution --change <id>` before `--status-check`; require positive executed-test counts on the reviewed snapshot.
 - **Tri-Tier State**: Authoritative ledger `.agentflow/state.json`, deep commit evidence in Git notes (`refs/notes/ship-evidence`), RFC 5133 commit trailers (`Ship-Change`, `Ship-<Gate>`).
 - **Harness Independence & Turn Contracts**: Orchestrate specialist gates via explicit Turn Contracts as independent turns. Subagents are an optional optimization; sequential independent turns preserve identical state and governance.
+
+---
+
+## 7. AI Evaluations (`evals`)
+- **Trace Observation**: Ground failure modes in observed production traces; zero brainstormed academic labels.
+- **Code-First Over Judges**: Enforce objective checks (schemas, regex, tool signatures) with deterministic code.
+- **Binary Judges**: Unambiguous Pass/Fail criteria with critique-first output; zero noisy 1–5 Likert scales.
+- **Statistical Calibration**: Isolate Train/Dev/Test splits (zero prompt leakage). Use TPR/TNR over raw accuracy; apply Rogan-Gladen correction for production prevalence.
+
+---
+
+## 8. Root-Cause Debugging (`debug`)
+- **Reproduction Mandate**: Zero production code edits before an automated test reproduces the failure (Red).
+- **Root Cause Over Symptom**: Trace bad state backward to origin; reject symptom masking (`if not x:`, `except: pass`).
+- **Anti-Cheat Audit**: Never weaken, delete, or skip existing assertions. Audit diffs with `verify_fix.py`.
+- **Circuit Breakers**: 2-strike rethink (form a new hypothesis); 3-strike circuit breaker (stop and report architectural flaw).

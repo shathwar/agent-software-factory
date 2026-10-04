@@ -58,6 +58,7 @@ This framework transforms AI from an unpredictable code generator into a **disci
 | **AI Dependency & Boilerplate Bloat** | [**`simplify`**](./skills/simplify/SKILL.md) enforces the *Laziness Ladder* (YAGNI, codebase reuse, stdlib built-ins, zero unrequested abstractions). Automated CI scanning via `scan_debt.py`. | **Leaner codebases, zero unneeded npm/pip dependencies, lower maintenance overhead.** |
 | **Reviewer Fatigue on AI PRs** | [**`review`**](./skills/review/SKILL.md) performs a 10-stage systems review (Correctness, Concurrency, Security, WebPerf, Failure, Craftsmanship) with an evidence-based Judge that rejects hallucinations. | **Senior/Staff engineers stop wasting hours catching basic race conditions, unindexed queries, and missing timeouts.** |
 | **Hollow, Backfilled Unit Tests** | [**`tdd`**](./skills/tdd/SKILL.md) enforces the *Iron Law of Test-First* and an in-flight **Doubt Cycle**. Agents are strictly forbidden from writing production code before proving a behavioral test fails. | **Real regression safety; tests verify observable behavior instead of mock configurations.** |
+| **Superficial Patching & Bug Regressions** | [**`debug`**](./skills/debug/SKILL.md) enforces the *Reproduction Mandate*, backward causation tracing, boundary logging, and anti-cheat diff auditing via `verify_fix.py`. | **Root-cause permanent fixes, zero weakened tests, automated reproduction proofs.** |
 | **Untracked AI & Stochastic Bugs** | [**`evals`**](./skills/evals/SKILL.md) enforces trace-grounded error discovery, zero-dependency annotation (`serve_review_app.py`), code-first assertions, binary LLM judges, and Rogan-Gladen calibration (`score_calibration.py`). | **Deterministic evaluation of stochastic outputs, calibrated LLM judges, zero reliance on noisy 1–5 scales.** |
 | **Vanishing Architectural Context** | [**`design`**](./skills/design/SKILL.md) enforces the *Facts vs. Decisions Law*, audits **Capability Closure**, and compiles an **ADR** and **OpenSpec package** directly into Git. | **Local decision and evidence records that teams can review alongside their existing controls.** |
 | **Multi-Agent Coordination & Crashes** | [**`ship`**](./skills/ship/SKILL.md) provides a **two-phase atomic transaction engine** (`.agentflow/archive-transaction.json`) and multi-change isolation (`--change <id>`) with automatic crash recovery. | **Recoverable archive operations and explicit change selection; parallel source editing still requires separate worktrees.** |
@@ -88,6 +89,7 @@ Teams can adopt skills incrementally without changing their entire workflow:
 | [**`spike`**](./skills/spike/SKILL.md) | `/spike`, `"spike"`, `"throwaway spike"` | Empirical Validation | Rapid disposable spikes with automated statistical benchmarking (`run_spike.py` p50/p90/p95/p99/max, RPS, RSS memory delta), ephemeral Docker sandboxes, and ADR bridge. |
 | [**`ship`**](./skills/ship/SKILL.md) | `/ship`, `"ship"`, `/lifecycle` | Full Lifecycle Orchestrator | **Pilot workflow**. Chains all 5 skills into an autonomous pipeline with 4 transition gates, git checkpoints, safe rollback, team profiles, preflight doctor, and working tree fingerprinting. |
 | [**`evals`**](./skills/evals/SKILL.md) | `/evals`, `"evals"`, `"error discovery"`, `"ai evals"` | AI Evaluation & Regression | Product-specific AI evaluation engine (Hamel Husain / Parlance Labs methodology). Trace-first error discovery, stdlib review app, code-first assertions, binary LLM judges, and Rogan-Gladen TPR/TNR calibration. |
+| [**`debug`**](./skills/debug/SKILL.md) | `/debug`, `"debug"`, `/fix`, `"fix"`, `"bugfix"` | Root-Cause Repair & Incident | Systematic debugging engine (borrowing best of `superpowers` & `debug-skill`): reproduction test first, backward data-flow tracing, multi-layer boundary logging, anti-cheat audit (`verify_fix.py`), and 3-strike circuit breaker. |
 
 ---
 
@@ -308,6 +310,22 @@ Give your agent the [evals SKILL.md](./skills/evals/SKILL.md) when evaluating AI
 
 ---
 
+## 8. `debug` (Systematic Root-Cause Debugging)
+
+Give your agent the [debug SKILL.md](./skills/debug/SKILL.md) when diagnosing crashes, broken tests, or regressions: `/debug "Fix test failure in payment_service"`.
+
+- **The Reproduction Mandate**: Zero production code edits before writing an isolated reproduction test that fails on current code for the reported reason.
+- **Backward Causation Tracing**: Trace data flow and state mutations backward from the crash site (Frame 0) to where state first diverged from invariants ([`root_cause_tracing.md`](./skills/debug/references/root_cause_tracing.md)).
+- **Multi-Component Boundary Logging**: Diagnostic instrumentation across system layers (CI, API, worker, DB) to isolate the failing boundary instead of guessing ([`multi_component_logging.md`](./skills/debug/references/multi_component_logging.md)).
+- **Root Cause Over Symptom**: Rejects symptom patching (bare `except: pass`, empty null guards, swallowed exceptions) that leaves corrupted state upstream ([`defensive_masking_antipatterns.md`](./skills/debug/references/defensive_masking_antipatterns.md)).
+- **Anti-Cheat Audit (`verify_fix.py`)**: Automated verification that repro tests exist, test assertions were not deleted or weakened (`@pytest.mark.skip`, `xit`), and all test runs pass.
+- **Two Strikes, Rethink**: If 2 hypotheses fail at the same location, the mental model is wrong. Stop patching, re-read code from scratch, and form a fundamentally new hypothesis.
+- **Three-Strike Circuit Breaker**: If 3 distinct fixes fail or reveal new breakage across other subsystems, stop. Surface to the human that the problem is architectural.
+- **Agent Roster**: [Root Cause Investigator](./skills/debug/agents/root_cause_investigator.md), [Reproduction Specialist](./skills/debug/agents/reproduction_specialist.md), and [Surgical Fixer](./skills/debug/agents/surgical_fixer.md).
+- **References**: [Root Cause Tracing](./skills/debug/references/root_cause_tracing.md), [Multi-Component Logging](./skills/debug/references/multi_component_logging.md), and [Defensive Masking Anti-Patterns](./skills/debug/references/defensive_masking_antipatterns.md).
+
+---
+
 ## Files
 
 ```text
@@ -318,14 +336,15 @@ Give your agent the [evals SKILL.md](./skills/evals/SKILL.md) when evaluating AI
 .github/
 └── copilot-instructions.md     # GitHub Copilot engineering instructions
 nano/                           # High-density, ultra-compact (<50 lines) rules for Cursor/Claude Code
-├── AGENTS.md                   # Universal drop-in rule file (<100 lines) combining all 7 skills
+├── AGENTS.md                   # Universal drop-in rule file (<100 lines) combining all 8 skills
 ├── review.nano.md
 ├── design.nano.md
 ├── ship.nano.md
 ├── simplify.nano.md
 ├── spike.nano.md
 ├── tdd.nano.md
-└── evals.nano.md
+├── evals.nano.md
+└── debug.nano.md
 
 scripts/
 ├── install.sh                  # Portable skill installer (symlink/copy to target environments)
@@ -426,24 +445,37 @@ skills/
 │       ├── review_pipeline.md
 │       ├── review_loop.md
 │       └── production_risk_matrix.md
-└── evals/
+├── evals/
+│   ├── SKILL.md
+│   ├── VERSION
+│   ├── agents/
+│   │   ├── eval_auditor.md
+│   │   ├── error_analyst.md
+│   │   ├── judge_engineer.md
+│   │   └── calibration_statistician.md
+│   ├── scripts/
+│   │   ├── serve_review_app.py
+│   │   ├── sample_traces.py
+│   │   └── score_calibration.py
+│   └── references/
+│       ├── taxonomy_framework.md
+│       ├── judge_rubric_templates.md
+│       ├── calibration_math.md
+│       ├── rag_metrics_handbook.md
+│       └── synthetic_data_generation.md
+└── debug/
     ├── SKILL.md
     ├── VERSION
     ├── agents/
-    │   ├── eval_auditor.md
-    │   ├── error_analyst.md
-    │   ├── judge_engineer.md
-    │   └── calibration_statistician.md
+    │   ├── root_cause_investigator.md
+    │   ├── reproduction_specialist.md
+    │   └── surgical_fixer.md
     ├── scripts/
-    │   ├── serve_review_app.py
-    │   ├── sample_traces.py
-    │   └── score_calibration.py
+    │   └── verify_fix.py
     └── references/
-        ├── taxonomy_framework.md
-        ├── judge_rubric_templates.md
-        ├── calibration_math.md
-        ├── rag_metrics_handbook.md
-        └── synthetic_data_generation.md
+        ├── root_cause_tracing.md
+        ├── multi_component_logging.md
+        └── defensive_masking_antipatterns.md
 ```
 
 ## Installation
@@ -597,6 +629,11 @@ python3 skills/evals/scripts/serve_review_app.py --samples samples.jsonl --port 
 Calibrate LLM judges against human labels and calculate Rogan-Gladen corrections:
 ```bash
 python3 skills/evals/scripts/score_calibration.py --input test_results.jsonl --p-obs 0.80
+```
+
+Audit a bugfix diff for reproduction tests, test weakening, and symptom masking:
+```bash
+python3 skills/debug/scripts/verify_fix.py --strict --test-cmd "pytest"
 ```
 
 ---
