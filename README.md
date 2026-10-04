@@ -58,6 +58,7 @@ This framework transforms AI from an unpredictable code generator into a **disci
 | **AI Dependency & Boilerplate Bloat** | [**`simplify`**](./skills/simplify/SKILL.md) enforces the *Laziness Ladder* (YAGNI, codebase reuse, stdlib built-ins, zero unrequested abstractions). Automated CI scanning via `scan_debt.py`. | **Leaner codebases, zero unneeded npm/pip dependencies, lower maintenance overhead.** |
 | **Reviewer Fatigue on AI PRs** | [**`review`**](./skills/review/SKILL.md) performs a 10-stage systems review (Correctness, Concurrency, Security, WebPerf, Failure, Craftsmanship) with an evidence-based Judge that rejects hallucinations. | **Senior/Staff engineers stop wasting hours catching basic race conditions, unindexed queries, and missing timeouts.** |
 | **Hollow, Backfilled Unit Tests** | [**`tdd`**](./skills/tdd/SKILL.md) enforces the *Iron Law of Test-First* and an in-flight **Doubt Cycle**. Agents are strictly forbidden from writing production code before proving a behavioral test fails. | **Real regression safety; tests verify observable behavior instead of mock configurations.** |
+| **Untracked AI & Stochastic Bugs** | [**`evals`**](./skills/evals/SKILL.md) enforces trace-grounded error discovery, zero-dependency annotation (`serve_review_app.py`), code-first assertions, binary LLM judges, and Rogan-Gladen calibration (`score_calibration.py`). | **Deterministic evaluation of stochastic outputs, calibrated LLM judges, zero reliance on noisy 1–5 scales.** |
 | **Vanishing Architectural Context** | [**`design`**](./skills/design/SKILL.md) enforces the *Facts vs. Decisions Law*, audits **Capability Closure**, and compiles an **ADR** and **OpenSpec package** directly into Git. | **Local decision and evidence records that teams can review alongside their existing controls.** |
 | **Multi-Agent Coordination & Crashes** | [**`ship`**](./skills/ship/SKILL.md) provides a **two-phase atomic transaction engine** (`.agentflow/archive-transaction.json`) and multi-change isolation (`--change <id>`) with automatic crash recovery. | **Recoverable archive operations and explicit change selection; parallel source editing still requires separate worktrees.** |
 | **Security & Compliance Hurdles** | Local policy checks, scoped capabilities, audit records, and guarded MCP actions. | **Useful control points for a pilot. Not an OS sandbox, identity system, or compliance certification. Your host still controls permissions, secrets, and network access.** |
@@ -86,6 +87,7 @@ Teams can adopt skills incrementally without changing their entire workflow:
 | [**`design`**](./skills/design/SKILL.md) | `/design`, `"design"`, `"grill me on this design"` | Pre-implementation | Relentlessly stress-tests architectures using frontier rounds, enforces **Capability Closure** ([`capability_closure.md`](./skills/design/references/capability_closure.md)), detects ungrillable questions, and compiles an ADR & OpenSpec. |
 | [**`spike`**](./skills/spike/SKILL.md) | `/spike`, `"spike"`, `"throwaway spike"` | Empirical Validation | Rapid disposable spikes with automated statistical benchmarking (`run_spike.py` p50/p90/p95/p99/max, RPS, RSS memory delta), ephemeral Docker sandboxes, and ADR bridge. |
 | [**`ship`**](./skills/ship/SKILL.md) | `/ship`, `"ship"`, `/lifecycle` | Full Lifecycle Orchestrator | **Pilot workflow**. Chains all 5 skills into an autonomous pipeline with 4 transition gates, git checkpoints, safe rollback, team profiles, preflight doctor, and working tree fingerprinting. |
+| [**`evals`**](./skills/evals/SKILL.md) | `/evals`, `"evals"`, `"error discovery"`, `"ai evals"` | AI Evaluation & Regression | Product-specific AI evaluation engine (Hamel Husain / Parlance Labs methodology). Trace-first error discovery, stdlib review app, code-first assertions, binary LLM judges, and Rogan-Gladen TPR/TNR calibration. |
 
 ---
 
@@ -287,6 +289,25 @@ All feedback uses plain, human language, including PR comments: what breaks, why
 - **Autonomous vs. Human Decision Separation**: Findings marked `autonomous` are fixed by the Code Fixer in the bounded review loop. Findings marked `requires-human` surface concrete trade-offs formatted as Frontier Clarifications (`❓ Q1` + `➡️ Recommended Stance`).
 - **Delivery Evidence Envelope**: For lifecycle delivery, bundles the Judge PASS report, verified test runner metrics (command, exit code `0`, duration, test count, zero failures), and SHA-256 working tree fingerprint into [`.agentflow/reviews/delivery_evidence.json`](./skills/review/references/finding_schema.md#6-delivery-evidence-envelope-agentflowreviewsdelivery_evidencejson).
 
+---
+
+## 7. `evals` (Product-Specific AI Evals)
+
+Give your agent the [evals SKILL.md](./skills/evals/SKILL.md) when evaluating AI, LLM, or agent features: `/evals "help me analyze traces.jsonl"`.
+
+- **Observation Over Brainstorming**: Ground evals in real traces. No generic academic tags ("hallucination score", "toxicity"); define concrete, application-specific failure modes.
+- **Zero-Dependency Trace Reviewer (`serve_review_app.py`)**: Local stdlib Python server hosting an interactive single-page app. Inspects full traces (inputs, intermediate turns, tool calls, outputs) with role-colored formatting and margin notes.
+- **Diverse Trace Sampling (`sample_traces.py`)**: Stratifies traces by length, tool calls, and error flags combined with random sampling to uncover unexpected edge cases without sampling bias.
+- **Code-First Before Judges**: Enforce objective criteria (JSON schemas, regex, tool signatures, execution outputs) with deterministic Python code. Reserve LLM judges strictly for subjective semantic criteria.
+- **Strictly Binary Judges**: Unambiguous Pass/Fail rubrics with mandatory critique-first structured JSON output. Zero noisy 1–5 Likert scales.
+- **Statistical Calibration (`score_calibration.py`)**: Strict Train (15%), Dev (45%), and Test (40%) split isolation with zero prompt leakage. Evaluates True Positive Rate (TPR) and True Negative Rate (TNR), rejecting raw accuracy on imbalanced datasets.
+- **Rogan-Gladen Bias Correction**: Calculates unbiased true production success rates $\hat{\theta} = \frac{p_{\text{obs}} + \text{TNR} - 1}{\text{TPR} + \text{TNR} - 1}$ and bootstrap 95% confidence intervals from held-out test calibration.
+- **RAG & Synthetic Bootstrapping**: Decomposed retrieval (Hit@K, MRR, Context Relevance) and generation (Faithfulness, Answer Relevance) metrics, alongside dimension-tuple combinatorial test generation.
+- **Agent Roster**: [Error Analyst](./skills/evals/agents/error_analyst.md), [Eval Auditor](./skills/evals/agents/eval_auditor.md), [Judge Engineer](./skills/evals/agents/judge_engineer.md), and [Calibration Statistician](./skills/evals/agents/calibration_statistician.md).
+- **References**: [Taxonomy Framework](./skills/evals/references/taxonomy_framework.md), [Judge Rubric Templates](./skills/evals/references/judge_rubric_templates.md), [Calibration Math](./skills/evals/references/calibration_math.md), [RAG Metrics Handbook](./skills/evals/references/rag_metrics_handbook.md), and [Synthetic Data Generation](./skills/evals/references/synthetic_data_generation.md).
+
+---
+
 ## Files
 
 ```text
@@ -297,13 +318,14 @@ All feedback uses plain, human language, including PR comments: what breaks, why
 .github/
 └── copilot-instructions.md     # GitHub Copilot engineering instructions
 nano/                           # High-density, ultra-compact (<50 lines) rules for Cursor/Claude Code
-├── AGENTS.md                   # Universal drop-in rule file (<100 lines) combining all 6 skills
+├── AGENTS.md                   # Universal drop-in rule file (<100 lines) combining all 7 skills
 ├── review.nano.md
 ├── design.nano.md
 ├── ship.nano.md
 ├── simplify.nano.md
 ├── spike.nano.md
-└── tdd.nano.md
+├── tdd.nano.md
+└── evals.nano.md
 
 scripts/
 ├── install.sh                  # Portable skill installer (symlink/copy to target environments)
@@ -379,31 +401,49 @@ skills/
 │   └── references/
 │       ├── laziness_ladder.md
 │       └── debt_tracking.md
-└── review/
+├── review/
+│   ├── SKILL.md
+│   ├── VERSION
+│   ├── agents/
+│   │   ├── correctness_reviewer.md
+│   │   ├── concurrency_reviewer.md
+│   │   ├── design_reviewer.md
+│   │   ├── review_judge.md
+│   │   └── code_fixer.md
+│   ├── scripts/
+│   │   ├── inspect_changes.sh
+│   │   └── validate_report.py
+│   └── references/
+│       ├── review_modes.md
+│       ├── finding_schema.md
+│       ├── agent_report.schema.json
+│       ├── handbook_foundations.md
+│       ├── handbook_craftsmanship.md
+│       ├── handbook_architecture.md
+│       ├── handbook_security.md
+│       ├── handbook_webperf.md
+│       ├── architectural_invariants.md
+│       ├── review_pipeline.md
+│       ├── review_loop.md
+│       └── production_risk_matrix.md
+└── evals/
     ├── SKILL.md
     ├── VERSION
     ├── agents/
-    │   ├── correctness_reviewer.md
-    │   ├── concurrency_reviewer.md
-    │   ├── design_reviewer.md
-    │   ├── review_judge.md
-    │   └── code_fixer.md
+    │   ├── eval_auditor.md
+    │   ├── error_analyst.md
+    │   ├── judge_engineer.md
+    │   └── calibration_statistician.md
     ├── scripts/
-    │   ├── inspect_changes.sh
-    │   └── validate_report.py
+    │   ├── serve_review_app.py
+    │   ├── sample_traces.py
+    │   └── score_calibration.py
     └── references/
-        ├── review_modes.md
-        ├── finding_schema.md
-        ├── agent_report.schema.json
-        ├── handbook_foundations.md
-        ├── handbook_craftsmanship.md
-        ├── handbook_architecture.md
-        ├── handbook_security.md
-        ├── handbook_webperf.md
-        ├── architectural_invariants.md
-        ├── review_pipeline.md
-        ├── review_loop.md
-        └── production_risk_matrix.md
+        ├── taxonomy_framework.md
+        ├── judge_rubric_templates.md
+        ├── calibration_math.md
+        ├── rag_metrics_handbook.md
+        └── synthetic_data_generation.md
 ```
 
 ## Installation
@@ -542,6 +582,21 @@ the operating system, a secret store, a cloud account, or a remote API.
 Benchmark an empirical spike with warmup passes and latency percentiles (p50/p90/p95/p99):
 ```bash
 python3 skills/spike/scripts/run_spike.py --cmd "python3 -c 'pass'" --iterations 100
+```
+
+Sample diverse and stratified traces for error discovery:
+```bash
+python3 skills/evals/scripts/sample_traces.py --input traces.jsonl --count 30 --output samples.jsonl
+```
+
+Launch the local zero-dependency trace review app:
+```bash
+python3 skills/evals/scripts/serve_review_app.py --samples samples.jsonl --port 8000
+```
+
+Calibrate LLM judges against human labels and calculate Rogan-Gladen corrections:
+```bash
+python3 skills/evals/scripts/score_calibration.py --input test_results.jsonl --p-obs 0.80
 ```
 
 ---

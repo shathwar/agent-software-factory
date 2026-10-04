@@ -16,6 +16,7 @@ EXPECTED_FILES = [
     "design.nano.md",
     "spike.nano.md",
     "ship.nano.md",
+    "evals.nano.md",
 ]
 
 

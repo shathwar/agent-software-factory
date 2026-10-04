@@ -122,6 +122,10 @@ Iterate sequentially through `openspec/changes/<change>/tasks.md`:
 5. Attach Git Notes & Commit Trailers:
    - Deep validation evidence (review reports, test logs) is attached to the commit object via Git notes (`refs/notes/ship-evidence`).
    - Format standard RFC 5133 commit trailers using `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --generate-trailers --change <change>` (`Ship-Change: <change>`, `Ship-<GateName>: <status>`).
+6. **Always report task cost in the final Ship Walkthrough**: after the last usage-affecting action, run `agentflow budget show --path <project> --change <change>` (or the installed equivalent) and include the recorded totals exactly as:
+   - `Tokens: <count>`
+   - `Cost: $<amount> USD`
+   Use the ledger's totals, not estimates; if either metric was not recorded, say `not recorded` instead of inferring or fabricating a value. This cost summary is required for successful, failed, cancelled, and blocked Ship tasks whenever a change ledger exists.
 
 ---
 

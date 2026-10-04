@@ -35,6 +35,7 @@ Granular rules for modular injection into specific agent sub-prompts or focused 
 | [`simplify.nano.md`](./simplify.nano.md) | Anti-Bloat | Laziness Ladder, YAGNI, deep modules, explicit `simplify:` debt ceilings. |
 | [`review.nano.md`](./review.nano.md) | Code Review | Evidence-based judge (reject hallucinations), 10-stage review hierarchy. |
 | [`ship.nano.md`](./ship.nano.md) | Delivery SDLC | Deterministic phase gates, git tag checkpoints, tri-tier state ledger. |
+| [`evals.nano.md`](./evals.nano.md) | AI Evals | Trace-first error discovery, code-first assertions, binary judges, Rogan-Gladen calibration. |
 
 ---
 

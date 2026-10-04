@@ -39,7 +39,7 @@ skills/<skill-name>/
 
 ---
 
-## The 6 Production Skills
+## The 7 Production Skills
 
 | Skill | Directory | Triggers | Primary Agents | Specialist Script |
 |---|---|---|---|---|
@@ -49,6 +49,7 @@ skills/<skill-name>/
 | **Simplify** | [`simplify/`](./simplify/) | `/simplify`, `simplify`, `yagni`, `do less` | `simplify_implementer` | `scripts/scan_debt.py` |
 | **Review** | [`review/`](./review/) | `/review`, `review`, `code review`, `diff review` | `review_judge`, `correctness_reviewer`, `code_fixer`, etc. | `scripts/validate_report.py` |
 | **Ship** | [`ship/`](./ship/) | `/ship`, `ship`, `lifecycle`, `full lifecycle` | `lifecycle_orchestrator` | `scripts/lifecycle/*.py` |
+| **Evals** | [`evals/`](./evals/) | `/evals`, `evals`, `eval`, `ai evals`, `error discovery` | `error_analyst`, `eval_auditor`, `judge_engineer`, `calibration_statistician` | `scripts/score_calibration.py` |
 
 ---
 
@@ -62,7 +63,7 @@ Agent platforms discover skills through standard directory conventions:
 
 To link all skills globally:
 ```bash
-for skill in design spike tdd simplify review ship; do
+for skill in design spike tdd simplify review ship evals; do
   ln -sfn "$(pwd)/skills/$skill" "$HOME/.gemini/config/skills/$skill"
 done
 ```
@@ -72,7 +73,7 @@ done
 - **Workspace Local**: `<workspace-root>/.claude/skills/<skill-name>/`
 
 ```bash
-for skill in design spike tdd simplify review ship; do
+for skill in design spike tdd simplify review ship evals; do
   ln -sfn "$(pwd)/skills/$skill" "$HOME/.claude/skills/$skill"
 done
 ```
