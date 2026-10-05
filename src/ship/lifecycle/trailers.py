@@ -145,7 +145,7 @@ class CommitTrailerGenerator:
             trailers.append("Ship-Review: PENDING")
 
         # 6. Gate: Delivery uses the same decision as inspection and archive.
-        decision = validate_delivery_readiness(review_ev, package, git_info, change_entry, design_error=design_error, spikes=inspect_spikes(repo_root), verification_config=config)
+        decision = validate_delivery_readiness(review_ev, package, git_info, change_entry, design_error=design_error, spikes=inspect_spikes(repo_root), repo_root=repo_root, verification_config=config)
         trailers.append("Ship-Delivery: " + ("READY" if decision[1] == "DELIVERY_READY" else "BLOCKED"))
 
         return trailers

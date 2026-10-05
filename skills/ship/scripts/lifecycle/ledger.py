@@ -349,6 +349,7 @@ class FileLedgerStore:
                     entry["evidence"]["review"]["status"] = review.get("status")
                     entry["evidence"]["review"]["reviewer"] = review.get("reviewer")
                     entry["evidence"]["review"]["findings_count"] = review.get("findings_count", 0)
+                    entry["evidence"]["review"]["findings"] = review.get("findings", [])
                     entry["evidence"]["review"]["critical_or_high_count"] = review.get("critical_or_high_count", 0)
                     entry["evidence"]["review"]["test_evidence_passed"] = review.get("test_evidence_passed")
                     entry["evidence"]["review"]["report_path"] = review.get("path") or review.get("report_file")
@@ -408,7 +409,7 @@ class FileLedgerStore:
                 from .gates import determine_lifecycle_state
                 entry["phase"] = determine_lifecycle_state(
                     GitClient().get_info(repo_root), adrs, [matched_pkg] if matched_pkg else [],
-                    spikes, review_ev, active_change=entry,
+                    spikes, review_ev, active_change=entry, repo_root=repo_root,
                 )[0]
 
                 new_entry_snapshot = json.dumps({
@@ -535,6 +536,7 @@ class FileLedgerStore:
             ev["status"] = report.get("status")
             ev["reviewer"] = report.get("reviewer")
             ev["findings_count"] = report.get("findings_count", 0)
+            ev["findings"] = report.get("findings", [])
             ev["critical_or_high_count"] = report.get("critical_or_high_count", 0)
             ev["test_evidence_passed"] = report.get("test_evidence_passed")
             ev["report_path"] = report.get("path") or report.get("report_file")
@@ -574,7 +576,7 @@ class FileLedgerStore:
             from .paths import resolve_change_path
             packages = OpenSpecRepository().inspect_openspec(repo_root, target_change=cid) if resolve_change_path(repo_root, cid).is_dir() else []
             package = packages[0] if packages else {"change": cid, "has_tasks": False, "total_tasks": 0}
-            entry["phase"] = validate_delivery_readiness(ev, package, git_info, entry, design_error=design_error, spikes=inspect_spikes(repo_root), verification_config=ShipConfigManager.load(repo_root))[0]
+            entry["phase"] = validate_delivery_readiness(ev, package, git_info, entry, design_error=design_error, spikes=inspect_spikes(repo_root), repo_root=repo_root, verification_config=ShipConfigManager.load(repo_root))[0]
 
             turns = entry.setdefault("turns", [])
             turn_idx = len(turns) + 1
@@ -879,4 +881,3 @@ record_turn_to_ledger = FileLedgerStore.record_turn
 resume_change_in_ledger = FileLedgerStore.resume_change
 get_turns_from_ledger = FileLedgerStore.get_turns
 sync_ledger_from_workspace = FileLedgerStore.sync_from_workspace
-

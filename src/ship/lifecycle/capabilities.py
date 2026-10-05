@@ -26,6 +26,7 @@ from .models import (
     Capability,
     CapabilityOperation,
     ExecutionRing,
+    LeaseStatus,
     TaskLease,
 )
 from .ledger import FileLedgerStore
@@ -698,7 +699,7 @@ class CapabilityManager:
                     timestamp=now_iso,
                 ))
 
-            if _is_expired(lease.expires_at, now_dt):
+            if lease.status not in (LeaseStatus.ACTIVE.value, LeaseStatus.ACQUIRED.value, LeaseStatus.RENEWED.value) or _is_expired(lease.expires_at, now_dt):
                 return _record_decision(AccessDecision(
                     allowed=False,
                     reason=f"Task lease for task '{task_id}' expired at {lease.expires_at}",

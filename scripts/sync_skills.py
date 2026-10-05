@@ -24,6 +24,7 @@ TOOL_MODULES = {
     "tdd": ("src/ship/tools/tdd.py", "skills/tdd/scripts/verify_tdd.py"),
     "review": ("src/ship/tools/review.py", "skills/review/scripts/validate_report.py"),
     "spike": ("src/ship/tools/spike.py", "skills/spike/scripts/run_spike.py"),
+    "ux": ("src/ship/tools/ux.py", "skills/ux/scripts/audit_ux.py"),
 }
 
 

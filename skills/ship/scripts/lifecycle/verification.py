@@ -78,7 +78,7 @@ def verify_finding_grounding(finding: Dict[str, Any], repo_root: Path) -> Tuple[
     norm_window = normalize_ws(window_text)
 
     # 1. Direct or normalized match in specified line window
-    if norm_evidence in norm_window or norm_window in norm_evidence:
+    if norm_evidence in norm_window:
         return True, f"Evidence grounded at {file_rel}:{line_str}"
 
     # 2. Window with context slack (+/- 10 lines to tolerate minor drift)
@@ -89,11 +89,6 @@ def verify_finding_grounding(finding: Dict[str, Any], repo_root: Path) -> Tuple[
 
     if norm_evidence in norm_slack:
         return True, f"Evidence grounded near {file_rel}:{line_str} (tolerated minor line offset)"
-
-    # 3. Check if first non-trivial line of evidence is anywhere near the window
-    ev_first_line = next((line.strip() for line in evidence.splitlines() if line.strip()), "")
-    if ev_first_line and ev_first_line in slack_window:
-        return True, f"Evidence partially grounded at {file_rel}:{line_str}"
 
     return False, f"Evidence quote not found in '{file_rel}' at or near lines {line_str}"
 

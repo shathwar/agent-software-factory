@@ -90,6 +90,7 @@ Teams can adopt skills incrementally without changing their entire workflow:
 | [**`ship`**](./skills/ship/SKILL.md) | `/ship`, `"ship"`, `/lifecycle` | Full Lifecycle Orchestrator | **Pilot workflow**. Chains all 5 skills into an autonomous pipeline with 4 transition gates, git checkpoints, safe rollback, team profiles, preflight doctor, and working tree fingerprinting. |
 | [**`evals`**](./skills/evals/SKILL.md) | `/evals`, `"evals"`, `"error discovery"`, `"ai evals"` | AI Evaluation & Regression | Product-specific AI evaluation engine (Hamel Husain / Parlance Labs methodology). Trace-first error discovery, stdlib review app, code-first assertions, binary LLM judges, and Rogan-Gladen TPR/TNR calibration. |
 | [**`debug`**](./skills/debug/SKILL.md) | `/debug`, `"debug"`, `/fix`, `"fix"`, `"bugfix"` | Root-Cause Repair & Incident | Systematic debugging engine (borrowing best of `superpowers` & `debug-skill`): reproduction test first, backward data-flow tracing, multi-layer boundary logging, anti-cheat audit (`verify_fix.py`), and 3-strike circuit breaker. |
+| [**`ux`**](./skills/ux/SKILL.md) | `/ux`, `"ux"`, `"ui"`, `"a11y"`, `"design system"` | Product & Interface Engineering | 3-phase frontend lifecycle (Flow Grilling ➔ UX Design ➔ Component Gen) with interactive checkpoints or `--autopilot` non-interactive mode. Enforces strict safety boundaries: read-only analysis (`flow`, `audit`, `a11y`), spec generation (`spec`), and code mutation (`component`). Automated linting via `audit_ux.py`. |
 
 ---
 
@@ -326,6 +327,30 @@ Give your agent the [debug SKILL.md](./skills/debug/SKILL.md) when diagnosing cr
 
 ---
 
+## 9. `ux` (Product UX & Interface Engineering)
+
+> **The Prime Directive — UX Is Not Visual Styling**: The agent must first establish user intent, flow, system states, accessibility, error recovery, and interaction behavior; visual implementation comes afterward. Guards against treating UX as cosmetic styling or "making the page prettier".
+
+Give your agent the [ux SKILL.md](./skills/ux/SKILL.md) when designing, refactoring, or generating frontend user experiences: `/ux "Build Team Invite Modal"`.
+
+- **Three Operating Modes**:
+  1. `/ux <feature>` ➔ **Full Gated Pipeline**: Complete lifecycle (Flow Grilling ➔ UX Spec & State Matrix ➔ Component Generation ➔ Option C Verification) with interactive checkpoints.
+  2. `/ux audit` ➔ **Analysis Only**: Read-only inspection (Nielsen heuristics, cognitive friction, WCAG a11y via `audit_ux.py`); **zero file writes**.
+  3. `/ux component` ➔ **Targeted Generation**: Directly synthesizes or refactors accessible frontend code against existing design tokens.
+- **Headless CI & IDE Autopilot (`--autopilot`)**: Appending `--autopilot` (e.g. `/ux <feature> --autopilot`) removes interactive checkpoints and runs all gates continuously to emit terminal verification receipts.
+- **Design Token Hierarchy & Detection Protocol**: Never assumes Tailwind defaults are the project's design system:
+  1. Detect existing design system/tokens (CSS custom properties, theme configs, component library tokens).
+  2. Reuse existing tokens first.
+  3. Detect framework and styling system from codebase and configs.
+  4. Follow existing project conventions.
+  5. If no token system exists: use a coherent Tailwind scale if Tailwind is configured; otherwise establish CSS custom properties.
+- **State Completeness Law**: Mandates that every component defines all applicable states for its interaction model: Views/Organisms (Empty, Loading, Populated, Partial/Stale, Error/Recovery, Unavailable/Forbidden), Controls/Atoms (Default, Hover, Focus-visible, Pressed/Active, Disabled, Busy/Loading), plus compound states (Selected, Checked, Expanded, Invalid, Read-only) when applicable.
+- **WCAG 2.1/2.2 AA Compliance**: 4.5:1 text contrast, complete keyboard tab flow, focus trapping in modal dialogs, and mandatory labels for icon-only buttons.
+- **Evidence & Executable Verification (Option C)**: Rejects purely advisory guidance (Option A). Every finding or recommendation must produce a structured evidence record (rule/heuristic, affected component, severity, recommended fix, verification method) AND execute verification via `audit_ux.py --fail-on error`, pasting terminal receipts.
+- **References**: [Usability Heuristics & Friction Rubric](./skills/ux/references/heuristics_rubric.md), [State Completeness & Interaction Models](./skills/ux/references/state_matrix.md), and [WCAG AA Developer Reference](./skills/ux/references/accessibility_wcag.md).
+
+---
+
 ## Files
 
 ```text
@@ -336,7 +361,7 @@ Give your agent the [debug SKILL.md](./skills/debug/SKILL.md) when diagnosing cr
 .github/
 └── copilot-instructions.md     # GitHub Copilot engineering instructions
 nano/                           # High-density, ultra-compact (<50 lines) rules for Cursor/Claude Code
-├── AGENTS.md                   # Universal drop-in rule file (<100 lines) combining all 8 skills
+├── AGENTS.md                   # Universal drop-in rule file (<100 lines) combining all 9 skills
 ├── review.nano.md
 ├── design.nano.md
 ├── ship.nano.md
@@ -344,7 +369,8 @@ nano/                           # High-density, ultra-compact (<50 lines) rules 
 ├── spike.nano.md
 ├── tdd.nano.md
 ├── evals.nano.md
-└── debug.nano.md
+├── debug.nano.md
+└── ux.nano.md
 
 scripts/
 ├── install.sh                  # Portable skill installer (symlink/copy to target environments)
@@ -463,19 +489,28 @@ skills/
 │       ├── calibration_math.md
 │       ├── rag_metrics_handbook.md
 │       └── synthetic_data_generation.md
-└── debug/
+├── debug/
+│   ├── SKILL.md
+│   ├── VERSION
+│   ├── agents/
+│   │   ├── root_cause_investigator.md
+│   │   ├── reproduction_specialist.md
+│   │   └── surgical_fixer.md
+│   ├── scripts/
+│   │   └── verify_fix.py
+│   └── references/
+│       ├── root_cause_tracing.md
+│       ├── multi_component_logging.md
+│       └── defensive_masking_antipatterns.md
+└── ux/
     ├── SKILL.md
     ├── VERSION
-    ├── agents/
-    │   ├── root_cause_investigator.md
-    │   ├── reproduction_specialist.md
-    │   └── surgical_fixer.md
     ├── scripts/
-    │   └── verify_fix.py
+    │   └── audit_ux.py
     └── references/
-        ├── root_cause_tracing.md
-        ├── multi_component_logging.md
-        └── defensive_masking_antipatterns.md
+        ├── heuristics_rubric.md
+        ├── state_matrix.md
+        └── accessibility_wcag.md
 ```
 
 ## Installation
@@ -663,7 +698,8 @@ MCP tools that change state or run shell benchmarks are disabled by default. To 
 them, a trusted operator must set
 `AGENTFLOW_MCP_ALLOW_MUTATIONS=1` in the server environment. This grants the connected
 client those operations; it is not a sandbox. Shell benchmarks also require an agent,
-operation, and target that pass the capability guard. Project test commands and
+`EXECUTE` operation, and a target equal to the exact benchmark command that pass the
+capability guard. Project test commands and
 benchmarks still run with server/user privileges.
 
 Install the CLI before `scripts/install.sh --mcp`, or use `--pip --mcp`. Registration

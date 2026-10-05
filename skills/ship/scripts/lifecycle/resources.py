@@ -121,14 +121,14 @@ class ChangeBudget:
 
         # Max turns can come from budget.max_turns, or conv.max_total_turns, or budget.max_total_turns
         max_turns_val = budget.get("max_turns")
-        if max_turns_val is None:
+        if "max_turns" not in budget:
             max_turns_val = conv.get("max_total_turns") if conv.get("max_total_turns") is not None else budget.get("max_total_turns", 25)
         elif conv.get("max_total_turns") is not None and max_turns_val == 25:
             max_turns_val = conv.get("max_total_turns")
 
         # Max dollars can come from max_dollars or max_cost_dollars
         max_dollars_val = budget.get("max_dollars")
-        if max_dollars_val is None:
+        if "max_dollars" not in budget:
             max_dollars_val = conv.get("max_cost_dollars") if conv.get("max_cost_dollars") is not None else budget.get("max_cost_dollars", 10.0)
         elif conv.get("max_cost_dollars") is not None and max_dollars_val == 10.0:
             max_dollars_val = conv.get("max_cost_dollars")
@@ -142,7 +142,7 @@ class ChangeBudget:
 
         def _opt_int(v: Any, default: Optional[int]) -> Optional[int]:
             if v is None:
-                return default
+                return None
             try:
                 iv = int(v)
                 return iv if iv >= 0 else None
@@ -151,7 +151,7 @@ class ChangeBudget:
 
         def _opt_float(v: Any, default: Optional[float]) -> Optional[float]:
             if v is None:
-                return default
+                return None
             try:
                 fv = float(v)
                 return fv if fv >= 0.0 else None
@@ -159,13 +159,13 @@ class ChangeBudget:
                 return default
 
         return cls(
-            max_tokens=_opt_int(budget.get("max_tokens"), 1_000_000),
-            max_model_calls=_opt_int(budget.get("max_model_calls"), 100),
+            max_tokens=_opt_int(budget.get("max_tokens", 1_000_000), 1_000_000),
+            max_model_calls=_opt_int(budget.get("max_model_calls", 100), 100),
             max_turns=_opt_int(max_turns_val, 25),
-            max_time_seconds=_opt_float(budget.get("max_time_seconds"), 1800.0),
+            max_time_seconds=_opt_float(budget.get("max_time_seconds", 1800.0), 1800.0),
             max_dollars=_opt_float(max_dollars_val, 10.0),
-            max_tool_executions=_opt_int(budget.get("max_tool_executions"), 200),
-            max_network_operations=_opt_int(budget.get("max_network_operations"), 50),
+            max_tool_executions=_opt_int(budget.get("max_tool_executions", 200), 200),
+            max_network_operations=_opt_int(budget.get("max_network_operations", 50), 50),
             max_remediation_attempts=int(budget.get("max_remediation_attempts", 3)),
             max_same_failures=int(max_same_val),
         )
@@ -363,8 +363,8 @@ class ResourceGovernor:
         def _check_metric(name: str, current: Union[int, float], limit: Optional[Union[int, float]], unit: str = ""):
             is_exc = False
             pct = 0.0
-            if limit is not None and limit > 0:
-                pct = round((current / limit) * 100.0, 1)
+            if limit is not None and limit >= 0:
+                pct = round((current / limit) * 100.0, 1) if limit else (100.0 if current > 0 else 0.0)
                 if current > limit or (isinstance(current, int) and current >= limit and current > 0):
                     is_exc = True
                     exceeded.append(name)
@@ -379,8 +379,8 @@ class ResourceGovernor:
         _check_metric("tokens", usage.tokens, budget.max_tokens, "tokens")
         _check_metric("model_calls", usage.model_calls, budget.max_model_calls, "calls")
         _check_metric("turns", usage.turns, budget.max_turns, "turns")
-        _check_metric("time", round(usage.time_seconds, 1), budget.max_time_seconds, "seconds")
-        _check_metric("dollars", round(usage.dollars, 4), budget.max_dollars, "USD")
+        _check_metric("time", usage.time_seconds, budget.max_time_seconds, "seconds")
+        _check_metric("dollars", usage.dollars, budget.max_dollars, "USD")
         _check_metric("tool_executions", usage.tool_executions, budget.max_tool_executions, "executions")
         _check_metric("network_operations", usage.network_operations, budget.max_network_operations, "operations")
 
@@ -435,7 +435,7 @@ class ResourceGovernor:
             # Accumulate
             consumed["tokens"] = int(consumed.get("tokens", 0) or 0) + delta["tokens"]
             consumed["model_calls"] = int(consumed.get("model_calls", 0) or 0) + delta["model_calls"]
-            consumed["dollars"] = round(float(consumed.get("dollars", 0.0) or 0.0) + delta["dollars"], 4)
+            consumed["dollars"] = float(consumed.get("dollars", 0.0) or 0.0) + delta["dollars"]
             consumed["tool_executions"] = int(consumed.get("tool_executions", 0) or 0) + delta["tool_executions"]
             consumed["network_operations"] = int(consumed.get("network_operations", 0) or 0) + delta["network_operations"]
             consumed["turns"] = int(consumed.get("turns", 0) or 0) + delta["turns"]
@@ -554,13 +554,13 @@ class ResourceGovernor:
             lines.append(f" {name:<22} {consumed_str:<16} {limit_str:<16} {f'{pct:.1f}%':<10} {stat_icon:<10}")
 
         d = status.details
-        _fmt_row("1. Tokens", f"{usage.tokens:,}", f"{budget.max_tokens:,}" if budget.max_tokens else "unlimited", d["tokens"]["pct_used"], d["tokens"]["exceeded"])
-        _fmt_row("2. Model Calls", f"{usage.model_calls:,}", f"{budget.max_model_calls:,}" if budget.max_model_calls else "unlimited", d["model_calls"]["pct_used"], d["model_calls"]["exceeded"])
-        _fmt_row("3. Turns", f"{usage.turns}", f"{budget.max_turns}" if budget.max_turns else "unlimited", d["turns"]["pct_used"], d["turns"]["exceeded"])
-        _fmt_row("4. Time (Seconds)", f"{usage.time_seconds:.1f}s", f"{budget.max_time_seconds:.1f}s" if budget.max_time_seconds else "unlimited", d["time"]["pct_used"], d["time"]["exceeded"])
-        _fmt_row("5. Dollars (USD)", f"${usage.dollars:.4f}", f"${budget.max_dollars:.2f}" if budget.max_dollars else "unlimited", d["dollars"]["pct_used"], d["dollars"]["exceeded"])
-        _fmt_row("6. Tool Executions", f"{usage.tool_executions}", f"{budget.max_tool_executions}" if budget.max_tool_executions else "unlimited", d["tool_executions"]["pct_used"], d["tool_executions"]["exceeded"])
-        _fmt_row("7. Network Ops", f"{usage.network_operations}", f"{budget.max_network_operations}" if budget.max_network_operations else "unlimited", d["network_operations"]["pct_used"], d["network_operations"]["exceeded"])
+        _fmt_row("1. Tokens", f"{usage.tokens:,}", f"{budget.max_tokens:,}" if budget.max_tokens is not None else "unlimited", d["tokens"]["pct_used"], d["tokens"]["exceeded"])
+        _fmt_row("2. Model Calls", f"{usage.model_calls:,}", f"{budget.max_model_calls:,}" if budget.max_model_calls is not None else "unlimited", d["model_calls"]["pct_used"], d["model_calls"]["exceeded"])
+        _fmt_row("3. Turns", f"{usage.turns}", f"{budget.max_turns}" if budget.max_turns is not None else "unlimited", d["turns"]["pct_used"], d["turns"]["exceeded"])
+        _fmt_row("4. Time (Seconds)", f"{usage.time_seconds:.1f}s", f"{budget.max_time_seconds:.1f}s" if budget.max_time_seconds is not None else "unlimited", d["time"]["pct_used"], d["time"]["exceeded"])
+        _fmt_row("5. Dollars (USD)", f"${usage.dollars:.4f}", f"${budget.max_dollars:.2f}" if budget.max_dollars is not None else "unlimited", d["dollars"]["pct_used"], d["dollars"]["exceeded"])
+        _fmt_row("6. Tool Executions", f"{usage.tool_executions}", f"{budget.max_tool_executions}" if budget.max_tool_executions is not None else "unlimited", d["tool_executions"]["pct_used"], d["tool_executions"]["exceeded"])
+        _fmt_row("7. Network Ops", f"{usage.network_operations}", f"{budget.max_network_operations}" if budget.max_network_operations is not None else "unlimited", d["network_operations"]["pct_used"], d["network_operations"]["exceeded"])
 
         lines.append("═" * 78)
         return "\n".join(lines)

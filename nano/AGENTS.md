@@ -1,15 +1,15 @@
 # Production Engineering Rules for Coding Agents
 
-Universal high-density engineering instructions for AI coding agents. Grounded in classic systems engineering: *Designing Data-Intensive Applications* (Kleppmann), *Release It!* (Nygard), and *A Philosophy of Software Design* (Ousterhout).
+Universal high-density engineering instructions for AI coding agents. Grounded in classic systems and product engineering: *Designing Data-Intensive Applications* (Kleppmann), *Release It!* (Nygard), *A Philosophy of Software Design* (Ousterhout), Norman, Nielsen, and Krug.
 
 ---
 
 ## 1. Anti-Bloat & Simplicity (`simplify`)
-- **Laziness Ladder**: 1. YAGNI ➔ 2. Codebase reuse ➔ 3. Standard library ➔ 4. Native platform ➔ 5. Installed deps ➔ 6. One-liner ➔ 7. Minimum code.
-- **Deep Modules (Ousterhout)**: Narrow interfaces hiding substantial complexity. Reject shallow 5-line pass-through wrappers.
-- **Define Errors Out of Existence**: Design APIs so boundary states (e.g., deleting an absent record, empty slice) are valid no-ops rather than exceptions.
+- **Laziness Ladder**: 1. YAGNI ➔ 2. Codebase reuse ➔ 3. Standard library ➔ 4. Native platform ➔ 5. Installed deps ➔ 6. One-liner ➔ 7. Min code.
+- **Deep Modules (Ousterhout)**: Narrow interfaces hiding substantial complexity. Reject shallow 5-line wrappers.
+- **Define Errors Out of Existence**: Boundary states (e.g., deleting missing records) are valid no-ops rather than exceptions.
 - **Zero Unrequested Abstractions**: No speculative interfaces or factories for single implementations.
-- **Debt Tracking**: Mark intentional shortcuts: `// simplify: <desc> | Ceiling: <limit> | Upgrade: <action>`.
+- **Debt Tracking**: Mark shortcuts: `// simplify: <desc> | Ceiling: <limit> | Upgrade: <action>`.
 
 ---
 
@@ -17,24 +17,24 @@ Universal high-density engineering instructions for AI coding agents. Grounded i
 - **Iron Law**: Zero production code written without a prior failing behavioral test.
 - **Dual-Speed Testing**:
   - *Tier 1 (Fast Domain)*: Pure business rules using in-memory fakes (< 50ms).
-  - *Tier 2 (Wire & Persistence)*: Real queries and transactions using ephemeral databases (SQLite memory, Testcontainers) (< 2s). Never mock SQL clients or database engines.
-- **Brownfield Characterization**: For untested legacy code, snapshot input/output ("Golden Master") before applying TDD.
+  - *Tier 2 (Wire/Persistence)*: Ephemeral databases (SQLite memory, Testcontainers) (< 2s). Never mock SQL/DB engines.
+- **Brownfield Characterization**: Snapshot input/output ("Golden Master") before applying TDD.
 - **Behavior Over Mocks**: Assert on observable inputs/outputs; never assert on private methods (`._`).
 
 ---
 
 ## 3. Systems Architecture & Design (`design`)
-- **Facts vs. Decisions Law**: Inspect files, schemas, and routes autonomously. Reserve user turns strictly for architectural trade-offs.
-- **Frontier Batching**: Never drip questions one-by-one. Batch the decision frontier into numbered rounds with recommended engineering stances.
+- **Facts vs. Decisions Law**: Inspect files, schemas, and routes autonomously. Reserve turns for architectural forks.
+- **Frontier Batching**: Never drip questions. Batch the decision frontier into numbered rounds with recommended stances.
 - **Ungrillable Detection**: If a question requires empirical proof (throughput/latency), trigger an isolated spike.
 - **Output**: Persist decisions to `docs/adr/` and `openspec/changes/`.
 
 ---
 
 ## 4. Empirical Spikes (`spike`)
-- **Strict Sandbox**: Throwaway code lives strictly in `.agentflow/spikes/<spike-name>/`. Never write prototype code to `src/`.
+- **Strict Sandbox**: Throwaway code lives strictly in `.agentflow/spikes/<name>/`. Never write prototype code to `src/`.
 - **Falsifiable SLIs**: Define explicit numerical thresholds (p99 latency, RPS) before measuring.
-- **Real Infrastructure**: Spin up ephemeral local Docker Compose instances on dynamic ports for backend I/O spikes.
+- **Real Infrastructure**: Ephemeral local Docker Compose instances on dynamic ports for backend I/O spikes.
 - **Statistical Rigor**: Use `run_spike.py` for warmup passes and latency percentiles (p50/p95/p99).
 
 ---
@@ -42,34 +42,24 @@ Universal high-density engineering instructions for AI coding agents. Grounded i
 ## 5. Systems Code Review (`review`)
 - **Evidence Requirement**: Plausible bugs remain hypotheses until exact file, line, and trigger path are proven.
 - **The Judge**: Every reported finding must be adjudicated against source code. Reject hallucinations.
-- **10-Stage Hierarchy**:
-  0. *Spec Alignment*: Match PRD/ADR acceptance criteria.
-  1. *Correctness*: Logic, bounds, nulls, float precision.
-  2. *Concurrency & Data (DDIA)*: TOCTOU races, fencing tokens on distributed locks, dual-write hazards, replication lag.
-  3. *Resilience (Release It!)*: Timeouts on all I/O, backoff with jitter, bulkheads, circuit breakers, poison-pill DLQ.
-  4. *Simplicity*: YAGNI, delete dead code.
-  5. *Maintainability*: Flat control flow, domain naming.
-  6. *Reuse*: Shared project utilities.
-  7. *Performance*: Proven query costs, N+1 queries.
-  8. *SOLID & Deep Modules*: High encapsulation, low indirection.
-  9. *Patterns*: Idiomatic patterns only (Single-Flight, Circuit Breaker).
+- **10-Stage Hierarchy**: Spec Alignment ➔ Correctness ➔ Concurrency & Data (DDIA) ➔ Resilience (Release It!) ➔ Simplicity ➔ Maintainability ➔ Reuse ➔ Performance ➔ SOLID & Deep Modules ➔ Patterns.
 
 ---
 
 ## 6. Delivery Lifecycle (`ship`)
-- **Deterministic Gates**: Design (Spec & ADR) ➔ Implementation (TDD + Simplify) ➔ Review (Adversarial Code Review) ➔ Delivery.
-- **Git Checkpoints & Recovery**: Record refs at `design` and `implementation`. Broken invariants return to design with edits preserved; whole-checkout rollback needs explicit operator authorization.
-- **Delivery Evidence**: Run installed `inspect_lifecycle.py --verify --tier execution --change <id>` before `--status-check`; require positive executed-test counts on the reviewed snapshot.
-- **Tri-Tier State**: Authoritative ledger `.agentflow/state.json`, deep commit evidence in Git notes (`refs/notes/ship-evidence`), RFC 5133 commit trailers (`Ship-Change`, `Ship-<Gate>`).
-- **Harness Independence & Turn Contracts**: Orchestrate specialist gates via explicit Turn Contracts as independent turns. Subagents are an optional optimization; sequential independent turns preserve identical state and governance.
+- **Deterministic Gates**: Design (ADR) ➔ Implementation (TDD + Simplify) ➔ Review (Adversarial Review) ➔ Delivery.
+- **Checkpoints & Recovery**: Record refs at design and implementation. Broken invariants return to design.
+- **Delivery Evidence**: Require positive executed-test counts on reviewed snapshot via `inspect_lifecycle.py`.
+- **Tri-Tier State**: Authoritative ledger `.agentflow/state.json`, commit evidence in Git notes, RFC 5133 trailers.
+- **Turn Contracts**: Orchestrate specialist gates via explicit Turn Contracts as independent turns.
 
 ---
 
 ## 7. AI Evaluations (`evals`)
 - **Trace Observation**: Ground failure modes in observed production traces; zero brainstormed academic labels.
 - **Code-First Over Judges**: Enforce objective checks (schemas, regex, tool signatures) with deterministic code.
-- **Binary Judges**: Unambiguous Pass/Fail criteria with critique-first output; zero noisy 1–5 Likert scales.
-- **Statistical Calibration**: Isolate Train/Dev/Test splits (zero prompt leakage). Use TPR/TNR over raw accuracy; apply Rogan-Gladen correction for production prevalence.
+- **Binary Judges**: Unambiguous Pass/Fail criteria with critique-first output; zero noisy 1–5 scales.
+- **Statistical Calibration**: Isolate Train/Dev/Test splits. Use TPR/TNR; apply Rogan-Gladen correction.
 
 ---
 
@@ -77,4 +67,15 @@ Universal high-density engineering instructions for AI coding agents. Grounded i
 - **Reproduction Mandate**: Zero production code edits before an automated test reproduces the failure (Red).
 - **Root Cause Over Symptom**: Trace bad state backward to origin; reject symptom masking (`if not x:`, `except: pass`).
 - **Anti-Cheat Audit**: Never weaken, delete, or skip existing assertions. Audit diffs with `verify_fix.py`.
-- **Circuit Breakers**: 2-strike rethink (form a new hypothesis); 3-strike circuit breaker (stop and report architectural flaw).
+- **Circuit Breakers**: 2-strike rethink (new hypothesis); 3-strike circuit breaker (report architectural flaw).
+
+---
+
+## 9. Product UX & Interfaces (`ux`)
+- **Prime Law (UX ≠ Styling)**: UX is not visual styling. First establish intent, flow, states, a11y, and recovery; visual styling comes afterward.
+- **State Completeness Law**: Define all applicable states for interaction model: Views (Empty, Loading, Populated, Partial/Stale, Error/Recovery, Unavailable); Controls (Default, Hover, Focus, Active, Disabled, Busy; plus Selected, Checked, Expanded, Invalid, Read-only).
+- **Semantics Over Div Soup**: Native HTML `<button>`, `<dialog>`, `<form>`, `<nav>` first; zero unsemantic clickable `<div>`s.
+- **Accessibility (WCAG AA)**: 4.5:1 text contrast, complete keyboard tab flow, visible `:focus-visible` rings.
+- **Cognitive Clarity (Krug/Norman)**: Clear visual hierarchy, no dead-end errors, explicit confirmation for destructive actions.
+- **Design Tokens**: Detect & reuse existing tokens first. Avoid arbitrary values when existing tokens satisfy; permit when justified.
+- **Safety & Verification (Option C)**: Read-only (`flow`, `audit`, `a11y`) vs Mutating (`spec`, `component`). `--autopilot` runs gates continuously. Run `audit_ux.py` with terminal receipts.

@@ -42,6 +42,9 @@ def load_pairs(file_path: Path) -> List[Tuple[str, str]]:
     pairs: List[Tuple[str, str]] = []
     suffix = file_path.suffix.lower()
 
+    def label(record: Dict[str, Any], *keys: str) -> Optional[str]:
+        return normalize_label(next((record[k] for k in keys if record.get(k) is not None and record[k] != ""), None))
+
     if suffix in (".jsonl", ".ndjson"):
         with open(file_path, "r", encoding="utf-8") as f:
             for line_no, line in enumerate(f, 1):
@@ -49,8 +52,8 @@ def load_pairs(file_path: Path) -> List[Tuple[str, str]]:
                 if not line:
                     continue
                 data = json.loads(line)
-                h = normalize_label(data.get("human") or data.get("ground_truth") or data.get("label") or data.get("actual"))
-                e = normalize_label(data.get("evaluator") or data.get("prediction") or data.get("pred") or data.get("judge"))
+                h = label(data, "human", "ground_truth", "label", "actual")
+                e = label(data, "evaluator", "prediction", "pred", "judge")
                 if h is not None and e is not None:
                     pairs.append((h, e))
 
@@ -58,8 +61,8 @@ def load_pairs(file_path: Path) -> List[Tuple[str, str]]:
         with open(file_path, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                h = normalize_label(row.get("human") or row.get("ground_truth") or row.get("label") or row.get("actual"))
-                e = normalize_label(row.get("evaluator") or row.get("prediction") or row.get("pred") or row.get("judge"))
+                h = label(row, "human", "ground_truth", "label", "actual")
+                e = label(row, "evaluator", "prediction", "pred", "judge")
                 if h is not None and e is not None:
                     pairs.append((h, e))
 
@@ -68,8 +71,8 @@ def load_pairs(file_path: Path) -> List[Tuple[str, str]]:
             data = json.load(f)
             if isinstance(data, list):
                 for item in data:
-                    h = normalize_label(item.get("human") or item.get("ground_truth") or item.get("label") or item.get("actual"))
-                    e = normalize_label(item.get("evaluator") or item.get("prediction") or item.get("pred") or item.get("judge"))
+                    h = label(item, "human", "ground_truth", "label", "actual")
+                    e = label(item, "evaluator", "prediction", "pred", "judge")
                     if h is not None and e is not None:
                         pairs.append((h, e))
             elif isinstance(data, dict):
@@ -196,7 +199,7 @@ def format_report(result: Dict[str, Any]) -> str:
         "| | Human Pass | Human Fail |",
         "|---|---|---|",
         f"| **Judge Pass** | {m['tp']} (TP) | {m['fp']} (FP - False Pass / Too Lenient) |",
-        f"| **Judge Fail** | {fn} (FN - False Fail / Too Strict) | {m['tn']} (TNR) |".format(fn=m['fn']),
+        f"| **Judge Fail** | {m['fn']} (FN - False Fail / Too Strict) | {m['tn']} (TN) |",
         "",
         "### Alignment Status",
     ]

@@ -78,6 +78,8 @@ def get_git_diff(repo_root: Path, base_ref: str = "HEAD") -> str:
             text=True,
             check=False,
         )
+        if res.returncode != 0:
+            raise RuntimeError(res.stderr.strip() or "git diff failed")
         diff_out = res.stdout
 
         # Also capture untracked files if any
@@ -88,6 +90,8 @@ def get_git_diff(repo_root: Path, base_ref: str = "HEAD") -> str:
             text=True,
             check=False,
         )
+        if res_untracked.returncode != 0:
+            raise RuntimeError(res_untracked.stderr.strip() or "git status failed")
         untracked_diff = ""
         for line in res_untracked.stdout.splitlines():
             if line.startswith("?? "):
@@ -114,6 +118,8 @@ def get_git_diff(repo_root: Path, base_ref: str = "HEAD") -> str:
             text=True,
             check=False,
         )
+        if res_last.returncode != 0:
+            raise RuntimeError(res_last.stderr.strip() or "git diff of last commit failed")
         return res_last.stdout
     except Exception as e:
         raise RuntimeError(f"Failed to execute git diff: {e}") from e

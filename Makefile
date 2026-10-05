@@ -36,7 +36,7 @@ test-lifecycle:
 
 test-skills:
 	@echo "Running specialist tools tests..."
-	PYTHONPATH=src:tests $(PYTEST) tests/test_verify_tdd.py tests/test_scan_debt.py tests/test_validate_report.py tests/test_run_spike.py -q
+	PYTHONPATH=src:tests $(PYTEST) tests/test_verify_tdd.py tests/test_scan_debt.py tests/test_validate_report.py tests/test_run_spike.py tests/test_audit_ux.py -q
 
 test test-all:
 	PYTHON="$(PYTHON)" bash scripts/run_tests.sh

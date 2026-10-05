@@ -18,6 +18,7 @@ EXPECTED_FILES = [
     "ship.nano.md",
     "evals.nano.md",
     "debug.nano.md",
+    "ux.nano.md",
 ]
 
 

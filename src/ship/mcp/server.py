@@ -33,15 +33,22 @@ def send_error(req_id: Optional[Any], code: int, message: str, data: Optional[An
 
 def handle_request(msg: Dict[str, Any]) -> None:
     """Process an incoming JSON-RPC request or notification."""
+    if not isinstance(msg, dict) or msg.get("jsonrpc") != "2.0" or not isinstance(msg.get("method"), str):
+        send_error(None, -32600, "Invalid request: expected a JSON-RPC request object")
+        return
     req_id = msg.get("id")
     method = msg.get("method")
-    params = msg.get("params") or {}
+    params = msg.get("params", {})
 
     # Notification handling (no id)
     if req_id is None:
         if method == "notifications/initialized":
             sys.stderr.write("[ship-mcp] Client initialized notification received\n")
             sys.stderr.flush()
+        return
+
+    if not isinstance(params, dict):
+        send_error(req_id, -32602, "Invalid params: expected an object")
         return
 
     # Method dispatch
@@ -82,9 +89,12 @@ def handle_request(msg: Dict[str, Any]) -> None:
 
     if method == "tools/call":
         tool_name = params.get("name")
-        arguments = params.get("arguments") or {}
-        if not tool_name:
+        arguments = params.get("arguments", {})
+        if not isinstance(tool_name, str) or not tool_name:
             send_error(req_id, -32602, "Invalid params: 'name' is required for tools/call")
+            return
+        if not isinstance(arguments, dict):
+            send_error(req_id, -32602, "Invalid params: arguments must be an object")
             return
 
         try:

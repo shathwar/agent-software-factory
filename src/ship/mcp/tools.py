@@ -2,6 +2,7 @@
 
 import json
 import os
+from dataclasses import asdict
 from pathlib import Path
 from typing import Dict, Any
 
@@ -290,16 +291,19 @@ def handle_ship_spike_run(args: Dict[str, Any]) -> Dict[str, Any]:
     cwd = Path(args["path"]).resolve() if args.get("path") else None
     if not args.get("agent_id") or not args.get("operation") or not args.get("target"):
         raise PermissionError("ship_spike_run requires agent_id, operation, and target for capability enforcement.")
+    if args["operation"] != "EXECUTE" or args["target"] != cmd:
+        raise PermissionError("ship_spike_run requires EXECUTE with target equal to the exact command.")
     CapabilityGuard(cwd or Path.cwd()).require(ActionContext(
-        agent_id=str(args["agent_id"]), operation=str(args["operation"]), target=str(args["target"]),
+        agent_id=str(args["agent_id"]), operation="EXECUTE", target=cmd,
         change_id=args.get("change"), task_id=args.get("task_id"),
         session_id=args.get("session_id"), lease_token=args.get("lease_token"),
     ))
     result = run_benchmark(cmd, iterations=iterations, concurrency=concurrency, warmup=warmup, timeout_sec=timeout, cwd=cwd)
-    table = format_markdown_table(result)
+    table, passed = format_markdown_table(result)
     return {
-        "summary": result.to_dict(),
+        "summary": asdict(result),
         "table": table,
+        "passed": passed,
     }
 
 

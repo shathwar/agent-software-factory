@@ -297,7 +297,7 @@ class EventReplayer:
                         "task_id": tid,
                         "owner_id": e.agent_id or payload.get("owner_id"),
                         "lease_token": payload.get("lease_token", f"token-{tid}"),
-                        "status": "ACTIVE",
+                        "status": payload.get("status", "ACTIVE"),
                         "acquired_at": e.timestamp,
                         "expires_at": payload.get("expires_at"),
                         "files": payload.get("files", []),
@@ -393,7 +393,9 @@ class EventReplayer:
                 for k in ("tokens", "model_calls", "turns", "tool_executions", "network_operations"):
                     con[k] = con.get(k, 0) + int(delta.get(k, 0) or 0)
                 for k in ("dollars", "time_seconds"):
-                    con[k] = round(con.get(k, 0.0) + float(delta.get(k, 0.0) or 0.0), 4)
+                    con[k] = con.get(k, 0.0) + float(delta.get(k, 0.0) or 0.0)
+                    if k == "time_seconds":
+                        con[k] = round(con[k], 4)
                 ch["budget"]["history"].append({
                     "timestamp": e.timestamp,
                     "agent_id": e.agent_id,
@@ -451,7 +453,7 @@ class EventReplayer:
         act_con = act_ch.get("budget", {}).get("consumed", {})
         rep_con = rep_ch.get("budget", {}).get("consumed", {})
         for k in ("tokens", "model_calls", "dollars", "tool_executions", "network_operations"):
-            if act_con.get(k) != rep_con.get(k):
+            if act_con.get(k, 0) != rep_con.get(k, 0):
                 mismatches[f"budget_{k}"] = {"actual": act_con.get(k), "replayed": rep_con.get(k)}
 
         # Compare active leases

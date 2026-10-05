@@ -132,6 +132,15 @@ class CoordinationManager:
     def _get_target_change(self, change_id: Optional[str]) -> str:
         return change_id or self.default_change_id or FileLedgerStore.get_active_change(self.repo_root) or "default"
 
+    def _record_lease_update(self, change_id: str, lease: TaskLease) -> None:
+        from .events import EventLogger
+        EventLogger(self.repo_root).emit(
+            event_type="LEASE_GRANTED", change_id=change_id,
+            agent_id=lease.owner_id, task_id=lease.task_id,
+            payload={"lease_token": lease.lease_token, "expires_at": lease.expires_at,
+                     "status": lease.status, "files": lease.target_files},
+        )
+
     def claim_task(
         self,
         task_id: str,
@@ -161,6 +170,23 @@ class CoordinationManager:
             now = _now_utc()
             now_iso = _now_iso()
 
+            # Renewals can expand their file set, so check conflicts before either
+            # the renewal shortcut or a fresh claim writes the lease.
+            if not self.config.allow_file_overlap and req_files:
+                for other_tid, other_data in leases_dict.items():
+                    if other_tid == task_id:
+                        continue
+                    other_lease = TaskLease.from_dict(other_data)
+                    if not is_lease_expired(other_lease, now):
+                        overlap = set(req_files) & set(other_lease.target_files)
+                        if overlap and other_lease.owner_id != owner_id:
+                            return CoordinationResult(
+                                success=False, task_id=task_id,
+                                error=f"Resource file conflict: {sorted(overlap)} leased by '{other_lease.owner_id}'",
+                                conflict_type=CoordinationConflictType.FILE_OVERLAP.value,
+                                lease=other_lease,
+                            )
+
             # 1. Check existing lease for this task
             existing_data = leases_dict.get(task_id)
             if existing_data:
@@ -178,6 +204,7 @@ class CoordinationManager:
                         existing_lease.target_files = list(set(existing_lease.target_files) | set(req_files))
                     leases_dict[task_id] = existing_lease.to_dict()
                     FileLedgerStore.save(self.repo_root, ledger)
+                    self._record_lease_update(cid, existing_lease)
                     return CoordinationResult(success=True, task_id=task_id, lease=existing_lease)
 
                 # Check if unexpired lease held by another owner
@@ -197,27 +224,6 @@ class CoordinationManager:
                     # Stale agent reclamation: mark old lease expired
                     existing_lease.status = LeaseStatus.EXPIRED.value
                     leases_dict[task_id] = existing_lease.to_dict()
-
-            # 2. Check resource/file conflict across all concurrent active leases
-            if not self.config.allow_file_overlap and req_files:
-                for other_tid, other_data in leases_dict.items():
-                    if other_tid == task_id:
-                        continue
-                    other_lease = TaskLease.from_dict(other_data)
-                    if not is_lease_expired(other_lease, now) and other_lease.status in (LeaseStatus.ACTIVE.value, LeaseStatus.ACQUIRED.value, LeaseStatus.RENEWED.value):
-                        overlap = set(req_files) & set(other_lease.target_files)
-                        if overlap and other_lease.owner_id != owner_id:
-                            err = (
-                                f"Resource file conflict: task '{task_id}' targets {sorted(overlap)} "
-                                f"which is currently locked by '{other_lease.owner_id}' for task '{other_tid}'"
-                            )
-                            return CoordinationResult(
-                                success=False,
-                                task_id=task_id,
-                                error=err,
-                                conflict_type=CoordinationConflictType.FILE_OVERLAP.value,
-                                lease=other_lease,
-                            )
 
             # 3. Check worker concurrency limit
             active_worker_count = len({
@@ -309,7 +315,7 @@ class CoordinationManager:
                     agent_id=owner_id,
                     session_id=sess_id,
                     task_id=task_id,
-                    payload={"target_files": req_files},
+                    payload={"files": req_files, "status": new_lease.status},
                 )
                 logger.emit(
                     event_type="LEASE_GRANTED",
@@ -317,7 +323,8 @@ class CoordinationManager:
                     agent_id=owner_id,
                     session_id=sess_id,
                     task_id=task_id,
-                    payload={"lease_token": token, "expires_at": new_lease.expires_at, "ttl_seconds": ttl},
+                    payload={"lease_token": token, "expires_at": new_lease.expires_at, "ttl_seconds": ttl,
+                             "status": new_lease.status, "files": req_files},
                 )
             except Exception:
                 pass
@@ -347,6 +354,8 @@ class CoordinationManager:
                 return CoordinationResult(success=False, task_id=task_id, error="Invalid lease token")
 
             now = _now_utc()
+            if is_lease_expired(lease, now):
+                return CoordinationResult(success=False, task_id=task_id, error="Lease is inactive or expired; claim it again")
             now_iso = _now_iso()
             ttl = ttl_seconds or lease.ttl_seconds
             exp_dt = datetime.fromtimestamp(now.timestamp() + ttl, tz=timezone.utc)
@@ -357,6 +366,7 @@ class CoordinationManager:
             leases_dict[task_id] = lease.to_dict()
 
             FileLedgerStore.save(self.repo_root, ledger)
+            self._record_lease_update(cid, lease)
             return CoordinationResult(success=True, task_id=task_id, lease=lease)
 
     def release_task(
@@ -386,6 +396,9 @@ class CoordinationManager:
             if lease.lease_token != lease_token:
                 return CoordinationResult(success=False, task_id=task_id, error="Invalid lease token")
 
+            if lease.status == LeaseStatus.RELEASED.value:
+                return CoordinationResult(success=True, task_id=task_id, lease=lease)
+
             now_iso = _now_iso()
             lease.status = LeaseStatus.RELEASED.value
             if session_id:
@@ -396,11 +409,13 @@ class CoordinationManager:
             if summary:
                 ev["summary"] = summary
 
-            if completed:
+            completed_tasks = change["coordination"].setdefault("completed_tasks", [])
+            if completed and task_id not in completed_tasks:
                 self._mark_task_completed_in_markdown(cid, task_id)
                 task_st = change.setdefault("task_status", {"total": 1, "completed": 0, "pending": 1})
                 task_st["completed"] = min(task_st.get("total", 1), task_st.get("completed", 0) + 1)
                 task_st["pending"] = max(0, task_st.get("total", 1) - task_st["completed"])
+                completed_tasks.append(task_id)
 
             from .provenance import compute_payload_digest
             sess_id = session_id or lease.session_id or f"sess-{lease.owner_id}"
@@ -614,6 +629,7 @@ class CoordinationManager:
             })
 
             FileLedgerStore.save(self.repo_root, ledger)
+            self._record_lease_update(cid, new_lease)
             return CoordinationResult(success=True, task_id=task_id, lease=new_lease, handoff=handoff_record)
 
     def reap_stale_leases(self, change_id: Optional[str] = None) -> List[TaskLease]:

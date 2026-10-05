@@ -373,6 +373,7 @@ def parse_review_report_file(p: Path, repo_root: Path) -> Dict[str, Any]:
         "reviewer": reviewer,
         "status": status,
         "verdict": verdict,
+        "findings": findings,
         "findings_count": len(findings),
         "critical_or_high_count": len(critical_or_high),
         "is_judge": reviewer in {"judge", "review_judge"},

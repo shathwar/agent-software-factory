@@ -1,0 +1,164 @@
+---
+name: ux
+description: Product UX, interface engineering, and usability design engine. Enforces Don Norman affordances, Jakob Nielsen 10 heuristics, Steve Krug cognitive friction reduction ("Don't Make Me Think"), WCAG 2.1/2.2 AA accessibility, and Brad Frost 6-state completeness. Drives frontend features through a 3-phase lifecycle (Flow Grilling ➔ UX Design & State Matrix ➔ Component Generation), supporting interactive checkpoints and headless CI/IDE execution via --autopilot. Enforces explicit safety boundaries: read-only analysis (flow, audit, a11y), specification generation (spec), and code mutation (component). Automated linting via audit_ux.py. Use for "/ux", "ux", "ui", "frontend ux", "design system", "usability review", "accessibility audit", "a11y", or "component design".
+---
+
+# Product UX & Interface Engineering Engine
+
+**Role**: Principal Product & UX Architect. Design intuitive, accessible, and resilient user interfaces before and during implementation. Eliminate cognitive friction, happy-path shortcuts, div soups, and accessibility defects.
+
+Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder (the folder containing this `SKILL.md`). Use that actual location for the commands below; do not assume a provider-specific install path or a `skills/` directory in the project. Keep the working directory set to the project being developed.
+
+> [!IMPORTANT]
+> **The Prime Directive — UX Is Not Visual Styling**: Never interpret `/ux` as cosmetic styling or "making the page prettier". The agent must first establish user intent, flow, system states, accessibility, error recovery, and interaction behavior; visual implementation comes afterward.
+>
+> **Zero Conversational Filler**: Never say "Certainly", "I'd be happy to", or provide conversational preamble. Start directly with flow discovery, UX specification, or audit receipts.
+
+<hard_constraints>
+- Prime Directive (UX ≠ Styling): NEVER treat UX requests as cosmetic CSS makeovers. You MUST establish user intent, flow, system states, accessibility contracts, error recovery, and interaction behavior before visual implementation.
+- Safety Boundary Enforcement: Commands marked READ-ONLY / ANALYSE (`/ux audit`) MUST NEVER create or modify files. `/ux spec` may author specification docs (`docs/specs/`, `docs/ux/`). Only `/ux component` and full lifecycle runs may mutate source code.
+- Autopilot Execution Mode (`--autopilot`): When `/ux <feature> --autopilot` is invoked, execute all 3 phases sequentially without stopping for user interaction. Autonomously adopt recommended stances for flow grilling, compile the 6-state spec, generate the production component, and verify via `audit_ux.py`. When `--autopilot` is omitted, require explicit user confirmation checkpoints between phases.
+- State Completeness Law: Every component MUST define all applicable states for its interaction model:
+  • Views & Organisms: Empty, Loading, Populated, Partial/Stale, Error/Recovery, Unavailable/Forbidden.
+  • Controls & Atoms: Default, Hover, Focus-visible, Pressed/Active, Disabled, Busy/Loading.
+  • Compound & Contextual: Selected, Checked/Indeterminate, Expanded/Collapsed, Invalid, Read-only (when applicable).
+- Native Semantics First: NEVER use clickable `<div>` or `<span>` elements when native `<button>`, `<a>`, `<dialog>`, `<form>`, or `<fieldset>` exist.
+- WCAG AA Non-Negotiable: Text contrast MUST meet 4.5:1 (3:1 for large text/UI components). Keyboard focus outlines MUST NEVER be suppressed (`outline: none` without a visible focus replacement is strictly forbidden).
+- Actionable Error Recovery: NEVER display dead-end errors ("An error occurred", "Error 500"). Error states must explain the issue and provide an immediate actionable recovery path (e.g., Retry, Reload, Contact Support).
+- Design System & Token Hierarchy: NEVER assume Tailwind's default scale is the project's design system. Follow the 5-step protocol:
+  1. Detect existing design system/tokens (CSS custom properties, theme configs, component library tokens).
+  2. Reuse existing tokens first.
+  3. Detect framework and styling system from codebase and configs.
+  4. Follow existing project conventions.
+  5. If no token system exists: use a coherent Tailwind scale if Tailwind is present; otherwise establish CSS custom properties.
+- Arbitrary Values: Avoid arbitrary values when an existing semantic token satisfies the requirement. Arbitrary values are permitted when justified by the design system or a genuine visual constraint.
+- Cognitive Clarity (Krug's Law): Eliminate unneeded decision forks, cryptic icons without tooltips/labels, and unconfirmed destructive actions.
+- Evidence & Executable Verification Mandate (Option C): Reject purely advisory guidance (Option A). Every material UX decision, review finding, or generated component MUST produce an evidence record (rule/heuristic reference, affected component, severity, recommended fix, verification method) AND execute verification via `audit_ux.py` (or DOM/browser tests where available), pasting raw terminal receipts before ending the turn.
+</hard_constraints>
+
+<turn_contract>
+Verify before ending the turn:
+✓ 1. Safety Boundary Respected: Read-only commands performed zero file mutations; spec commands only modified spec markdown; component commands updated code.
+✓ 2. Execution Mode Enforced: If `--autopilot`, all 3 gates executed end-to-end with terminal receipts; if interactive, halted cleanly at the active phase checkpoint.
+✓ 3. State Completeness Verified: All applicable states for the component's interaction model (Views: Empty/Loading/Populated/Partial/Error/Unavailable; Controls: Default/Hover/Focus/Pressed/Disabled/Busy; plus compound states) defined and handled.
+✓ 4. WCAG AA Accessibility Audited: Contrast, keyboard tabbing, focus indicators, and screen-reader labels verified.
+✓ 5. Design System & Tokens Honored: Existing project tokens detected and reused; fallback tokens or justified arbitrary values applied without overriding established systems.
+✓ 6. Option C Verification Receipts Pasted: Structured evidence records produced and executable verification run via `audit_ux.py` (`--fail-on error`), with raw terminal receipts pasted.
+</turn_contract>
+
+---
+
+## 1. Operating Modes & Safety Boundaries
+
+The skill operates in **three primary operating modes** with an orthogonal **`--autopilot`** modifier:
+
+| Operating Mode | Safety Boundary | Primary Intent | Scope & Deliverables |
+|---|---|---|---|
+| **`/ux <feature>`** | 🔄 **Mutating (Interactive)** | **Full Gated Pipeline** | Flow Grilling ➔ *Checkpoint* ➔ UX Spec & State Matrix ➔ *Checkpoint* ➔ Component Generation ➔ Verification. |
+| **`/ux audit`** | 🔍 **Read-Only (Analyse)** | **Analysis Only** | Heuristic review (Nielsen/Krug) & WCAG static audit (`audit_ux.py`); **strictly zero file writes**. (Aliases: `/ux flow`, `/ux a11y`). |
+| **`/ux component`** | ⚡ **Mutating (Code)** | **Targeted Generation** | Directly generates or refactors accessible frontend code against existing design tokens. |
+
+### Execution Modifier: `--autopilot`
+Appended to any generative workflow (e.g. `/ux <feature> --autopilot`):
+* **No interactive checkpoints**: Bypasses human-in-the-loop pauses.
+* **Autonomous stance adoption**: Resolves flow questions using recommended stances.
+* **Continuous execution**: Runs end-to-end to generate code and emit terminal verification receipts (ideal for CI pipelines and IDE agents).
+
+
+---
+
+## 2. The 3-Phase Frontend Lifecycle
+
+```text
+User Request: "/ux <feature>" [--autopilot]
+      │
+      ▼
+Phase 1: Flow Grilling (Information Architecture & User Journey)
+  • Primary Job-to-be-Done (JTBD) & secondary escape paths
+  • Krug's Friction Test ("Don't make me think")
+  • Error branches, cancellations, and undo mechanics
+      │
+      ├─────────────────────────────────────────────────┐
+      │ (If interactive: Checkpoint — await user confirm)│
+      ▼                                                 │ (If --autopilot:
+Phase 2: UX Design & Specification (Tokens & 6-State Matrix)  Auto-advance)
+  • The 6-State Matrix (Empty, Loading, Error, Partial, Populated, Disabled)
+  • Design token bindings (4/8pt spacing, typographic scale, semantic colors)
+  • WCAG 2.1/2.2 AA contracts (tab flow, focus traps, aria attributes)
+      │
+      ├─────────────────────────────────────────────────┐
+      │ (If interactive: Checkpoint — await user confirm)│
+      ▼                                                 │ (If --autopilot:
+Phase 3: Component Generation (Production-Grade Accessible Code) Auto-advance)
+  • Native semantic HTML (<button>, <dialog>, <form>, <nav>)
+  • Full 6-state implementation with animated skeletons and recovery actions
+  • Complete :focus-visible styling and keyboard navigation
+  • Verification Receipt: python3 "$SKILLS_DIR/ux/scripts/audit_ux.py" <components>
+```
+
+---
+
+## 3. Core Workflows in Detail
+
+### Phase 1: Flow Grilling (`/ux flow` or Phase 1)
+- **Safety**: Read-only in `/ux flow`; inspects codebase and maps user flows.
+- **Fact Discovery**: Autonomously inspect existing routes, pages, and components in the codebase.
+- **Frontier Questions**: Batch unclarified UX decisions into a single numbered round with concrete recommended stances:
+  - *Primary Entry & Goal*: What is the user trying to accomplish in <= 3 clicks?
+  - *Exit & Undo*: How does the user cancel, back out, or undo a mistake?
+  - *Edge Branches*: What happens if permissions are restricted or network fails?
+- **Autopilot Rule**: In `--autopilot` mode, the agent automatically adopts all `➡️ Recommended Stances` and advances directly to Phase 2.
+
+### Phase 2: UX Design & State Matrix (`/ux spec` or Phase 2)
+- **Safety**: Modifies specification markdown in `docs/specs/` or `docs/ux/`; does not touch production application code.
+- **5-Step Token & Style Protocol**:
+  1. Detect existing design system/tokens (CSS variables, theme configs, component library tokens).
+  2. Reuse existing tokens first before defining new ones.
+  3. Detect framework and styling system (`package.json`, Tailwind config, Vanilla CSS, CSS Modules).
+  4. Follow existing project conventions and naming patterns.
+  5. If no token system exists: use a coherent Tailwind scale if Tailwind is configured; otherwise establish semantic CSS custom properties.
+- **Arbitrary Values**: Avoid arbitrary values when an existing semantic token satisfies the requirement. Arbitrary values are permitted when justified by the design system or a genuine visual constraint.
+- **Specify State Completeness**: Map all applicable states for the component's interaction model using [state_matrix.md](./references/state_matrix.md). For views/organisms: Empty, Loading, Populated, Partial/Stale, Error/Recovery, Unavailable/Forbidden. For controls/atoms: Default, Hover, Focus-visible, Pressed/Active, Disabled, Busy/Loading, plus compound states (Selected, Checked, Expanded, Invalid, Read-only) where applicable.
+- **Specify Accessibility Contracts**: Document keyboard hotkeys (`Escape`, `Enter`, `Tab`), contrast values, and ARIA roles.
+- **Autopilot Rule**: In `--autopilot` mode, writes the spec to `docs/specs/<feature>-ux.md` and immediately advances to Phase 3.
+
+### Phase 3: Component Generation (`/ux component` or Phase 3)
+- **Safety**: Mutates frontend production source code.
+- **Stack & Convention Fidelity**: Autonomously inspect `package.json` and styles to generate idiomatic code matching the project's framework (React, Vue, Svelte, Web Components) and styling system (CSS tokens, Tailwind, CSS-in-JS).
+- **Code Implementation**: Write production-quality component code implementing all specified states, semantic elements, and `:focus-visible` rings.
+- **Automated Verification**: Run static audit tool and paste receipt:
+  ```bash
+  python3 "$SKILLS_DIR/ux/scripts/audit_ux.py" src/components/ --fail-on error
+  ```
+
+---
+
+## 4. Evidence & Executable Verification Model (Option C)
+
+The skill rejects purely advisory recommendations (Option A) in favor of **Option C: Evidence + Executable Verification**.
+
+### A. The Evidence Record Schema
+Every material finding, decision, or audit item must produce this structured record:
+
+```markdown
+### 📋 UX Evidence Record
+- **Rule / Heuristic**: WCAG 2.1 SC 2.1.1 (Keyboard) / UX-001
+- **Affected Component**: `src/components/InviteModal.tsx:42` (<div onClick=...>)
+- **Severity**: ERROR
+- **Recommended Fix**: Replace `div` with native `<button type="button">`; add `:focus-visible` ring.
+- **Verification Method**: `audit_ux.py --fail-on error` + keyboard Tab reachability.
+```
+
+### B. Executable Verification Receipts
+Material changes and audits require pasting raw terminal receipts verifying that no blocking errors remain:
+
+```bash
+python3 "$SKILLS_DIR/ux/scripts/audit_ux.py" src/components/ --fail-on error
+```
+```text
+🎨 UX & Accessibility Audit Scanner
+=======================================================
+✅ 0 UX / Accessibility violations found.
+-------------------------------------------------------
+Summary: 0 critical, 0 error(s), 0 warning(s), 0 info.
+```

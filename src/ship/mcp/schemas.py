@@ -204,12 +204,12 @@ TOOLS_MANIFEST: List[Dict[str, Any]] = [
                 "timeout_sec": {"type": "number", "description": "Timeout per iteration in seconds (default: 60.0)"},
                 "path": {"type": "string", "description": "Working directory for benchmark execution"},
                 "agent_id": {"type": "string", "description": "Registered agent principal"},
-                "operation": {"type": "string", "description": "Capability operation, e.g. EXECUTE or NETWORK_READ"},
-                "target": {"type": "string", "description": "Scoped capability target"},
+                "operation": {"type": "string", "enum": ["EXECUTE"], "description": "Requires an EXECUTE capability"},
+                "target": {"type": "string", "description": "Exact command string to authorize; must equal command"},
                 "change": {"type": "string"}, "task_id": {"type": "string"},
                 "session_id": {"type": "string"}, "lease_token": {"type": "string"}
             },
-            "required": ["command"]
+            "required": ["command", "agent_id", "operation", "target"]
         }
     },
     {

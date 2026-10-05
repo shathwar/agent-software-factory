@@ -14,17 +14,70 @@ if [ -z "$COMMAND" ]; then
   COMMAND="$INPUT"
 fi
 
-# Strip quoted strings and heredocs to avoid false positives in commit messages or docs
-STRIPPED=$(echo "$COMMAND" | sed -E \
-  -e "/<<['\"]?EOF/,/^EOF/d" \
-  -e "s/\"([^\"\\\\]|\\\\.)*\"//g" \
-  -e "s/'[^']*'//g")
-
 # Run Policy Verification & Velocity Limiting via Python stdlib
 RESULT=$(python3 -c '
-import sys, os, re, json, time
+import sys, os, re, json, time, shlex
+from pathlib import Path
 
 cmd = sys.argv[1]
+
+def block(reason):
+    print(json.dumps({"decision": "block", "reason": reason}))
+    sys.exit(2)
+
+# Parse JSON here as well so quoting protection does not depend on jq.
+try:
+    payload = json.loads(cmd)
+except ValueError:
+    payload = None
+if isinstance(payload, dict):
+    cmd = payload.get("tool_input", {}).get("command", payload.get("command", ""))
+if not isinstance(cmd, str):
+    block("Command must be a string.")
+
+# Substitutions and heredocs require a full shell interpreter to classify.
+if re.search(r"\$\(|`|\$\{|<<", cmd):
+    block("Shell substitutions and heredocs cannot be safely classified by this hook.")
+try:
+    lexer = shlex.shlex(cmd, posix=True, punctuation_chars=";&|()<>\n")
+    lexer.whitespace = " \t\r"
+    lexer.whitespace_split = True
+    tokens = list(lexer)
+except ValueError:
+    block("Malformed shell quoting cannot be safely classified.")
+
+commands = []
+policy_commands = []
+normalized = []
+words = []
+for token in tokens + [";"]:
+    if token and all(c in ";&|\n" for c in token):
+        if words:
+            commands.append(words)
+            # Literal output/message arguments are data. Executable operands in
+            # every other command retain their complete unquoted values.
+            if words[0] not in ("echo", "printf"):
+                kept = []
+                skip_next = False
+                for word in words:
+                    if skip_next:
+                        skip_next = False
+                        continue
+                    if words[:2] == ["git", "commit"] and word in ("-m", "--message"):
+                        skip_next = True
+                        continue
+                    if words[:2] == ["git", "commit"] and word.startswith("--message="):
+                        continue
+                    if words[:2] == ["git", "log"] and word.startswith("--grep="):
+                        continue
+                    kept.append(word)
+                normalized.extend(kept)
+                policy_commands.append(kept)
+            words = []
+        normalized.append(token)
+    else:
+        words.append(token)
+cmd = " ".join(normalized)
 
 # 0. Tool Velocity Limiter (agent-guard Anti-Runaway / Anti-Brute-Force Guardrail)
 velocity_disabled = os.environ.get("AGT_VELOCITY_LIMITER_DISABLED", "").lower() in ("1", "true", "yes")
@@ -78,28 +131,48 @@ if re.search(r"\b(curl|wget|fetch)\b[^|\n\r]*\|\s*(sh|bash|zsh|python|perl|pwsh)
     sys.exit(2)
 
 # 5. Dangerous Git & Database Drops
-if re.search(r"(git\s+push(\s+.*)?\s+(--force|-f\b)|git\s+reset\s+--hard|DROP\s+(TABLE|DATABASE)|TRUNCATE\s+TABLE|db\.dropDatabase|db\.[a-zA-Z0-9_]+\.drop\(|mkfs\b|dd\s+if=.*of=/dev/)", cmd, re.I):
+if re.search(r"(git\s+push(\s+.*)?\s+(--force|-f\b)|git\s+reset\s+--hard|DROP\s+(TABLE|DATABASE)|TRUNCATE\s+TABLE|db\.dropDatabase|db\.[a-zA-Z0-9_]+\.drop\s*\(|mkfs\b|dd\s+if=.*of=/dev/)", cmd, re.I):
     print(json.dumps({"decision": "block", "reason": "Destructive command blocked by safety hook: risky operation detected."}))
     sys.exit(2)
 
-# 6. Smart Safe-Target Cleanup Allowlisting for rm -rf
-m = re.search(r"rm\s+(-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*|-[a-zA-Z]*f[a-zA-Z]*r[a-zA-Z]*|-r\s+-f|-f\s+-r|--recursive\s+-f|-f\s+--recursive)\s+(.+)$", cmd, re.I)
-if m:
+# 6. Resolve recursive cleanup operands within the actual allowed roots.
+for words in policy_commands:
+    if os.path.basename(words[0]) != "rm":
+        if re.search(r"(?:^|[ /])rm\s+-", " ".join(words)):
+            block("Wrapped deletion cannot be safely classified; use a direct cleanup command.")
+        continue
+    targets = []
+    recursive = False
+    options = True
+    for word in words[1:]:
+        if options and word == "--":
+            options = False
+        elif options and word.startswith("-"):
+            recursive |= word == "--recursive" or (not word.startswith("--") and any(c in word for c in "rR"))
+        else:
+            targets.append(word)
+    if not recursive:
+        continue
     SAFE_TARGETS = {
         "node_modules", "dist", "build", ".next", "target",
         "__pycache__", ".pytest_cache", ".venv", "venv",
         "coverage", ".turbo", "out", ".agentflow"
     }
-    targets_str = m.group(2).strip()
-    targets = targets_str.split()
     is_safe = bool(targets)
+    if any(part[0] == "cd" for part in commands):
+        is_safe = False
     for t in targets:
-        clean = re.sub(r"^\./+", "", t.strip("\"'\''")).rstrip("/")
-        if not clean:
+        path = Path(t)
+        if path.is_absolute() or not path.parts or ".." in path.parts or any(c in t for c in "$*?[]{}~"):
             is_safe = False
             break
-        root_part = clean.split("/")[0]
-        if root_part not in SAFE_TARGETS and clean not in SAFE_TARGETS:
+        root = Path.cwd() / path.parts[0]
+        if path.parts[0] not in SAFE_TARGETS or root.is_symlink():
+            is_safe = False
+            break
+        try:
+            (Path.cwd() / path).resolve().relative_to(root.resolve())
+        except (ValueError, OSError, RuntimeError):
             is_safe = False
             break
     if not is_safe:
@@ -116,7 +189,7 @@ if history_file:
         pass
 
 sys.exit(0)
-' "$STRIPPED" 2>&1) || {
+' "$COMMAND" 2>&1) || {
   EXIT_CODE=$?
   if [ -n "$RESULT" ]; then
     echo "$RESULT"
