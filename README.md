@@ -60,6 +60,7 @@ This framework transforms AI from an unpredictable code generator into a **disci
 | **Hollow, Backfilled Unit Tests** | [**`tdd`**](./skills/tdd/SKILL.md) enforces the *Iron Law of Test-First* and an in-flight **Doubt Cycle**. Agents are strictly forbidden from writing production code before proving a behavioral test fails. | **Real regression safety; tests verify observable behavior instead of mock configurations.** |
 | **Superficial Patching & Bug Regressions** | [**`debug`**](./skills/debug/SKILL.md) enforces the *Reproduction Mandate*, backward causation tracing, boundary logging, and anti-cheat diff auditing via `verify_fix.py`. | **Root-cause permanent fixes, zero weakened tests, automated reproduction proofs.** |
 | **Untracked AI & Stochastic Bugs** | [**`evals`**](./skills/evals/SKILL.md) enforces trace-grounded error discovery, zero-dependency annotation (`serve_review_app.py`), code-first assertions, binary LLM judges, and Rogan-Gladen calibration (`score_calibration.py`). | **Deterministic evaluation of stochastic outputs, calibrated LLM judges, zero reliance on noisy 1–5 scales.** |
+| **Frontend Slop & Broken UI States** | [**`ux`**](./skills/ux/SKILL.md) enforces the *UX Prime Directive* (intent, flow, error recovery before visual styling), the *State Completeness Law* (Views 6 states, Controls interactive states), 5-step token detection hierarchy, and Option C executable verification (`audit_ux.py`). | **Eliminates clickable unstyled divs, missing keyboard traps, arbitrary token bypasses, and unhandled empty/loading/error states.** |
 | **Vanishing Architectural Context** | [**`design`**](./skills/design/SKILL.md) enforces the *Facts vs. Decisions Law*, audits **Capability Closure**, and compiles an **ADR** and **OpenSpec package** directly into Git. | **Local decision and evidence records that teams can review alongside their existing controls.** |
 | **Multi-Agent Coordination & Crashes** | [**`ship`**](./skills/ship/SKILL.md) provides a **two-phase atomic transaction engine** (`.agentflow/archive-transaction.json`) and multi-change isolation (`--change <id>`) with automatic crash recovery. | **Recoverable archive operations and explicit change selection; parallel source editing still requires separate worktrees.** |
 | **Security & Compliance Hurdles** | Local policy checks, scoped capabilities, audit records, and guarded MCP actions. | **Useful control points for a pilot. Not an OS sandbox, identity system, or compliance certification. Your host still controls permissions, secrets, and network access.** |
@@ -78,6 +79,47 @@ Teams can adopt skills incrementally without changing their entire workflow:
 
 ---
 
+## Core Architectural Superpowers ("The Best Bits")
+
+Beyond individual skill instructions, the repository is engineered with unique architectural pillars that distinguish it from conventional prompt collections:
+
+1. **Zero External Runtime Dependencies (100% Python 3.10+ Standard Library)**
+   - The entire SDLC engine, all specialist verification scripts, the trace review web app (`serve_review_app.py`), the statistical benchmarking engine (`run_spike.py`), and the test suite run with **zero third-party pip dependencies**.
+   - No virtualenv bloat, no supply chain drift, and zero installation friction on developer machines or minimal CI/CD runners.
+
+2. **Byte-for-Byte Distribution Parity**
+   - Implements a dual distribution model: every specialist tool in `src/ship/tools/` mirrors its standalone script in `skills/*/scripts/` byte-for-byte.
+   - Enforced by automated synchronization (`scripts/sync_skills.py`), CI sanity checks (`make verify-parity`), and Git pre-commit hooks (`scripts/setup_hooks.sh`).
+
+3. **Native stdio Model Context Protocol (MCP) Server**
+   - Built-in zero-dependency stdio server (`src/ship/mcp/`) that seamlessly connects lifecycle management, gate readiness, checkpoints, rollbacks, and verification tools directly to Claude Desktop, Cursor, and any MCP client.
+   - Guarded execution with explicit mutation authorization (`AGENTFLOW_MCP_ALLOW_MUTATIONS=1`).
+
+4. **Ultra-Dense Nano Rules (<60 Lines) & Universal `AGENTS.md` (<100 Lines)**
+   - Every skill provides a companion `.nano.md` file in `nano/` condensed to under 60 lines and 4,000 bytes for token-constrained agent contexts.
+   - A single universal [`nano/AGENTS.md`](./nano/AGENTS.md) (<100 lines, <6,000 bytes) equips any agent (Claude Code, Cursor, Windsurf, Copilot) with all 9 skills simultaneously. Density limits are strictly guarded by CI budget tests (`tests/test_nano_rules.py`).
+
+5. **Option C Verification Engine (Executable Proofs Over Advisory Slop)**
+   - Strictly rejects purely advisory suggestions (Option A) and unverified text assertions (Option B).
+   - Mandates **Option C**: every architectural or UX decision produces a structured evidence record AND executes deterministic verification (`verify_tdd.py`, `scan_debt.py`, `validate_report.py`, `verify_fix.py`, `score_calibration.py`, `audit_ux.py`), capturing terminal receipts into Git notes and ledgers.
+
+6. **Tri-Tier Lifecycle State & Two-Phase Crash Self-Healing**
+   - Persistent re-entrant state machine combining:
+     - Authoritative multi-change ledger (`.agentflow/state.json`) with multi-agent change isolation (`--change <id>`).
+     - Deep commit evidence in Git notes (`refs/notes/ship-evidence`).
+     - Standard RFC 5133 commit trailers (`Ship-Change`, `Ship-Gate`, `--generate-trailers`).
+   - Two-phase commit spec archiving (`.agentflow/archive-transaction.json`) with automatic self-healing rollback upon unexpected session interruption.
+
+7. **Universal Cross-Ecosystem Support**
+   - Out-of-the-box native manifests for 70+ agents via Vercel Skills CLI (`npx skills add shathwar/skills`), Cursor IDE (`.cursor/rules/ship.mdc`), GitHub Copilot (`.github/copilot-instructions.md`), OpenAI Codex (`.codex-plugin/plugin.json`), Claude Code (`install.sh --target-claude`), and Google Antigravity.
+
+8. **Developer Tooling & Ephemeral Sandboxes**
+   - Instant developer sanity check in under 2 seconds (`make check`).
+   - One-command disposable git sandbox for testing workflows in isolation (`make playground` / `scripts/playground.sh`).
+   - Preflight diagnostic doctor verifying runtime, git, skills, and ledger integrity (`make doctor`).
+
+---
+
 ## Skills Catalog
 
 | Skill Name | Command / Trigger | Lifecycle Stage | Description |
@@ -87,7 +129,7 @@ Teams can adopt skills incrementally without changing their entire workflow:
 | [**`tdd`**](./skills/tdd/SKILL.md) | `/tdd`, `"tdd"`, `"red-green-refactor"` | Implementation | Dual-speed TDD engine (fast fakes & ephemeral DBs), legacy characterization wrapping, in-flight **Doubt Cycle** ([`doubt_cycle.md`](./skills/tdd/references/doubt_cycle.md)), and `verify_tdd.py` CI parity auditor. |
 | [**`design`**](./skills/design/SKILL.md) | `/design`, `"design"`, `"grill me on this design"` | Pre-implementation | Relentlessly stress-tests architectures using frontier rounds, enforces **Capability Closure** ([`capability_closure.md`](./skills/design/references/capability_closure.md)), detects ungrillable questions, and compiles an ADR & OpenSpec. |
 | [**`spike`**](./skills/spike/SKILL.md) | `/spike`, `"spike"`, `"throwaway spike"` | Empirical Validation | Rapid disposable spikes with automated statistical benchmarking (`run_spike.py` p50/p90/p95/p99/max, RPS, RSS memory delta), ephemeral Docker sandboxes, and ADR bridge. |
-| [**`ship`**](./skills/ship/SKILL.md) | `/ship`, `"ship"`, `/lifecycle` | Full Lifecycle Orchestrator | **Pilot workflow**. Chains all 5 skills into an autonomous pipeline with 4 transition gates, git checkpoints, safe rollback, team profiles, preflight doctor, and working tree fingerprinting. |
+| [**`ship`**](./skills/ship/SKILL.md) | `/ship`, `"ship"`, `/lifecycle` | Full Lifecycle Orchestrator | **Pilot workflow**. Chains all skills into an autonomous pipeline with 4 transition gates, git checkpoints, safe rollback, team profiles, preflight doctor, and working tree fingerprinting. |
 | [**`evals`**](./skills/evals/SKILL.md) | `/evals`, `"evals"`, `"error discovery"`, `"ai evals"` | AI Evaluation & Regression | Product-specific AI evaluation engine (Hamel Husain / Parlance Labs methodology). Trace-first error discovery, stdlib review app, code-first assertions, binary LLM judges, and Rogan-Gladen TPR/TNR calibration. |
 | [**`debug`**](./skills/debug/SKILL.md) | `/debug`, `"debug"`, `/fix`, `"fix"`, `"bugfix"` | Root-Cause Repair & Incident | Systematic debugging engine (borrowing best of `superpowers` & `debug-skill`): reproduction test first, backward data-flow tracing, multi-layer boundary logging, anti-cheat audit (`verify_fix.py`), and 3-strike circuit breaker. |
 | [**`ux`**](./skills/ux/SKILL.md) | `/ux`, `"ux"`, `"ui"`, `"a11y"`, `"design system"` | Product & Interface Engineering | 3-phase frontend lifecycle (Flow Grilling ➔ UX Design ➔ Component Gen) with interactive checkpoints or `--autopilot` non-interactive mode. Enforces strict safety boundaries: read-only analysis (`flow`, `audit`, `a11y`), spec generation (`spec`), and code mutation (`component`). Automated linting via `audit_ux.py`. |
@@ -331,22 +373,100 @@ Give your agent the [debug SKILL.md](./skills/debug/SKILL.md) when diagnosing cr
 
 > **The Prime Directive — UX Is Not Visual Styling**: The agent must first establish user intent, flow, system states, accessibility, error recovery, and interaction behavior; visual implementation comes afterward. Guards against treating UX as cosmetic styling or "making the page prettier".
 
-Give your agent the [ux SKILL.md](./skills/ux/SKILL.md) when designing, refactoring, or generating frontend user experiences: `/ux "Build Team Invite Modal"`.
+Give your agent the [ux SKILL.md](./skills/ux/SKILL.md) when designing, evaluating, or implementing frontend user experiences: `/ux "Build Team Invite Modal"`.
 
-- **Three Operating Modes**:
-  1. `/ux <feature>` ➔ **Full Gated Pipeline**: Complete lifecycle (Flow Grilling ➔ UX Spec & State Matrix ➔ Component Generation ➔ Option C Verification) with interactive checkpoints.
-  2. `/ux audit` ➔ **Analysis Only**: Read-only inspection (Nielsen heuristics, cognitive friction, WCAG a11y via `audit_ux.py`); **zero file writes**.
-  3. `/ux component` ➔ **Targeted Generation**: Directly synthesizes or refactors accessible frontend code against existing design tokens.
-- **Headless CI & IDE Autopilot (`--autopilot`)**: Appending `--autopilot` (e.g. `/ux <feature> --autopilot`) removes interactive checkpoints and runs all gates continuously to emit terminal verification receipts.
-- **Design Token Hierarchy & Detection Protocol**: Never assumes Tailwind defaults are the project's design system:
-  1. Detect existing design system/tokens (CSS custom properties, theme configs, component library tokens).
-  2. Reuse existing tokens first.
-  3. Detect framework and styling system from codebase and configs.
-  4. Follow existing project conventions.
-  5. If no token system exists: use a coherent Tailwind scale if Tailwind is configured; otherwise establish CSS custom properties.
-- **State Completeness Law**: Mandates that every component defines all applicable states for its interaction model: Views/Organisms (Empty, Loading, Populated, Partial/Stale, Error/Recovery, Unavailable/Forbidden), Controls/Atoms (Default, Hover, Focus-visible, Pressed/Active, Disabled, Busy/Loading), plus compound states (Selected, Checked, Expanded, Invalid, Read-only) when applicable.
-- **WCAG 2.1/2.2 AA Compliance**: 4.5:1 text contrast, complete keyboard tab flow, focus trapping in modal dialogs, and mandatory labels for icon-only buttons.
-- **Evidence & Executable Verification (Option C)**: Rejects purely advisory guidance (Option A). Every finding or recommendation must produce a structured evidence record (rule/heuristic, affected component, severity, recommended fix, verification method) AND execute verification via `audit_ux.py --fail-on error`, pasting terminal receipts.
+### Architecture & Gated Flow
+
+```text
+                    /ux
+                     │
+              ┌──────┴──────┐
+              │ Router      │
+              └──────┬──────┘
+                     │
+        ┌────────────┼────────────┐
+        ↓            ↓            ↓
+      Flow          Audit        A11y
+        │
+        ↓
+   UX Specification
+        │
+        ↓
+   State Matrix
+        │
+        ↓
+ Component Generation
+        │
+        ↓
+   UX Verification (Option C)
+        │
+        ├── audit_ux.py --fail-on error
+        ├── accessibility checks
+        └── regression evidence
+```
+
+### Operating Modes & Safety Boundaries
+
+The skill clearly demarcates read-only analysis from code mutation to prevent unwanted repository edits:
+
+| Mode / Targeted Command | Action Type | Intent & Safety Boundary |
+|---|---|---|
+| `/ux <feature>` | Full Gated Pipeline | Drives complete lifecycle: Flow Grilling ➔ UX Spec ➔ State Matrix ➔ Component Gen ➔ Option C Verification with interactive checkpoints. |
+| `/ux flow` | Read-only analysis | Maps user journeys, mental models, decision paths, and cognitive friction (**zero file writes**). |
+| `/ux audit` | Read-only analysis | Audits Nielsen heuristics, affordance mismatches, and dark patterns (**zero file writes**). |
+| `/ux a11y` | Read-only analysis | Evaluates WCAG 2.1/2.2 AA compliance, keyboard tab order, and screen reader names (**zero file writes**). |
+| `/ux spec` | Specification drafting | Produces authoritative UX spec and interaction state matrices under `docs/ux/` or `openspec/` without modifying component source. |
+| `/ux component` | Targeted code generation | Generates or refactors accessible frontend code against existing design tokens. |
+
+- **Headless CI & IDE Autopilot (`--autopilot`)**: Appending `--autopilot` (e.g. `/ux <feature> --autopilot`) removes interactive human checkpoints and executes all phase gates internally to produce terminal verification receipts—essential for CI pipelines and headless agents.
+
+### The State Completeness Law
+
+Rather than forcing a rigid taxonomy, the fundamental law is:
+> **Every component must define all applicable states for its interaction model.**
+
+1. **Views / Organisms**:
+   - `Empty` (Zero-state onboarding, clear next action)
+   - `Loading` (Skeletons or spinners, layout stability)
+   - `Populated` (Healthy data display, responsive layout)
+   - `Partial / Stale` (Degraded background sync, cached indicators)
+   - `Error / Recovery` (Actionable error messaging, retry triggers)
+   - `Unavailable / Forbidden` (RBAC restrictions, network downtime)
+2. **Controls / Atoms**:
+   - `Default`, `Hover`, `Focus-visible`, `Pressed / Active`, `Disabled`, `Busy / Loading`
+3. **Compound States (when applicable)**:
+   - `Selected`, `Checked`, `Expanded`, `Invalid`, `Read-only`
+
+### Design Token Hierarchy & Nuanced Arbitrary Values Rule
+
+Never assumes Tailwind's default palette is the project's design system:
+1. **Detect existing tokens**: Scans for CSS custom properties (`var(--...)`), theme configuration files (`tailwind.config.*`, theme objects), or component library design tokens.
+2. **Reuse existing tokens**: Strictly prioritizes existing design tokens over new declarations.
+3. **Detect styling system**: Identifies Tailwind, CSS Modules, styled-components, vanilla CSS, or component libraries.
+4. **Follow conventions**: Follows existing spacing, typography, and color scales.
+5. **Fallback**: If no token system exists:
+   - Tailwind configured ➔ Establish a coherent Tailwind scale.
+   - Vanilla CSS ➔ Establish semantic CSS custom properties.
+
+> **Nuanced Arbitrary Values Rule**: Avoid arbitrary values (e.g. `p-[17px]`) when an existing semantic token satisfies the requirement. Arbitrary values are permitted when justified by the design system or a genuine visual constraint.
+
+### Static UX & Accessibility Scanner (`audit_ux.py`)
+
+A zero-dependency static scanner inspecting JSX, TSX, HTML, Vue, and Svelte files with 4 severity tiers (`CRITICAL`, `ERROR`, `WARNING`, `INFO`):
+- **False-Positive Resistant**:
+  - **Interactive Elements**: Flags clickable `<div>`/`<span>` tags lacking keyboard interaction (`onKeyDown`/Enter/Space) and accessible names, preferring native `<button>` over superficial ARIA patches.
+  - **Focus Indicators**: Recognizes legitimate replacement focus styles (e.g. `box-shadow: 0 0 0 2px var(--focus-ring)`) instead of blindly flagging `outline: none`.
+  - **Accessible Names**: Detects accessible names across `aria-label`, `aria-labelledby`, visible text, `title`, and visually-hidden text.
+  - **Form Associations**: Validates `<label for>`, `aria-labelledby`, `aria-label`, and `<fieldset>`/`<legend>` relationships.
+  - **Configurable Token Policies**: Permits common dimensional resets (`1px`, `100%`, `0`) while flagging undocumented arbitrary overrides.
+- **CI Enforcement**: Run `python3 skills/ux/scripts/audit_ux.py --fail-on error src/` to fail pipelines on critical and error findings.
+
+### Evidence & Verification Standard (Option C)
+
+- **Option A (Advisory)**: Discarded — LLMs giving conversational advice without rigor.
+- **Option B (Evidence-backed)**: Minimum — Every material UX decision produces heuristic/rule references, affected components, severity, recommended fixes, and verification methods.
+- **Option C (Evidence + Executable Verification)**: **Mandated Standard** — The agent produces structured evidence AND executes static/browser verification, pasting terminal receipts into Git notes and PR summaries.
+
 - **References**: [Usability Heuristics & Friction Rubric](./skills/ux/references/heuristics_rubric.md), [State Completeness & Interaction Models](./skills/ux/references/state_matrix.md), and [WCAG AA Developer Reference](./skills/ux/references/accessibility_wcag.md).
 
 ---
@@ -354,13 +474,14 @@ Give your agent the [ux SKILL.md](./skills/ux/SKILL.md) when designing, refactor
 ## Files
 
 ```text
+Makefile                        # Fast developer workflow targets (check, test, doctor, mcp, sync)
 .codex-plugin/
 └── plugin.json                 # OpenAI Codex native skill manifest
 .cursor/rules/
 └── ship.mdc                    # Cursor IDE native lifecycle rule
 .github/
 └── copilot-instructions.md     # GitHub Copilot engineering instructions
-nano/                           # High-density, ultra-compact (<50 lines) rules for Cursor/Claude Code
+nano/                           # High-density, ultra-compact (<60 lines) rules for Cursor/Claude Code
 ├── AGENTS.md                   # Universal drop-in rule file (<100 lines) combining all 9 skills
 ├── review.nano.md
 ├── design.nano.md
@@ -373,8 +494,27 @@ nano/                           # High-density, ultra-compact (<50 lines) rules 
 └── ux.nano.md
 
 scripts/
+├── check.sh                    # Instant sanity check (<2s: py_compile + parity + nano budget)
 ├── install.sh                  # Portable skill installer (symlink/copy to target environments)
-└── run_tests.sh                # Standard-library validation and regression runner
+├── playground.sh               # Ephemeral disposable git test repo provisioner
+├── run_tests.sh                # Standard-library validation and regression runner
+├── setup_hooks.sh              # Pre-commit hook installer ensuring 100% distribution parity
+├── sync_skills.py              # Synchronizes src/ship/ into skills/*/scripts/
+└── test_fast.sh                # Fast in-memory unit test runner (<4s)
+
+src/ship/                       # Unified Python package with 100% byte-for-byte parity to skills/
+├── cli.py                      # agentflow / ship unified CLI entrypoint
+├── lifecycle/                  # Modular SOLID lifecycle, gate, and transaction engine
+├── mcp/                        # Zero-dependency stdio Model Context Protocol (MCP) server
+│   ├── schemas.py              # MCP tool schemas for lifecycle, TDD, debt, benchmarks, validation
+│   ├── server.py               # Lightweight stdio JSON-RPC protocol server
+│   └── tools.py                # Capability-guarded MCP tool handlers
+└── tools/                      # Specialist tools (parity mirrors for skills/*/scripts/)
+    ├── review.py
+    ├── simplify.py
+    ├── spike.py
+    ├── tdd.py
+    └── ux.py
 
 skills/
 ├── ship/
@@ -562,9 +702,8 @@ The installer defaults to preserving existing non-symlink directories to avoid o
 ### Portable Rules for Cursor, Claude Code, and Windsurf (`nano/`)
 
 For teams operating across multiple AI coding tools with tight context budgets:
-- **Universal Root Rules ([`nano/AGENTS.md`](./nano/AGENTS.md))**: A complete, high-density distillation of all 6 skills (< 100 lines) ready to copy to `AGENTS.md`, `.cursorrules`, or `CLAUDE.md`.
-- **Scoped Nano Rules**: Standalone files under [`nano/`](./nano/) (`review.nano.md`, `simplify.nano.md`, `tdd.nano.md`, etc.) under 50 lines each for targeted task injection.
-
+- **Universal Root Rules ([`nano/AGENTS.md`](./nano/AGENTS.md))**: A complete, high-density distillation of all 9 skills (< 100 lines, < 6,000 bytes) ready to copy to `AGENTS.md`, `.cursorrules`, or `CLAUDE.md`.
+- **Scoped Nano Rules**: Standalone files under [`nano/`](./nano/) (`review.nano.md`, `simplify.nano.md`, `tdd.nano.md`, `ux.nano.md`, etc.) under 60 lines and 4,000 bytes each for targeted task injection.
 
 ---
 
@@ -596,6 +735,8 @@ The test runner reports the current test count and includes nested adversarial p
 - **Event Replay & Integrity ([`test_event_stream.py`](./tests/verification/test_event_stream.py), [`test_deterministic_replay.py`](./tests/production/test_deterministic_replay.py))**: Hash-chain verification and deterministic state replay.
 - **Team Operations & Diagnostics ([`test_team_operations.py`](./tests/test_team_operations.py))**: Preflight doctor checks, workflow profile deep-merging, and zero-loss state migrations.
 - **Core Engine Mechanics ([`test_inspect_lifecycle.py`](./tests/test_inspect_lifecycle.py))**: Git checkpoints, safe rollback on renames, Git notes attachment, and RFC 5133 trailer generation.
+- **UX & Accessibility Audits ([`test_audit_ux.py`](./tests/test_audit_ux.py))**: Static scanner rule validation across all 5 checks, multi-level severity thresholds, and false-positive prevention.
+- **Ultra-Dense Nano Rules ([`test_nano_rules.py`](./tests/test_nano_rules.py))**: Enforces strict line count (<60 lines for skills, <100 lines for `AGENTS.md`) and byte budget (<4KB / <6KB) density limits across all 9 skills.
 - **Document Integrity ([`test_documents.py`](./tests/test_documents.py))**: Validates that all relative Markdown link targets exist on disk and that schema document examples adhere to contract.
 
 ### CLI Inspection & Auditing Tools
@@ -635,6 +776,11 @@ Validate a reviewer or Judge report against the formal 12-field schema:
 python3 skills/review/scripts/validate_report.py report.json
 ```
 
+Audit frontend user interfaces and components for accessibility, interaction state completeness, and design token bypasses:
+```bash
+python3 skills/ux/scripts/audit_ux.py --fail-on error src/components/
+```
+
 Inspect the new AgentFlow control surfaces:
 ```bash
 agentflow events verify --path .
@@ -669,6 +815,20 @@ python3 skills/evals/scripts/score_calibration.py --input test_results.jsonl --p
 Audit a bugfix diff for reproduction tests, test weakening, and symptom masking:
 ```bash
 python3 skills/debug/scripts/verify_fix.py --strict --test-cmd "pytest"
+```
+
+### Developer Tooling & Makefile Targets
+
+Fast commands for local development, pre-commit checks, and CI:
+```bash
+make check          # Instant sanity check (<2s: syntax + parity + nano rules budget)
+make test-fast      # Fast in-memory unit tests (<4s: tools, schemas, document integrity)
+make test           # Full test suite (all unit, integration, and policy tests)
+make doctor         # Preflight lifecycle diagnostic checks
+make mcp            # Launch zero-dependency stdio Model Context Protocol (MCP) server
+make sync           # Synchronize src/ship/ into skills/*/scripts/ (100% parity)
+make verify-parity  # Verify 100% byte-for-byte parity between src/ and skills/
+make playground     # Provision ephemeral disposable git playground in .agentflow/playground
 ```
 
 ---
