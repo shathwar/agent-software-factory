@@ -87,3 +87,9 @@ python3 "$SKILLS_DIR/debug/scripts/verify_fix.py" --strict
 # Audit against specific test command
 python3 "$SKILLS_DIR/debug/scripts/verify_fix.py" --strict --test-cmd "pytest tests/test_my_fix.py"
 ```
+
+## Step observations
+
+When the AgentFlow runtime is available and local telemetry writes are allowed, use `agentflow steps catalog --skill debug` to discover the stable step IDs and evidence expectations. Begin one run per task/invocation with `agentflow steps begin --skill debug`; retain its run ID across resumption. Record each step as `started` before execution and `completed` with actual evidence files, or `failed`/`skipped` with a reason. Finish with `agentflow steps report <run_id>` and disclose unobserved steps or unfinished attempts; completion records are not independent quality verdicts.
+
+The standalone equivalent is `python3 "$SKILLS_DIR/ship/scripts/trace_steps.py"`. See [step tracing](../ship/references/step_tracing.md) for arguments, retries, evidence and read-only behavior when that companion skill is installed. If neither runtime is available, continue the requested workflow and report capture unavailable; do not fabricate a trace.

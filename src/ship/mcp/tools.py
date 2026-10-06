@@ -321,7 +321,29 @@ def handle_ship_review_validate(args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def handle_ship_steps_begin(args):
+    from ship.lifecycle.step_tracing import StepTrace
+    return StepTrace(_get_root(args)).begin(
+        args.get("skills"), change_id=args.get("change"), task_id=args.get("task_id"),
+        agent_id=args.get("agent_id"), session_id=args.get("session_id"), model=args.get("model"))
+
+
+def handle_ship_steps_record(args):
+    from ship.lifecycle.step_tracing import StepTrace
+    return StepTrace(_get_root(args)).record(
+        args["run_id"], args["step_id"], args["status"], attempt_id=args.get("attempt_id"),
+        evidence=args.get("evidence"), reason=args.get("reason"))
+
+
+def handle_ship_steps_report(args):
+    from ship.lifecycle.step_tracing import StepTrace
+    return StepTrace(_get_root(args)).report(args["run_id"])
+
+
 HANDLERS: Dict[str, Any] = {
+    "ship_steps_begin": handle_ship_steps_begin,
+    "ship_steps_record": handle_ship_steps_record,
+    "ship_steps_report": handle_ship_steps_report,
     "ship_next_turn": handle_ship_next_turn,
     "ship_status": handle_ship_status,
     "ship_evaluate": handle_ship_evaluate,
@@ -347,6 +369,7 @@ def dispatch_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
     if not handler:
         raise ValueError(f"Unknown tool: '{name}'. Available tools: {list(HANDLERS.keys())}")
     privileged = {
+        "ship_steps_begin", "ship_steps_record",
         "ship_record_turn", "ship_checkpoint", "ship_rollback", "ship_approve_design",
         "ship_record_tests", "ship_record_review", "ship_archive", "ship_spike_run", "ship_verify",
     }

@@ -147,3 +147,9 @@ Iterate sequentially through `openspec/changes/<change>/tasks.md`:
 - [Review Engine (`review`)](../review/SKILL.md): 10-stage systems code review.
 
 - [Local team rollout](./references/team_rollout.md): Doctor, profiles, supported environments, pinned upgrades, state migration, and pilot scenarios.
+
+## Step observations
+
+When the AgentFlow runtime is available and local telemetry writes are allowed, use `agentflow steps catalog --skill ship` to discover the stable step IDs and evidence expectations. Begin one run per task/invocation with `agentflow steps begin --skill ship`; retain its run ID across resumption. Record each step as `started` before execution and `completed` with actual evidence files, or `failed`/`skipped` with a reason. Finish with `agentflow steps report <run_id>` and disclose unobserved steps or unfinished attempts; completion records are not independent quality verdicts.
+
+The standalone equivalent is `python3 "$SKILLS_DIR/ship/scripts/trace_steps.py"`. See [step tracing](./references/step_tracing.md) for arguments, retries, evidence and read-only behavior when that companion skill is installed. If neither runtime is available, continue the requested workflow and report capture unavailable; do not fabricate a trace.

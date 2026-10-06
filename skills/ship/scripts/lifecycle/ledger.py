@@ -168,7 +168,7 @@ class FileLedgerStore:
 
     @classmethod
     @contextmanager
-    def lock(cls, repo_root: Path, timeout_sec: float = 10.0):
+    def lock(cls, repo_root: Path, timeout_sec: float = 10.0, *, recover: bool = True):
         agentflow_dir = agentflow_path(repo_root)
         agentflow_dir.mkdir(parents=True, exist_ok=True)
         sync_directory(repo_root)
@@ -204,7 +204,8 @@ class FileLedgerStore:
                             break
                         time.sleep(0.01)
             _tls.locks[lock_key] = 1
-            _tls.last_archive_recovery = recover_archive(repo_root)
+            if recover:
+                _tls.last_archive_recovery = recover_archive(repo_root)
             yield
         finally:
             _tls.locks[lock_key] = 0

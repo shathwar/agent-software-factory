@@ -119,3 +119,9 @@ Decompose evaluation into independent stages:
 | `scripts/sample_traces.py` | Stratified & diverse trace sampler | `--input <path> --count <n> --output <path>` |
 | `scripts/serve_review_app.py` | Local trace review & annotation server | `--samples <path> --port <int> --data-dir <path>` |
 | `scripts/score_calibration.py` | TPR/TNR, confusion matrix & Rogan-Gladen CIs | `--input <path> --p-obs <float> --bootstrap <int>` |
+
+## Step observations
+
+When the AgentFlow runtime is available and local telemetry writes are allowed, use `agentflow steps catalog --skill evals` to discover the stable step IDs and evidence expectations. Begin one run per task/invocation with `agentflow steps begin --skill evals`; retain its run ID across resumption. Record each step as `started` before execution and `completed` with actual evidence files, or `failed`/`skipped` with a reason. Finish with `agentflow steps report <run_id>` and disclose unobserved steps or unfinished attempts; completion records are not independent quality verdicts.
+
+The standalone equivalent is `python3 "$SKILLS_DIR/ship/scripts/trace_steps.py"`. See [step tracing](../ship/references/step_tracing.md) for arguments, retries, evidence and read-only behavior when that companion skill is installed. If neither runtime is available, continue the requested workflow and report capture unavailable; do not fabricate a trace.

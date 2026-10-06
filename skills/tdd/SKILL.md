@@ -132,3 +132,9 @@ python3 "$SKILLS_DIR/tdd/scripts/verify_tdd.py" --trim-receipt test_run.log
 - [TDD Patterns & Testability (`tdd_patterns.md`)](./references/tdd_patterns.md): AAA patterns, Dual-Speed testing, fakes vs stubs vs mocks, characterization tests.
 - [Testing Anti-Patterns Catalog (`anti_patterns.md`)](./references/anti_patterns.md): Common agent testing failures, hollow mock smells, and brittle assertions.
 - [In-Flight Doubt Cycle (`doubt_cycle.md`)](./references/doubt_cycle.md): 5-step adversarial verification protocol to cross-examine non-trivial decisions during implementation.
+
+## Step observations
+
+When the AgentFlow runtime is available and local telemetry writes are allowed, use `agentflow steps catalog --skill tdd` to discover the stable step IDs and evidence expectations. Begin one run per task/invocation with `agentflow steps begin --skill tdd`; retain its run ID across resumption. Record each step as `started` before execution and `completed` with actual evidence files, or `failed`/`skipped` with a reason. Finish with `agentflow steps report <run_id>` and disclose unobserved steps or unfinished attempts; completion records are not independent quality verdicts.
+
+The standalone equivalent is `python3 "$SKILLS_DIR/ship/scripts/trace_steps.py"`. See [step tracing](../ship/references/step_tracing.md) for arguments, retries, evidence and read-only behavior when that companion skill is installed. If neither runtime is available, continue the requested workflow and report capture unavailable; do not fabricate a trace.

@@ -95,3 +95,9 @@ Traverse these 5 domains during grilling (details in [`systems_inquiry_matrix.md
 - [Capability Closure Checklists (`capability_closure.md`)](./references/capability_closure.md): Entity lifecycle CRUD, subsystem integration, role matrix, and expectation sweep.
 - [Architecture Decision Record Template (`adr_template.md`)](./references/adr_template.md): Standard contract format for ADRs.
 - [OpenSpec Change Package Template (`openspec_template.md`)](./references/openspec_template.md): Schema for `proposal.md`, `specs/`, and `tasks.md`.
+
+## Step observations
+
+When the AgentFlow runtime is available and local telemetry writes are allowed, use `agentflow steps catalog --skill design` to discover the stable step IDs and evidence expectations. Begin one run per task/invocation with `agentflow steps begin --skill design`; retain its run ID across resumption. Record each step as `started` before execution and `completed` with actual evidence files, or `failed`/`skipped` with a reason. Finish with `agentflow steps report <run_id>` and disclose unobserved steps or unfinished attempts; completion records are not independent quality verdicts.
+
+The standalone equivalent is `python3 "$SKILLS_DIR/ship/scripts/trace_steps.py"`. See [step tracing](../ship/references/step_tracing.md) for arguments, retries, evidence and read-only behavior when that companion skill is installed. If neither runtime is available, continue the requested workflow and report capture unavailable; do not fabricate a trace.

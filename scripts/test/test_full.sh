@@ -34,6 +34,7 @@ echo ""
 echo "=== 2. Checking Distribution Parity & Skill Coverage ==="
 "$PYTHON" scripts/verify/sync_parity.py --check
 "$PYTHON" scripts/verify/check_coverage.py
+"$PYTHON" scripts/verify/build_step_catalog.py --check
 echo "✓ Skill distribution parity OK"
 echo ""
 

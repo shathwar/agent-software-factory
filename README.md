@@ -124,6 +124,7 @@ All tools run from the repository root with standard Python 3.10+:
 ./scripts/verify/check_sanity.sh               # Instant sanity check (<2s: syntax + parity + nano budget)
 python3 scripts/verify/sync_parity.py --check  # Verify 100% byte-for-byte parity between src/ and skills/
 python3 scripts/verify/check_coverage.py       # Audit skill step coverage inventory and verification gaps
+python3 scripts/verify/build_step_catalog.py --check # Verify shipped runtime step IDs and source versions
 python3 scripts/verify/ci_gate.py              # Strict CI pull-request policy gate
 
 # Test Suites
@@ -189,6 +190,10 @@ tests/                          # In-memory fast unit tests, fixtures, and evalu
 ```
 
 ---
+
+## Step Observability
+
+`agentflow steps begin --skill tdd --task <id>` starts a run using the same stable step IDs as the coverage inventory. Record `started`, `completed`, `failed`, or `skipped` observations, then use `agentflow steps report <run_id>` to inspect missing steps, retries, and evidence integrity. Completion records require evidence files; failed/skipped records require reasons. Reports distinguish missing capture from success and do not change delivery gates. See [step tracing](./skills/ship/references/step_tracing.md) for CLI, standalone, and MCP usage.
 
 ## Team Rollout & Governance
 

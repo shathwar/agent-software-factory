@@ -237,3 +237,49 @@ TOOLS_MANIFEST.append({
         },
     },
 })
+
+TOOLS_MANIFEST.extend([
+    {
+        "name": "ship_steps_begin",
+        "description": "Begin a reported skill run with a snapshot of stable step IDs and skill versions. Returns run_id; does not verify agent behavior.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "skills": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": True},
+                "change": {"type": "string"},
+                "task_id": {"type": "string"},
+                "agent_id": {"type": "string"},
+                "session_id": {"type": "string"},
+                "model": {"type": "string"}
+            },
+            "required": ["skills"]
+        }
+    },
+    {
+        "name": "ship_steps_record",
+        "description": "Record a step start or result. Complete/fail require the active attempt_id. Completion requires evidence files; skip/fail require a reason. Returns the correlated event and attempt IDs.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "run_id": {"type": "string"},
+                "step_id": {"type": "string"},
+                "status": {"type": "string", "enum": ["started", "completed", "failed", "skipped"]},
+                "attempt_id": {"type": "string"},
+                "evidence": {"type": "array", "items": {"type": "string"}, "description": "Repository-relative receipt files, hashed at recording time"},
+                "reason": {"type": "string"}
+            },
+            "required": ["run_id", "step_id", "status"]
+        }
+    },
+    {
+        "name": "ship_steps_report",
+        "description": "Report every step in a run, including unobserved steps, unfinished attempts, skips, failures and changed/missing evidence. Not a quality verdict.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}, "run_id": {"type": "string"}},
+            "required": ["run_id"]
+        }
+    }
+])

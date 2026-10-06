@@ -109,3 +109,9 @@ Audit markers across tiers:
 - [Simplify Implementer Role (`simplify_implementer.md`)](./agents/simplify_implementer.md): Minimal production code agent prompt for green-phase implementation.
 - [The Laziness Ladder Guide (`laziness_ladder.md`)](./references/laziness_ladder.md): Language-by-language stdlib replacements and anti-bloat patterns.
 - [Debt Tracking & Ledger Protocol (`debt_tracking.md`)](./references/debt_tracking.md): Auditing and cleaning up `simplify:` shortcuts.
+
+## Step observations
+
+When the AgentFlow runtime is available and local telemetry writes are allowed, use `agentflow steps catalog --skill simplify` to discover the stable step IDs and evidence expectations. Begin one run per task/invocation with `agentflow steps begin --skill simplify`; retain its run ID across resumption. Record each step as `started` before execution and `completed` with actual evidence files, or `failed`/`skipped` with a reason. Finish with `agentflow steps report <run_id>` and disclose unobserved steps or unfinished attempts; completion records are not independent quality verdicts.
+
+The standalone equivalent is `python3 "$SKILLS_DIR/ship/scripts/trace_steps.py"`. See [step tracing](../ship/references/step_tracing.md) for arguments, retries, evidence and read-only behavior when that companion skill is installed. If neither runtime is available, continue the requested workflow and report capture unavailable; do not fabricate a trace.

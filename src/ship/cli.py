@@ -59,6 +59,8 @@ CORE SUBCOMMANDS:
       Manage durable authorization objects and scope-limited human approvals.
   agentflow events <list|tail|verify> [options]
       Forensic audit trail: append-only cryptographic hash-chained execution event stream.
+  agentflow steps <catalog|begin|started|completed|failed|skipped|report> [options]
+      Record correlated skill steps and evidence; report missing observations.
   agentflow budget <show|set|record|check> [options]
       Resource & Budget Governor: track and enforce ceilings across 7 economic dimensions.
   agentflow benchmark [--suite all|<category>] [--iterations N] [--json]
@@ -1490,6 +1492,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     cmd = argv[0].strip().lower()
     sub_args = list(argv[1:])
+
+    if cmd == "steps":
+        from ship.lifecycle.step_tracing import main as steps_main
+        return steps_main(sub_args)
 
     # MCP Server dispatch
     if cmd == "mcp":

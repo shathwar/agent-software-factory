@@ -4,19 +4,19 @@
   "limitations": [
     "This is a coverage inventory, not a record of executed evaluations or a readiness score.",
     "No automated real-agent behavioral evaluator is registered. Unit, integration, and static fixture checks do not establish agent adherence.",
-    "Mandatory correlated step start/result telemetry is not implemented; expected_evidence describes the required proof, not guaranteed capture."
+    "Correlated step start/result recording is available through AgentFlow, but capture is caller-reported and requires runtime use; expected evidence is not independently verified."
   ],
   "source_digests": {
-    "skills/design/SKILL.md": "baec425d16a278324ea66f50f7eb08aa47d1f504c9b757b833e8eb9481208aec",
-    "skills/spike/SKILL.md": "fb59caa37f08677eac548f3dc080673f125f4619f1925ba6696707e39b67f4fb",
-    "skills/tdd/SKILL.md": "bb736b58fc4df49e53501f85aaf8169d5908a022652fe8770b0d65b66d6d8088",
-    "skills/simplify/SKILL.md": "edc57c0e1bd1d70b34bb524286cf4ae4d326a9ac66c738fcf6136cae423ae94c",
-    "skills/review/SKILL.md": "63534b9de3f626df4bd51b19ffede91717b79f5e15c4c735bac6eb2fc9b49e3d",
+    "skills/design/SKILL.md": "84caa191369efc09e08091ea2e783decb13468e341e34da57819b8db3a477a48",
+    "skills/spike/SKILL.md": "046d1a7db2d54b0e51a6be5204505d714b716b8851e8ee9eb2d95bc8bf9ffa4d",
+    "skills/tdd/SKILL.md": "a4c2802078b8251c8ddc1725e6feb305c1d75d28bccd90abebd5d47d9fc42d50",
+    "skills/simplify/SKILL.md": "9e7a06852b80872a83c68d5ee8d7c23f057fafb6dea42acaa07085cf9b11ecf4",
+    "skills/review/SKILL.md": "b2283333eacc6d81c501d3688b24929c7080c5dfaa8f18104073d00318cf6099",
     "skills/review/references/review_pipeline.md": "67299c5862bb8a50b2f8d0d5e1021aee7b8fc41e6fc10b628f9a46d9df8ac1d2",
-    "skills/debug/SKILL.md": "4e9befd3d74f2a2d09ec0ac7062b53b8d38c5ecf96362b4749dc70792094e868",
-    "skills/evals/SKILL.md": "65df88ee5be9976217b1de2c388e0a84fac8aa4c648bd9ea103f32e48cc82909",
-    "skills/ux/SKILL.md": "b8ef25f407145f1be5e45213968f2da25ff1fe86d6020b781c6ca10ede829d2f",
-    "skills/ship/SKILL.md": "8b31cba9d7a37f03a32c0941f61203f3ff5b320a31c77a5f9f29eb7a7bd82951"
+    "skills/debug/SKILL.md": "634cefcd8ff3f0ec18e947b668a8c711a61eebf72185567a7ef35eb920c7471c",
+    "skills/evals/SKILL.md": "93a4bc3321f57bb1cf7302b0987ffcb9f27fb991ded17f4467624e9e2c773afa",
+    "skills/ux/SKILL.md": "360df1caa1807a0a6ea47c687d0204698004cd844effe9daf01378a4b3308241",
+    "skills/ship/SKILL.md": "688ab02a4a78851d8333cae2ac8db3df0408cad426a277d4fa5cdd1067126491"
   },
   "validators": {
     "turn": {
