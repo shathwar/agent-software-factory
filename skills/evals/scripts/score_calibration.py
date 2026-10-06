@@ -18,8 +18,87 @@ import json
 import math
 from pathlib import Path
 import random
+import re
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+
+
+def verify_split_isolation(
+    train_ids: Sequence[str] | Set[str],
+    test_ids: Sequence[str] | Set[str]
+) -> Tuple[bool, List[str]]:
+    """Verify zero overlap between train/few-shot set and held-out test set (EVL-LEAK-001)."""
+    set_train = {str(x).strip() for x in train_ids if str(x).strip()}
+    set_test = {str(x).strip() for x in test_ids if str(x).strip()}
+    overlap = sorted(list(set_train.intersection(set_test)))
+
+    if overlap:
+        sample = overlap[:5]
+        extra = f" (and {len(overlap) - 5} more)" if len(overlap) > 5 else ""
+        return False, [
+            f"EVL-LEAK-001: Data leakage detected! Train/Dev and Test sets share {len(overlap)} IDs: {sample}{extra}. "
+            "Held-out test set must be strictly isolated to prevent inflated calibration."
+        ]
+    return True, []
+
+
+def audit_judge_rubric(prompt_text: str) -> Tuple[bool, List[str]]:
+    """Audit judge prompt rubric for anti-patterns:
+    - EVL-RUB-001: Likert scale / multi-point score instead of binary Pass/Fail.
+    - EVL-RUB-002: Missing critique/reasoning step before verdict.
+    - EVL-MOD-001: Unpinned model snapshot (e.g., 'latest' or unversioned aliases).
+    """
+    errors: List[str] = []
+    text_lower = prompt_text.lower()
+
+    # EVL-RUB-001: Detect Likert scale or non-binary rating schemes
+    likert_patterns = [
+        r"\b(?:scale\s+of\s+1\s*(?:to|-)\s*[5|10])\b",
+        r"\b(?:rate|rating|score)\s+(?:from\s+)?1\s*(?:to|-)\s*[5|10]\b",
+        r"\b(?:1\s*[-–]\s*5|1\s*[-–]\s*10)\s*(?:stars?|scale|rating|points?)\b",
+        r"\b(?:5-point|10-point)\s+scale\b",
+        r"\blikert\b",
+        r"\bscore\s+between\s+1\s+and\s+(?:5|10)\b",
+    ]
+    for pat in likert_patterns:
+        if re.search(pat, text_lower):
+            errors.append(
+                f"EVL-RUB-001: Likert / multi-point rating pattern detected ('{pat}'). "
+                "Judge prompts must use binary Pass/Fail with explicit operational criteria, not fuzzy rating scales."
+            )
+            break
+
+    # EVL-RUB-002: Ensure critique / reasoning before verdict
+    reasoning_markers = [
+        "critique", "reasoning", "chain of thought", "thought",
+        "justification", "step-by-step", "explanation", "analysis"
+    ]
+    if not any(m in text_lower for m in reasoning_markers):
+        errors.append(
+            "EVL-RUB-002: Missing explicit critique-before-verdict requirement. "
+            "Prompts must instruct judge to articulate critique/reasoning prior to outputting Pass or Fail."
+        )
+
+    # EVL-MOD-001: Detect unpinned model references
+    unpinned_patterns = [
+        r"\b([a-zA-Z0-9_-]+-latest)\b",
+        r"\b(gpt-4o)\b(?!\s*-\d{4})",
+        r"\b(claude-3-5-sonnet)\b(?!\s*-\d{8})",
+        r"\b(gemini-1\.5-pro)\b(?!\s*-\d{3})",
+    ]
+    for pat in unpinned_patterns:
+        match = re.search(pat, prompt_text)
+        if match:
+            # Check if it was followed by a snapshot identifier
+            matched_str = match.group(1)
+            # If matched 'latest' or unversioned model
+            errors.append(
+                f"EVL-MOD-001: Potentially unpinned model alias detected ('{matched_str}'). "
+                "Production LLM judges must pin exact model snapshot dates or hashes to prevent silent calibration drift."
+            )
+            break
+
+    return len(errors) == 0, errors
 
 
 def normalize_label(val: Any) -> Optional[str]:
@@ -234,12 +313,51 @@ def format_report(result: Dict[str, Any]) -> str:
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Evaluate judge calibration and calculate Rogan-Gladen corrections.")
-    parser.add_argument("--input", "-i", type=Path, required=True, help="Path to JSON, JSONL, or CSV predictions file.")
+    parser.add_argument("--input", "-i", type=Path, default=None, help="Path to JSON, JSONL, or CSV predictions file.")
     parser.add_argument("--p-obs", type=float, default=None, help="Observed pass rate in production (0.0 to 1.0).")
     parser.add_argument("--bootstrap", type=int, default=2000, help="Number of bootstrap resamples (default: 2000).")
     parser.add_argument("--format", choices=["markdown", "json"], default="markdown", help="Output format.")
+    parser.add_argument("--check-split", type=Path, default=None, help="Path to split manifest JSON file with train and test IDs.")
+    parser.add_argument("--audit-rubric", type=Path, default=None, help="Path to judge prompt markdown/text file to audit.")
 
     args = parser.parse_args(argv)
+
+    if args.check_split:
+        try:
+            with open(args.check_split, "r", encoding="utf-8") as f:
+                split_data = json.load(f)
+            train_ids = split_data.get("train", []) or split_data.get("train_ids", []) or split_data.get("few_shots", [])
+            test_ids = split_data.get("test", []) or split_data.get("test_ids", [])
+            passed, errors = verify_split_isolation(train_ids, test_ids)
+            if not passed:
+                for err in errors:
+                    print(f"❌ {err}", file=sys.stderr)
+                return 1
+            print(f"✅ Split isolation verified: zero overlap between train ({len(train_ids)}) and test ({len(test_ids)}) sets.")
+            if not args.input and not args.audit_rubric:
+                return 0
+        except Exception as e:
+            print(f"Error checking split manifest: {e}", file=sys.stderr)
+            return 1
+
+    if args.audit_rubric:
+        try:
+            with open(args.audit_rubric, "r", encoding="utf-8") as f:
+                prompt_content = f.read()
+            passed, errors = audit_judge_rubric(prompt_content)
+            if not passed:
+                for err in errors:
+                    print(f"❌ {err}", file=sys.stderr)
+                return 1
+            print("✅ Judge prompt rubric passed anti-pattern audit.")
+            if not args.input:
+                return 0
+        except Exception as e:
+            print(f"Error auditing judge rubric: {e}", file=sys.stderr)
+            return 1
+
+    if not args.input:
+        parser.error("Must specify --input (or --check-split / --audit-rubric)")
 
     try:
         pairs = load_pairs(args.input)

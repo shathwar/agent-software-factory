@@ -20,7 +20,7 @@ class LocalRolloutTests(unittest.TestCase):
             install = base / 'installed skills'
             project = base / 'consumer project'
             project.mkdir()
-            subprocess.run(['bash', str(ROOT / 'scripts/install.sh'), '--target', str(install), '--mode', 'copy'], check=True, capture_output=True)
+            subprocess.run(['bash', str(ROOT / 'scripts/setup/install_skills.sh'), '--target', str(install), '--mode', 'copy'], check=True, capture_output=True)
             script = install / 'ship/scripts/inspect_lifecycle.py'
             def cli(*args, code=0):
                 result = subprocess.run([sys.executable, str(script), *args], cwd=project, capture_output=True, text=True)

@@ -48,9 +48,10 @@ def parse_report(text):
     return json.loads(text, object_pairs_hook=unique_object, parse_constant=reject_constant)
 
 
-def validate_report(report):
+def validate_report(report, verify_source: bool = False, repo_root: Optional[Path | str] = None):
     if not isinstance(report, dict):
         return ["Report must be a JSON object"]
+
 
     errors = []
     missing_top = TOP_REQUIRED - report.keys()
@@ -140,26 +141,89 @@ def validate_report(report):
             if end and int(end) < int(start[1:]):
                 errors.append(f"{fid}: line range ends before it starts")
 
+        # Check for manufactured stylistic findings with elevated severity (REV-SEV-001)
+        if isinstance(finding["severity"], str) and finding["severity"] in {"CRITICAL", "HIGH"}:
+            title_prob = (finding["title"] + " " + finding["problem"]).lower()
+            if re.search(r"\b(naming convention|rename|camelcase|snake_case|indentation|trailing whitespace|prettier|formatting)\b", title_prob):
+                errors.append(f"[{fid}] [REV-SEV-001] Stylistic or cosmetic issue cannot be marked {finding['severity']}. Demote to LOW or omit.")
+
+
+    if verify_source and not errors:
+        errors.extend(verify_source_evidence(report, repo_root=repo_root))
+
+    return errors
+
+
+def verify_source_evidence(report: dict, repo_root: Optional[Path | str] = None) -> list[str]:
+    """Verify that cited files exist on disk and cited evidence lines actually appear in the source."""
+    root = Path(repo_root) if repo_root else Path.cwd()
+    errors = []
+    findings = report.get("findings", [])
+    if not isinstance(findings, list):
+        return errors
+
+    for idx, finding in enumerate(findings):
+        if not isinstance(finding, dict):
+            continue
+        fid = finding.get("id", f"findings[{idx}]")
+        file_rel = finding.get("file", "")
+        if not file_rel or not isinstance(file_rel, str):
+            continue
+
+        target_file = root / file_rel
+        if not target_file.is_file():
+            errors.append(f"[{fid}] [REV-SRC-001] Referenced file '{file_rel}' does not exist in repository working tree.")
+            continue
+
+        evidence = finding.get("evidence", "")
+        if isinstance(evidence, str) and evidence.strip():
+            try:
+                content = target_file.read_text(encoding="utf-8", errors="replace")
+                norm_evidence = " ".join(evidence.split())
+                norm_content = " ".join(content.split())
+                if norm_evidence not in norm_content:
+                    errors.append(
+                        f"[{fid}] [REV-EV-001] Quoted evidence does not match contents of '{file_rel}'. "
+                        "Hallucinated or modified evidence rejected by Judge."
+                    )
+            except Exception as e:
+                errors.append(f"[{fid}] Unable to read source file '{file_rel}': {e}")
+
     return errors
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("report", help="JSON report file, or - for stdin")
+    parser.add_argument(
+        "--verify-source",
+        action="store_true",
+        help="Verify that referenced files and evidence snippets actually exist on disk in the working tree.",
+    )
+    parser.add_argument(
+        "--repo-root",
+        default=None,
+        help="Path to repository root for source existence verification (default: current directory).",
+    )
     args = parser.parse_args(argv)
     try:
         text = (sys.stdin.read() if args.report == "-"
                 else Path(args.report).read_text(encoding="utf-8"))
-        errors = validate_report(parse_report(text))
+        errors = validate_report(
+            parse_report(text),
+            verify_source=args.verify_source,
+            repo_root=args.repo_root,
+        )
     except (OSError, ValueError) as error:
         errors = [str(error)]
     if errors:
         for error in errors:
             print(error, file=sys.stderr)
         return 1
-    print("Report structure is valid; source evidence and review coverage still require adjudication.")
+    print("Report structure is valid; source evidence and review coverage verified.")
     return 0
 
 
 if __name__ == "__main__":
     sys.exit(main())
+

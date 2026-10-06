@@ -1,0 +1,23 @@
+{
+  "reviewer": "judge",
+  "status": "complete",
+  "coverage": ["Inspected average.py"],
+  "questions": [],
+  "routing_notes": [],
+  "findings": [
+    {
+      "id": "FINDING-001",
+      "severity": "P1",
+      "category": "Correctness",
+      "file": "src/average.py",
+      "line": "L25-L10",
+      "title": "Division by zero",
+      "problem": "Divide by zero on empty list",
+      "evidence": "return sum(v)/len(v)",
+      "impact": "Crashes on empty requests.",
+      "recommendation": "Return 0 when empty",
+      "confidence": 1.5,
+      "fixability": "autonomous"
+    }
+  ]
+}

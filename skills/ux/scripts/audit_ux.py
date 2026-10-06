@@ -8,8 +8,10 @@ Rule Catalog:
 - UX-002 (ERROR): Suppressed focus outline without replacement indicator (ring, box-shadow, border).
 - UX-003 (ERROR): Icon-only button has no accessible name (missing aria-label, aria-labelledby, sr-only).
 - UX-014 (ERROR): Form input/textarea/select element has no accessible name.
+- UX-041 (ERROR): Modal dialog lacks accessible name (missing aria-label, aria-labelledby, or title).
 - UX-005 (WARNING): Dead-end error message lacks actionable recovery CTA.
 - UX-021 (WARNING): Arbitrary spacing/dimension value bypasses design tokens.
+- UX-051 (WARNING): Dynamic collection rendering lacks empty state or loading skeleton handling.
 - UX-031 (INFO): Icon button uses title attribute instead of preferred aria-label or sr-only text.
 """
 
@@ -99,6 +101,16 @@ RECOVERY_CTA_PATTERN = re.compile(
 
 ARBITRARY_TAILWIND_PATTERN = re.compile(
     r"""(?:\b|(?<=[\s"'`]))([a-zA-Z0-9_-]*(?:p|m|px|py|pl|pr|pt|pb|mx|my|ml|mr|mt|mb|top|bottom|left|right|w|h|gap|inset)-\[([^\]]+)\])"""
+)
+
+DIALOG_PATTERN = re.compile(
+    r"""<(?:dialog\b|div\b[^>]*\brole\s*=\s*["']dialog["'])([^>]*)>""",
+    re.IGNORECASE | re.DOTALL,
+)
+
+MAP_COLLECTION_PATTERN = re.compile(
+    r"""\b(\w+)\.map\s*\(""",
+    re.IGNORECASE,
 )
 
 
@@ -271,6 +283,54 @@ def check_dead_end_errors(content: str, file_path: str) -> List[UXViolation]:
     return violations
 
 
+def check_modal_dialogs(content: str, file_path: str) -> List[UXViolation]:
+    violations: List[UXViolation] = []
+    for match in DIALOG_PATTERN.finditer(content):
+        attrs = match.group(1)
+        has_aria_label = bool(re.search(r"""\b(?:aria-label|aria-labelledby)\s*=""", attrs, re.IGNORECASE))
+        has_title = bool(re.search(r"""\btitle\s*=""", attrs, re.IGNORECASE))
+        if not (has_aria_label or has_title):
+            line_no = content[:match.start()].count("\n") + 1
+            violations.append(UXViolation(
+                rule_id="UX-041",
+                severity="ERROR",
+                message="Modal dialog lacks accessible name (missing aria-label, aria-labelledby, or title).",
+                file_path=file_path,
+                line_number=line_no,
+                snippet=match.group(0).splitlines()[0].strip()[:100],
+            ))
+    return violations
+
+
+def check_state_completeness(content: str, file_path: str) -> List[UXViolation]:
+    violations: List[UXViolation] = []
+    matches = list(MAP_COLLECTION_PATTERN.finditer(content))
+    if not matches:
+        return violations
+
+    has_empty = bool(re.search(r"""(?:\.length\s*===?\s*0|!\w+\.length|\bEmpty\b|No\s+(?:items|results|data)|not\s+found)""", content, re.IGNORECASE))
+    has_loading = bool(re.search(r"""(?:\bisLoading\b|\bloading\b|\bSkeleton\b|\bSpinner\b|\bpending\b)""", content, re.IGNORECASE))
+
+    if not has_empty or not has_loading:
+        first_match = matches[0]
+        line_no = content[:first_match.start()].count("\n") + 1
+        missing = []
+        if not has_empty:
+            missing.append("empty state (.length === 0 / 'No items')")
+        if not has_loading:
+            missing.append("loading skeleton/spinner")
+
+        violations.append(UXViolation(
+            rule_id="UX-051",
+            severity="WARNING",
+            message=f"Dynamic collection mapping missing: {', '.join(missing)}. Brad Frost 6-state completeness requires explicit Empty and Loading branches.",
+            file_path=file_path,
+            line_number=line_no,
+            snippet=content[first_match.start():first_match.start() + 80].strip(),
+        ))
+    return violations
+
+
 def audit_content(
     content: str,
     file_path: str,
@@ -293,6 +353,10 @@ def audit_content(
         violations.extend(check_arbitrary_tokens(content, file_path, allowed_tokens))
     if "UX-005" not in ignored and "DEAD_END_ERROR" not in ignored:
         violations.extend(check_dead_end_errors(content, file_path))
+    if "UX-041" not in ignored and "MODAL_DIALOG_LABEL" not in ignored:
+        violations.extend(check_modal_dialogs(content, file_path))
+    if "UX-051" not in ignored and "STATE_COMPLETENESS" not in ignored:
+        violations.extend(check_state_completeness(content, file_path))
 
     return violations
 

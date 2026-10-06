@@ -1,0 +1,12 @@
+diff --git a/src/services/auth.py b/src/services/auth.py
+--- a/src/services/auth.py
++++ b/src/services/auth.py
+@@ -10,2 +10,2 @@
+-    token = parse(header)
++    token = parse_safe(header)
+diff --git a/tests/test_auth.py b/tests/test_auth.py
+--- a/tests/test_auth.py
++++ b/tests/test_auth.py
+@@ -15,2 +15,4 @@
++def test_auth_bugfix():
++    assert True

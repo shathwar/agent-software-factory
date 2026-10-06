@@ -1,0 +1,2766 @@
+{
+  "schema_version": 1,
+  "scope": "Required workflow steps and turn contracts for the nine repository skills; conditional steps apply only in their stated modes.",
+  "limitations": [
+    "This is a coverage inventory, not a record of executed evaluations or a readiness score.",
+    "No automated real-agent behavioral evaluator is registered. Unit, integration, and static fixture checks do not establish agent adherence.",
+    "Mandatory correlated step start/result telemetry is not implemented; expected_evidence describes the required proof, not guaranteed capture."
+  ],
+  "source_digests": {
+    "skills/design/SKILL.md": "baec425d16a278324ea66f50f7eb08aa47d1f504c9b757b833e8eb9481208aec",
+    "skills/spike/SKILL.md": "fb59caa37f08677eac548f3dc080673f125f4619f1925ba6696707e39b67f4fb",
+    "skills/tdd/SKILL.md": "bb736b58fc4df49e53501f85aaf8169d5908a022652fe8770b0d65b66d6d8088",
+    "skills/simplify/SKILL.md": "edc57c0e1bd1d70b34bb524286cf4ae4d326a9ac66c738fcf6136cae423ae94c",
+    "skills/review/SKILL.md": "63534b9de3f626df4bd51b19ffede91717b79f5e15c4c735bac6eb2fc9b49e3d",
+    "skills/review/references/review_pipeline.md": "67299c5862bb8a50b2f8d0d5e1021aee7b8fc41e6fc10b628f9a46d9df8ac1d2",
+    "skills/debug/SKILL.md": "4e9befd3d74f2a2d09ec0ac7062b53b8d38c5ecf96362b4749dc70792094e868",
+    "skills/evals/SKILL.md": "65df88ee5be9976217b1de2c388e0a84fac8aa4c648bd9ea103f32e48cc82909",
+    "skills/ux/SKILL.md": "b8ef25f407145f1be5e45213968f2da25ff1fe86d6020b781c6ca10ede829d2f",
+    "skills/ship/SKILL.md": "8b31cba9d7a37f03a32c0941f61203f3ff5b320a31c77a5f9f29eb7a7bd82951"
+  },
+  "validators": {
+    "turn": {
+      "reference": {
+        "path": "src/ship/lifecycle/turns.py",
+        "symbol": "get_next_turn_contract"
+      },
+      "scope": "Plans lifecycle actions; does not observe whether an agent executes them."
+    },
+    "delivery": {
+      "reference": {
+        "path": "src/ship/lifecycle/gates.py",
+        "symbol": "validate_delivery_readiness"
+      },
+      "scope": "Checks delivery evidence and gate readiness, not the full agent workflow."
+    },
+    "execution": {
+      "reference": {
+        "path": "src/ship/lifecycle/verification.py",
+        "symbol": "execute_and_verify_tests"
+      },
+      "scope": "Executes configured tests and binds a receipt to the source snapshot; does not prove edit ordering."
+    },
+    "grounding": {
+      "reference": {
+        "path": "src/ship/lifecycle/verification.py",
+        "symbol": "verify_finding_grounding"
+      },
+      "scope": "Checks cited source grounding, not semantic correctness or defect recall."
+    },
+    "review-schema": {
+      "reference": {
+        "path": "src/ship/tools/review.py",
+        "symbol": "validate_report"
+      },
+      "scope": "Validates report structure, not adjudication quality."
+    },
+    "tdd-audit": {
+      "reference": {
+        "path": "src/ship/tools/tdd.py",
+        "symbol": "audit_tdd"
+      },
+      "scope": "Checks file parity and static test anti-patterns, not red-before-edit ordering."
+    },
+    "debt": {
+      "reference": {
+        "path": "src/ship/tools/simplify.py",
+        "symbol": "main"
+      },
+      "scope": "Checks debt marker syntax, not runtime threshold attainment or solution simplicity."
+    },
+    "spike": {
+      "reference": {
+        "path": "src/ship/tools/spike.py",
+        "symbol": "run_benchmark"
+      },
+      "scope": "Measures command execution; experiment representativeness remains unvalidated."
+    },
+    "spike-report": {
+      "reference": {
+        "path": "src/ship/tools/spike.py",
+        "symbol": "validate_spike_report"
+      },
+      "scope": "Validates spike report format, falsifiable hypothesis SLIs, results table, and anti-contradiction verdicts."
+    },
+    "spike-isolation": {
+      "reference": {
+        "path": "src/ship/tools/spike.py",
+        "symbol": "audit_spike_isolation"
+      },
+      "scope": "Audits changed paths to guarantee prototype code never leaks into production directories (src/, lib/, app/)."
+    },
+    "fix": {
+      "reference": {
+        "path": "skills/debug/scripts/verify_fix.py",
+        "symbol": "audit_diff"
+      },
+      "scope": "Checks diff patterns for reproduction tests, masking, and weakening; heuristics do not prove root cause."
+    },
+    "fix-tests": {
+      "reference": {
+        "path": "skills/debug/scripts/verify_fix.py",
+        "symbol": "run_test_command"
+      },
+      "scope": "Executes the provided command; does not prove prior red state or causal repair."
+    },
+    "sample": {
+      "reference": {
+        "path": "skills/evals/scripts/sample_traces.py",
+        "symbol": "select_diverse_sample"
+      },
+      "scope": "Samples trace features; does not validate failure taxonomies."
+    },
+    "calibration": {
+      "reference": {
+        "path": "skills/evals/scripts/score_calibration.py",
+        "symbol": "compute_metrics"
+      },
+      "scope": "Computes TPR/TNR from supplied labels; does not enforce split isolation."
+    },
+    "bootstrap": {
+      "reference": {
+        "path": "skills/evals/scripts/score_calibration.py",
+        "symbol": "bootstrap_ci"
+      },
+      "scope": "Computes correction intervals from supplied pairs, not label or sampling validity."
+    },
+    "ux-audit": {
+      "reference": {
+        "path": "src/ship/tools/ux.py",
+        "symbol": "audit_file"
+      },
+      "scope": "Static source heuristics only; no browser, contrast measurement, or keyboard execution."
+    },
+    "doctor": {
+      "reference": {
+        "path": "src/ship/lifecycle/operations.py",
+        "symbol": "doctor"
+      },
+      "scope": "Checks local prerequisites and state readability."
+    },
+    "provenance": {
+      "reference": {
+        "path": "src/ship/lifecycle/turns.py",
+        "symbol": "validate_turn_record"
+      },
+      "scope": "Validates record shapes; does not authenticate the claimed work."
+    },
+    "budget": {
+      "reference": {
+        "path": "src/ship/lifecycle/resources.py",
+        "symbol": "ResourceGovernor.get_usage"
+      },
+      "scope": "Aggregates recorded usage; does not collect model-provider usage automatically."
+    },
+    "design": {
+      "reference": {
+        "path": "src/ship/tools/design.py",
+        "symbol": "validate_repository"
+      },
+      "scope": "Validates ADR and OpenSpec structure, invariants, downstream criteria, and idempotency."
+    },
+    "design-interview": {
+      "reference": {
+        "path": "src/ship/tools/design.py",
+        "symbol": "validate_interview_round"
+      },
+      "scope": "Validates frontier round batching, questions, and non-vacuous recommended stances."
+    },
+    "design-gate": {
+      "reference": {
+        "path": "src/ship/tools/design.py",
+        "symbol": "validate_confirmation_gate"
+      },
+      "scope": "Enforces confirmation gate: halts turns without mutating spec files prior to confirmation."
+    }
+  },
+  "eval_cases": {
+    "runner-receipts": {
+      "reference": {
+        "path": "tests/test_readiness.py",
+        "symbol": "ReadinessTests.test_execution_requires_actual_runner_evidence"
+      },
+      "kind": "lifecycle_integration",
+      "scope": "Rejects absent or no-op execution evidence."
+    },
+    "design-digest": {
+      "reference": {
+        "path": "tests/test_evidence_gates.py",
+        "symbol": "EvidenceGateTests.test_design_approval_and_reapproval_use_reviewed_digest"
+      },
+      "kind": "lifecycle_integration",
+      "scope": "Tests design approval binding and reapproval."
+    },
+    "gate-contradictions": {
+      "reference": {
+        "path": "tests/test_evidence_gates.py",
+        "symbol": "EvidenceGateTests.test_contradictory_results_block_every_delivery_surface"
+      },
+      "kind": "lifecycle_integration",
+      "scope": "Tests contradictory evidence rejection."
+    },
+    "turn-selection": {
+      "reference": {
+        "path": "tests/test_turn_regressions.py",
+        "symbol": "TurnRegressionTests.test_all_emitted_design_states_require_design_work"
+      },
+      "kind": "lifecycle_integration",
+      "scope": "Tests emitted design contracts, not agent execution."
+    },
+    "turn-ingestion": {
+      "reference": {
+        "path": "tests/test_turn_regressions.py",
+        "symbol": "TurnRegressionTests.test_invalid_turns_do_not_write_or_increment_revision"
+      },
+      "kind": "lifecycle_integration",
+      "scope": "Tests invalid provenance ingestion."
+    },
+    "tdd-parity": {
+      "reference": {
+        "path": "tests/test_verify_tdd.py",
+        "symbol": "TestVerifyTDD.test_audit_tdd_parity_failure"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests source/test file parity heuristic."
+    },
+    "tdd-assertions": {
+      "reference": {
+        "path": "tests/test_verify_tdd.py",
+        "symbol": "TestVerifyTDD.test_anti_pattern_assertless_test"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests static assertion detection."
+    },
+    "debt-format": {
+      "reference": {
+        "path": "tests/test_scan_debt.py",
+        "symbol": "TestScanDebt.test_parse_valid_marker"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests marker parsing."
+    },
+    "spike-execution": {
+      "reference": {
+        "path": "tests/test_run_spike.py",
+        "symbol": "TestRunSpike.test_run_benchmark_execution"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests actual benchmark command execution and metrics."
+    },
+    "spike-timeout": {
+      "reference": {
+        "path": "tests/test_run_spike.py",
+        "symbol": "TestRunSpike.test_timeout_terminates_child_process_group"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests timed-out child process cleanup, not all ephemeral infrastructure."
+    },
+    "fix-repro": {
+      "reference": {
+        "path": "tests/test_debug_skill.py",
+        "symbol": "DebugSkillTests.test_audit_diff_missing_repro_test"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests missing reproduction-file heuristic."
+    },
+    "fix-masking": {
+      "reference": {
+        "path": "tests/test_debug_skill.py",
+        "symbol": "DebugSkillTests.test_audit_diff_symptom_masking"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests masking pattern detection."
+    },
+    "fix-weakening": {
+      "reference": {
+        "path": "tests/test_debug_skill.py",
+        "symbol": "DebugSkillTests.test_audit_diff_test_weakening"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests assertion weakening patterns."
+    },
+    "sampling": {
+      "reference": {
+        "path": "tests/test_evals_skill.py",
+        "symbol": "EvalsSkillTests.test_sample_traces_diversity"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests sample size and unique trace IDs."
+    },
+    "calibration-math": {
+      "reference": {
+        "path": "tests/test_evals_skill.py",
+        "symbol": "EvalsSkillTests.test_score_calibration_metrics"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests confusion matrix and TPR/TNR calculations."
+    },
+    "bootstrap-math": {
+      "reference": {
+        "path": "tests/test_evals_skill.py",
+        "symbol": "EvalsSkillTests.test_bootstrap_ci"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests bootstrap result bounds."
+    },
+    "review-schema": {
+      "reference": {
+        "path": "tests/test_validate_report.py",
+        "symbol": "ReportTests.test_invalid_finding_fields"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests malformed finding rejection."
+    },
+    "ux-keyboard": {
+      "reference": {
+        "path": "tests/test_audit_ux.py",
+        "symbol": "TestAuditUX.test_clickable_div_lacking_keyboard"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests static keyboard-handler heuristics."
+    },
+    "ux-tokens": {
+      "reference": {
+        "path": "tests/test_audit_ux.py",
+        "symbol": "TestAuditUX.test_arbitrary_tokens_and_allowlist"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests arbitrary token and allowlist heuristics."
+    },
+    "ux-recovery": {
+      "reference": {
+        "path": "tests/test_audit_ux.py",
+        "symbol": "TestAuditUX.test_dead_end_error_detection"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests dead-end error text heuristic."
+    },
+    "ux-fixtures": {
+      "reference": {
+        "path": "tests/test_ux_evaluation.py",
+        "symbol": "TestUXEvaluation.test_pipeline_evaluation_runs_and_produces_valid_metrics"
+      },
+      "kind": "static_fixture",
+      "scope": "Runs simulated source-pattern pipeline; fixes, regressions, token cost, and time are not observed real-agent outcomes."
+    },
+    "resume": {
+      "reference": {
+        "path": "tests/test_agent_workflow_trials.py",
+        "symbol": "AgentWorkflowTrialTests.test_trial_3_interrupted_sessions_resumption"
+      },
+      "kind": "lifecycle_integration",
+      "scope": "Synthetic evidence tests state recovery and resumption."
+    },
+    "installation": {
+      "reference": {
+        "path": "tests/test_agent_workflow_trials.py",
+        "symbol": "AgentWorkflowTrialTests.test_trial_6_external_installation_and_consumer_project"
+      },
+      "kind": "lifecycle_integration",
+      "scope": "Tests external consumer installation and lifecycle APIs."
+    },
+    "archive": {
+      "reference": {
+        "path": "tests/test_inspect_lifecycle.py",
+        "symbol": "TestInspectLifecycle.test_apply_and_archive_openspec"
+      },
+      "kind": "lifecycle_integration",
+      "scope": "Tests spec merge and archive operation."
+    },
+    "dirty-evidence": {
+      "reference": {
+        "path": "tests/test_agent_workflow_trials.py",
+        "symbol": "AgentWorkflowTrialTests.test_trial_1_existing_uncommitted_work"
+      },
+      "kind": "lifecycle_integration",
+      "scope": "Tests source changes invalidate review and delivery."
+    },
+    "rollback-boundary": {
+      "reference": {
+        "path": "tests/test_readiness.py",
+        "symbol": "ReadinessTests.test_rollback_requires_explicit_opt_in_and_preserves_user_work"
+      },
+      "kind": "lifecycle_integration",
+      "scope": "Tests explicit rollback authorization."
+    },
+    "m-facts": {
+      "reference": {
+        "path": "tests/skill_evaluations.md",
+        "text": "| Facts vs. Decisions Law |"
+      },
+      "kind": "manual_agent",
+      "scope": "Written acceptance scenario; no automated agent execution or run result is registered."
+    },
+    "m-spike": {
+      "reference": {
+        "path": "tests/skill_evaluations.md",
+        "text": "| Ungrillable question spike |"
+      },
+      "kind": "manual_agent",
+      "scope": "Written acceptance scenario; no automated agent execution or run result is registered."
+    },
+    "m-red": {
+      "reference": {
+        "path": "tests/skill_evaluations.md",
+        "text": "| Red-state verification |"
+      },
+      "kind": "manual_agent",
+      "scope": "Written acceptance scenario; no automated agent execution or run result is registered."
+    },
+    "m-stdlib": {
+      "reference": {
+        "path": "tests/skill_evaluations.md",
+        "text": "| Laziness Ladder stdlib-first |"
+      },
+      "kind": "manual_agent",
+      "scope": "Written acceptance scenario; no automated agent execution or run result is registered."
+    },
+    "m-debt": {
+      "reference": {
+        "path": "tests/skill_evaluations.md",
+        "text": "| Simplify debt syntax |"
+      },
+      "kind": "manual_agent",
+      "scope": "Written acceptance scenario; no automated agent execution or run result is registered."
+    },
+    "m-resume": {
+      "reference": {
+        "path": "tests/skill_evaluations.md",
+        "text": "| Ship crash recovery |"
+      },
+      "kind": "manual_agent",
+      "scope": "Written acceptance scenario; no automated agent execution or run result is registered."
+    },
+    "m-clean-review": {
+      "reference": {
+        "path": "tests/skill_evaluations.md",
+        "text": "| Clean-tree review |"
+      },
+      "kind": "manual_agent",
+      "scope": "Written acceptance scenario; no automated agent execution or run result is registered."
+    },
+    "m-pr": {
+      "reference": {
+        "path": "tests/skill_evaluations.md",
+        "text": "| PR review authorisation |"
+      },
+      "kind": "manual_agent",
+      "scope": "Written acceptance scenario; no automated agent execution or run result is registered."
+    },
+    "m-schema": {
+      "reference": {
+        "path": "tests/skill_evaluations.md",
+        "text": "| Malformed reviewer output |"
+      },
+      "kind": "manual_agent",
+      "scope": "Written acceptance scenario; no automated agent execution or run result is registered."
+    },
+    "m-repair": {
+      "reference": {
+        "path": "tests/skill_evaluations.md",
+        "text": "| Unresolved repair |"
+      },
+      "kind": "manual_agent",
+      "scope": "Written acceptance scenario; no automated agent execution or run result is registered."
+    },
+    "m-context": {
+      "reference": {
+        "path": "tests/skill_evaluations.md",
+        "text": "| Context resumption |"
+      },
+      "kind": "manual_agent",
+      "scope": "Written acceptance scenario; no automated agent execution or run result is registered."
+    },
+    "m-regression": {
+      "reference": {
+        "path": "tests/skill_evaluations.md",
+        "text": "| Post-fix regression |"
+      },
+      "kind": "manual_agent",
+      "scope": "Written acceptance scenario; no automated agent execution or run result is registered."
+    },
+    "design-adr": {
+      "reference": {
+        "path": "tests/test_design_skill.py",
+        "symbol": "TestDesignSkillValidators.test_adr_validation_happy_path"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests ADR structural validation, invariants, and downstream checklist."
+    },
+    "design-openspec": {
+      "reference": {
+        "path": "tests/test_design_skill.py",
+        "symbol": "TestDesignSkillValidators.test_openspec_validation_happy_path"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests OpenSpec change package validation, RFC 2119 keywords, and tasks.md."
+    },
+    "design-anti-cheat": {
+      "reference": {
+        "path": "tests/test_design_skill.py",
+        "symbol": "TestDesignAntiCheatAndBypass.test_interview_round_vacuous_stance_rejection"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests anti-cheat rejection of vacuous stances and single-question drip rounds."
+    },
+    "design-gate-halt": {
+      "reference": {
+        "path": "tests/test_design_skill.py",
+        "symbol": "TestDesignAntiCheatAndBypass.test_confirmation_gate_halt_enforcement"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests confirmation gate halt enforcement to prevent premature spec mutation."
+    },
+    "design-rubric": {
+      "reference": {
+        "path": "tests/test_design_skill.py",
+        "symbol": "TestDesignFixturesAndRubric.test_l5_design_rubric_evaluation"
+      },
+      "kind": "static_fixture",
+      "scope": "Tests L5 architectural outcome quality across the 5 Systems Inquiry Domains."
+    },
+    "spike-report-format": {
+      "reference": {
+        "path": "tests/test_run_spike.py",
+        "symbol": "TestRunSpike.test_validate_spike_report_happy_path"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests spike report schema validation and results table parsing."
+    },
+    "spike-unfalsifiable": {
+      "reference": {
+        "path": "tests/test_run_spike.py",
+        "symbol": "TestRunSpike.test_validate_spike_report_unfalsifiable_hypothesis"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests rejection of vague hypotheses lacking numerical SLI thresholds."
+    },
+    "spike-verdict-contradiction": {
+      "reference": {
+        "path": "tests/test_run_spike.py",
+        "symbol": "TestRunSpike.test_validate_spike_report_verdict_contradiction"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests anti-cheat rejection of CONFIRMED verdicts when empirical metrics are breached."
+    },
+    "spike-isolation-leakage": {
+      "reference": {
+        "path": "tests/test_run_spike.py",
+        "symbol": "TestRunSpike.test_audit_spike_isolation_leakage"
+      },
+      "kind": "tool_unit",
+      "scope": "Tests detection of prototype code leaking into production paths."
+    },
+    "spike-rubric": {
+      "reference": {
+        "path": "tests/test_run_spike.py",
+        "symbol": "TestRunSpike.test_l5_spike_rubric"
+      },
+      "kind": "static_fixture",
+      "scope": "Tests L5 outcome quality across statistical rigor, falsifiability, and decision bridge."
+    }
+  },
+  "skills": {
+    "design": {
+      "source": "skills/design/SKILL.md",
+      "steps": [
+        {
+          "id": "design.facts",
+          "title": "Discover repository facts",
+          "requirement": {
+            "path": "skills/design/SKILL.md",
+            "text": "Facts = Agent Job"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            1
+          ],
+          "expected_evidence": [
+            "Inspected schemas/routes/configs with source locations",
+            "Questions distinguished from discoverable facts"
+          ],
+          "validators": [
+            "design"
+          ],
+          "eval_cases": [
+            "m-facts"
+          ],
+          "gaps": [
+            "Requires live agent run trace for end-to-end question suppression."
+          ]
+        },
+        {
+          "id": "design.frontier",
+          "title": "Batch decision frontier and recommendations",
+          "requirement": {
+            "path": "skills/design/SKILL.md",
+            "text": "Frontier Batching"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            2
+          ],
+          "expected_evidence": [
+            "Decision graph and unresolved dependencies",
+            "Numbered round with recommended stances"
+          ],
+          "validators": [
+            "design-interview"
+          ],
+          "eval_cases": [
+            "design-anti-cheat",
+            "m-facts"
+          ],
+          "gaps": [
+            "Live multi-turn agent interview requires automated trace capture."
+          ]
+        },
+        {
+          "id": "design.domains",
+          "title": "Inspect five systems inquiry domains",
+          "requirement": {
+            "path": "skills/design/SKILL.md",
+            "text": "The 5 Systems Inquiry Domains"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Per-domain invariants, risks, decisions and explicit applicability"
+          ],
+          "validators": [
+            "design"
+          ],
+          "eval_cases": [
+            "design-rubric"
+          ],
+          "gaps": [
+            "Seeded domain cases are static rubric fixtures; live trace evaluator pending."
+          ]
+        },
+        {
+          "id": "design.spike",
+          "title": "Resolve empirical branches through spikes",
+          "requirement": {
+            "path": "skills/design/SKILL.md",
+            "text": "Detect \"Ungrillable\" Questions"
+          },
+          "applies_when": "Empirical uncertainty is present",
+          "turn_contracts": [
+            3
+          ],
+          "expected_evidence": [
+            "Empirical question linked to spike hypothesis and verdict"
+          ],
+          "validators": [
+            "spike"
+          ],
+          "eval_cases": [
+            "m-spike",
+            "spike-execution"
+          ],
+          "gaps": [
+            "Routing is a manual case; full end-to-end agent branch trace pending."
+          ]
+        },
+        {
+          "id": "design.closure",
+          "title": "Check capability closure",
+          "requirement": {
+            "path": "skills/design/SKILL.md",
+            "text": "Capability Closure & Confirmation Gate"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Entity lifecycle, integration, roles and expectation checklist"
+          ],
+          "validators": [
+            "design"
+          ],
+          "eval_cases": [
+            "design-adr",
+            "design-rubric"
+          ],
+          "gaps": [
+            "Semantic closure verified by rubric; automated domain solver pending."
+          ]
+        },
+        {
+          "id": "design.confirm",
+          "title": "Capture explicit design confirmation",
+          "requirement": {
+            "path": "skills/design/SKILL.md",
+            "text": "Confirmation Gate: NEVER"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "User confirmation linked to the reviewed decision package"
+          ],
+          "validators": [
+            "design-gate",
+            "delivery"
+          ],
+          "eval_cases": [
+            "design-gate-halt",
+            "design-digest"
+          ],
+          "gaps": [
+            "Live interaction relies on user prompt pause in host runtime."
+          ]
+        },
+        {
+          "id": "design.package",
+          "title": "Compile ADR/OpenSpec and checkpoint",
+          "requirement": {
+            "path": "skills/design/SKILL.md",
+            "text": "Checkpoint Recorded"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            4
+          ],
+          "expected_evidence": [
+            "ADR/OpenSpec files",
+            "Specification digest and design checkpoint"
+          ],
+          "validators": [
+            "design",
+            "turn",
+            "delivery"
+          ],
+          "eval_cases": [
+            "design-adr",
+            "design-openspec",
+            "turn-selection",
+            "design-digest"
+          ],
+          "gaps": [
+            "Semantic completeness validated deterministically; live LLM generation pending."
+          ]
+        }
+      ]
+    },
+    "spike": {
+      "source": "skills/spike/SKILL.md",
+      "steps": [
+        {
+          "id": "spike.hypothesis",
+          "title": "Define falsifiable threshold and timebox",
+          "requirement": {
+            "path": "skills/spike/SKILL.md",
+            "text": "Falsifiable SLI"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Hypothesis, numerical threshold, workload and timebox"
+          ],
+          "validators": [
+            "spike-report"
+          ],
+          "eval_cases": [
+            "spike-unfalsifiable"
+          ],
+          "gaps": [
+            "Hypothesis numeric threshold validated deterministically; workload generation requires domain context."
+          ]
+        },
+        {
+          "id": "spike.sandbox",
+          "title": "Create isolated representative sandbox",
+          "requirement": {
+            "path": "skills/spike/SKILL.md",
+            "text": "Sandbox Isolation"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Scratch-only file diff",
+            "Ephemeral infrastructure configuration and endpoints"
+          ],
+          "validators": [
+            "spike-isolation"
+          ],
+          "eval_cases": [
+            "spike-isolation-leakage"
+          ],
+          "gaps": [
+            "Production path isolation audited deterministically; runtime compose monitoring pending."
+          ]
+        },
+        {
+          "id": "spike.measure",
+          "title": "Execute benchmark with warmup and workload",
+          "requirement": {
+            "path": "skills/spike/SKILL.md",
+            "text": "Automated Measurement"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Command, warmup, iterations, concurrency, timeouts",
+            "Raw measurements and latency/error/throughput summary"
+          ],
+          "validators": [
+            "spike"
+          ],
+          "eval_cases": [
+            "spike-execution"
+          ],
+          "gaps": [
+            "Command timing and percentiles verified; statistical representativeness assessed by rubric."
+          ]
+        },
+        {
+          "id": "spike.verdict",
+          "title": "Compare measurements to hypothesis",
+          "requirement": {
+            "path": "skills/spike/SKILL.md",
+            "text": "Empirical Verdict"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            2
+          ],
+          "expected_evidence": [
+            "Expected/observed SLI table and CONFIRMED/REFUTED/QUALIFIED conclusion"
+          ],
+          "validators": [
+            "spike",
+            "spike-report"
+          ],
+          "eval_cases": [
+            "spike-execution",
+            "spike-verdict-contradiction",
+            "spike-report-format"
+          ],
+          "gaps": [
+            "Anti-contradiction verified deterministically; live LLM verdict trace pending."
+          ]
+        },
+        {
+          "id": "spike.bridge",
+          "title": "Update design from measured verdict",
+          "requirement": {
+            "path": "skills/spike/SKILL.md",
+            "text": "ADR / OpenSpec Bridge"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            3
+          ],
+          "expected_evidence": [
+            "ADR/spec diff linked to spike evidence and settled question"
+          ],
+          "validators": [
+            "spike-report"
+          ],
+          "eval_cases": [
+            "spike-rubric"
+          ],
+          "gaps": [
+            "Configuration snippet extraction validated by rubric; automated AST injection pending."
+          ]
+        },
+        {
+          "id": "spike.teardown",
+          "title": "Remove ephemeral resources and preserve isolation",
+          "requirement": {
+            "path": "skills/spike/SKILL.md",
+            "text": "Teardown Mandate"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            1,
+            4
+          ],
+          "expected_evidence": [
+            "Container/process/port cleanup receipts",
+            "Production-path diff shows no prototype changes"
+          ],
+          "validators": [
+            "spike",
+            "spike-isolation"
+          ],
+          "eval_cases": [
+            "spike-timeout",
+            "spike-isolation-leakage"
+          ],
+          "gaps": [
+            "Timeout cleanup and prototype leakage verified; host daemon state verification pending."
+          ]
+        }
+      ]
+    },
+    "tdd": {
+      "source": "skills/tdd/SKILL.md",
+      "steps": [
+        {
+          "id": "tdd.select",
+          "title": "Select atomic task or accepted exception",
+          "requirement": {
+            "path": "skills/tdd/SKILL.md",
+            "text": "Pick Atomic Requirement"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Task/scenario ID and acceptance criterion",
+            "Explicit applicability of test-first exceptions"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No per-task validator links the requirement to its behavioral test."
+          ]
+        },
+        {
+          "id": "tdd.characterize",
+          "title": "Preserve existing work with characterization tests",
+          "requirement": {
+            "path": "skills/tdd/SKILL.md",
+            "text": "Golden Master (Characterization Wrapping)"
+          },
+          "applies_when": "Existing untested or in-flight implementation",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Baseline behavior and characterization test receipt before refactor"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No real-agent case for preserving in-flight user code."
+          ]
+        },
+        {
+          "id": "tdd.tier",
+          "title": "Choose real persistence or fast domain harness",
+          "requirement": {
+            "path": "skills/tdd/SKILL.md",
+            "text": "Dual-Speed Testing Rule"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Harness choice and DB/wire setup matched to the changed behavior"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No evaluator detects mocked DB engines across an agent run."
+          ]
+        },
+        {
+          "id": "tdd.red",
+          "title": "Prove expected behavioral failure before edits",
+          "requirement": {
+            "path": "skills/tdd/SKILL.md",
+            "text": "Red-State Verification"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            1
+          ],
+          "expected_evidence": [
+            "Test ID, pre-edit snapshot, command and assertion-failure receipt"
+          ],
+          "validators": [
+            "tdd-audit"
+          ],
+          "eval_cases": [
+            "tdd-parity",
+            "tdd-assertions",
+            "m-red"
+          ],
+          "gaps": [
+            "Static parity cannot prove failure cause or red-before-edit chronology."
+          ]
+        },
+        {
+          "id": "tdd.green",
+          "title": "Implement minimum passing change",
+          "requirement": {
+            "path": "skills/tdd/SKILL.md",
+            "text": "Minimum Viable Green"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            2,
+            3
+          ],
+          "expected_evidence": [
+            "Source diff and green receipt linked to the same test"
+          ],
+          "validators": [
+            "execution"
+          ],
+          "eval_cases": [
+            "runner-receipts"
+          ],
+          "gaps": [
+            "No automated semantic check of minimum implementation."
+          ]
+        },
+        {
+          "id": "tdd.doubt",
+          "title": "Probe assumptions and turn gaps into tests",
+          "requirement": {
+            "path": "skills/tdd/SKILL.md",
+            "text": "Phase 3 (Doubt Check)"
+          },
+          "applies_when": "Non-trivial branching, concurrency, boundaries or mutation",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Diff and contract review",
+            "Edge-case probes and new red receipts"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No observation or eval of the doubt cycle."
+          ]
+        },
+        {
+          "id": "tdd.refactor",
+          "title": "Refactor under green protection",
+          "requirement": {
+            "path": "skills/tdd/SKILL.md",
+            "text": "Phase 4 (Refactor)"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Refactor diff and post-edit passing suite receipt"
+          ],
+          "validators": [
+            "execution"
+          ],
+          "eval_cases": [
+            "runner-receipts"
+          ],
+          "gaps": [
+            "Final execution evidence does not prove verification after every edit."
+          ]
+        },
+        {
+          "id": "tdd.advance",
+          "title": "Update task checkbox and test ledger",
+          "requirement": {
+            "path": "skills/tdd/SKILL.md",
+            "text": "Task Checkbox & Ledger Updated"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            4
+          ],
+          "expected_evidence": [
+            "Task completion and test ledger entry bound to verified code"
+          ],
+          "validators": [
+            "delivery"
+          ],
+          "eval_cases": [
+            "gate-contradictions"
+          ],
+          "gaps": [
+            "No end-to-end task chronology check."
+          ]
+        }
+      ]
+    },
+    "simplify": {
+      "source": "skills/simplify/SKILL.md",
+      "steps": [
+        {
+          "id": "simplify.need",
+          "title": "Check whether functionality is necessary",
+          "requirement": {
+            "path": "skills/simplify/SKILL.md",
+            "text": "Does this need to exist at all?"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Decision rationale and inspected alternatives",
+            "Resulting scoped diff"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No automated agent evaluation of this ladder decision."
+          ]
+        },
+        {
+          "id": "simplify.reuse",
+          "title": "Search existing project solutions",
+          "requirement": {
+            "path": "skills/simplify/SKILL.md",
+            "text": "Does it already exist in this codebase?"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Decision rationale and inspected alternatives",
+            "Resulting scoped diff"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No automated agent evaluation of this ladder decision."
+          ]
+        },
+        {
+          "id": "simplify.stdlib",
+          "title": "Check standard library support",
+          "requirement": {
+            "path": "skills/simplify/SKILL.md",
+            "text": "Does the standard library do this?"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            1
+          ],
+          "expected_evidence": [
+            "Decision rationale and inspected alternatives",
+            "Resulting scoped diff"
+          ],
+          "validators": [],
+          "eval_cases": [
+            "m-stdlib"
+          ],
+          "gaps": [
+            "No automated agent evaluation of this ladder decision."
+          ]
+        },
+        {
+          "id": "simplify.platform",
+          "title": "Check native platform support",
+          "requirement": {
+            "path": "skills/simplify/SKILL.md",
+            "text": "Does a native platform feature cover it?"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Decision rationale and inspected alternatives",
+            "Resulting scoped diff"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No automated agent evaluation of this ladder decision."
+          ]
+        },
+        {
+          "id": "simplify.dependency",
+          "title": "Check already installed dependencies",
+          "requirement": {
+            "path": "skills/simplify/SKILL.md",
+            "text": "Does an already-installed dependency solve it?"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Decision rationale and inspected alternatives",
+            "Resulting scoped diff"
+          ],
+          "validators": [],
+          "eval_cases": [
+            "m-stdlib"
+          ],
+          "gaps": [
+            "No automated agent evaluation of this ladder decision."
+          ]
+        },
+        {
+          "id": "simplify.one-line",
+          "title": "Check for a sound one-line solution",
+          "requirement": {
+            "path": "skills/simplify/SKILL.md",
+            "text": "Can this be one line?"
+          },
+          "applies_when": "Earlier ladder rungs do not settle the implementation",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Candidate one-line solution or rationale for additional code"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No behavioral eval distinguishes a sound compact solution from unreadable compression."
+          ]
+        },
+        {
+          "id": "simplify.minimum",
+          "title": "Choose the smallest sound implementation",
+          "requirement": {
+            "path": "skills/simplify/SKILL.md",
+            "text": "Only then: Write minimum code that works."
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Decision rationale and inspected alternatives",
+            "Resulting scoped diff"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No automated agent evaluation of this ladder decision."
+          ]
+        },
+        {
+          "id": "simplify.conventions",
+          "title": "Preserve team conventions and remove speculative layers",
+          "requirement": {
+            "path": "skills/simplify/SKILL.md",
+            "text": "Team Conventions Precedence"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            2
+          ],
+          "expected_evidence": [
+            "Applicable conventions and justified abstractions",
+            "Simplification diff"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No semantic eval distinguishes necessary architecture from speculative layers."
+          ]
+        },
+        {
+          "id": "simplify.verify",
+          "title": "Run tests after simplification",
+          "requirement": {
+            "path": "skills/simplify/SKILL.md",
+            "text": "Green Tests Preserved"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            3
+          ],
+          "expected_evidence": [
+            "Post-simplification test command, snapshot and receipt"
+          ],
+          "validators": [
+            "execution"
+          ],
+          "eval_cases": [
+            "runner-receipts"
+          ],
+          "gaps": [
+            "Shared execution verifier does not prove each simplification edit was followed by tests."
+          ]
+        },
+        {
+          "id": "simplify.debt",
+          "title": "Record and scan shortcut ceilings and upgrades",
+          "requirement": {
+            "path": "skills/simplify/SKILL.md",
+            "text": "Debt Formatted & Scanned"
+          },
+          "applies_when": "Intentional shortcuts; scan after simplification",
+          "turn_contracts": [
+            4
+          ],
+          "expected_evidence": [
+            "Debt marker, concrete ceiling, upgrade action and scanner receipt"
+          ],
+          "validators": [
+            "debt"
+          ],
+          "eval_cases": [
+            "debt-format",
+            "m-debt"
+          ],
+          "gaps": [
+            "Syntax checks do not observe actual ceiling breaches."
+          ]
+        }
+      ]
+    },
+    "review": {
+      "source": "skills/review/SKILL.md",
+      "steps": [
+        {
+          "id": "review.mode",
+          "title": "Select authorized action and scope",
+          "requirement": {
+            "path": "skills/review/SKILL.md",
+            "text": "Select action mode"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            1
+          ],
+          "expected_evidence": [
+            "Requested action mode and permitted side effects"
+          ],
+          "validators": [],
+          "eval_cases": [
+            "m-pr"
+          ],
+          "gaps": [
+            "No automated agent authorization behavior eval."
+          ]
+        },
+        {
+          "id": "review.discover",
+          "title": "Inspect complete change or repository scope",
+          "requirement": {
+            "path": "skills/review/references/review_pipeline.md",
+            "text": "Change & Context Discovery"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Resolved base/head and working tree fingerprint",
+            "Read source/callers/specs/standards and inspected file inventory"
+          ],
+          "validators": [],
+          "eval_cases": [
+            "m-clean-review"
+          ],
+          "gaps": [
+            "Manual case covers clean trees; automated inspector tests do not establish actual reviewer reading."
+          ]
+        },
+        {
+          "id": "review.route",
+          "title": "Select relevant checks and execution strategy",
+          "requirement": {
+            "path": "skills/review/references/review_pipeline.md",
+            "text": "Execution Strategy Selection"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Active stages and specialist/sequential execution record"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No behavioral eval of routing, skipped checks or equivalent sequential coverage."
+          ]
+        },
+        {
+          "id": "review.stage-0",
+          "title": "Review Spec Alignment",
+          "requirement": {
+            "path": "skills/review/SKILL.md",
+            "text": "0. **Spec Alignment**"
+          },
+          "applies_when": "Spec present",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Stage result and applicability",
+            "Source-grounded candidate findings with concrete trigger and impact"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No automated real-agent precision/recall benchmark for Spec Alignment."
+          ]
+        },
+        {
+          "id": "review.stage-1",
+          "title": "Review Correctness",
+          "requirement": {
+            "path": "skills/review/SKILL.md",
+            "text": "1. **Correctness**"
+          },
+          "applies_when": "Stage applicable to requested technical scope",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Stage result and applicability",
+            "Source-grounded candidate findings with concrete trigger and impact"
+          ],
+          "validators": [],
+          "eval_cases": [
+            "m-clean-review"
+          ],
+          "gaps": [
+            "No automated real-agent precision/recall benchmark for Correctness."
+          ]
+        },
+        {
+          "id": "review.stage-2",
+          "title": "Review Concurrency / Safety",
+          "requirement": {
+            "path": "skills/review/SKILL.md",
+            "text": "2. **Concurrency / Safety**"
+          },
+          "applies_when": "Stage applicable to requested technical scope",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Stage result and applicability",
+            "Source-grounded candidate findings with concrete trigger and impact"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No automated real-agent precision/recall benchmark for Concurrency / Safety."
+          ]
+        },
+        {
+          "id": "review.stage-3",
+          "title": "Review Failure / Resilience",
+          "requirement": {
+            "path": "skills/review/SKILL.md",
+            "text": "3. **Failure / Resilience**"
+          },
+          "applies_when": "Stage applicable to requested technical scope",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Stage result and applicability",
+            "Source-grounded candidate findings with concrete trigger and impact"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No automated real-agent precision/recall benchmark for Failure / Resilience."
+          ]
+        },
+        {
+          "id": "review.stage-4",
+          "title": "Review Simplicity (YAGNI & Smells)",
+          "requirement": {
+            "path": "skills/review/SKILL.md",
+            "text": "4. **Simplicity (YAGNI & Smells)**"
+          },
+          "applies_when": "Stage applicable to requested technical scope",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Stage result and applicability",
+            "Source-grounded candidate findings with concrete trigger and impact"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No automated real-agent precision/recall benchmark for Simplicity (YAGNI & Smells)."
+          ]
+        },
+        {
+          "id": "review.stage-5",
+          "title": "Review Maintainability",
+          "requirement": {
+            "path": "skills/review/SKILL.md",
+            "text": "5. **Maintainability**"
+          },
+          "applies_when": "Stage applicable to requested technical scope",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Stage result and applicability",
+            "Source-grounded candidate findings with concrete trigger and impact"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No automated real-agent precision/recall benchmark for Maintainability."
+          ]
+        },
+        {
+          "id": "review.stage-6",
+          "title": "Review Reuse (DRY)",
+          "requirement": {
+            "path": "skills/review/SKILL.md",
+            "text": "6. **Reuse (DRY)**"
+          },
+          "applies_when": "Stage applicable to requested technical scope",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Stage result and applicability",
+            "Source-grounded candidate findings with concrete trigger and impact"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No automated real-agent precision/recall benchmark for Reuse (DRY)."
+          ]
+        },
+        {
+          "id": "review.stage-7",
+          "title": "Review Performance",
+          "requirement": {
+            "path": "skills/review/SKILL.md",
+            "text": "7. **Performance**"
+          },
+          "applies_when": "Stage applicable to requested technical scope",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Stage result and applicability",
+            "Source-grounded candidate findings with concrete trigger and impact"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No automated real-agent precision/recall benchmark for Performance."
+          ]
+        },
+        {
+          "id": "review.stage-8",
+          "title": "Review SOLID",
+          "requirement": {
+            "path": "skills/review/SKILL.md",
+            "text": "8. **SOLID**"
+          },
+          "applies_when": "Stage applicable to requested technical scope",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Stage result and applicability",
+            "Source-grounded candidate findings with concrete trigger and impact"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No automated real-agent precision/recall benchmark for SOLID."
+          ]
+        },
+        {
+          "id": "review.stage-9",
+          "title": "Review Patterns",
+          "requirement": {
+            "path": "skills/review/SKILL.md",
+            "text": "9. **Patterns**"
+          },
+          "applies_when": "Stage applicable to requested technical scope",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Stage result and applicability",
+            "Source-grounded candidate findings with concrete trigger and impact"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No automated real-agent precision/recall benchmark for Patterns."
+          ]
+        },
+        {
+          "id": "review.judge",
+          "title": "Independently adjudicate and validate findings",
+          "requirement": {
+            "path": "skills/review/SKILL.md",
+            "text": "Independent Adjudication"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            2,
+            4
+          ],
+          "expected_evidence": [
+            "Judge decisions, independent source citations and valid report schema"
+          ],
+          "validators": [
+            "grounding",
+            "review-schema"
+          ],
+          "eval_cases": [
+            "review-schema",
+            "m-schema"
+          ],
+          "gaps": [
+            "Grounding/schema checks do not establish semantic correctness or independent reasoning."
+          ]
+        },
+        {
+          "id": "review.repair",
+          "title": "Repair with frozen finding IDs and bounded retries",
+          "requirement": {
+            "path": "skills/review/SKILL.md",
+            "text": "Frozen Classification Enforced"
+          },
+          "applies_when": "Authorized review-loop",
+          "turn_contracts": [
+            3
+          ],
+          "expected_evidence": [
+            "Stable finding ledger and outcomes",
+            "Pre/post tests, regression attribution and iteration budget"
+          ],
+          "validators": [
+            "execution"
+          ],
+          "eval_cases": [
+            "m-repair",
+            "m-context",
+            "m-regression",
+            "runner-receipts"
+          ],
+          "gaps": [
+            "Manual cases exist; real-agent repair, resume and stopping behavior remain unautomated."
+          ]
+        },
+        {
+          "id": "review.publish",
+          "title": "Publish once against the reviewed PR snapshot",
+          "requirement": {
+            "path": "skills/review/references/review_pipeline.md",
+            "text": "PR comment publication"
+          },
+          "applies_when": "Explicitly authorized review-pr",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Authorization, current base/head SHAs, returned comment URL/ID and retry lookup"
+          ],
+          "validators": [],
+          "eval_cases": [
+            "m-pr"
+          ],
+          "gaps": [
+            "No automated agent publication/idempotency eval."
+          ]
+        },
+        {
+          "id": "review.record",
+          "title": "Return judged report and record provenance",
+          "requirement": {
+            "path": "skills/review/SKILL.md",
+            "text": "Ledger Updated & Provenance Recorded"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            5
+          ],
+          "expected_evidence": [
+            "Final judged report",
+            "Ledger record with execution mode and findings count"
+          ],
+          "validators": [
+            "review-schema",
+            "provenance"
+          ],
+          "eval_cases": [
+            "review-schema",
+            "turn-ingestion"
+          ],
+          "gaps": [
+            "Record shape checks do not prove the report matches every executed stage."
+          ]
+        }
+      ]
+    },
+    "debug": {
+      "source": "skills/debug/SKILL.md",
+      "steps": [
+        {
+          "id": "debug.investigate",
+          "title": "Read context and trace bad state to origin",
+          "requirement": {
+            "path": "skills/debug/SKILL.md",
+            "text": "Backward Causation Tracing"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            2
+          ],
+          "expected_evidence": [
+            "Complete error context and causal path to first invalid state"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No causal correctness benchmark."
+          ]
+        },
+        {
+          "id": "debug.boundaries",
+          "title": "Instrument component boundaries",
+          "requirement": {
+            "path": "skills/debug/SKILL.md",
+            "text": "Multi-Component Boundary Logging"
+          },
+          "applies_when": "Multi-component or nondeterministic failures",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Correlated input/output boundary logs and divergence point"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No instrumentation completeness or log-correlation eval."
+          ]
+        },
+        {
+          "id": "debug.compare",
+          "title": "Compare working examples and isolate delta",
+          "requirement": {
+            "path": "skills/debug/SKILL.md",
+            "text": "Pattern Analysis"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Working reference, inspected differences and suspected causal delta"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No pattern-analysis behavior eval."
+          ]
+        },
+        {
+          "id": "debug.hypothesis",
+          "title": "Probe one falsifiable theory at a time",
+          "requirement": {
+            "path": "skills/debug/SKILL.md",
+            "text": "State Single Theory"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Hypothesis, one changed variable and experiment outcome"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No structured hypothesis history or single-variable check."
+          ]
+        },
+        {
+          "id": "debug.rethink",
+          "title": "Rethink after two failed hypotheses",
+          "requirement": {
+            "path": "skills/debug/SKILL.md",
+            "text": "Two-Strike Rethink"
+          },
+          "applies_when": "Two hypotheses fail at the same location",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Attempt history and evidence of a new causal model"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No durable attempt counter or agent stopping eval."
+          ]
+        },
+        {
+          "id": "debug.reproduce",
+          "title": "Reproduce failure before production edits",
+          "requirement": {
+            "path": "skills/debug/SKILL.md",
+            "text": "Reproduction Test Proven Failing"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            1
+          ],
+          "expected_evidence": [
+            "Pre-edit failing reproduction or justified nondeterministic trace"
+          ],
+          "validators": [
+            "fix"
+          ],
+          "eval_cases": [
+            "fix-repro"
+          ],
+          "gaps": [
+            "Diff heuristics cannot prove reproducibility or temporal ordering."
+          ]
+        },
+        {
+          "id": "debug.fix",
+          "title": "Apply surgical root-cause repair without masking",
+          "requirement": {
+            "path": "skills/debug/SKILL.md",
+            "text": "Surgical Fix Applied"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            3
+          ],
+          "expected_evidence": [
+            "Minimal source diff linked to causal hypothesis"
+          ],
+          "validators": [
+            "fix"
+          ],
+          "eval_cases": [
+            "fix-masking"
+          ],
+          "gaps": [
+            "Masking heuristics do not prove permanent causal repair."
+          ]
+        },
+        {
+          "id": "debug.verify",
+          "title": "Verify reproduction and full suite without weakening",
+          "requirement": {
+            "path": "skills/debug/SKILL.md",
+            "text": "Full Verification Passed"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            4
+          ],
+          "expected_evidence": [
+            "Reproduction and full-suite green receipts",
+            "Anti-cheat audit receipt"
+          ],
+          "validators": [
+            "fix",
+            "fix-tests"
+          ],
+          "eval_cases": [
+            "fix-weakening"
+          ],
+          "gaps": [
+            "No end-to-end real-agent repro-to-fix eval."
+          ]
+        },
+        {
+          "id": "debug.stop",
+          "title": "Stop after three failed fixes",
+          "requirement": {
+            "path": "skills/debug/SKILL.md",
+            "text": "Three-Strike Circuit Breaker"
+          },
+          "applies_when": "Three failed fixes or cascading subsystem breakages",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Attempt count and unresolved architectural contradiction report"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No automated behavioral enforcement of stopping before attempt four."
+          ]
+        }
+      ]
+    },
+    "evals": {
+      "source": "skills/evals/SKILL.md",
+      "steps": [
+        {
+          "id": "evals.route",
+          "title": "Choose precise eval workflow",
+          "requirement": {
+            "path": "skills/evals/SKILL.md",
+            "text": "Fast Intent Router"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            1
+          ],
+          "expected_evidence": [
+            "Selected workflow and trace/data availability"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No agent routing eval across the seven workflows."
+          ]
+        },
+        {
+          "id": "evals.sample",
+          "title": "Sample diverse real traces",
+          "requirement": {
+            "path": "skills/evals/SKILL.md",
+            "text": "Diverse Sampling"
+          },
+          "applies_when": "Traces are available",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Trace IDs, strata, seed and selected sample"
+          ],
+          "validators": [
+            "sample"
+          ],
+          "eval_cases": [
+            "sampling"
+          ],
+          "gaps": [
+            "Sampler tests do not establish production representativeness."
+          ]
+        },
+        {
+          "id": "evals.annotate",
+          "title": "Review full traces and derive failure taxonomy",
+          "requirement": {
+            "path": "skills/evals/SKILL.md",
+            "text": "Trace Review Protocol"
+          },
+          "applies_when": "Error discovery",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Full input/context/tools/output and free-text annotations",
+            "Grounded failure clusters"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No annotation-server integration test or taxonomy semantic evaluator."
+          ]
+        },
+        {
+          "id": "evals.audit",
+          "title": "Audit six evaluation pillars",
+          "requirement": {
+            "path": "skills/evals/SKILL.md",
+            "text": "Eval Audit (6-Pillar Inspection)"
+          },
+          "applies_when": "Existing eval pipeline",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Pillar findings linked to pipeline evidence and sample counts"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No acceptance cases for audit completeness."
+          ]
+        },
+        {
+          "id": "evals.code",
+          "title": "Implement deterministic evaluators for objective checks",
+          "requirement": {
+            "path": "skills/evals/SKILL.md",
+            "text": "Code-First Evaluators"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            2
+          ],
+          "expected_evidence": [
+            "Executable assertion, failure definition, positive and negative fixtures"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No eval of the agent choosing objective code checks over judges."
+          ]
+        },
+        {
+          "id": "evals.judge",
+          "title": "Define binary criterion-specific judges",
+          "requirement": {
+            "path": "skills/evals/SKILL.md",
+            "text": "LLM-as-a-Judge Design"
+          },
+          "applies_when": "Subjective or semantic failure mode",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Pinned model snapshot, binary rubric, few-shot critiques and JSON output"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No automated rubric compliance or model-pin enforcement."
+          ]
+        },
+        {
+          "id": "evals.split",
+          "title": "Keep train/dev/test isolated",
+          "requirement": {
+            "path": "skills/evals/SKILL.md",
+            "text": "Data Split Isolation"
+          },
+          "applies_when": "Judge development and calibration",
+          "turn_contracts": [
+            3
+          ],
+          "expected_evidence": [
+            "Disjoint trace IDs and split manifest",
+            "Few-shot provenance and held-out execution count"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No split-overlap or held-out reuse guard."
+          ]
+        },
+        {
+          "id": "evals.calibrate",
+          "title": "Measure TPR/TNR against human labels",
+          "requirement": {
+            "path": "skills/evals/SKILL.md",
+            "text": "Threshold Gates"
+          },
+          "applies_when": "Evaluator predictions and human labels available",
+          "turn_contracts": [
+            4
+          ],
+          "expected_evidence": [
+            "Human/predicted labels, class counts and TPR/TNR thresholds"
+          ],
+          "validators": [
+            "calibration"
+          ],
+          "eval_cases": [
+            "calibration-math"
+          ],
+          "gaps": [
+            "Math tests do not establish label quality or adequate calibration sample size."
+          ]
+        },
+        {
+          "id": "evals.correct",
+          "title": "Correct aggregate pass rates with uncertainty",
+          "requirement": {
+            "path": "skills/evals/SKILL.md",
+            "text": "Report Rogan-Gladen Corrected Prevalence"
+          },
+          "applies_when": "Aggregate production pass rate from an imperfect judge",
+          "turn_contracts": [
+            4
+          ],
+          "expected_evidence": [
+            "Observed prevalence, calibration pairs and corrected estimate/interval"
+          ],
+          "validators": [
+            "bootstrap"
+          ],
+          "eval_cases": [
+            "bootstrap-math"
+          ],
+          "gaps": [
+            "No complete production sampling and correction validity check."
+          ]
+        },
+        {
+          "id": "evals.rag",
+          "title": "Evaluate retrieval separately from generation",
+          "requirement": {
+            "path": "skills/evals/SKILL.md",
+            "text": "RAG Evaluation"
+          },
+          "applies_when": "RAG workflow",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Retrieval ranks and relevance",
+            "Atomic claim support and negative rejection verdicts"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No executable RAG stage evals registered."
+          ]
+        },
+        {
+          "id": "evals.synthetic",
+          "title": "Bootstrap from constraints when traces do not exist",
+          "requirement": {
+            "path": "skills/evals/SKILL.md",
+            "text": "Synthetic Data Bootstrap"
+          },
+          "applies_when": "No production traces",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Synthetic provenance, constraints and realistic user scenarios"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No synthetic data quality or contamination eval."
+          ]
+        },
+        {
+          "id": "evals.revalidate",
+          "title": "Revalidate after model or prompt changes",
+          "requirement": {
+            "path": "skills/evals/SKILL.md",
+            "text": "Re-validation cadence"
+          },
+          "applies_when": "Prompt or model changes",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Prompt/model versions and revalidation comparison"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No automated change-triggered calibration gate."
+          ]
+        }
+      ]
+    },
+    "ux": {
+      "source": "skills/ux/SKILL.md",
+      "steps": [
+        {
+          "id": "ux.mode",
+          "title": "Select mutation scope and execution mode",
+          "requirement": {
+            "path": "skills/ux/SKILL.md",
+            "text": "Safety Boundary Enforcement"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            1,
+            2
+          ],
+          "expected_evidence": [
+            "Chosen command, allowed paths and interactive/autopilot mode"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No real-agent filesystem boundary or checkpoint test."
+          ]
+        },
+        {
+          "id": "ux.flow",
+          "title": "Discover intent, routes, escape paths and recovery",
+          "requirement": {
+            "path": "skills/ux/SKILL.md",
+            "text": "Phase 1: Flow Grilling"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Inspected routes and flow graph",
+            "Decisions covering cancel, undo, permissions and failures"
+          ],
+          "validators": [],
+          "eval_cases": [
+            "ux-fixtures"
+          ],
+          "gaps": [
+            "Static fixture checks do not prove flow completeness."
+          ]
+        },
+        {
+          "id": "ux.tokens",
+          "title": "Detect and reuse project design system",
+          "requirement": {
+            "path": "skills/ux/SKILL.md",
+            "text": "5-Step Token & Style Protocol"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            5
+          ],
+          "expected_evidence": [
+            "DESIGN.md/tokens/framework evidence and justified style bindings"
+          ],
+          "validators": [
+            "ux-audit"
+          ],
+          "eval_cases": [
+            "ux-tokens"
+          ],
+          "gaps": [
+            "Scanner detects some arbitrary values; it does not prove the five-step lookup was followed."
+          ]
+        },
+        {
+          "id": "ux.states",
+          "title": "Specify all applicable view, control and compound states",
+          "requirement": {
+            "path": "skills/ux/SKILL.md",
+            "text": "Specify State Completeness"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            3
+          ],
+          "expected_evidence": [
+            "State matrix and state-to-component/interaction mapping"
+          ],
+          "validators": [],
+          "eval_cases": [
+            "ux-fixtures"
+          ],
+          "gaps": [
+            "No rendered six-state/control-state coverage."
+          ]
+        },
+        {
+          "id": "ux.accessibility",
+          "title": "Specify and verify keyboard, focus, contrast and names",
+          "requirement": {
+            "path": "skills/ux/SKILL.md",
+            "text": "Specify Accessibility Contracts"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            4
+          ],
+          "expected_evidence": [
+            "Keyboard/focus test receipts, measured contrast and accessible names"
+          ],
+          "validators": [
+            "ux-audit"
+          ],
+          "eval_cases": [
+            "ux-keyboard"
+          ],
+          "gaps": [
+            "Source heuristics do not execute keyboard paths or measure rendered contrast."
+          ]
+        },
+        {
+          "id": "ux.component",
+          "title": "Implement idiomatic semantic components and recovery",
+          "requirement": {
+            "path": "skills/ux/SKILL.md",
+            "text": "Phase 3: Component Generation"
+          },
+          "applies_when": "Authorized component generation or full lifecycle",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Production diff implementing specified states and recovery paths"
+          ],
+          "validators": [
+            "ux-audit"
+          ],
+          "eval_cases": [
+            "ux-recovery"
+          ],
+          "gaps": [
+            "No component-generation agent eval or state transition browser tests."
+          ]
+        },
+        {
+          "id": "ux.inspect",
+          "title": "Inspect implementation before polish",
+          "requirement": {
+            "path": "skills/ux/SKILL.md",
+            "text": "1. Inspect current implementation"
+          },
+          "applies_when": "Polish workflow",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Source/DOM inspection and baseline snapshot"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No recorded browser inspection proof."
+          ]
+        },
+        {
+          "id": "ux.context",
+          "title": "Read project context before polish",
+          "requirement": {
+            "path": "skills/ux/SKILL.md",
+            "text": "2. Read project design context"
+          },
+          "applies_when": "Polish workflow",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Design-system, token and typography references"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No agent eval of context fidelity."
+          ]
+        },
+        {
+          "id": "ux.baseline",
+          "title": "Run baseline UX audit",
+          "requirement": {
+            "path": "skills/ux/SKILL.md",
+            "text": "3. Run UX audit"
+          },
+          "applies_when": "Polish workflow",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Baseline static findings and command receipt"
+          ],
+          "validators": [
+            "ux-audit"
+          ],
+          "eval_cases": [
+            "ux-keyboard",
+            "ux-tokens"
+          ],
+          "gaps": [
+            "Static findings do not capture rendered appearance."
+          ]
+        },
+        {
+          "id": "ux.impeccable",
+          "title": "Inspect rendered output with Impeccable",
+          "requirement": {
+            "path": "skills/ux/SKILL.md",
+            "text": "4. Invoke Impeccable"
+          },
+          "applies_when": "Routed visual refinement and tool available",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Rendered preview and specialist findings or explicit skip"
+          ],
+          "validators": [],
+          "eval_cases": [
+            "ux-fixtures"
+          ],
+          "gaps": [
+            "Fixture simulation is not execution of Impeccable or a rendered inspection."
+          ]
+        },
+        {
+          "id": "ux.visual-fix",
+          "title": "Apply and render visual refinements",
+          "requirement": {
+            "path": "skills/ux/SKILL.md",
+            "text": "5. Apply visual fixes"
+          },
+          "applies_when": "Authorized visual refinement",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Scoped CSS/token diff and before/after rendered evidence"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No measured rendered regression checks."
+          ]
+        },
+        {
+          "id": "ux.hallmark",
+          "title": "Run structural anti-slop critique",
+          "requirement": {
+            "path": "skills/ux/SKILL.md",
+            "text": "6. Invoke Hallmark"
+          },
+          "applies_when": "Routed structural critique and tool available",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Normalized structural critique or explicit skip"
+          ],
+          "validators": [],
+          "eval_cases": [
+            "ux-fixtures"
+          ],
+          "gaps": [
+            "Fixture simulation is not a Hallmark agent evaluation."
+          ]
+        },
+        {
+          "id": "ux.reconcile",
+          "title": "Normalize and prioritize findings in context",
+          "requirement": {
+            "path": "skills/ux/SKILL.md",
+            "text": "7. Reconcile findings"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            6
+          ],
+          "expected_evidence": [
+            "Required/Recommended/Contextual/Ignore outcomes with precedence rationale"
+          ],
+          "validators": [],
+          "eval_cases": [
+            "ux-fixtures"
+          ],
+          "gaps": [
+            "Static fixture assertions do not prove actual conflict resolution."
+          ]
+        },
+        {
+          "id": "ux.worthwhile",
+          "title": "Fix only worthwhile issues within iteration budget",
+          "requirement": {
+            "path": "skills/ux/SKILL.md",
+            "text": "8. Fix worthwhile issues"
+          },
+          "applies_when": "Mutating refinement",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Accepted scoped fixes, pass count and unresolved findings"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No real-agent two-pass ceiling or regression behavior test."
+          ]
+        },
+        {
+          "id": "ux.degrade",
+          "title": "Record unavailable specialists and continue",
+          "requirement": {
+            "path": "skills/ux/SKILL.md",
+            "text": "Graceful Degradation Law"
+          },
+          "applies_when": "Specialist tools unavailable",
+          "turn_contracts": [
+            6
+          ],
+          "expected_evidence": [
+            "Tool availability and explicit SKIPPED outcomes",
+            "Core verification completion"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No tool-failure injection against a real agent workflow."
+          ]
+        },
+        {
+          "id": "ux.final-audit",
+          "title": "Run final executable verification",
+          "requirement": {
+            "path": "skills/ux/SKILL.md",
+            "text": "9. Run final UX audit"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            7
+          ],
+          "expected_evidence": [
+            "Rule/component/severity/fix/verification evidence",
+            "Final scanner and browser receipts"
+          ],
+          "validators": [
+            "ux-audit"
+          ],
+          "eval_cases": [
+            "ux-keyboard",
+            "ux-tokens",
+            "ux-recovery"
+          ],
+          "gaps": [
+            "Static scanner cannot guarantee zero functional or visual regressions."
+          ]
+        },
+        {
+          "id": "ux.report",
+          "title": "Return final reconciliation report",
+          "requirement": {
+            "path": "skills/ux/SKILL.md",
+            "text": "The UX Final Review Reconciliation Report"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Flow/state/a11y/visual/structural outcomes, skips and unresolved issues"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No report completeness or unsupported-success agent eval."
+          ]
+        }
+      ]
+    },
+    "ship": {
+      "source": "skills/ship/SKILL.md",
+      "steps": [
+        {
+          "id": "ship.preflight",
+          "title": "Run installed-project doctor",
+          "requirement": {
+            "path": "skills/ship/SKILL.md",
+            "text": "Local Preflight"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Doctor command, interpreter, skill versions and result"
+          ],
+          "validators": [
+            "doctor"
+          ],
+          "eval_cases": [
+            "installation"
+          ],
+          "gaps": [
+            "Installation tests do not prove agent runs preflight after upgrades."
+          ]
+        },
+        {
+          "id": "ship.resume",
+          "title": "Inspect state and next turn before work",
+          "requirement": {
+            "path": "skills/ship/SKILL.md",
+            "text": "Turn Contract Inspected"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            1
+          ],
+          "expected_evidence": [
+            "Selected change, next-turn contract and recovered state"
+          ],
+          "validators": [
+            "turn"
+          ],
+          "eval_cases": [
+            "resume",
+            "m-resume"
+          ],
+          "gaps": [
+            "Synthetic recovery tests do not establish real-agent cold resumption."
+          ]
+        },
+        {
+          "id": "ship.design",
+          "title": "Run fact discovery, frontier and empirical branches",
+          "requirement": {
+            "path": "skills/ship/SKILL.md",
+            "text": "Design: Specification & Architecture"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Design and spike step evidence linked to active change"
+          ],
+          "validators": [
+            "turn"
+          ],
+          "eval_cases": [
+            "turn-selection"
+          ],
+          "gaps": [
+            "Delegated design/spike step gaps remain; orchestration is not independently observed."
+          ]
+        },
+        {
+          "id": "ship.approve",
+          "title": "Checkpoint reviewed design and record authorization",
+          "requirement": {
+            "path": "skills/ship/SKILL.md",
+            "text": "Capture the design digest"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Design checkpoint, exact digest, approver and confirmation receipt"
+          ],
+          "validators": [
+            "delivery"
+          ],
+          "eval_cases": [
+            "design-digest"
+          ],
+          "gaps": [
+            "Engine validates binding; real-agent authorization sequencing is not evaluated."
+          ]
+        },
+        {
+          "id": "ship.implement",
+          "title": "Execute per-task red, green and refactor",
+          "requirement": {
+            "path": "skills/ship/SKILL.md",
+            "text": "Implementation: Test-First Development"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Task-linked red/green/refactor evidence and configured test commands"
+          ],
+          "validators": [
+            "execution",
+            "tdd-audit"
+          ],
+          "eval_cases": [
+            "runner-receipts",
+            "tdd-parity"
+          ],
+          "gaps": [
+            "No per-task enforced chronology; inherits TDD and simplify gaps."
+          ]
+        },
+        {
+          "id": "ship.checkpoint",
+          "title": "Update tasks and implementation checkpoint",
+          "requirement": {
+            "path": "skills/ship/SKILL.md",
+            "text": "Checkpoint implementation"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Checked tasks, test ledger and implementation checkpoint"
+          ],
+          "validators": [
+            "delivery"
+          ],
+          "eval_cases": [
+            "gate-contradictions"
+          ],
+          "gaps": [
+            "No agent eval for honest task completion."
+          ]
+        },
+        {
+          "id": "ship.inspect-review",
+          "title": "Review staged, unstaged and untracked implementation",
+          "requirement": {
+            "path": "skills/ship/SKILL.md",
+            "text": "Inspect implementation changes across the working tree"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Reviewed file inventory and current source fingerprint"
+          ],
+          "validators": [
+            "delivery"
+          ],
+          "eval_cases": [
+            "dirty-evidence"
+          ],
+          "gaps": [
+            "Engine invalidation tests do not prove reviewer scope completeness."
+          ]
+        },
+        {
+          "id": "ship.review",
+          "title": "Obtain judge clearance and delivery evidence",
+          "requirement": {
+            "path": "skills/ship/SKILL.md",
+            "text": "Package `.agentflow/delivery_evidence.json`"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Judge report, zero blocking defects and current delivery envelope"
+          ],
+          "validators": [
+            "review-schema",
+            "delivery"
+          ],
+          "eval_cases": [
+            "review-schema",
+            "gate-contradictions"
+          ],
+          "gaps": [
+            "Inherits review stage recall and repair-loop behavioral gaps."
+          ]
+        },
+        {
+          "id": "ship.replan",
+          "title": "Return architectural contradictions to design",
+          "requirement": {
+            "path": "skills/ship/SKILL.md",
+            "text": "Replan Guard"
+          },
+          "applies_when": "Review finds broken architectural invariant",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Preserved work, broken invariant and explicit replan state"
+          ],
+          "validators": [],
+          "eval_cases": [
+            "rollback-boundary"
+          ],
+          "gaps": [
+            "Rollback boundary is tested; agent detection of architectural contradictions is not."
+          ]
+        },
+        {
+          "id": "ship.verify",
+          "title": "Independently execute final tests and check current gates",
+          "requirement": {
+            "path": "skills/ship/SKILL.md",
+            "text": "After the final source edit"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            2,
+            4
+          ],
+          "expected_evidence": [
+            "Raw command/exit/count/duration receipt",
+            "Verification and review bound to current fingerprint"
+          ],
+          "validators": [
+            "execution",
+            "delivery"
+          ],
+          "eval_cases": [
+            "runner-receipts",
+            "dirty-evidence"
+          ],
+          "gaps": [
+            "Engine checks are covered; missing step telemetry still prevents a full execution history."
+          ]
+        },
+        {
+          "id": "ship.walkthrough",
+          "title": "Deliver evidence-backed handoff",
+          "requirement": {
+            "path": "skills/ship/SKILL.md",
+            "text": "Deliver Walkthrough"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Change summary, ADR links, review scorecard and debt ledger"
+          ],
+          "validators": [],
+          "eval_cases": [],
+          "gaps": [
+            "No evaluator for walkthrough accuracy and completeness."
+          ]
+        },
+        {
+          "id": "ship.archive",
+          "title": "Apply and archive specs with recovery",
+          "requirement": {
+            "path": "skills/ship/SKILL.md",
+            "text": "Apply & Archive OpenSpec"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Merged specs, archive destination and recovery journal outcome"
+          ],
+          "validators": [
+            "delivery"
+          ],
+          "eval_cases": [
+            "archive",
+            "resume"
+          ],
+          "gaps": [
+            "Operation tests do not establish end-to-end agent behavior."
+          ]
+        },
+        {
+          "id": "ship.provenance",
+          "title": "Attach notes/trailers and synchronize provenance",
+          "requirement": {
+            "path": "skills/ship/SKILL.md",
+            "text": "Attach Git Notes & Commit Trailers"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [
+            3
+          ],
+          "expected_evidence": [
+            "Git notes/trailers or authorized skip",
+            "Turn records with change and execution mode"
+          ],
+          "validators": [
+            "provenance"
+          ],
+          "eval_cases": [
+            "turn-ingestion"
+          ],
+          "gaps": [
+            "Record shape checks are not authenticated per-step capture."
+          ]
+        },
+        {
+          "id": "ship.cost",
+          "title": "Report recorded final task usage",
+          "requirement": {
+            "path": "skills/ship/SKILL.md",
+            "text": "Always report task cost"
+          },
+          "applies_when": "Always",
+          "turn_contracts": [],
+          "expected_evidence": [
+            "Final budget read after usage-affecting actions",
+            "Exact recorded Tokens/Cost or not recorded"
+          ],
+          "validators": [
+            "budget"
+          ],
+          "eval_cases": [],
+          "gaps": [
+            "No agent eval of final usage freshness or missing-vs-zero reporting."
+          ]
+        }
+      ]
+    }
+  }
+}

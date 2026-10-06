@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "active_change_id": "auth-tokens",
+  "changes": {
+    "auth-tokens": {
+      "change_id": "auth-tokens",
+      "phase": "implementation",
+      "revision_counter": 1,
+      "evidence": {
+        "design": {
+          "status": "PENDING",
+          "adr": null,
+          "approval": null
+        },
+        "implementation": {
+          "status": "IN_PROGRESS",
+          "tests_passed": null
+        }
+      }
+    }
+  }
+}

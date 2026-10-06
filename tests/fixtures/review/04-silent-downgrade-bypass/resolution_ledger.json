@@ -1,0 +1,13 @@
+{
+  "change_id": "payment-feature",
+  "iteration": 2,
+  "review_resolutions": [
+    {
+      "finding_id": "FINDING-001",
+      "original_severity": "CRITICAL",
+      "status": "DROPPED_WITHOUT_ACTION",
+      "reason": "Deemed unnecessary to fix for current release",
+      "git_sha": null
+    }
+  ]
+}

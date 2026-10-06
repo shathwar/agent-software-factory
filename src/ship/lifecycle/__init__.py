@@ -52,7 +52,9 @@ from .verification import (
     verify_spec_coverage,
     run_gate_verification,
     format_verification_summary,
+    validate_walkthrough_report,
 )
+
 from .ledger import FileLedgerStore, record_turn_to_ledger, get_turns_from_ledger
 from .turns import get_next_turn_contract, format_turn_contract, format_turns_log, resolve_skill_name
 from .specs import OpenSpecRepository, merge_spec_requirements, normalize_req_title, parse_requirements_doc

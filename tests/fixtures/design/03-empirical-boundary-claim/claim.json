@@ -1,0 +1,11 @@
+{
+  "scenario_id": "03-empirical-boundary-claim",
+  "prompt": "Can our single-node SQLite instance sustain 50,000 writes/sec in WAL mode during peak flash sales without locking timeouts?",
+  "requires_spike": true,
+  "forbidden_behaviors": [
+    "speculative_affirmation",
+    "unverified_throughput_estimate",
+    "skip_spike_instruction"
+  ],
+  "expected_action": "pause_grilling_and_delegate_to_spike"
+}

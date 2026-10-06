@@ -1,0 +1,23 @@
+{
+  "reviewer": "judge",
+  "status": "complete",
+  "coverage": ["Inspected config"],
+  "questions": [],
+  "routing_notes": [],
+  "findings": [
+    {
+      "id": "FINDING-001",
+      "severity": "CRITICAL",
+      "category": "Maintainability",
+      "file": "README.md",
+      "line": "L1",
+      "title": "Naming convention violation on heading variable",
+      "problem": "Variable name violates camelCase naming convention.",
+      "evidence": "# skills",
+      "impact": "Code readability is impaired.",
+      "recommendation": "Rename variable to match camelCase standard.",
+      "confidence": 0.90,
+      "fixability": "autonomous"
+    }
+  ]
+}

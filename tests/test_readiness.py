@@ -131,7 +131,7 @@ class ReadinessTests(unittest.TestCase):
         import test_archive_recovery as fixtures
         from ship.lifecycle.evidence import design_fingerprint
         from ship.lifecycle.vcs import GitClient
-        gate = Path(__file__).resolve().parents[1] / 'scripts/ci_gate.py'
+        gate = Path(__file__).resolve().parents[1] / 'scripts/verify/ci_gate.py'
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             fixtures.ArchiveRecoveryTests().workspace(root)

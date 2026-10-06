@@ -284,9 +284,9 @@ class AgentWorkflowTrialTests(unittest.TestCase):
             project_dir = base / "consumer_project"
             project_dir.mkdir()
 
-            # Install via install.sh in copy mode
+            # Install via install_skills.sh in copy mode
             subprocess.run(
-                ["bash", str(ROOT / "scripts/install.sh"), "--target", str(install_dir), "--mode", "copy"],
+                ["bash", str(ROOT / "scripts/setup/install_skills.sh"), "--target", str(install_dir), "--mode", "copy"],
                 check=True,
                 capture_output=True,
             )

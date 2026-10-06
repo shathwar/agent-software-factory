@@ -1,0 +1,8 @@
+{
+  "command": "pytest tests/",
+  "exit_code": 1,
+  "passed": false,
+  "tests_run": 0,
+  "duration_seconds": 0.01,
+  "error": "ModuleNotFoundError: No module named 'billing_service'"
+}

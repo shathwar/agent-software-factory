@@ -253,6 +253,87 @@ class TestScanDebt(unittest.TestCase):
             self.assertIn("In-memory cache", res_normal.stdout)
             self.assertIn("O(N) filter", res_normal.stdout)
 
+    def test_audit_code_simplicity_redundant_dependencies(self):
+        js_code = 'import { v4 } from "uuid";\nimport clone from "lodash.clonedeep";\n'
+        findings = scan_debt.audit_code_simplicity("test.js", js_code)
+        self.assertEqual(len(findings), 2)
+        self.assertTrue(all(f["rule_id"] == "SMP-DEP-001" for f in findings))
+        self.assertTrue(all(f["severity"] == "ERROR" for f in findings))
+
+    def test_audit_code_simplicity_speculative_factory_and_wrapper(self):
+        py_code = (
+            "class SvcFactory:\n"
+            "    @staticmethod\n"
+            "    def create(): return None\n\n"
+            "class SvcWrapper:\n"
+            "    def __init__(self, inner):\n"
+            "        self._inner = inner\n"
+            "    def a(self): return self._inner.a()\n"
+            "    def b(self): return self._inner.b()\n"
+        )
+        findings = scan_debt.audit_code_simplicity("svc.py", py_code)
+        rule_ids = {f["rule_id"] for f in findings}
+        self.assertIn("SMP-ABS-001", rule_ids)
+        self.assertIn("SMP-WRAP-001", rule_ids)
+
+    def test_simplify_fixtures(self):
+        fixtures_dir = ROOT / "tests/fixtures/simplify"
+
+        # 01-unrequested-abstraction
+        f1 = fixtures_dir / "01-unrequested-abstraction/user_factory.py"
+        findings_1 = scan_debt.audit_code_simplicity(f1)
+        rules_1 = {f["rule_id"] for f in findings_1}
+        self.assertIn("SMP-ABS-001", rules_1)
+        self.assertIn("SMP-WRAP-001", rules_1)
+
+        # 02-dependency-inflation
+        f2 = fixtures_dir / "02-dependency-inflation/id_generator.ts"
+        findings_2 = scan_debt.audit_code_simplicity(f2)
+        rules_2 = {f["rule_id"] for f in findings_2}
+        self.assertIn("SMP-DEP-001", rules_2)
+
+        # 03-destructive-deletion
+        f3 = fixtures_dir / "03-destructive-deletion/diff.patch"
+        self.assertTrue(f3.exists())
+        self.assertIn("-        if not user_id", f3.read_text())
+
+        # 04-invalid-debt-marker
+        f4 = fixtures_dir / "04-invalid-debt-marker/cache_service.py"
+        markers_4 = scan_debt.scan_paths([f4])
+        self.assertEqual(len(markers_4), 2)
+        self.assertTrue(all(not m["is_valid"] for m in markers_4))
+
+    def test_evaluate_simplify_rubric(self):
+        sys.path.insert(0, str(ROOT / "tests/evaluation"))
+        import evaluate_simplify_rubric
+
+        evaluator = evaluate_simplify_rubric.SimplifyRubricEvaluator(passing_threshold=0.80)
+
+        # Clean minimal code
+        good_code = (
+            "import os\n"
+            "from pathlib import Path\n\n"
+            "class ConfigReader:\n"
+            "    def __init__(self, base_dir: Path):\n"
+            "        self.base_dir = base_dir\n"
+            "    def read_key(self, key: str, default: str = '') -> str:\n"
+            "        return os.environ.get(key, default)\n"
+        )
+        report_good = evaluator.evaluate_code(good_code, "GoodConfig")
+        self.assertTrue(report_good.passed)
+        self.assertEqual(report_good.status, "PASS")
+
+        # Over-engineered / redundant code
+        bad_code = (
+            "import cloneDeep from 'lodash.clonedeep';\n"
+            "class UserFactory:\n"
+            "    def create(): pass\n"
+        )
+        report_bad = evaluator.evaluate_code(bad_code, "BadCode")
+        self.assertFalse(report_bad.passed)
+        self.assertIn("Redundant 3rd-party dependency", report_bad.domain_scores["stdlib_first"].feedback[0])
+
 
 if __name__ == "__main__":
     unittest.main()
+

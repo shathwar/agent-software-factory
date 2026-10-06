@@ -89,11 +89,11 @@ Parity is enforced by automated test guards (`tests/test_packaging.py`) and mana
 
 ```bash
 # Verify parity without making changes
-python3 scripts/sync_skills.py --check
+python3 scripts/verify/sync_parity.py --check
 
 # Synchronize modifications from src/ship into skills/
-python3 scripts/sync_skills.py --direction src-to-skills
+python3 scripts/verify/sync_parity.py --direction src-to-skills
 
 # Synchronize modifications from skills/ into src/ship
-python3 scripts/sync_skills.py --direction skills-to-src
+python3 scripts/verify/sync_parity.py --direction skills-to-src
 ```

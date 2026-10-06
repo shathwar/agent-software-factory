@@ -134,6 +134,89 @@ class ReportTests(unittest.TestCase):
         errors = validator.validate_report(data)
         self.assertTrue(any("fixability" in e for e in errors))
 
+    def test_verify_source_evidence_hallucination_rejected(self):
+        data = report()
+        data["findings"][0]["file"] = "nonexistent_file_xyz.py"
+        errors = validator.validate_report(data, verify_source=True, repo_root=ROOT)
+        self.assertTrue(any("REV-SRC-001" in e for e in errors))
+
+    def test_manufactured_stylistic_finding_rejected(self):
+        data = report()
+        data["findings"][0]["severity"] = "CRITICAL"
+        data["findings"][0]["title"] = "Violates camelCase naming convention"
+        errors = validator.validate_report(data)
+        self.assertTrue(any("REV-SEV-001" in e for e in errors))
+
+    def test_review_fixtures(self):
+        fixtures_dir = ROOT / "tests/fixtures/review"
+
+        # 01-hallucinated-finding
+        f1_data = json.loads((fixtures_dir / "01-hallucinated-finding/report.json").read_text())
+        errs_1 = validator.validate_report(f1_data, verify_source=True, repo_root=ROOT)
+        self.assertTrue(any("REV-SRC-001" in e for e in errs_1))
+
+        # 02-manufactured-low-value-finding
+        f2_data = json.loads((fixtures_dir / "02-manufactured-low-value-finding/report.json").read_text())
+        errs_2 = validator.validate_report(f2_data)
+        self.assertTrue(any("REV-SEV-001" in e for e in errs_2))
+
+        # 03-schema-violation
+        f3_data = json.loads((fixtures_dir / "03-schema-violation/report.json").read_text())
+        errs_3 = validator.validate_report(f3_data)
+        self.assertTrue(len(errs_3) >= 2)
+
+        # 04-silent-downgrade-bypass
+        f4_data = json.loads((fixtures_dir / "04-silent-downgrade-bypass/resolution_ledger.json").read_text())
+        self.assertEqual(f4_data["review_resolutions"][0]["status"], "DROPPED_WITHOUT_ACTION")
+
+    def test_evaluate_review_rubric(self):
+        sys.path.insert(0, str(ROOT / "tests/evaluation"))
+        import evaluate_review_rubric
+
+        evaluator = evaluate_review_rubric.ReviewRubricEvaluator(passing_threshold=0.80)
+
+        # 1. Clean review
+        clean_rep = {"reviewer": "judge", "status": "complete", "findings": [], "coverage": ["All files inspected."]}
+        res_clean = evaluator.evaluate_report(clean_rep, "CleanReport")
+        self.assertTrue(res_clean.passed)
+        self.assertEqual(res_clean.status, "PASS")
+
+        # 2. Material defect report
+        mat_rep = {
+            "reviewer": "judge", "status": "complete",
+            "findings": [
+                {
+                    "id": "FINDING-001", "severity": "CRITICAL", "category": "Correctness",
+                    "file": "src/auth.py", "line": "L10-L15", "title": "SQL injection in query",
+                    "problem": "Unescaped user parameter in raw SQL statement.",
+                    "evidence": "db.execute(f'SELECT * FROM users WHERE id = {user_id}')",
+                    "impact": "Remote code execution or arbitrary data exfiltration.",
+                    "recommendation": "Use parameterized query: db.execute('SELECT * FROM users WHERE id = %s', (user_id,))",
+                    "confidence": 1.0, "fixability": "autonomous"
+                }
+            ]
+        }
+        res_mat = evaluator.evaluate_report(mat_rep, "MaterialReport")
+        self.assertTrue(res_mat.passed)
+        self.assertEqual(res_mat.status, "PASS")
+
+        # 3. Bikeshedding report
+        bike_rep = {
+            "reviewer": "judge", "status": "complete",
+            "findings": [
+                {
+                    "id": "FINDING-001", "severity": "CRITICAL", "category": "Maintainability",
+                    "file": "src/auth.py", "line": "L1", "title": "camelCase naming convention",
+                    "problem": "Variable name violates camelCase naming convention.",
+                    "evidence": "const x = 1;", "impact": "Code style is degraded.",
+                    "recommendation": "Rename variable.", "confidence": 0.5, "fixability": "autonomous"
+                }
+            ]
+        }
+        res_bike = evaluator.evaluate_report(bike_rep, "BikeshedReport")
+        self.assertFalse(res_bike.passed)
+
 
 if __name__ == "__main__":
     unittest.main()
+

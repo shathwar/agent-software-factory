@@ -20,6 +20,7 @@ from typing import List, Optional, Sequence, Tuple
 
 
 TOOL_MODULES = {
+    "design": ("src/ship/tools/design.py", "skills/design/scripts/validate_design.py"),
     "simplify": ("src/ship/tools/simplify.py", "skills/simplify/scripts/scan_debt.py"),
     "tdd": ("src/ship/tools/tdd.py", "skills/tdd/scripts/verify_tdd.py"),
     "review": ("src/ship/tools/review.py", "skills/review/scripts/validate_report.py"),
@@ -102,6 +103,14 @@ def sync_files(repo_root: Path, direction: str = "src-to-skills") -> List[Tuple[
     return synced
 
 
+def find_repo_root(start: Optional[Path] = None) -> Path:
+    current = (start or Path.cwd()).resolve()
+    for p in [current] + list(current.parents):
+        if (p / "src/ship").is_dir() and (p / "skills").is_dir():
+            return p
+    return current
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         description="Synchronize and verify parity between src/ship/ and skills/ distributions."
@@ -130,7 +139,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
 
     args = parser.parse_args(argv)
-    repo_root = Path(args.path).resolve()
+    repo_root = Path(args.path).resolve() if args.path != "." else find_repo_root()
 
     if args.check:
         passed, errors = check_parity(repo_root)

@@ -62,6 +62,8 @@ class Finding:
     line: int
     message: str
     severity: str  # "ERROR" or "WARNING"
+    rule_id: str = ""
+
 
 
 @dataclass
@@ -202,16 +204,68 @@ def check_anti_patterns(file_path: Path) -> list[Finding]:
                             file=str(file_path),
                             line=node.lineno,
                             message=f"Test '{node.name}' contains no detectable assertion. Tests must verify observable behavior.",
-                            severity="ERROR"
+                            severity="ERROR",
+                            rule_id="TDD-ASRT-001",
                         ))
+                    # Tautological assertion detection
+                    for child in ast.walk(node):
+                        if isinstance(child, ast.Assert) and isinstance(child.test, ast.Constant) and child.test.value is True:
+                            findings.append(Finding(
+                                category="tautological_assertion",
+                                file=str(file_path),
+                                line=child.lineno,
+                                message="Tautological assertion ('assert True') detected. Tests must assert actual observable behavior.",
+                                severity="ERROR",
+                                rule_id="TDD-TAUT-001",
+                            ))
+                        if isinstance(child, ast.Call):
+                            call_attr = getattr(child.func, "attr", "")
+                            if call_attr in {"assertTrue", "assert_true"} and child.args and isinstance(child.args[0], ast.Constant) and child.args[0].value is True:
+                                findings.append(Finding(
+                                    category="tautological_assertion",
+                                    file=str(file_path),
+                                    line=child.lineno,
+                                    message="Tautological assertion ('assertTrue(True)') detected. Tests must assert actual observable behavior.",
+                                    severity="ERROR",
+                                    rule_id="TDD-TAUT-001",
+                                ))
             ast_checked = True
         except SyntaxError:
             ast_checked = False
+
+    db_mock_pattern = re.compile(
+        r"(?:patch|mock)\w*\(.*(?:psycopg|sqlite3|mysql|pg_client|postgres|redis|ioredis|prisma|sqlalchemy|cursor)",
+        re.IGNORECASE,
+    )
+    tautological_pattern = re.compile(
+        r"\bassert\s+True\b|\bassertTrue\(\s*True\s*\)|\bexpect\(\s*true\s*\)\.toBe\(\s*true\s*\)",
+        re.IGNORECASE,
+    )
 
     for i, line in enumerate(lines, 1):
         stripped = line.strip()
         if stripped.startswith(("#", "//", "/*", "*")):
             continue
+
+        if db_mock_pattern.search(line):
+            findings.append(Finding(
+                category="mocked_database",
+                file=str(file_path),
+                line=i,
+                message="Mocking of database engine/client detected. Violates Tier 2 Dual-Speed Rule: use ephemeral SQLite/containers.",
+                severity="ERROR",
+                rule_id="TDD-MOCK-DB-001",
+            ))
+
+        if not ast_checked and tautological_pattern.search(line):
+            findings.append(Finding(
+                category="tautological_assertion",
+                file=str(file_path),
+                line=i,
+                message="Tautological assertion detected. Tests must assert actual observable behavior.",
+                severity="ERROR",
+                rule_id="TDD-TAUT-001",
+            ))
 
         if private_matches := private_access_pattern.findall(line):
             legit = [
@@ -224,7 +278,8 @@ def check_anti_patterns(file_path: Path) -> list[Finding]:
                     file=str(file_path),
                     line=i,
                     message=f"Test directly inspects private member(s) ({', '.join(legit)}). Assert on observable public outcomes instead.",
-                    severity="WARNING"
+                    severity="WARNING",
+                    rule_id="TDD-SPY-001",
                 ))
 
         if mock_pattern.search(line):
@@ -238,7 +293,8 @@ def check_anti_patterns(file_path: Path) -> list[Finding]:
                         file=str(file_path),
                         line=current_func_line,
                         message=f"Test '{current_func_name}' contains no detectable assertion. Tests must verify observable behavior.",
-                        severity="ERROR"
+                        severity="ERROR",
+                        rule_id="TDD-ASRT-001",
                     ))
                 in_test_func = True
                 current_func_name = next(filter(None, m.groups()), "unknown_test")
@@ -254,7 +310,8 @@ def check_anti_patterns(file_path: Path) -> list[Finding]:
             file=str(file_path),
             line=current_func_line,
             message=f"Test '{current_func_name}' contains no detectable assertion. Tests must verify observable behavior.",
-            severity="ERROR"
+            severity="ERROR",
+            rule_id="TDD-ASRT-001",
         ))
 
     if mock_count > 8:
@@ -263,7 +320,8 @@ def check_anti_patterns(file_path: Path) -> list[Finding]:
             file=str(file_path),
             line=1,
             message=f"Test file contains {mock_count} mock/spy references. High risk of testing mock setup rather than domain behavior. Prefer in-memory fakes or ephemeral databases.",
-            severity="WARNING"
+            severity="WARNING",
+            rule_id="TDD-MOCK-001",
         ))
 
     return findings
@@ -291,8 +349,10 @@ def audit_tdd(files: list[str], repo_root: Path | None = None, strict: bool = Fa
                 file=p,
                 line=1,
                 message="Production logic modified with ZERO test changes in the changeset. Enforce the Iron Law of Test-First.",
-                severity="ERROR"
+                severity="ERROR",
+                rule_id="TDD-PAR-001",
             ))
+
 
     for t in test_files:
         p = root / t if not Path(t).is_absolute() else Path(t)
@@ -376,10 +436,61 @@ def verify_tdd(ref_range: str | None = None, files: list[str] | None = None, rep
                     line=1,
                     message=str(e),
                     severity="ERROR",
+                    rule_id="TDD-GIT-001",
                 )
             ],
             error=str(e),
         )
+
+
+def audit_test_diff(diff_text: str) -> list[Finding]:
+    """Audit a git diff to detect test weakening or deletion of assertions."""
+    findings: list[Finding] = []
+    lines = diff_text.splitlines()
+
+    current_file = ""
+    in_test_file = False
+    deleted_asserts = 0
+    added_asserts = 0
+
+    assert_kw = re.compile(r"(?:\bassert(?:_|\b)|\.assert|self\.assert|expect\(|\.toBe|\.toEqual)", re.IGNORECASE)
+
+    for line in lines:
+        if line.startswith("diff --git"):
+            if in_test_file and deleted_asserts > added_asserts:
+                findings.append(Finding(
+                    category="test_weakening",
+                    file=current_file,
+                    line=1,
+                    message=f"Test weakening detected in '{current_file}': {deleted_asserts} assertion(s) removed but only {added_asserts} added. Do not weaken tests to pass faulty implementations.",
+                    severity="ERROR",
+                    rule_id="TDD-WEAK-001",
+                ))
+            deleted_asserts = 0
+            added_asserts = 0
+            parts = line.split()
+            current_file = parts[-1].lstrip("b/") if len(parts) >= 4 else "unknown"
+            in_test_file = is_test_file(current_file)
+        elif in_test_file:
+            if line.startswith("-") and not line.startswith("---"):
+                if assert_kw.search(line):
+                    deleted_asserts += 1
+            elif line.startswith("+") and not line.startswith("+++"):
+                if assert_kw.search(line):
+                    added_asserts += 1
+
+    if in_test_file and deleted_asserts > added_asserts:
+        findings.append(Finding(
+            category="test_weakening",
+            file=current_file,
+            line=1,
+            message=f"Test weakening detected in '{current_file}': {deleted_asserts} assertion(s) removed but only {added_asserts} added. Do not weaken tests to pass faulty implementations.",
+            severity="ERROR",
+            rule_id="TDD-WEAK-001",
+        ))
+
+
+    return findings
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -389,6 +500,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--strict", action="store_true", help="Fail with exit code 1 on any ERROR finding")
     parser.add_argument("--json", action="store_true", help="Output results in JSON format")
     parser.add_argument("--trim-receipt", help="Path to raw test runner output to trim (or '-' for stdin)")
+    parser.add_argument("--audit-diff", help="Path to git diff file (or '-' for stdin) to audit for test weakening")
 
     args = parser.parse_args(argv)
 
@@ -399,6 +511,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             raw = Path(args.trim_receipt).read_text(encoding="utf-8", errors="replace")
         print(trim_test_receipt(raw))
         return 0
+
+    if args.audit_diff:
+        if args.audit_diff == "-":
+            raw_diff = sys.stdin.read()
+        else:
+            raw_diff = Path(args.audit_diff).read_text(encoding="utf-8", errors="replace")
+        diff_findings = audit_test_diff(raw_diff)
+        if args.json:
+            print(json.dumps([asdict(f) for f in diff_findings], indent=2))
+        else:
+            print(f"Test Diff Weakening Audit: {'PASSED' if not diff_findings else 'FAILED'}")
+            for f in diff_findings:
+                print(f"  • [{f.severity}] {f.file}: {f.message}")
+        return 1 if diff_findings else 0
 
     try:
         files_to_check = args.files if args.files else get_changed_files(args.ref_range)

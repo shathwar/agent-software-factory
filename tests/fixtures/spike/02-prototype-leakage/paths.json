@@ -1,0 +1,6 @@
+[
+  ".scratch/redis-spike/worker.py",
+  ".scratch/redis-spike/docker-compose.yml",
+  "src/services/session_cache.py",
+  "docs/adr/ADR-0002-caching.md"
+]

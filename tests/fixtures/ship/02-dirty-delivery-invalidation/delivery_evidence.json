@@ -1,0 +1,7 @@
+{
+  "change_id": "payment-api",
+  "reviewed_tree_fingerprint": "a1b2c3d4e5f67890123456789abcdef012345678",
+  "current_tree_fingerprint": "0987654321fedcba0987654321fedcba09876543",
+  "review_verdict": "PASS",
+  "status": "INVALIDATED_BY_UNREVIEWED_EDITS"
+}

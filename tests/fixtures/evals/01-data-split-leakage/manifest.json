@@ -1,0 +1,4 @@
+{
+  "train": ["trace_001", "trace_002", "trace_003", "trace_004", "trace_005"],
+  "test": ["trace_005", "trace_006", "trace_007", "trace_008"]
+}

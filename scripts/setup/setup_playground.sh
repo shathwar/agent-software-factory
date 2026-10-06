@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Provision an ephemeral disposable git workspace for manual AgentFlow testing
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd))"
 PLAYGROUND_DIR="$REPO_ROOT/.agentflow/playground"
 
 rm -rf "$PLAYGROUND_DIR"

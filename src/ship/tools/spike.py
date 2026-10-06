@@ -14,17 +14,18 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, as_completed, wait
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import signal
 import statistics
 import subprocess
 import sys
 import time
-from typing import Sequence
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 
 @dataclass
@@ -301,9 +302,217 @@ def format_markdown_table(
     return "\n".join(lines), all_passed
 
 
+@dataclass
+class SpikeFinding:
+    rule_id: str
+    severity: str  # ERROR, WARNING, INFO
+    message: str
+    file_path: Optional[str] = None
+    line_number: Optional[int] = None
+
+
+@dataclass
+class SpikeValidationResult:
+    passed: bool
+    findings: List[SpikeFinding] = field(default_factory=list)
+    metrics: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def errors(self) -> List[SpikeFinding]:
+        return [f for f in self.findings if f.severity == "ERROR"]
+
+    @property
+    def warnings(self) -> List[SpikeFinding]:
+        return [f for f in self.findings if f.severity == "WARNING"]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "passed": self.passed,
+            "error_count": len(self.errors),
+            "warning_count": len(self.warnings),
+            "findings": [asdict(f) for f in self.findings],
+            "metrics": self.metrics,
+        }
+
+
+# Isolation check: Prototype code must never leak into production paths
+FORBIDDEN_PROD_PREFIXES = ("src/", "lib/", "app/", "pkg/", "internal/")
+ALLOWED_SPIKE_PREFIXES = (".scratch/", "scratch/", "docs/adr/", "openspec/", "tests/")
+
+FALSIFIABLE_THRESHOLD_REGEX = re.compile(
+    r"(?:\b\d+(?:\.\d+)?\s*(?:ms|s|rps|tps|qps|req/sec|ops|kb|mb|gb|%)\b|[<>]=?\s*\d+)",
+    re.IGNORECASE,
+)
+
+
+def audit_spike_isolation(file_paths: Sequence[str | Path]) -> SpikeValidationResult:
+    """Audit changed or created paths during a spike to ensure zero leakage into production paths."""
+    findings: List[SpikeFinding] = []
+
+    for p in file_paths:
+        p_str = str(p).replace("\\", "/")
+        norm_path = p_str.lstrip("./")
+
+        if any(norm_path.startswith(prefix) for prefix in FORBIDDEN_PROD_PREFIXES):
+            findings.append(SpikeFinding(
+                rule_id="SPK-ISO-001",
+                severity="ERROR",
+                message=f"Prototype code leaked into production directory: '{p_str}'. Spikes must remain strictly isolated inside .scratch/<spike-name>/.",
+                file_path=p_str,
+            ))
+
+    errors = [f for f in findings if f.severity == "ERROR"]
+    return SpikeValidationResult(
+        passed=len(errors) == 0,
+        findings=findings,
+        metrics={"total_paths_audited": len(file_paths), "violations": len(errors)},
+    )
+
+
+def validate_spike_report(report_text: str, filename: str = "SpikeReport.md") -> SpikeValidationResult:
+    """Validate a Spike Report against the canonical SKILL.md Section 3 schema and anti-cheat constraints."""
+    findings: List[SpikeFinding] = []
+
+    # 1. Header
+    report_header = re.search(r"^##\s+🧪\s*Spike\s+Report:\s*(.+)$", report_text, re.MULTILINE)
+    if not report_header:
+        findings.append(SpikeFinding(
+            rule_id="SPK-REP-001",
+            severity="ERROR",
+            message="Missing required header: '## 🧪 Spike Report: <Spike Name>'",
+            file_path=filename,
+        ))
+
+    # 2. Question & Hypothesis
+    if "### 🎯 Empirical Question & Hypothesis" not in report_text and "Empirical Question & Hypothesis" not in report_text:
+        findings.append(SpikeFinding(
+            rule_id="SPK-REP-002",
+            severity="ERROR",
+            message="Missing required section: '### 🎯 Empirical Question & Hypothesis'",
+            file_path=filename,
+        ))
+    else:
+        q_match = re.search(r"-\s+\*\*Question\*\*:\s*(.+)$", report_text, re.MULTILINE)
+        h_match = re.search(r"-\s+\*\*Hypothesis\*\*:\s*(.+)$", report_text, re.MULTILINE)
+
+        if not q_match or not q_match.group(1).strip():
+            findings.append(SpikeFinding(
+                rule_id="SPK-REP-003",
+                severity="ERROR",
+                message="Missing or empty '- **Question**: <Unresolved question>'",
+                file_path=filename,
+            ))
+
+        if not h_match or not h_match.group(1).strip():
+            findings.append(SpikeFinding(
+                rule_id="SPK-REP-004",
+                severity="ERROR",
+                message="Missing or empty '- **Hypothesis**: <Expected outcome with numerical threshold>'",
+                file_path=filename,
+            ))
+        else:
+            hypo_text = h_match.group(1).strip()
+            # Anti-Cheat: Hypothesis must contain numerical threshold / falsifiable SLI
+            if not FALSIFIABLE_THRESHOLD_REGEX.search(hypo_text):
+                findings.append(SpikeFinding(
+                    rule_id="SPK-HYP-001",
+                    severity="ERROR",
+                    message=f"Hypothesis '{hypo_text}' lacks a falsifiable numerical threshold (e.g. '< 15ms', '> 5000 RPS', '< 1%').",
+                    file_path=filename,
+                ))
+
+    # 3. Methodology & Setup
+    if "### 🧪 Methodology & Setup" not in report_text and "Methodology & Setup" not in report_text:
+        findings.append(SpikeFinding(
+            rule_id="SPK-REP-005",
+            severity="ERROR",
+            message="Missing required section: '### 🧪 Methodology & Setup'",
+            file_path=filename,
+        ))
+    else:
+        if ".scratch/" not in report_text and "scratch/" not in report_text:
+            findings.append(SpikeFinding(
+                rule_id="SPK-REP-006",
+                severity="WARNING",
+                message="Methodology should document isolated sandbox location (e.g. '.scratch/<spike-name>/')",
+                file_path=filename,
+            ))
+
+    # 4. Empirical Results Table
+    results_match = re.search(r"###\s+📊\s*Empirical\s+Results", report_text, re.MULTILINE)
+    has_breached_row = False
+    if not results_match and "Empirical Results" not in report_text:
+        findings.append(SpikeFinding(
+            rule_id="SPK-REP-007",
+            severity="ERROR",
+            message="Missing required section: '### 📊 Empirical Results'",
+            file_path=filename,
+        ))
+    else:
+        # Check table columns: Metric / Condition | Expected | Observed | Status
+        if "| Metric" not in report_text or "| Status" not in report_text:
+            findings.append(SpikeFinding(
+                rule_id="SPK-REP-008",
+                severity="ERROR",
+                message="Empirical Results table must include columns: '| Metric / Condition | Expected | Observed | Status |'",
+                file_path=filename,
+            ))
+        if "❌ Breached" in report_text:
+            has_breached_row = True
+
+    # 5. Architectural Verdict
+    verdict_match = re.search(r"###\s+⚖️\s*Architectural\s+Verdict", report_text, re.MULTILINE)
+    if not verdict_match and "Architectural Verdict" not in report_text:
+        findings.append(SpikeFinding(
+            rule_id="SPK-REP-009",
+            severity="ERROR",
+            message="Missing required section: '### ⚖️ Architectural Verdict'",
+            file_path=filename,
+        ))
+    else:
+        v_token = re.search(r"-\s+\*\*Verdict\*\*:\s*\*{0,2}(CONFIRMED|REFUTED|QUALIFIED)\*{0,2}", report_text, re.IGNORECASE)
+        if not v_token:
+            findings.append(SpikeFinding(
+                rule_id="SPK-VER-001",
+                severity="ERROR",
+                message="Verdict must explicitly state one of: CONFIRMED, REFUTED, or QUALIFIED",
+                file_path=filename,
+            ))
+        else:
+            verdict_val = v_token.group(1).upper()
+            # Anti-Cheat: If any metric breached, verdict cannot be CONFIRMED
+            if verdict_val == "CONFIRMED" and has_breached_row:
+                findings.append(SpikeFinding(
+                    rule_id="SPK-VER-002",
+                    severity="ERROR",
+                    message="Verdict contradiction: Marked 'CONFIRMED' despite one or more empirical metrics being '❌ Breached'.",
+                    file_path=filename,
+                ))
+
+    # 6. Reusable Snippets
+    if "### 💎 Reusable Snippets" not in report_text and "Reusable Snippets" not in report_text:
+        findings.append(SpikeFinding(
+            rule_id="SPK-REP-010",
+            severity="WARNING",
+            message="Spike report should include '### 💎 Reusable Snippets' extracted to ADR or production config",
+            file_path=filename,
+        ))
+
+    errors = [f for f in findings if f.severity == "ERROR"]
+    return SpikeValidationResult(
+        passed=len(errors) == 0,
+        findings=findings,
+        metrics={
+            "errors": len(errors),
+            "warnings": len([f for f in findings if f.severity == "WARNING"]),
+            "has_breached_row": has_breached_row,
+        },
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Automated Statistical Spike Runner for Prototypes")
-    parser.add_argument("--cmd", required=True, help="Command line string to benchmark")
+    parser.add_argument("--cmd", help="Command line string to benchmark")
     parser.add_argument("--iterations", type=int, default=100, help="Number of measurement runs (default: 100)")
     parser.add_argument("--warmup", type=int, default=10, help="Number of warmup runs (default: 10)")
     parser.add_argument("--workers", "--concurrency", dest="concurrency", type=int, default=1, help="Concurrent worker threads (default: 1)")
@@ -313,9 +522,44 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--expected-rps", type=float, help="Expected minimum throughput (RPS)")
     parser.add_argument("--expected-err", type=float, help="Expected maximum error rate percentage")
     parser.add_argument("--timeout", type=float, default=60.0, help="Timeout per iteration in seconds (default: 60.0)")
+    parser.add_argument("--audit-report", help="Path to Spike Report markdown file to validate")
+    parser.add_argument("--audit-paths", nargs="*", help="File paths to audit for prototype sandbox isolation")
     parser.add_argument("--json", action="store_true", help="Output results in JSON format")
 
     args = parser.parse_args(argv)
+
+    # 1. Audit Report Mode
+    if args.audit_report:
+        report_file = Path(args.audit_report).resolve()
+        if not report_file.is_file():
+            sys.stderr.write(f"Error: Report file not found: {report_file}\n")
+            return 1
+        report_text = report_file.read_text(encoding="utf-8")
+        result = validate_spike_report(report_text, filename=report_file.name)
+        if args.json:
+            print(json.dumps(result.to_dict(), indent=2))
+        else:
+            print(f"Spike Report Validation: {'PASSED' if result.passed else 'FAILED'}")
+            print(f"Errors: {len(result.errors)}, Warnings: {len(result.warnings)}")
+            for f in result.findings:
+                print(f"  • [{f.severity}] {f.rule_id}: {f.message}")
+        return 0 if result.passed else 1
+
+    # 2. Audit Paths Mode
+    if args.audit_paths:
+        result = audit_spike_isolation(args.audit_paths)
+        if args.json:
+            print(json.dumps(result.to_dict(), indent=2))
+        else:
+            print(f"Spike Sandbox Isolation: {'PASSED' if result.passed else 'FAILED'}")
+            print(f"Violations: {len(result.errors)}")
+            for f in result.findings:
+                print(f"  • [{f.severity}] {f.rule_id}: {f.message}")
+        return 0 if result.passed else 1
+
+    # 3. Benchmark Mode
+    if not args.cmd:
+        parser.error("--cmd is required when not running in audit mode (--audit-report or --audit-paths)")
 
     cwd = Path(args.cwd).resolve() if args.cwd else None
 

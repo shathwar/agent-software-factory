@@ -1,0 +1,23 @@
+{
+  "reviewer": "judge",
+  "status": "complete",
+  "coverage": ["Inspected nonexistent service"],
+  "questions": [],
+  "routing_notes": [],
+  "findings": [
+    {
+      "id": "FINDING-001",
+      "severity": "CRITICAL",
+      "category": "Correctness",
+      "file": "src/nonexistent/phantom_service.py",
+      "line": "L42",
+      "title": "Phantom nil dereference in absent class",
+      "problem": "Calling process() on undefined client crashes.",
+      "evidence": "this.phantomClient.process()",
+      "impact": "Production crashes.",
+      "recommendation": "Check if phantomClient is null.",
+      "confidence": 0.95,
+      "fixability": "autonomous"
+    }
+  ]
+}

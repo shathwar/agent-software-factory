@@ -3290,9 +3290,79 @@ class TestInspectLifecycle(unittest.TestCase):
             fp_restored = inspect_lifecycle.compute_working_tree_fingerprint(root)
             self.assertEqual(fp_clean, fp_restored)
 
+    def test_validate_walkthrough_report(self):
+        from ship.lifecycle import validate_walkthrough_report
+
+        good_walkthrough = (
+            "# Ship Delivery Walkthrough: User Authentication\n\n"
+            "## Architecture\n"
+            "Implemented as specified in [docs/adr/ADR-0001-auth.md](docs/adr/ADR-0001-auth.md).\n\n"
+            "## Review Scorecard\n"
+            "| Stage | Status |\n"
+            "| Concurrency | PASS |\n"
+            "Judge PASS verdict received.\n\n"
+            "## Technical Debt\n"
+            "Scanned with scan_debt.py; 0 debt markers found.\n\n"
+            "## Usage & Cost\n"
+            "- Tokens: 125,000\n"
+            "- Cost: $0.45 USD\n"
+        )
+        errors = validate_walkthrough_report(good_walkthrough)
+        self.assertEqual(errors, [])
+
+        # Missing cost summary
+        bad_walkthrough = (
+            "# Ship Delivery\n"
+            "docs/adr/ADR-0001.md\n"
+            "Review scorecard: PASS\n"
+            "technical debt: clean\n"
+        )
+        bad_errors = validate_walkthrough_report(bad_walkthrough)
+        self.assertTrue(any("SHP-COST-001" in e for e in bad_errors))
+
+    def test_ship_fixtures(self):
+        fixtures_dir = ROOT / "tests/fixtures/ship"
+
+        # 01-unapproved-design-bypass
+        f1_data = json.loads((fixtures_dir / "01-unapproved-design-bypass/state.json").read_text())
+        auth_data = f1_data["changes"]["auth-tokens"]["evidence"]["design"]
+        self.assertIsNone(auth_data["approval"])
+
+        # 02-dirty-delivery-invalidation
+        f2_data = json.loads((fixtures_dir / "02-dirty-delivery-invalidation/delivery_evidence.json").read_text())
+        self.assertNotEqual(f2_data["reviewed_tree_fingerprint"], f2_data["current_tree_fingerprint"])
+
+        # 03-unchecked-task-premature-advance
+        tasks_text = (fixtures_dir / "03-unchecked-task-premature-advance/tasks.md").read_text()
+        self.assertIn("- [ ]", tasks_text)
+
+        # 04-fabricated-test-receipt
+        f4_data = json.loads((fixtures_dir / "04-fabricated-test-receipt/receipt.json").read_text())
+        self.assertFalse(f4_data["passed"])
+        self.assertEqual(f4_data["tests_run"], 0)
+
+    def test_evaluate_ship_rubric(self):
+        sys.path.insert(0, str(ROOT / "tests/evaluation"))
+        import evaluate_ship_rubric
+
+        evaluator = evaluate_ship_rubric.ShipRubricEvaluator(passing_threshold=0.80)
+
+        good_walkthrough = (
+            "# Delivery Walkthrough\n"
+            "Design: Approved in docs/adr/ADR-0001.md and openspec/changes/auth/tasks.md.\n"
+            "Implementation: TDD red-green-refactor complete. Ran 42 tests in 0.15s (exit code: 0).\n"
+            "Review: Judge PASS verdict confirmed with 0 critical findings.\n"
+            "Delivery: Clean tree fingerprint verified.\n"
+            "Usage: Tokens: 50,000 | Cost: $0.20 USD\n"
+        )
+        rep_good = evaluator.evaluate_delivery(good_walkthrough, target_name="GoodShip")
+        self.assertTrue(rep_good.passed)
+        self.assertEqual(rep_good.status, "PASS")
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 

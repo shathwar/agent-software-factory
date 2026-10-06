@@ -15,4 +15,4 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - name: Run test suite
-        run: ./scripts/run_tests.sh
+        run: ./scripts/test/test_full.sh

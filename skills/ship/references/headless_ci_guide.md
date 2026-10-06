@@ -11,7 +11,7 @@ human PR review and the repository's protected merge checks.
    files on the protected default branch. `ship-review.yml` remains a separate review
    example; validate its host permissions before enabling it.
 2. Set repository variable `SHIP_SKILLS_SHA` to a reviewed **full commit SHA** of this
-   skills repository containing `scripts/ci_gate.py`. Missing or non-SHA values stop
+   skills repository containing `scripts/verify/ci_gate.py`. Missing or non-SHA values stop
    the workflow. The tools are checked out separately under `.agentflow/toolchain`.
 3. Configure the `ship-approved` GitHub environment with required reviewers and
    protected deployment branches. Configure the chosen agent provider secret. Review
@@ -42,13 +42,13 @@ review and dispatch; task checkbox completion alone does not change the design d
 ## Execution and publication
 
 The workflow checks out the approved commit and pinned toolchain, then calls
-`scripts/ci_gate.py prepare` **before** starting the agent. This independently checks
+`scripts/verify/ci_gate.py prepare` **before** starting the agent. This independently checks
 the supplied digest, creates the checkpoint, and records approval for that design.
 Missing or mismatched design artifacts stop execution. The runner gets one selected
 change and bounded turns; it leaves the reviewed change package active.
 
 After the agent finishes, the workflow restores the pinned toolchain and calls
-`scripts/ci_gate.py delivery` as a normal workflow step. It rechecks the original
+`scripts/verify/ci_gate.py delivery` as a normal workflow step. It rechecks the original
 digest, executes the configured test command, requires a `VERIFIED` execution receipt
 with positive test counts, and checks full lifecycle readiness, including Judge PASS.
 No script-exists condition or agent decision can skip this step. An absent toolchain,

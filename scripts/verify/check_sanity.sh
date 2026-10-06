@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR/../.." && pwd))"
 cd "$REPO_ROOT"
 
 PYTHON="${PYTHON:-python3}"
@@ -10,6 +10,7 @@ PYTEST="${PYTEST:-pytest}"
 
 echo "=== 1. Instant Sanity Check ==="
 "$PYTHON" -m py_compile src/ship/*.py src/ship/lifecycle/*.py src/ship/tools/*.py
-"$PYTHON" scripts/sync_skills.py --check
+"$PYTHON" scripts/verify/sync_parity.py --check
+"$PYTHON" scripts/verify/check_coverage.py
 PYTHONPATH=src:tests "$PYTEST" tests/test_nano_rules.py -q
 echo "✅ Sanity check passed (<2s)."

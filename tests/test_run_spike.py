@@ -198,6 +198,116 @@ class TestRunSpike(unittest.TestCase):
         self.assertEqual(metrics.total_runs, 0)
         self.assertEqual(metrics.error_rate_pct, 100.0)
 
+    def test_validate_spike_report_happy_path(self):
+        report = """## 🧪 Spike Report: Redis Cluster Failover
+
+### 🎯 Empirical Question & Hypothesis
+- **Question**: Can Redis cluster master failover complete in under 500ms without data loss?
+- **Hypothesis**: Failover completes with p99 latency < 500ms and 0% unrecoverable error rate.
+
+### 🧪 Methodology & Setup
+- **Sandbox**: `.scratch/redis-failover-spike/`
+- **Harness**: 3-node Redis cluster in Docker Compose, 500 iterations.
+
+### 📊 Empirical Results
+| Metric / Condition | Expected | Observed | Status |
+|---|---|---|---|
+| Latency (p99) | < 500ms | 340ms | ✅ Met |
+| Error Rate | < 0.1% | 0.0% | ✅ Met |
+
+### ⚖️ Architectural Verdict
+- **Verdict**: CONFIRMED
+- **Recommendation**: Deploy 3-node cluster with 1s heartbeat.
+- **Frontier Impact**: Decision D2 resolved.
+
+### 💎 Reusable Snippets
+```yaml
+cluster-node-timeout: 1000
+```
+"""
+        result = run_spike.validate_spike_report(report)
+        self.assertTrue(result.passed, f"Expected pass, got: {[f.message for f in result.errors]}")
+        self.assertEqual(len(result.errors), 0)
+
+    def test_validate_spike_report_unfalsifiable_hypothesis(self):
+        fixture_path = ROOT / "tests/fixtures/spike/01-unfalsifiable-hypothesis/report.md"
+        report_text = fixture_path.read_text(encoding="utf-8")
+        result = run_spike.validate_spike_report(report_text)
+        self.assertFalse(result.passed)
+        error_rules = [f.rule_id for f in result.errors]
+        self.assertIn("SPK-HYP-001", error_rules)
+
+    def test_validate_spike_report_verdict_contradiction(self):
+        fixture_path = ROOT / "tests/fixtures/spike/04-verdict-contradiction/report.md"
+        report_text = fixture_path.read_text(encoding="utf-8")
+        result = run_spike.validate_spike_report(report_text)
+        self.assertFalse(result.passed)
+        error_rules = [f.rule_id for f in result.errors]
+        self.assertIn("SPK-VER-002", error_rules)  # Marked CONFIRMED despite breached
+
+    def test_audit_spike_isolation_clean(self):
+        clean_paths = [
+            ".scratch/benchmark/worker.py",
+            "docs/adr/ADR-0005-spike.md",
+            "scratch/temp.log",
+        ]
+        result = run_spike.audit_spike_isolation(clean_paths)
+        self.assertTrue(result.passed)
+        self.assertEqual(len(result.errors), 0)
+
+    def test_audit_spike_isolation_leakage(self):
+        leaked_paths = [
+            ".scratch/benchmark/worker.py",
+            "src/engine/db.py",  # Leakage!
+        ]
+        result = run_spike.audit_spike_isolation(leaked_paths)
+        self.assertFalse(result.passed)
+        error_rules = [f.rule_id for f in result.errors]
+        self.assertIn("SPK-ISO-001", error_rules)
+
+    def test_l5_spike_rubric(self):
+        from tests.evaluation.evaluate_spike_rubric import SpikeRubricEvaluator
+        evaluator = SpikeRubricEvaluator(passing_threshold=0.80)
+
+        good_report = """## 🧪 Spike Report: SQLite WAL Concurrency
+
+### 🎯 Empirical Question & Hypothesis
+- **Question**: Can SQLite sustain 5,000 writes/sec in WAL mode?
+- **Hypothesis**: Throughput > 5000 RPS with error rate < 0.1% and p99 latency < 20ms.
+
+### 🧪 Methodology & Setup
+- **Sandbox**: `.scratch/sqlite-wal/`
+- **Harness**: Ephemeral SQLite DB in RAM disk, 50 workers, 100 warmup, 1000 iterations.
+
+### 📊 Empirical Results
+| Metric / Condition | Expected | Observed | Status |
+|---|---|---|---|
+| Throughput / RPS | > 5000 | 8,420 | ✅ Met |
+| Latency (p50) | - | 1.8ms | ℹ️ Recorded |
+| Latency (p99) | < 20ms | 9.4ms | ✅ Met |
+| Error Rate | < 0.1% | 0.0% | ✅ Met |
+
+### ⚖️ Architectural Verdict
+- **Verdict**: CONFIRMED
+- **Recommendation**: Retain SQLite with WAL and busy_timeout=5000.
+- **Frontier Impact**: Avoid PostgreSQL dependency.
+
+### 💎 Reusable Snippets
+```sql
+PRAGMA journal_mode = WAL;
+PRAGMA busy_timeout = 5000;
+```
+"""
+        report = evaluator.evaluate_report(good_report, "GoodReport")
+        self.assertTrue(report.passed)
+        self.assertGreaterEqual(report.overall_score, 0.80)
+
+        # Contradicted report fails rubric
+        bad_path = ROOT / "tests/fixtures/spike/04-verdict-contradiction/report.md"
+        bad_report = evaluator.evaluate_report(bad_path.read_text(encoding="utf-8"), "BadReport")
+        self.assertFalse(bad_report.passed)
+        self.assertEqual(bad_report.domain_scores["verdict_coherence"].score, 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

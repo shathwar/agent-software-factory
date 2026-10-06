@@ -89,7 +89,7 @@ Beyond individual skill instructions, the repository is engineered with unique a
 
 2. **Byte-for-Byte Distribution Parity**
    - Implements a dual distribution model: every specialist tool in `src/ship/tools/` mirrors its standalone script in `skills/*/scripts/` byte-for-byte.
-   - Enforced by automated synchronization (`scripts/sync_skills.py`), CI sanity checks (`make verify-parity`), and Git pre-commit hooks (`scripts/setup_hooks.sh`).
+   - Enforced by automated synchronization (`scripts/verify/sync_parity.py`), CI sanity checks (`python3 scripts/verify/sync_parity.py --check`), and Git pre-commit hooks (`scripts/setup/setup_hooks.sh`).
 
 3. **Native stdio Model Context Protocol (MCP) Server**
    - Built-in zero-dependency stdio server (`src/ship/mcp/`) that seamlessly connects lifecycle management, gate readiness, checkpoints, rollbacks, and verification tools directly to Claude Desktop, Cursor, and any MCP client.
@@ -111,12 +111,12 @@ Beyond individual skill instructions, the repository is engineered with unique a
    - Two-phase commit spec archiving (`.agentflow/archive-transaction.json`) with automatic self-healing rollback upon unexpected session interruption.
 
 7. **Universal Cross-Ecosystem Support**
-   - Out-of-the-box native manifests for 70+ agents via Vercel Skills CLI (`npx skills add shathwar/skills`), Cursor IDE (`.cursor/rules/ship.mdc`), GitHub Copilot (`.github/copilot-instructions.md`), OpenAI Codex (`.codex-plugin/plugin.json`), Claude Code (`install.sh --target-claude`), and Google Antigravity.
+   - Out-of-the-box native manifests for 70+ agents via Vercel Skills CLI (`npx skills add shathwar/skills`), Cursor IDE (`.cursor/rules/ship.mdc`), GitHub Copilot (`.github/copilot-instructions.md`), OpenAI Codex (`.codex-plugin/plugin.json`), Claude Code (`./scripts/setup/install_skills.sh --target-claude`), and Google Antigravity.
 
 8. **Developer Tooling & Ephemeral Sandboxes**
-   - Instant developer sanity check in under 2 seconds (`make check`).
-   - One-command disposable git sandbox for testing workflows in isolation (`make playground` / `scripts/playground.sh`).
-   - Preflight diagnostic doctor verifying runtime, git, skills, and ledger integrity (`make doctor`).
+   - Instant developer sanity check in under 2 seconds (`./scripts/verify/check_sanity.sh`).
+   - One-command disposable git sandbox for testing workflows in isolation (`./scripts/setup/setup_playground.sh`).
+   - Preflight diagnostic doctor verifying runtime, git, skills, and ledger integrity (`python3 -m ship.cli doctor`).
 
 ---
 
@@ -611,7 +611,7 @@ Missing external tooling NEVER fails the pipeline, causes error exits, or blocks
 ## Files
 
 ```text
-Makefile                        # Fast developer workflow targets (check, test, doctor, mcp, sync)
+scripts/                        # Fast developer workflow scripts (check.sh, run_tests.sh, sync_skills.py)
 .codex-plugin/
 └── plugin.json                 # OpenAI Codex native skill manifest
 .cursor/rules/
@@ -631,13 +631,19 @@ nano/                           # High-density, ultra-compact (<60 lines) rules 
 └── ux.nano.md
 
 scripts/
-├── check.sh                    # Instant sanity check (<2s: py_compile + parity + nano budget)
-├── install.sh                  # Portable skill installer (symlink/copy to target environments)
-├── playground.sh               # Ephemeral disposable git test repo provisioner
-├── run_tests.sh                # Standard-library validation and regression runner
-├── setup_hooks.sh              # Pre-commit hook installer ensuring 100% distribution parity
-├── sync_skills.py              # Synchronizes src/ship/ into skills/*/scripts/
-└── test_fast.sh                # Fast in-memory unit test runner (<4s)
+├── verify/                     # Sanity checks, parity synchronization, coverage, CI gates
+│   ├── check_sanity.sh         # Fast sanity check (<2s: py_compile + parity + nano budget)
+│   ├── check_coverage.py       # Audits skill step coverage inventory & rubric checks
+│   ├── sync_parity.py          # Synchronizes src/ship/ into skills/*/scripts/ (100% parity)
+│   └── ci_gate.py              # Pull-request / CI workflow policy gate
+├── test/                       # Unit and full regression runners
+│   ├── test_fast.sh            # Fast in-memory unit test runner (<2s)
+│   └── test_full.sh            # Standard-library validation and regression runner
+├── setup/                      # Host installation, hooks, sandboxes
+│   ├── install_skills.sh       # Portable skill installer (symlink/copy to target environments)
+│   ├── setup_hooks.sh          # Pre-commit hook installer ensuring 100% distribution parity
+│   └── setup_playground.sh     # Ephemeral disposable git test repo provisioner
+└── README.md                   # Detailed guide and cheat sheet for all developer scripts
 
 src/ship/                       # Unified Python package with 100% byte-for-byte parity to skills/
 ├── cli.py                      # agentflow / ship unified CLI entrypoint
@@ -798,7 +804,7 @@ skills/
 To install skills into your environment's skill directory (defaults to `~/.gemini/config/skills/`):
 
 ```bash
-./scripts/install.sh
+./scripts/setup/install_skills.sh
 ```
 
 ### Multi-Agent & Cross-IDE Installation
@@ -814,7 +820,7 @@ Install into any AI agent or IDE with native manifests or one-command installers
 - **GitHub Copilot**: Context instructions ready in [`.github/copilot-instructions.md`](./.github/copilot-instructions.md).
 - **Claude Code**:
   ```bash
-  ./scripts/install.sh --target-claude
+  ./scripts/setup/install_skills.sh --target-claude
   ```
 
 ### Safety & Team Customisation Flags
@@ -829,14 +835,14 @@ The installer defaults to preserving existing non-symlink directories to avoid o
 
 ```bash
 # Safe update with timestamped backup of existing directories
-./scripts/install.sh --backup
+./scripts/setup/install_skills.sh --backup
 
 # Install to Claude Code or Cursor
-./scripts/install.sh --target-claude
-./scripts/install.sh --target-cursor
+./scripts/setup/install_skills.sh --target-claude
+./scripts/setup/install_skills.sh --target-cursor
 
 # Preview installation
-./scripts/install.sh --dry-run --target /path/to/custom/skills
+./scripts/setup/install_skills.sh --dry-run --target /path/to/custom/skills
 ```
 
 ### Portable Rules for Cursor, Claude Code, and Windsurf (`nano/`)
@@ -973,18 +979,25 @@ Audit a bugfix diff for reproduction tests, test weakening, and symptom masking:
 python3 skills/debug/scripts/verify_fix.py --strict --test-cmd "pytest"
 ```
 
-### Developer Tooling & Makefile Targets
+### Developer Tooling & Verification Scripts
+
+The [skill step coverage inventory](./tests/skill_coverage.md) maps required steps
+across all nine skills to expected evidence, existing validators, evaluation cases,
+and remaining gaps. Run `python3 scripts/verify/check_coverage.py` for a summary or
+`python3 scripts/verify/check_coverage.py --skill tdd --gaps` for one skill's gaps.
+CI checks that definitions, references, and turn-contract mappings stay current;
+inventory validity does not imply that agent behavior has been evaluated.
 
 Fast commands for local development, pre-commit checks, and CI:
 ```bash
-make check          # Instant sanity check (<2s: syntax + parity + nano rules budget)
-make test-fast      # Fast in-memory unit tests (<4s: tools, schemas, document integrity)
-make test           # Full test suite (all unit, integration, and policy tests)
-make doctor         # Preflight lifecycle diagnostic checks
-make mcp            # Launch zero-dependency stdio Model Context Protocol (MCP) server
-make sync           # Synchronize src/ship/ into skills/*/scripts/ (100% parity)
-make verify-parity  # Verify 100% byte-for-byte parity between src/ and skills/
-make playground     # Provision ephemeral disposable git playground in .agentflow/playground
+./scripts/verify/check_sanity.sh               # Instant sanity check (<2s: syntax + parity + nano rules budget)
+./scripts/test/test_fast.sh                   # Fast in-memory unit tests (<2s: tools, schemas, document integrity)
+./scripts/test/test_full.sh                   # Full test suite (all unit, integration, and policy tests)
+python3 -m ship.cli doctor                     # Preflight lifecycle diagnostic checks
+python3 -m ship.mcp                            # Launch zero-dependency stdio Model Context Protocol (MCP) server
+python3 scripts/verify/sync_parity.py          # Synchronize src/ship/ into skills/*/scripts/ (100% parity)
+python3 scripts/verify/sync_parity.py --check  # Verify 100% byte-for-byte parity between src/ and skills/
+./scripts/setup/setup_playground.sh            # Provision ephemeral disposable git playground in .agentflow/playground
 ```
 
 ---
@@ -993,7 +1006,7 @@ make playground     # Provision ephemeral disposable git playground in .agentflo
 
 Start small. Run the skills locally on a few real tasks. Keep normal code review and host controls in place.
 
-- **Local Team Rollout Guide ([`team_rollout.md`](./skills/ship/references/team_rollout.md))**: Detailed guide covering `--doctor` preflight, workflow profiles (`small-fix`, `standard`, `high-risk`), host capability adaptations (`auto`, `sequential`, `parallel`), pinned distributions (`install.sh --mode copy --backup`), and zero-loss ledger migration.
+- **Local Team Rollout Guide ([`team_rollout.md`](./skills/ship/references/team_rollout.md))**: Detailed guide covering `--doctor` preflight, workflow profiles (`small-fix`, `standard`, `high-risk`), host capability adaptations (`auto`, `sequential`, `parallel`), pinned distributions (`install_skills.sh --mode copy --backup`), and zero-loss ledger migration.
 - **Behavioral Evaluation Cases & Pilot Benchmarks ([`skill_evaluations.md`](./tests/skill_evaluations.md))**: 12 realistic evaluation fixtures and acceptance criteria for benchmarking agent decisions, boundary respect, and defect detection before organizational distribution.
 - **Headless CI & Asynchronous Automation ([`headless_ci_guide.md`](./skills/ship/references/headless_ci_guide.md))**: Pilot GitHub Actions templates with explicit design commit/digest approval and mandatory checks outside agent prompts. Repair proposals reuse the same gated workflow.
 - **Local by default**: Ledgers, evidence, and logs stay on the machine or in the repository unless a host, command, or provider sends them elsewhere.
@@ -1018,7 +1031,7 @@ client those operations; it is not a sandbox. Shell benchmarks also require an a
 capability guard. Project test commands and
 benchmarks still run with server/user privileges.
 
-Install the CLI before `scripts/install.sh --mcp`, or use `--pip --mcp`. Registration
+Install the CLI before `scripts/setup/install_skills.sh --mcp`, or use `--pip --mcp`. Registration
 stores the resolved executable path and preserves malformed existing configuration
 by failing without overwriting it. Pin a reviewed commit for a team pilot.
 
@@ -1027,5 +1040,5 @@ the current Git working-tree fingerprint. Run `agentflow verify --tier execution
 after source changes and before delivery. An empty or inconclusive receipt cannot pass.
 Mutation verification is currently advisory and cannot claim success without execution.
 
-Run the full suite with `PYTHON=python3.12 ./scripts/run_tests.sh` (or another supported
+Run the full suite with `PYTHON=python3.12 ./scripts/test/test_full.sh` (or another supported
 Python interpreter). Packaging and source imports are separate validation surfaces.

@@ -67,7 +67,7 @@ jobs:
       # Set this repository variable to an organization-reviewed full commit SHA.
       SKILLS_SHA: ${{ vars.SHIP_SKILLS_SHA }}
       SKILLS_DIR: ${{ github.workspace }}/.agentflow/toolchain/skills
-      CI_GATE: ${{ github.workspace }}/.agentflow/toolchain/scripts/ci_gate.py
+      CI_GATE: ${{ github.workspace }}/.agentflow/toolchain/scripts/verify/ci_gate.py
     steps:
       - name: Validate approval inputs and operator permissions
         env:

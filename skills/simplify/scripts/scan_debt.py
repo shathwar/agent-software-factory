@@ -10,6 +10,7 @@ Valid Syntax:
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
 from pathlib import Path
@@ -17,6 +18,16 @@ import re
 import sys
 import tokenize
 from typing import Any, Dict, List, Optional, Sequence, Tuple
+
+REDUNDANT_DEPENDENCIES: Dict[str, str] = {
+    "uuid": "Use native crypto.randomUUID()",
+    "lodash.clonedeep": "Use native structuredClone()",
+    "rimraf": "Use fs.promises.rm(dir, { recursive: true, force: true })",
+    "mkdirp": "Use fs.promises.mkdir(dir, { recursive: true })",
+    "node-fetch": "Use native global fetch()",
+    "pytz": "Use standard library zoneinfo.ZoneInfo (Python 3.9+)",
+}
+
 
 DEFAULT_EXCLUDES = {
     ".git",
@@ -255,6 +266,104 @@ def format_table(markers: List[Dict[str, Any]], markdown: bool = True) -> str:
     return "\n".join(lines)
 
 
+def audit_code_simplicity(
+    file_path: Path | str,
+    content: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Audit source files for unrequested speculative abstractions, redundant dependencies, and shallow wrappers."""
+    path = Path(file_path)
+    if content is None:
+        try:
+            content = path.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            return []
+
+    findings: List[Dict[str, Any]] = []
+    lines = content.splitlines()
+
+    # 1. Redundant dependencies (Laziness Ladder Rung 3 & 5)
+    for i, line in enumerate(lines, start=1):
+        stripped = line.strip()
+        if stripped.startswith(("#", "//", "/*", "*")):
+            continue
+        for dep, replacement in REDUNDANT_DEPENDENCIES.items():
+            pattern = rf"""(?:import\s+.*\s+from\s+['"]{re.escape(dep)}['"]|require\s*\(\s*['"]{re.escape(dep)}['"]\s*\)|import\s+{re.escape(dep)}\b)"""
+            if re.search(pattern, stripped):
+                findings.append({
+                    "rule_id": "SMP-DEP-001",
+                    "file": str(path),
+                    "line": i,
+                    "severity": "ERROR",
+                    "message": f"Redundant external dependency '{dep}' detected. Laziness Ladder violation: {replacement}.",
+                })
+
+    # 2. Speculative factories and shallow wrappers in Python files
+    if path.suffix == ".py":
+        try:
+            tree = ast.parse(content, filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef):
+                    # Speculative factory check
+                    if node.name.endswith("Factory") and len(node.body) <= 3:
+                        findings.append({
+                            "rule_id": "SMP-ABS-001",
+                            "file": str(path),
+                            "line": node.lineno,
+                            "severity": "WARNING",
+                            "message": f"Speculative factory class '{node.name}' detected with minimal implementation. Favor direct concrete instantiation.",
+                        })
+                    # Shallow wrapper check (class forwarding calls with 1-line return self._inner.foo())
+                    methods = [m for m in node.body if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))]
+                    non_dunder = [m for m in methods if not m.name.startswith("__")]
+                    forwarding_count = 0
+                    for m in non_dunder:
+                        if len(m.body) == 1 and isinstance(m.body[0], ast.Return):
+                            ret_val = m.body[0].value
+                            if isinstance(ret_val, ast.Call) and isinstance(ret_val.func, ast.Attribute):
+                                if isinstance(ret_val.func.value, ast.Attribute) and (
+                                    ret_val.func.value.attr.startswith(("_", "repo", "inner", "service"))
+                                    or ret_val.func.value.attr in {"inner", "repo", "service"}
+                                ):
+                                    forwarding_count += 1
+                    if len(non_dunder) >= 1 and forwarding_count == len(non_dunder):
+                        findings.append({
+                            "rule_id": "SMP-WRAP-001",
+                            "file": str(path),
+                            "line": node.lineno,
+                            "severity": "WARNING",
+                            "message": f"Shallow wrapper class '{node.name}' forwards all calls without domain logic. Deepen the module or eliminate the wrapper layer.",
+                        })
+        except SyntaxError:
+            pass
+
+    return findings
+
+
+def audit_paths_simplicity(
+    targets: Sequence[str | Path],
+    excludes: Optional[set[str]] = None,
+) -> List[Dict[str, Any]]:
+    """Recursively audit paths for simplicity anti-patterns."""
+    if excludes is None:
+        excludes = DEFAULT_EXCLUDES
+
+    findings: List[Dict[str, Any]] = []
+    for target in targets:
+        p = Path(target).resolve()
+        if p.is_file():
+            findings.extend(audit_code_simplicity(p))
+        elif p.is_dir():
+            for root, dirs, files in os.walk(p):
+                dirs[:] = [d for d in dirs if d not in excludes and not d.startswith(".")]
+                for file_name in files:
+                    if file_name.startswith("."):
+                        continue
+                    file_path = Path(root) / file_name
+                    if file_path.suffix.lower() in {".py", ".ts", ".js", ".tsx", ".jsx", ".go"}:
+                        findings.extend(audit_code_simplicity(file_path))
+    return findings
+
+
 def scan_debt(paths: Optional[Sequence[Path | str]] = None, strict: bool = False) -> Tuple[List[Dict[str, Any]], bool]:
     """Convenience function to scan paths for debt markers and return (markers, has_errors)."""
     target_paths = [Path(p) for p in paths] if paths else [Path.cwd()]
@@ -282,23 +391,47 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument(
         "--strict",
         action="store_true",
-        help="Exit with non-zero status if any invalid debt markers are found.",
+        help="Exit with non-zero status if any invalid debt markers or simplicity errors are found.",
+    )
+    parser.add_argument(
+        "--audit-code",
+        action="store_true",
+        help="Audit source code for redundant dependencies, shallow wrappers, and speculative abstractions.",
     )
 
     args = parser.parse_args(argv)
     markers = scan_paths(args.paths)
+    code_findings: List[Dict[str, Any]] = []
+    if args.audit_code:
+        code_findings = audit_paths_simplicity(args.paths)
 
     if args.format == "json":
-        print(json.dumps(markers, indent=2))
+        output = {"markers": markers, "code_findings": code_findings} if args.audit_code else markers
+        print(json.dumps(output, indent=2))
     else:
         print(format_table(markers, markdown=(args.format == "markdown")))
+        if code_findings:
+            print("\n### 🔍 Code Simplicity Findings:")
+            for f in code_findings:
+                icon = "❌" if f["severity"] == "ERROR" else "⚠️"
+                print(f"  {icon} [{f['rule_id']}] `{f['file']}:{f['line']}`: {f['message']}")
 
-    if args.strict and any(not m["is_valid"] for m in markers):
-        sys.stderr.write(f"\nError: Found {sum(1 for m in markers if not m['is_valid'])} invalid debt marker(s).\n")
+    has_invalid_markers = any(not m["is_valid"] for m in markers)
+    has_code_errors = any(f["severity"] == "ERROR" for f in code_findings)
+
+    if args.strict and (has_invalid_markers or has_code_errors):
+        inv_count = sum(1 for m in markers if not m["is_valid"])
+        code_errs = sum(1 for f in code_findings if f["severity"] == "ERROR")
+        if code_errs == 0:
+            sys.stderr.write(f"\nError: Found {inv_count} invalid debt marker(s).\n")
+        else:
+            sys.stderr.write(f"\nError: Found {inv_count + code_errs} simplify violation(s).\n")
         return 1
 
     return 0
 
 
+
 if __name__ == "__main__":
     sys.exit(main())
+

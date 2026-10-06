@@ -1,4 +1,4 @@
-"""Unit tests for skills installation script (scripts/install.sh)."""
+"""Unit tests for skills installation script (scripts/setup/install_skills.sh)."""
 
 from pathlib import Path
 import subprocess
@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-INSTALL_SCRIPT = ROOT / "scripts" / "install.sh"
+INSTALL_SCRIPT = ROOT / "scripts" / "setup" / "install_skills.sh"
 
 
 class TestInstallScript(unittest.TestCase):
@@ -26,7 +26,7 @@ class TestInstallScript(unittest.TestCase):
         for flag in ["-h", "--help"]:
             with self.subTest(flag=flag):
                 res = self.run_installer(flag)
-                self.assertIn("Usage: ./scripts/install.sh [options]", res.stdout)
+                self.assertIn("Usage: ./scripts/setup/install_skills.sh [options]", res.stdout)
                 self.assertIn("--target", res.stdout)
                 self.assertIn("--mode", res.stdout)
 

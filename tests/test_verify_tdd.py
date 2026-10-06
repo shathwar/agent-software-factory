@@ -205,8 +205,9 @@ class TestVerifyTDD(unittest.TestCase):
             src_file = tmppath / "service.py"
             src_file.write_text("def run(): pass\n")
             test_file = tmppath / "test_service.py"
-            test_file.write_text("def test_run(): assert True\n")
+            test_file.write_text("from service import run\ndef test_run(): assert run() is None\n")
             subprocess.run(["git", "add", "service.py", "test_service.py"], cwd=tmppath, check=True)
+
 
             untracked_file = tmppath / "untracked.py"
             untracked_file.write_text("x = 1\n")
@@ -339,7 +340,111 @@ class TestVerifyTDD(unittest.TestCase):
         self.assertEqual(len(result.untested_files), 0)
         self.assertEqual(len(result.production_files), 0)
 
+    def test_anti_pattern_tautological_assertion(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            test_file = Path(tmpdir) / "test_tautology.py"
+            test_file.write_text(
+                "def test_always_passes():\n"
+                "    assert True\n"
+            )
+            findings = verify_tdd.check_anti_patterns(test_file)
+            categories = [f.category for f in findings]
+            self.assertIn("tautological_assertion", categories)
+            self.assertTrue(any(f.rule_id == "TDD-TAUT-001" for f in findings))
+
+    def test_anti_pattern_mocked_database(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            test_file = Path(tmpdir) / "test_db_mock.py"
+            test_file.write_text(
+                "from unittest.mock import patch\n"
+                "@patch('psycopg2.connect')\n"
+                "def test_user_query(mock_conn):\n"
+                "    mock_conn.return_value = None\n"
+                "    assert True is False\n"
+            )
+            findings = verify_tdd.check_anti_patterns(test_file)
+            categories = [f.category for f in findings]
+            self.assertIn("mocked_database", categories)
+            self.assertTrue(any(f.rule_id == "TDD-MOCK-DB-001" for f in findings))
+
+    def test_audit_test_diff_weakening(self):
+        diff_text = (
+            "diff --git a/tests/test_user.py b/tests/test_user.py\n"
+            "--- a/tests/test_user.py\n"
+            "+++ b/tests/test_user.py\n"
+            "@@ -10,3 +10,2 @@\n"
+            "-    assert user.is_active is True\n"
+            "-    self.assertEqual(user.role, 'admin')\n"
+            "+    pass\n"
+        )
+        findings = verify_tdd.audit_test_diff(diff_text)
+        self.assertTrue(any(f.rule_id == "TDD-WEAK-001" for f in findings))
+        self.assertIn("test_weakening", [f.category for f in findings])
+
+    def test_tdd_fixtures(self):
+        fixtures_dir = ROOT / "tests/fixtures/tdd"
+        # 01-test-weakening
+        diff_patch = (fixtures_dir / "01-test-weakening/diff.patch").read_text()
+        findings_diff = verify_tdd.audit_test_diff(diff_patch)
+        self.assertTrue(any(f.rule_id == "TDD-WEAK-001" for f in findings_diff))
+
+        # 02-database-mocking
+        db_mock_file = fixtures_dir / "02-database-mocking/test_user_repo.py"
+        findings_db = verify_tdd.check_anti_patterns(db_mock_file)
+        self.assertTrue(any(f.rule_id == "TDD-MOCK-DB-001" for f in findings_db))
+
+        # 03-assertless-tautology
+        taut_file = fixtures_dir / "03-assertless-tautology/test_calculator.py"
+        findings_taut = verify_tdd.check_anti_patterns(taut_file)
+        self.assertTrue(any(f.rule_id == "TDD-TAUT-001" for f in findings_taut))
+
+        # 04-untested-production
+        prod_file = fixtures_dir / "04-untested-production/order_service.py"
+        self.assertTrue(prod_file.exists())
+        simulated_prod_path = "src/services/" + prod_file.name
+        self.assertTrue(verify_tdd.is_production_code(simulated_prod_path))
+        audit_res = verify_tdd.audit_tdd([simulated_prod_path], strict=True)
+        self.assertFalse(audit_res.passed)
+        self.assertEqual(len(audit_res.untested_files), 1)
+        self.assertTrue(any(f.rule_id == "TDD-PAR-001" for f in audit_res.findings))
+
+
+    def test_evaluate_tdd_rubric(self):
+        sys.path.insert(0, str(ROOT / "tests/evaluation"))
+        import evaluate_tdd_rubric
+
+        evaluator = evaluate_tdd_rubric.TDDRubricEvaluator(passing_threshold=0.80)
+
+        # High quality test suite
+        good_test = (
+            "import unittest\n"
+            "class TestOrderService(unittest.TestCase):\n"
+            "    def setUp(self):\n"
+            "        self.fake_db = {}\n"
+            "        self.svc = OrderService(self.fake_db)\n"
+            "    def test_when_valid_amount_should_succeed(self):\n"
+            "        result = self.svc.charge('ord_1', 100.0)\n"
+            "        self.assertEqual(result, True)\n"
+            "        self.assertEqual(self.fake_db.get('ord_1'), 100.0)\n"
+            "    def test_when_zero_or_negative_amount_should_raise(self):\n"
+            "        with self.assertRaises(ValueError):\n"
+            "            self.svc.charge('ord_2', 0)\n"
+        )
+        report_good = evaluator.evaluate_test_code(good_test, "GoodTest")
+        self.assertTrue(report_good.passed)
+        self.assertEqual(report_good.status, "PASS")
+
+        # Tautological test suite
+        bad_test = (
+            "def test_tautology():\n"
+            "    assert True\n"
+        )
+        report_bad = evaluator.evaluate_test_code(bad_test, "BadTest")
+        self.assertFalse(report_bad.passed)
+        self.assertIn("Critical failure", report_bad.domain_scores["assertion_specificity"].feedback[0])
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

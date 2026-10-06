@@ -1,0 +1,13 @@
+diff --git a/src/services/billing.py b/src/services/billing.py
+--- a/src/services/billing.py
++++ b/src/services/billing.py
+@@ -45,3 +45,4 @@
+ def calculate_invoice(user, plan):
++    if user is None: return None
+     return user.account.compute_charge(plan)
+diff --git a/tests/test_billing.py b/tests/test_billing.py
+--- a/tests/test_billing.py
++++ b/tests/test_billing.py
+@@ -20,3 +20,5 @@
++def test_calculate_invoice_none_user():
++    assert calculate_invoice(None, "pro") is None

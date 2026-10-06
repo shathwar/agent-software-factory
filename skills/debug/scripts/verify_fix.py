@@ -29,14 +29,27 @@ TEST_FILE_PATTERNS = [
 
 # Patterns that weaken or skip tests
 TEST_WEAKENING_PATTERNS = [
-    re.compile(r"^\+\s*@pytest\.mark\.skip"),
-    re.compile(r"^\+\s*@unittest\.skip"),
-    re.compile(r"^\+\s*(?:it|test|describe)\.skip"),
-    re.compile(r"^\+\s*xit\("),
-    re.compile(r"^\+\s*xdescribe\("),
-    re.compile(r"^\+\s*//\s*(?:expect|assert)"),
-    re.compile(r"^\+\s*#\s*self\.assert"),
-    re.compile(r"^\+\s*#\s*assert "),
+    (re.compile(r"^\+\s*@pytest\.mark\.skip"), "Added @pytest.mark.skip decorator."),
+    (re.compile(r"^\+\s*@pytest\.mark\.xfail"), "Added @pytest.mark.xfail decorator."),
+    (re.compile(r"^\+\s*@unittest\.skip"), "Added @unittest.skip decorator."),
+    (re.compile(r"^\+\s*@unittest\.expectedFailure"), "Added @unittest.expectedFailure decorator."),
+    (re.compile(r"^\+\s*(?:it|test|describe)\.skip"), "Added skip to test runner."),
+    (re.compile(r"^\+\s*xit\("), "Added disabled xit() test block."),
+    (re.compile(r"^\+\s*xdescribe\("), "Added disabled xdescribe() suite block."),
+    (re.compile(r"^\+\s*//\s*(?:expect|assert)"), "Commented out test assertion."),
+    (re.compile(r"^\+\s*#\s*self\.assert"), "Commented out unittest assertion."),
+    (re.compile(r"^\+\s*#\s*assert "), "Commented out pytest assertion."),
+]
+
+TAUTOLOGICAL_TEST_PATTERNS = [
+    (re.compile(r"^\+\s*assert\s+(?:True|1\s*==\s*1)\b"), "Hollow tautological assertion ('assert True')."),
+    (re.compile(r"^\+\s*self\.assertTrue\(\s*True\s*\)"), "Hollow tautological assertion ('self.assertTrue(True)')."),
+    (re.compile(r"^\+\s*expect\(\s*true\s*\)\.toBe\(\s*true\s*\)"), "Hollow tautological assertion ('expect(true).toBe(true)')."),
+]
+
+DEFENSIVE_NULL_GUARD_PATTERNS = [
+    (re.compile(r"^\+\s*if\s+\w+\s+is\s+None\s*:\s*return(?:\s+None)?\b"), "Defensive null guard returning early at point of impact."),
+    (re.compile(r"^\+\s*if\s+not\s+\w+\s*:\s*return(?:\s+None)?\b"), "Defensive guard returning early at point of impact."),
 ]
 
 # Patterns that swallow or mask exceptions
@@ -135,6 +148,7 @@ def audit_diff(diff_text: str) -> BugfixAuditResult:
     is_current_test = False
     deleted_assertions_count = 0
     added_assertions_count = 0
+    total_prod_lines_added = 0
     file_added_lines: dict[str, list[str]] = {}
 
     lines = diff_text.splitlines()
@@ -161,14 +175,21 @@ def audit_diff(diff_text: str) -> BugfixAuditResult:
             for pat, desc in SYMPTOM_MASKING_PATTERNS:
                 if pat.search(line):
                     violations.append(f"[{current_file}] Symptom Masking Anti-Pattern: {desc}")
+            for pat, desc in DEFENSIVE_NULL_GUARD_PATTERNS:
+                if pat.search(line):
+                    violations.append(f"[{current_file}] Symptom Masking Anti-Pattern: {desc}")
             if line.startswith("+") and not line.startswith("+++"):
+                total_prod_lines_added += 1
                 file_added_lines.setdefault(current_file, []).append(line[1:])
 
         # Check test weakening in test files
         if is_current_test:
-            for pat in TEST_WEAKENING_PATTERNS:
+            for pat, desc in TEST_WEAKENING_PATTERNS:
                 if pat.search(line):
                     violations.append(f"[{current_file}] Test Weakening Violation: Added test skip or commented-out assertion: {line.strip()}")
+            for pat, desc in TAUTOLOGICAL_TEST_PATTERNS:
+                if pat.search(line):
+                    violations.append(f"[{current_file}] Hollow Repro Test Violation: {desc}")
 
             # Track assertions
             if line.startswith("-") and not line.startswith("---"):
@@ -195,6 +216,13 @@ def audit_diff(diff_text: str) -> BugfixAuditResult:
     # Flag net loss of assertions across test files
     if deleted_assertions_count > added_assertions_count and added_assertions_count == 0:
         violations.append(f"Assertion Degradation Violation: {deleted_assertions_count} assertions deleted with 0 added.")
+
+    # Flag excessive scope creep
+    if len(prod_files) > 5 or total_prod_lines_added > 150:
+        violations.append(
+            f"Excessive Scope Violation: Bugfix diff modified {len(prod_files)} production files "
+            f"({total_prod_lines_added} lines added). Violates surgical repair constraint (laziness ladder)."
+        )
 
     passed = len(violations) == 0
 

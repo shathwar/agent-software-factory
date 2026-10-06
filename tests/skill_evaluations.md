@@ -1,6 +1,6 @@
 # Behavioral Evaluation Cases & Pilot Benchmarks
 
-These cases evaluate agent decisions, boundary respect, and judgment in realistic scenarios. They serve as acceptance criteria for staged manual evaluations and pilot team benchmarking, distinct from the automated fast unit-test CI job (`./scripts/run_tests.sh`).
+These cases evaluate agent decisions, boundary respect, and judgment in realistic scenarios. They serve as acceptance criteria for staged manual evaluations and pilot team benchmarking, distinct from the automated fast unit-test CI job (`./scripts/test/test_full.sh`).
 
 Run them in a disposable fixture repository with the skill available by absolute path. Use a fresh agent context for each case, providing only the request and raw fixture. Keep expected outcomes with the evaluator. Replace provider access with a recording stub; never post to a live PR for a test.
 
@@ -36,4 +36,4 @@ These deterministic integration trials evaluate workflow transitions, boundary e
 | Interrupted session resumption | Session terminates abruptly during TDD; crash leaves pending archive journal. | Next agent session resumes cold at exact next task without re-asking design approval or losing completed tasks; orphaned transaction journals self-heal automatically on next invocation. |
 | Rejected & amended design | Requirements or tasks amended after initial design approval. | Rejection/amendment invalidates approval digest; lifecycle drops to `DESIGN_APPROVAL_REQUIRED`; blocks archive and delivery; stale digest rejected; explicit re-approval unblocks TDD. |
 | Failed tests block advancement | All tasks in `tasks.md` checked `[x]`, but test suite reports failure. | Enforces test-first invariant; refuses to advance to Review or Delivery; recommends Red-Green-Refactor; emits `Ship-Implementation: FAILED` and blocks archive until clean green evidence is recorded. |
-| External installation & consumer project | Skills installed via `scripts/install.sh --target <dir> --mode copy` and run in an independent external repository. | Runs cleanly with zero path or import errors; passes `doctor`; executes full lifecycle from design fingerprint through approval, TDD, review, status check, and archive. |
+| External installation & consumer project | Skills installed via `scripts/setup/install_skills.sh --target <dir> --mode copy` and run in an independent external repository. | Runs cleanly with zero path or import errors; passes `doctor`; executes full lifecycle from design fingerprint through approval, TDD, review, status check, and archive. |

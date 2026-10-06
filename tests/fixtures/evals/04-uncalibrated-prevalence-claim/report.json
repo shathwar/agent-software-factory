@@ -1,0 +1,15 @@
+{
+  "evaluator_name": "RAG_Factual_Consistency_Judge",
+  "model": "gpt-4o-2024-08-06",
+  "calibration": {
+    "tpr": 0.85,
+    "tnr": 0.75
+  },
+  "production_monitoring": {
+    "observed_pass_rate": 0.92,
+    "claimed_success_rate": 0.92,
+    "rogan_gladen_corrected": false,
+    "ci_95": null,
+    "notes": "Directly reporting raw observed pass rate as true production success rate without adjusting for false positive bias."
+  }
+}

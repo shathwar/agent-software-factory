@@ -78,7 +78,7 @@ class StabilizationTests(unittest.TestCase):
             executable.write_text('#!/bin/sh\nexit 0\n')
             executable.chmod(0o755)
             env = dict(os.environ, PATH=str(bin_dir) + os.pathsep + os.environ['PATH'])
-            result = subprocess.run(['bash', str(repo / 'scripts/install.sh'), '--target', str(target), '--mcp'],
+            result = subprocess.run(['bash', str(repo / 'scripts/setup/install_skills.sh'), '--target', str(target), '--mcp'],
                                     env=env, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(config.read_text(), '{invalid existing configuration')

@@ -14,7 +14,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR/../.." && pwd))"
 SKILLS_DIR="$REPO_ROOT/skills"
 
 DEFAULT_TARGET="$HOME/.gemini/config/skills"
@@ -37,7 +37,7 @@ esac
 usage() {
     local code="${1:-0}"
     cat <<EOF
-Usage: ./scripts/install.sh [options]
+Usage: ./scripts/setup/install_skills.sh [options]
 
 Options:
   --target <dir>     Target skills directory (default: $DEFAULT_TARGET)

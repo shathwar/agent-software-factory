@@ -171,7 +171,7 @@ def verify_review_grounding(review_report: Dict[str, Any], repo_root: Path) -> V
 def runner_test_counts(output: str) -> Tuple[Optional[int], int]:
     """Read completed-test counts from supported runners; unknown formats fail closed.
 
-    ponytail: summary parsing trusts the configured runner; add an adapter when a
+    simplify: summary parsing trusts the configured runner; add an adapter when a
     supported team's runner differs. This is not authentication of process output.
     """
     output = re.sub(r"\x1b\[[0-9;]*m", "", output)
@@ -594,3 +594,31 @@ def format_verification_summary(records: Dict[str, VerificationRecord], change: 
             lines.append("─────────────────────────────────────────────────────────────────────")
     lines.append("═════════════════════════════════════════════════════════════════════")
     return "\n".join(lines)
+
+
+def validate_walkthrough_report(walkthrough_text: str, budget_data: Optional[Dict[str, Any]] = None) -> List[str]:
+    """Validate that the delivery walkthrough report satisfies the Ship Walkthrough & Cost Transparency contract."""
+    errors = []
+    # 1. ADR / Architectural Decision Record link
+    if not re.search(r"(?:docs/adr/|ADR-|architecture decision)", walkthrough_text, re.IGNORECASE):
+        errors.append("[SHP-WALK-001] Missing reference or link to ADR (docs/adr/ADR-*.md) in delivery walkthrough.")
+
+    # 2. Review scorecard or verdict summary
+    if not re.search(r"(?:review scorecard|verdict|judge\s+pass|ready to deploy|review summary)", walkthrough_text, re.IGNORECASE):
+        errors.append("[SHP-WALK-001] Missing Review Scorecard or Judge verdict summary in delivery walkthrough.")
+
+    # 3. Technical debt ledger section
+    if not re.search(r"(?:technical debt|simplify debt|scan_debt|debt markers|debt ledger)", walkthrough_text, re.IGNORECASE):
+        errors.append("[SHP-WALK-001] Missing technical debt ledger section (scan_debt.py summary) in delivery walkthrough.")
+
+    # 4. Cost transparency: Tokens and Cost reporting
+    tokens_match = re.search(r"Tokens:\s*([0-9,]+|\bnot recorded\b)", walkthrough_text, re.IGNORECASE)
+    cost_match = re.search(r"Cost:\s*(\$[0-9,.]+(?:\s*USD)?|\bnot recorded\b)", walkthrough_text, re.IGNORECASE)
+
+    if not tokens_match:
+        errors.append("[SHP-COST-001] Missing required 'Tokens: <count>' (or 'Tokens: not recorded') in delivery walkthrough.")
+    if not cost_match:
+        errors.append("[SHP-COST-001] Missing required 'Cost: $<amount> USD' (or 'Cost: not recorded') in delivery walkthrough.")
+
+    return errors
+

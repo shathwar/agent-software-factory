@@ -153,6 +153,103 @@ class TestAuditUX(unittest.TestCase):
             exit_code = ux.main([str(err_file), "--quiet", "--fail-on", "error"])
             self.assertEqual(exit_code, 1)
 
+    def test_modal_dialogs(self):
+        # Dialog with no accessible name -> UX-041 ERROR
+        bad_dialog = '<dialog className="p-6 rounded"><div>Modal content</div></dialog>'
+        violations = ux.audit_content(bad_dialog, "test.tsx")
+        rule_ids = [v.rule_id for v in violations]
+        self.assertIn("UX-041", rule_ids)
+        self.assertEqual(violations[0].severity, "ERROR")
+
+        # Good: dialog with aria-label
+        good_dialog = '<dialog aria-label="Confirmation Modal" className="p-6">Content</dialog>'
+        violations = ux.audit_content(good_dialog, "test.tsx")
+        self.assertNotIn("UX-041", [v.rule_id for v in violations])
+
+    def test_state_completeness(self):
+        # Mapping without empty or loading state -> UX-051 WARNING
+        bad_list = '<div>{items.map(item => <Card key={item.id} {...item} />)}</div>'
+        violations = ux.audit_content(bad_list, "test.tsx")
+        rule_ids = [v.rule_id for v in violations]
+        self.assertIn("UX-051", rule_ids)
+        self.assertEqual(violations[0].severity, "WARNING")
+
+        # Good: list with loading skeleton and empty state
+        good_list = '''
+        if (isLoading) return <Skeleton />;
+        if (items.length === 0) return <div>No items found</div>;
+        return <div>{items.map(item => <Card key={item.id} />)}</div>;
+        '''
+        violations = ux.audit_content(good_list, "test.tsx")
+        self.assertNotIn("UX-051", [v.rule_id for v in violations])
+
+    def test_l5_ux_rubric_evaluator(self):
+        from tests.evaluation.evaluate_ux_rubric import UXRubricEvaluator
+
+        evaluator = UXRubricEvaluator()
+
+        exemplary_spec = {
+            "flow": {
+                "jtbd": "Quickly review and approve pending invoices",
+                "escape_paths": ["Cancel review", "Return to dashboard"],
+                "cancellation_or_undo": True,
+            },
+            "states": {
+                "empty": "Empty state illustration with 'No pending invoices'",
+                "loading": "Animated Skeleton cards matching table layout",
+                "populated": "Data table with keyboard navigation and focus rings",
+                "error": {
+                    "message": "Failed to fetch invoices",
+                    "recovery_action": "Retry",
+                },
+            },
+            "accessibility": {
+                "keyboard_navigable": True,
+                "focus_indicators_visible": True,
+            },
+            "design_system": {
+                "tokens_reused": True,
+                "arbitrary_values_count": 0,
+            },
+            "slop_patterns": [],
+            "destructive_actions": {
+                "present": True,
+                "confirmed": True,
+            },
+        }
+
+        report = evaluator.evaluate_component(exemplary_spec)
+        self.assertTrue(report.passed)
+        self.assertGreaterEqual(report.overall_score, 0.85)
+
+        flawed_spec = {
+            "flow": {},
+            "states": {
+                "populated": "Only populated rendered",
+            },
+            "accessibility": {
+                "keyboard_navigable": False,
+                "focus_indicators_visible": False,
+            },
+            "audit_violations": [
+                {"rule_id": "UX-001", "severity": "ERROR", "message": "Clickable div"},
+                {"rule_id": "UX-002", "severity": "ERROR", "message": "Outline none"},
+            ],
+            "design_system": {
+                "tokens_reused": False,
+                "arbitrary_values_count": 12,
+            },
+            "slop_patterns": ["3-column purple cards", "irrelevant astronaut illustration"],
+            "destructive_actions": {
+                "present": True,
+                "confirmed": False,
+            },
+        }
+
+        report_bad = evaluator.evaluate_component(flawed_spec)
+        self.assertFalse(report_bad.passed)
+        self.assertLess(report_bad.overall_score, 0.50)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,38 @@
+{
+  "scenario_id": "02-dependent-frontier-tree",
+  "title": "Asynchronous Event Ingestion & Partitioning",
+  "decisions": [
+    {
+      "id": "D1",
+      "title": "Message Broker Selection",
+      "options": ["Kafka", "RabbitMQ", "Redis Streams"],
+      "dependencies": []
+    },
+    {
+      "id": "D2",
+      "title": "Partition Key Strategy",
+      "options": ["Tenant ID", "User ID Hash", "Round Robin"],
+      "dependencies": ["D1"]
+    },
+    {
+      "id": "D3",
+      "title": "Consumer Deduplication & Idempotency",
+      "options": ["Redis SETNX with 24h TTL", "Postgres Unique Constraint in Outbox Table"],
+      "dependencies": ["D2"]
+    }
+  ],
+  "expected_rounds": [
+    {
+      "round": 1,
+      "unblocked_decisions": ["D1"]
+    },
+    {
+      "round": 2,
+      "unblocked_decisions": ["D2"]
+    },
+    {
+      "round": 3,
+      "unblocked_decisions": ["D3"]
+    }
+  ]
+}

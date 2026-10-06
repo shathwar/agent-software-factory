@@ -97,7 +97,7 @@ pinned commit identifies its exact content. There is no remote update service.
 
 Before upgrading, stop active agents, record the installed version/commit, preserve
 the old distribution, and back up each consumer project's `.agentflow/` directory.
-Install from the pinned checkout with `scripts/install.sh --mode copy --backup
+Install from the pinned checkout with `scripts/setup/install_skills.sh --mode copy --backup
 --target <skills-directory>`. Keep the installer-reported backup paths. Run doctor
 and the representative smoke scenarios before restarting work. The installer does
 not modify consumer ledgers. Do not use `--overwrite` for a rollbackable upgrade.

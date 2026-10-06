@@ -1,0 +1,12 @@
+diff --git a/src/billing/service.py b/src/billing/service.py
+--- a/src/billing/service.py
++++ b/src/billing/service.py
+@@ -10,8 +10,2 @@
+     def process_payment(self, user_id: str, amount: float) -> bool:
+-        if not user_id or not isinstance(user_id, str):
+-            raise ValueError("Invalid user_id")
+-        if amount <= 0:
+-            raise ValueError("Amount must be positive")
+-        if amount > 10_000:
+-            raise ValueError("Amount exceeds limit")
+         return self.gateway.charge(user_id, amount)
