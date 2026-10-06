@@ -71,3 +71,19 @@ audit_ux.py
   - Dead-end errors lacking actionable recovery paths (UX-005).
   - Unjustified arbitrary dimensional overrides (UX-021).
 - **Execution**: Zero external dependencies (Python 3.10+ standard library). Emits exit code 1 on blocking errors (`--fail-on error`). Emits raw terminal receipts for Option C verification.
+
+---
+
+## 5. Graceful Degradation Matrix
+
+The UX skill operates autonomously regardless of external tool presence:
+
+| Tooling Availability | Operational Pipeline Flow | Fallback Behavior |
+|---|---|---|
+| **Full Suite (Both Installed)** | `UX ➔ Implementation ➔ Impeccable ➔ Hallmark ➔ audit_ux.py` | Full multi-specialist refinement |
+| **Impeccable Missing** | `UX ➔ Implementation ➔ Hallmark ➔ audit_ux.py` | UX core enforces token hierarchy & Heuristic 8 |
+| **Hallmark Missing** | `UX ➔ Implementation ➔ Impeccable ➔ audit_ux.py` | Visual polish active; familiar platform patterns preserved |
+| **Neither Installed** | `UX ➔ Implementation ➔ audit_ux.py` | 100% standalone zero-dependency execution |
+
+> **Invariance Law**: External tooling absence NEVER causes pipeline failure, build errors, or blocked deployment.
+

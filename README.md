@@ -586,6 +586,18 @@ DECISION
 PASS WITH 2 P2 FINDINGS
 ```
 
+#### Graceful Degradation & Non-Blocking Resilience
+
+The UX skill operates reliably in all environments regardless of external tooling availability:
+
+```text
+Impeccable unavailable ➔ UX + audit_ux.py continue autonomously
+Hallmark unavailable   ➔ UX + Impeccable continue autonomously
+Neither installed      ➔ UX core + audit_ux.py operate fully standalone
+```
+
+Missing external tooling NEVER fails the pipeline, causes error exits, or blocks `--autopilot`. Unavailable tools are cleanly logged as `SKIPPED (Tooling unavailable; applied core UX standards)` in the final review without impeding shipping readiness.
+
 - **References & Adapters**:
   - [Architecture & Layer Boundaries](./skills/ux/references/orchestration.md)
   - [Impeccable Specialist Adapter](./skills/ux/integrations/impeccable.md)

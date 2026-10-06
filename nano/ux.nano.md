@@ -50,7 +50,7 @@ Production UX rules grounded in Norman (*Everyday Things*), Nielsen (Heuristics)
 
 ## 6. Integrations & Layer Boundaries
 - **Layer Model**: UX Core (requirements) ➔ Impeccable (visual craft) ➔ Hallmark (anti-slop critic) ➔ audit_ux.py (deterministic).
-- **Critic & Precedence**: UX ➔ Impl ➔ Imp ➔ Hallmark. Hallmark critiques result; never dictates initial UX.
+- **Critic & Precedence**: UX ➔ Impl ➔ Imp ➔ Hallmark. Hallmark critiques result; never dictates initial UX. P0 A11y ➔ UX ➔ Tokens ➔ Responsive ➔ Visual (Imp) ➔ Anti-Slop (Hlm).
 - **Hallmark Context Policy**: Required, Recommended, Contextual, Ignore. Admin card-grid = Ignore; consumer landing = fix.
+- **Degradation Law**: Imp missing ➔ UX + audit_ux continue. Hlm missing ➔ UX + Imp continue. Neither ➔ UX standalone. Missing tools NEVER fail UX.
 - **Routing & Limits**: New: UX ➔ Imp ➔ Hlm. Polish: Imp ➔ opt Hlm. Admin: UX ➔ Imp. Max 2 passes. Preserve DESIGN.md.
-- **Precedence**: P0 A11y ➔ UX Correctness ➔ Tokens ➔ Responsive ➔ Visual Polish (Imp) ➔ Anti-Slop (Hlm). Novelty never trumps cognitive load.

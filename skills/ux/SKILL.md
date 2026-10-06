@@ -34,6 +34,7 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 - Arbitrary Values: Avoid arbitrary values when an existing semantic token satisfies the requirement. Arbitrary values are permitted when justified by the design system or a genuine visual constraint.
 - Cognitive Clarity (Krug's Law): Eliminate unneeded decision forks, cryptic icons without tooltips/labels, and unconfirmed destructive actions.
 - Integration Precedence Law: When integrating specialist design capabilities (Impeccable, Hallmark), strict precedence applies: P0 Accessibility / Functional ➔ UX Correctness ➔ Design System Consistency ➔ Responsive Quality ➔ Visual Polish (Impeccable) ➔ Anti-Slop (Hallmark). Hallmark's "make this more distinctive" MUST NEVER override UX's "the existing familiar pattern reduces cognitive load."
+- Graceful Degradation Law: Neither Impeccable nor Hallmark is a hard prerequisite for the UX pipeline. If Impeccable is unavailable, UX + `audit_ux.py` continue autonomously. If Hallmark is unavailable, UX + Impeccable continue autonomously. If both are unavailable, UX core + `audit_ux.py` operate fully standalone. Tooling absence MUST NEVER fail the UX pipeline, block deployment, or halt `--autopilot`.
 - Evidence & Executable Verification Mandate (Option C): Reject purely advisory guidance (Option A). Every material UX decision, review finding, or generated component MUST produce an evidence record (rule/heuristic reference, affected component, severity, recommended fix, verification method) AND execute verification via `audit_ux.py` (or DOM/browser tests where available), pasting raw terminal receipts before ending the turn.
 </hard_constraints>
 
@@ -44,7 +45,7 @@ Verify before ending the turn:
 ✓ 3. State Completeness Verified: All applicable states for the component's interaction model (Views: Empty/Loading/Populated/Partial/Error/Unavailable; Controls: Default/Hover/Focus/Pressed/Disabled/Busy; plus compound states) defined and handled.
 ✓ 4. WCAG AA Accessibility Audited: Contrast, keyboard tabbing, focus indicators, and screen-reader labels verified.
 ✓ 5. Design System & Tokens Honored: Existing project tokens detected and reused; fallback tokens or justified arbitrary values applied without overriding established systems.
-✓ 6. Specialist Integration Boundaries Upheld: Normalized findings schema applied; precedence order (A11y > UX > Tokens > Responsive > Visual Polish > Anti-Slop) strictly enforced.
+✓ 6. Specialist Integration Boundaries & Graceful Degradation Upheld: Normalized findings schema applied; precedence order enforced; unavailable tools cleanly bypassed without error or pipeline failure.
 ✓ 7. Option C Verification Receipts Pasted: Structured evidence records produced and executable verification run via `audit_ux.py` (`--fail-on error`), with raw terminal receipts pasted.
 </turn_contract>
 
@@ -52,7 +53,7 @@ Verify before ending the turn:
 
 ## 1. Operating Modes & Safety Boundaries
 
-The skill operates in **three primary operating modes** with an orthogonal **`--autopilot`** modifier:
+The skill operates in **four primary operating modes** with an orthogonal **`--autopilot`** modifier:
 
 | Operating Mode | Safety Boundary | Primary Intent | Scope & Deliverables |
 |---|---|---|---|
@@ -226,6 +227,7 @@ PASS WITH 2 P2 FINDINGS
 - **PASS**: 0 blocking issues, 0 P0/P1 findings, all critical/high items resolved.
 - **PASS WITH N FINDINGS**: 0 blocking P0/P1 issues; remaining findings are non-blocking P2/P3 items explicitly classified as `Ignore` or deferred `Contextual`.
 - **BLOCKED / FAIL**: Any unresolved P0 accessibility violation, incomplete 6-state matrix, or missing error recovery. Remediate immediately before shipping.
+- **Tooling Availability Resilience**: If Impeccable or Hallmark is uninstalled or unavailable, record its section as `SKIPPED (Tooling unavailable; applied core UX standards)`. Skipped external tooling NEVER causes a `BLOCKED / FAIL` verdict.
 
 ---
 
@@ -374,6 +376,32 @@ A Hallmark finding does not automatically mean "fix it." Standard, predictable l
     - **Enterprise Admin / DevTool**: **`Ignore`**. Predictable symmetry minimizes cognitive load and speeds scanning.
     - **Consumer Landing Page**: **`Contextual` ➔ `Recommended` (Fix)**. Asymmetric layouts and editorial pacing create brand distinction.
 - **`Ignore`**: Standard platform UI patterns (tables, forms, filter sidebars) where novelty introduces friction.
+
+### I. Graceful Degradation & Tooling Availability Law
+
+The UX skill must operate reliably in environments where either or both specialist tools are missing. Neither Impeccable nor Hallmark is ever a hard prerequisite:
+
+```text
+Impeccable unavailable
+       ↓
+UX + audit_ux.py continue autonomously
+
+Hallmark unavailable
+       ↓
+UX + Impeccable continue autonomously
+
+Neither installed
+       ↓
+UX core + audit_ux.py operate fully standalone
+```
+
+**Cardinal Rules of Degradation**:
+1. **Zero Pipeline Failures**: Under NO circumstance does `hallmark unavailable` or `impeccable unavailable` fail the UX command, cause an error exit code, or block `--autopilot`.
+2. **Autonomous Fallbacks**:
+   - If **Impeccable** is missing: UX core applies its 5-step token hierarchy and basic visual heuristics ([`heuristics_rubric.md`](./references/heuristics_rubric.md) Heuristic 8).
+   - If **Hallmark** is missing: UX core applies Krug's cognitive friction test and native semantic controls.
+   - If **Both** are missing: Full pipeline executes using UX core and `audit_ux.py` without disruption.
+3. **Execution Logging**: Unavailable tools are marked `SKIPPED (Tooling unavailable; applied core UX standards)` in execution logs and the Final Reconciliation Report.
 
 - **Adapters & Architecture References**:
   - Layer Boundaries & Orchestration: [references/orchestration.md](./references/orchestration.md)

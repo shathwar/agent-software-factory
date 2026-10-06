@@ -151,6 +151,6 @@ Skip Hallmark to conserve token budgets and avoid pointless friction:
    The agent checks whether Hallmark tooling is installed or accessible via upstream [nutlope/hallmark](https://github.com/nutlope/hallmark).
 2. **Autonomous Graceful Fallback**:
    If Hallmark is not installed or unavailable:
-   - The `ux` skill applies its built-in anti-slop guidelines: Krug's cognitive friction test, native platform semantics, avoiding gratuitous decoration, and adhering strictly to project design tokens.
-   - The absence of Hallmark MUST NOT fail the build or stop `--autopilot` execution.
-   - Log: `hallmark: skipped (nutlope/hallmark unavailable; applied core UX anti-slop rules)`.
+   - The absence of Hallmark MUST NEVER fail the UX pipeline or stop `--autopilot` execution.
+   - The UX workflow continues autonomously: `UX + Impeccable continue`.
+   - Log: `hallmark: skipped (nutlope/hallmark unavailable; continuing autonomously with UX + Impeccable)`.

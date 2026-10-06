@@ -182,6 +182,6 @@ Skip Impeccable to preserve token budget and speed when:
    If uninstalled in a supported environment, install via `npx impeccable install` or vendor via `git submodule add https://github.com/pbakaus/impeccable .impeccable`.
 3. **Autonomous Graceful Fallback**:
    If Impeccable is not installed and cannot be fetched:
-   - The `ux` skill autonomously applies its built-in visual guidelines ([`heuristics_rubric.md`](../references/heuristics_rubric.md) Heuristic 8: Aesthetic and Minimalist Design) and the 5-step design token hierarchy.
-   - The absence of Impeccable MUST NOT fail the build or stop `--autopilot` execution.
-   - Log: `impeccable: skipped (pbakaus/impeccable unavailable; applied core UX visual standards)`.
+   - The absence of Impeccable MUST NEVER fail the UX pipeline or stop `--autopilot` execution.
+   - The UX workflow continues autonomously: `UX + audit_ux.py continue`.
+   - Log: `impeccable: skipped (pbakaus/impeccable unavailable; continuing autonomously with core UX + audit_ux.py)`.
