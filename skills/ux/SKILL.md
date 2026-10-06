@@ -239,7 +239,7 @@ Anti-slop & originality (Hallmark)
 
 ### E. The Rendered UI Pass Workflow (Impeccable)
 
-Do not use Impeccable merely as another static AST checklist; its core value is **visual inspection + refinement** of rendered output:
+Do not use Impeccable merely as another static AST checklist; its core value is **visual inspection + refinement** of rendered output. The parent `ux` agent invokes [pbakaus/impeccable](https://github.com/pbakaus/impeccable) via a dedicated subagent (`Role: Impeccable Visual Specialist`) running `/impeccable polish <target>` against the living rendered application:
 
 ```text
 Generate (Synthesize component against UX contract & tokens)
@@ -248,7 +248,7 @@ Run audit_ux.py (Deterministic static accessibility & token verification)
    ↓
 Render application (Spin up dev server / render DOM snapshot or visual preview)
    ↓
-Run Impeccable (Inspect rendered optical alignment, rhythm, responsive layout)
+Run Impeccable (Subagent executes `/impeccable polish` on rendered output)
    ↓
 Apply fixes (Surgical adjustments to CSS, tokens, spacing, typography)
    ↓
