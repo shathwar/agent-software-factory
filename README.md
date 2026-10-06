@@ -99,8 +99,17 @@ For agent frameworks:
    Every specialist tool in `src/ship/tools/` mirrors its script in `skills/*/scripts/` identically. Enforced by `scripts/verify/sync_parity.py --check` and Git pre-commit hooks.
 3. **Native stdio Model Context Protocol (MCP) Server**:
    Built-in zero-dependency stdio server (`src/ship/mcp/`) connecting lifecycle management, gate checks, checkpoints, and verifications to Cursor, Claude Desktop, and Antigravity.
-4. **Option C Verification Engine**:
-   Rejects advisory text assertions. Every skill produces structured evidence records AND executes deterministic verification receipts (`verify_tdd.py`, `scan_debt.py`, `validate_report.py`, `verify_fix.py`, `score_calibration.py`, `audit_ux.py`).
+4. **Executable Proofs Over LLM Claims ("Option C" Verification)**:
+   AI agents often sound confident while hallucinating passing tests or claiming code is clean. This framework rejects "trust me" assertions by enforcing a strict 3-tier standard:
+   - *Option A (Advisory)*: Pure chat advice without verification (Rejected).
+   - *Option B (Text Claims)*: Markdown or JSON checklists with unverified claims (Rejected).
+   - *Option C (Executable Proofs)*: **The Mandated Standard**. The agent must run a deterministic, zero-dependency Python script to generate an unforgeable execution receipt before advancing to the next phase:
+     - `verify_tdd.py`: Proves failing behavioral tests existed *before* production code in git diffs; flags assertless tests.
+     - `scan_debt.py`: Enforces documented technical debt ceilings in CI.
+     - `validate_report.py`: Validates review findings against code line grounding and schemas.
+     - `verify_fix.py`: Proves bugfixes contain reproduction proofs and rejects deleted/weakened test assertions.
+     - `score_calibration.py`: Computes true mathematical TPR/TNR statistics instead of 1–5 subjective rating scales.
+     - `audit_ux.py`: AST scanner proving keyboard navigation, WCAG accessibility, and all 6 UI view states exist.
 5. **Two-Phase Crash Self-Healing**:
    Authoritative multi-change ledger (`.agentflow/state.json`) with atomic two-phase commit spec archiving (`.agentflow/archive-transaction.json`) ensuring cold resumption after interrupted sessions.
 
