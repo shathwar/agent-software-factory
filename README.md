@@ -467,7 +467,71 @@ A zero-dependency static scanner inspecting JSX, TSX, HTML, Vue, and Svelte file
 - **Option B (Evidence-backed)**: Minimum — Every material UX decision produces heuristic/rule references, affected components, severity, recommended fixes, and verification methods.
 - **Option C (Evidence + Executable Verification)**: **Mandated Standard** — The agent produces structured evidence AND executes static/browser verification, pasting terminal receipts into Git notes and PR summaries.
 
-- **References**: [Usability Heuristics & Friction Rubric](./skills/ux/references/heuristics_rubric.md), [State Completeness & Interaction Models](./skills/ux/references/state_matrix.md), and [WCAG AA Developer Reference](./skills/ux/references/accessibility_wcag.md).
+### Specialist Integrations: Impeccable & Hallmark
+
+The `ux` skill acts as the **orchestrator and final authority**. Specialized visual craft and anti-slop capabilities operate as independent specialists rather than competing authorities:
+
+#### Responsibility Boundary
+
+| Layer | Owner | Authority & Scope |
+|---|---|---|
+| **User goal / flow** | `ux` | Information architecture, user mental models, decision paths |
+| **UX contract** | `ux` | Interaction specs, escape hatches, undo paths, error boundaries |
+| **State matrix** | `ux` | 6 view states (Empty, Loading, Populated, Partial, Error, Unavailable) + control states |
+| **Accessibility requirements** | `ux` + `audit_ux.py` | WCAG 2.1/2.2 AA, keyboard navigation, focus traps, accessible names |
+| **Component implementation** | `ux` | Production JSX/TSX/HTML code generation and semantic markup |
+| **Visual refinement** | `Impeccable` | Spacing rhythm, micro-typography, optical alignment, depth layering |
+| **Responsive visual quality** | `Impeccable` | Fluid wrapping, container queries, viewport adaptations, touch targets |
+| **Typography/layout polish** | `Impeccable` | Leading, tracking, line lengths, hierarchical text contrast |
+| **Anti-slop** | `Hallmark` | Eliminating generic AI tropes (purple gradients, uniform 3-card grids) |
+| **Structural visual originality** | `Hallmark` | Asymmetric layouts, editorial pacing, distinctive component personality |
+| **Final UX decision** | `ux` | Final arbitration; resolves conflicts across usability, craft, and tokens |
+
+#### Invocation Routing Rules
+
+Do not run all specialists indiscriminately; route based on surface type and goal to maximize token and cost efficiency:
+- **New feature**: `UX ➔ Impeccable ➔ Hallmark` (Full pipeline: UX flow, visual craft, anti-slop originality).
+- **Existing UI polish**: `Impeccable ➔ optional Hallmark` (Visual craft and responsive refinement).
+- **Accessibility-only**: `UX/a11y ➔ audit_ux.py` (Dedicated WCAG pass; **skip Hallmark and Impeccable**).
+- **Internal CRUD / admin**: `UX ➔ Impeccable` (**skip Hallmark** unless visual differentiation matters; familiar patterns reduce cognitive load).
+- **Marketing / consumer-facing**: `UX ➔ Impeccable ➔ Hallmark` (Run all three for maximum visual craft and distinction).
+
+#### Normalized Critique Contract & Precedence Hierarchy
+
+Findings from Impeccable, Hallmark, and UX audits normalize into a unified schema:
+```yaml
+finding:
+  source: impeccable | hallmark | ux | audit
+  rule_id: "<identifier, e.g. UX-001, IMP-014, HLM-003>"
+  severity: P0 | P1 | P2 | P3
+  category: accessibility | usability | visual | slop | responsive
+  evidence: "<exact code snippet or computed style>"
+  recommendation: "<concrete actionable fix>"
+  confidence: 0.0 - 1.0
+```
+
+When recommendations conflict, strict precedence applies:
+```text
+P0 accessibility / functional issue
+        ↓
+UX correctness & cognitive clarity
+        ↓
+Design-system token consistency
+        ↓
+Responsive quality & layout stability
+        ↓
+Visual polish (Impeccable)
+        ↓
+Anti-slop & originality (Hallmark)
+```
+*Golden Rule*: Hallmark stating *"make this card grid more distinctive"* **never overrides** UX stating *"the existing familiar pattern reduces cognitive load."*
+
+- **References & Adapters**:
+  - [Impeccable Specialist Adapter](./skills/ux/integrations/impeccable.md)
+  - [Hallmark Specialist Adapter](./skills/ux/integrations/hallmark.md)
+  - [Usability Heuristics & Friction Rubric](./skills/ux/references/heuristics_rubric.md)
+  - [State Completeness & Interaction Models](./skills/ux/references/state_matrix.md)
+  - [WCAG AA Developer Reference](./skills/ux/references/accessibility_wcag.md)
 
 ---
 
@@ -645,12 +709,15 @@ skills/
 └── ux/
     ├── SKILL.md
     ├── VERSION
+    ├── integrations/
+    │   ├── hallmark.md
+    │   └── impeccable.md
     ├── scripts/
     │   └── audit_ux.py
     └── references/
+        ├── accessibility_wcag.md
         ├── heuristics_rubric.md
-        ├── state_matrix.md
-        └── accessibility_wcag.md
+        └── state_matrix.md
 ```
 
 ## Installation

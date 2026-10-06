@@ -33,6 +33,7 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
   5. If no token system exists: use a coherent Tailwind scale if Tailwind is present; otherwise establish CSS custom properties.
 - Arbitrary Values: Avoid arbitrary values when an existing semantic token satisfies the requirement. Arbitrary values are permitted when justified by the design system or a genuine visual constraint.
 - Cognitive Clarity (Krug's Law): Eliminate unneeded decision forks, cryptic icons without tooltips/labels, and unconfirmed destructive actions.
+- Integration Precedence Law: When integrating specialist design capabilities (Impeccable, Hallmark), strict precedence applies: P0 Accessibility / Functional ➔ UX Correctness ➔ Design System Consistency ➔ Responsive Quality ➔ Visual Polish (Impeccable) ➔ Anti-Slop (Hallmark). Hallmark's "make this more distinctive" MUST NEVER override UX's "the existing familiar pattern reduces cognitive load."
 - Evidence & Executable Verification Mandate (Option C): Reject purely advisory guidance (Option A). Every material UX decision, review finding, or generated component MUST produce an evidence record (rule/heuristic reference, affected component, severity, recommended fix, verification method) AND execute verification via `audit_ux.py` (or DOM/browser tests where available), pasting raw terminal receipts before ending the turn.
 </hard_constraints>
 
@@ -43,7 +44,8 @@ Verify before ending the turn:
 ✓ 3. State Completeness Verified: All applicable states for the component's interaction model (Views: Empty/Loading/Populated/Partial/Error/Unavailable; Controls: Default/Hover/Focus/Pressed/Disabled/Busy; plus compound states) defined and handled.
 ✓ 4. WCAG AA Accessibility Audited: Contrast, keyboard tabbing, focus indicators, and screen-reader labels verified.
 ✓ 5. Design System & Tokens Honored: Existing project tokens detected and reused; fallback tokens or justified arbitrary values applied without overriding established systems.
-✓ 6. Option C Verification Receipts Pasted: Structured evidence records produced and executable verification run via `audit_ux.py` (`--fail-on error`), with raw terminal receipts pasted.
+✓ 6. Specialist Integration Boundaries Upheld: Normalized findings schema applied; precedence order (A11y > UX > Tokens > Responsive > Visual Polish > Anti-Slop) strictly enforced.
+✓ 7. Option C Verification Receipts Pasted: Structured evidence records produced and executable verification run via `audit_ux.py` (`--fail-on error`), with raw terminal receipts pasted.
 </turn_contract>
 
 ---
@@ -162,3 +164,80 @@ python3 "$SKILLS_DIR/ux/scripts/audit_ux.py" src/components/ --fail-on error
 -------------------------------------------------------
 Summary: 0 critical, 0 error(s), 0 warning(s), 0 info.
 ```
+
+---
+
+## 5. Specialist Integrations: Impeccable & Hallmark
+
+The `ux` skill acts as the **orchestrator and final authority**. Specialized visual craft and anti-slop capabilities (such as [Impeccable](./integrations/impeccable.md) and [Hallmark](./integrations/hallmark.md)) operate as independent specialists rather than competing authorities.
+
+### A. Responsibility Boundary
+
+| Layer | Owner | Authority & Scope |
+|---|---|---|
+| **User goal / flow** | `ux` | Information architecture, user mental models, decision paths |
+| **UX contract** | `ux` | Interaction specs, escape hatches, undo paths, error boundaries |
+| **State matrix** | `ux` | 6 view states (Empty, Loading, Populated, Partial, Error, Unavailable) + control states |
+| **Accessibility requirements** | `ux` + `audit_ux.py` | WCAG 2.1/2.2 AA, keyboard navigation, focus traps, accessible names |
+| **Component implementation** | `ux` | Production JSX/TSX/HTML code generation and semantic markup |
+| **Visual refinement** | `Impeccable` | Spacing rhythm, micro-typography, optical alignment, depth layering |
+| **Responsive visual quality** | `Impeccable` | Fluid wrapping, container queries, viewport adaptations, touch targets |
+| **Typography/layout polish** | `Impeccable` | Leading, tracking, line lengths, hierarchical text contrast |
+| **Anti-slop** | `Hallmark` | Eliminating generic AI tropes (purple gradients, uniform 3-card grids) |
+| **Structural visual originality** | `Hallmark` | Asymmetric layouts, editorial pacing, distinctive component personality |
+| **Final UX decision** | `ux` | Final arbitration; resolves conflicts across usability, craft, and tokens |
+
+### B. Invocation Routing Rules
+
+Do not run all specialists indiscriminately; route based on surface type and goal to maximize token and cost efficiency:
+
+| Surface / Workflow | Pipeline Route | Specialist Execution Guidance |
+|---|---|---|
+| **New feature** | `UX ➔ Impeccable ➔ Hallmark` | Full pipeline: UX establishes flow and states, Impeccable refines layout/tokens, Hallmark eliminates AI defaults. |
+| **Existing UI polish** | `Impeccable ➔ optional Hallmark` | Focus on visual craft and responsive refinement; Hallmark optional if redesigning structure. |
+| **Accessibility-only** | `UX/a11y ➔ audit_ux.py` | Run a11y pass only; **skip Hallmark and Impeccable** entirely. |
+| **Internal CRUD / admin** | `UX ➔ Impeccable` | UX enforces efficiency, Impeccable aligns tokens/spacing; **skip Hallmark** unless visual differentiation explicitly matters. Familiar patterns reduce cognitive load. |
+| **Marketing / consumer-facing** | `UX ➔ Impeccable ➔ Hallmark` | Run all three: UX intent, Impeccable polish, and Hallmark visual distinction. |
+
+### C. Critique Contract: Normalized Findings
+
+When Impeccable, Hallmark, or UX audits generate findings, normalize them into a single coherent schema so the agent reconciles them consistently:
+
+```yaml
+finding:
+  source: impeccable | hallmark | ux | audit
+  rule_id: "<identifier, e.g. UX-001, IMP-014, HLM-003>"
+  severity: P0 | P1 | P2 | P3
+  category: accessibility | usability | visual | slop | responsive
+  evidence: "<exact code snippet, element, or selector>"
+  recommendation: "<concrete actionable fix>"
+  confidence: 0.0 - 1.0
+```
+
+### D. Precedence Hierarchy
+
+When recommendations conflict, strict precedence applies:
+
+```text
+P0 accessibility / functional issue
+        ↓
+UX correctness & cognitive clarity
+        ↓
+Design-system token consistency
+        ↓
+Responsive quality & layout stability
+        ↓
+Visual polish (Impeccable)
+        ↓
+Anti-slop & originality (Hallmark)
+```
+
+**Golden Rules of Arbitration**:
+- **Cognitive Load Over Novelty**: Hallmark saying *"make this card grid more distinctive"* DOES NOT override UX stating *"the existing familiar pattern reduces cognitive load for dense scanning."*
+- **Accessibility Over Polish**: Impeccable saying *"reduce contrast for softer aesthetic"* DOES NOT override WCAG stating *"text contrast must meet 4.5:1 minimum."*
+- **Token Consistency Over Arbitrary Styling**: Visual suggestions must reuse detected tokens rather than introducing arbitrary hex values or ad-hoc margins.
+
+- **Adapters**:
+  - Detailed Impeccable specification: [integrations/impeccable.md](./integrations/impeccable.md)
+  - Detailed Hallmark specification: [integrations/hallmark.md](./integrations/hallmark.md)
+

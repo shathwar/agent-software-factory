@@ -46,3 +46,10 @@ Production UX rules grounded in Norman (*Everyday Things*), Nielsen (Heuristics)
 - **Evidence-Backed**: Every decision produces rule citation, affected component, severity, fix, and verification method.
 - **Executable Receipts**: Run `audit_ux.py --fail-on error`; paste terminal receipts before ending turn.
 
+---
+
+## 6. Integrations & Precedence (Impeccable & Hallmark)
+- **Role Boundary**: `ux` owns flow, contract, states, a11y, and final decision. Impeccable = visual/responsive polish; Hallmark = anti-slop/originality.
+- **Routing**: New feature: UX ➔ Imp ➔ Hlm. Polish: Imp ➔ opt Hlm. A11y: UX/a11y only. Admin: UX ➔ Imp. Marketing: UX ➔ Imp ➔ Hlm.
+- **Precedence**: P0 A11y ➔ UX Correctness ➔ Tokens ➔ Responsive ➔ Visual Polish (Imp) ➔ Anti-Slop (Hlm). Novelty never trumps cognitive load.
+
