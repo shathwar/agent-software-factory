@@ -15,7 +15,7 @@ Grounded in **Jakob Nielsen's 10 Usability Heuristics** and **Steve Krug's Laws 
 | **5. Error Prevention** | Disabling invalid submit options, input masks, destructive confirmations. | Allowing user to type letters into phone inputs; accidental clicks immediately wiping user data. |
 | **6. Recognition Over Recall** | Visible options, autocomplete, field placeholders, tooltips. | Forcing user to remember codes or IDs from previous screens; icon-only buttons with zero tooltips. |
 | **7. Flexibility & Efficiency of Use** | Keyboard shortcuts (`Enter` to submit, `Esc` to close), bulk actions. | Mouse-only requirement; forms requiring 10 clicks when tab navigation could suffice. |
-| **8. Aesthetic & Minimalist Design** | Generous whitespace (4/8pt grid), clear typographic hierarchy. | Crammed dashboards, 5 different font sizes and colors competing for visual attention. |
+| **8. Aesthetic & Minimalist Design** | Uncluttered visual hierarchy; essential content prioritised over visual noise. (Visual refinement delegated to Impeccable; anti-slop delegated to Hallmark). | Crammed layouts, competing calls-to-action, and gratuitous decorative clutter obscuring primary user tasks. |
 | **9. Help Users Recognize, Diagnose, & Recover from Errors** | Contextual inline errors explaining *what*, *why*, and *how to fix*. | "Invalid input" or "Error 500" with no guidance on which field failed or what to do next. |
 | **10. Help & Documentation** | Inline helper text, contextual tooltips, FAQs near friction points. | Unexplained technical parameters with no tooltip or docs link. |
 

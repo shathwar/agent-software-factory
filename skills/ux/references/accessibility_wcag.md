@@ -17,8 +17,8 @@ Essential rules and verification checklist for accessible user interfaces.
 
 - **Complete Keyboard Reachability**: Every interactive element (buttons, links, inputs, dropdowns) must be reachable via `Tab` / `Shift+Tab`.
 - **Visible Focus Indicator**:
-  - NEVER use `outline: none` without providing an explicit replacement.
-  - Recommended Tailwind: `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-600`.
+  - NEVER suppress outlines (`outline: none`) without providing an explicit high-contrast replacement indicator.
+  - Deterministic verification is enforced via `audit_ux.py` (Rule UX-002).
 - **Focus Trapping**: Modal dialogs must trap focus within the dialog while open, and return focus to the triggering element upon closing.
 - **Escape Hotkey**: Modals, dropdown menus, and popovers must close on `Escape`.
 

@@ -587,6 +587,7 @@ PASS WITH 2 P2 FINDINGS
 ```
 
 - **References & Adapters**:
+  - [Architecture & Layer Boundaries](./skills/ux/references/orchestration.md)
   - [Impeccable Specialist Adapter](./skills/ux/integrations/impeccable.md)
   - [Hallmark Specialist Adapter](./skills/ux/integrations/hallmark.md)
   - [Usability Heuristics & Friction Rubric](./skills/ux/references/heuristics_rubric.md)

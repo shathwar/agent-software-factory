@@ -229,9 +229,23 @@ PASS WITH 2 P2 FINDINGS
 
 ---
 
-## 5. Specialist Integrations: Impeccable & Hallmark
+## 5. Specialist Integrations & Layer Architecture
 
-The `ux` skill acts as the **orchestrator and final authority**. Specialized visual craft and anti-slop capabilities (such as [Impeccable](./integrations/impeccable.md) and [Hallmark](./integrations/hallmark.md)) operate as independent specialists rather than competing authorities.
+The `ux` skill acts as the **orchestrator and final authority**, maintaining strict separation of concerns across four layers:
+
+```text
+UX Core (skills/ux/references/)
+    ↓ (high-level requirements: flow, intent, 6-state completeness, error recovery)
+Impeccable (pbakaus/impeccable)
+    ↓ (visual implementation expertise: optical balance, rhythm, micro-typography)
+Hallmark (nutlope/hallmark)
+    ↓ (anti-slop expertise: eliminating generic AI tropes, editorial originality)
+audit_ux.py (skills/ux/scripts/audit_ux.py)
+    ↓ (deterministic checks: static AST a11y, focus indicators, keyboard reachable)
+```
+
+> [!NOTE]
+> **No Overlapping Rule Duplication**: The core UX skill and its references ([`references/orchestration.md`](./references/orchestration.md)) define high-level requirements and orchestration principles. They do **not** duplicate the specialist rule catalogs of Impeccable or Hallmark. Visual implementation craft is owned by Impeccable; anti-slop expertise is owned by Hallmark; deterministic compliance is enforced by `audit_ux.py`.
 
 ### A. Responsibility Boundary
 
@@ -361,7 +375,8 @@ A Hallmark finding does not automatically mean "fix it." Standard, predictable l
     - **Consumer Landing Page**: **`Contextual` ➔ `Recommended` (Fix)**. Asymmetric layouts and editorial pacing create brand distinction.
 - **`Ignore`**: Standard platform UI patterns (tables, forms, filter sidebars) where novelty introduces friction.
 
-- **Adapters**:
+- **Adapters & Architecture References**:
+  - Layer Boundaries & Orchestration: [references/orchestration.md](./references/orchestration.md)
   - Detailed Impeccable specification: [integrations/impeccable.md](./integrations/impeccable.md)
   - Detailed Hallmark specification: [integrations/hallmark.md](./integrations/hallmark.md)
 
