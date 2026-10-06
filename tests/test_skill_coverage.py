@@ -12,7 +12,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("check_skill_coverage", ROOT / "scripts/check_skill_coverage.py")
+spec = importlib.util.spec_from_file_location("check_skill_coverage", ROOT / "scripts/verify/check_coverage.py")
 coverage = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(coverage)
 

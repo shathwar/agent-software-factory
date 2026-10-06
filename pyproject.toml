@@ -34,3 +34,7 @@ ignore = ["E501"]
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E402"]
 "skills/ship/scripts/inspect_lifecycle.py" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["fixtures", ".agentflow", ".git"]
