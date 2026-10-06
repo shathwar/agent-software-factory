@@ -17,12 +17,11 @@ Rubric Dimensions (0.0 - 1.0 each):
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
-import json
+from dataclasses import dataclass, field
 from pathlib import Path
 import re
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 
 @dataclass

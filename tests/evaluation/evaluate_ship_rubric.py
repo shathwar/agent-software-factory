@@ -82,14 +82,22 @@ class ShipRubricEvaluator:
         has_review_mention = bool(re.search(r"\b(?:review|scorecard|judge pass|verdict)\b", walkthrough_text, re.IGNORECASE))
         has_delivery_mention = bool(re.search(r"\b(?:delivery|shipped|pr|walkthrough|archive)\b", walkthrough_text, re.IGNORECASE))
 
-        if has_design_mention: gate_pts += 0.25
-        else: gate_feedback.append("Missing Design gate summary or ADR reference.")
-        if has_impl_mention: gate_pts += 0.25
-        else: gate_feedback.append("Missing Implementation gate summary or test pass confirmation.")
-        if has_review_mention: gate_pts += 0.25
-        else: gate_feedback.append("Missing Review gate summary or Judge scorecard.")
-        if has_delivery_mention: gate_pts += 0.25
-        else: gate_feedback.append("Missing Delivery gate summary.")
+        if has_design_mention:
+            gate_pts += 0.25
+        else:
+            gate_feedback.append("Missing Design gate summary or ADR reference.")
+        if has_impl_mention:
+            gate_pts += 0.25
+        else:
+            gate_feedback.append("Missing Implementation gate summary or test pass confirmation.")
+        if has_review_mention:
+            gate_pts += 0.25
+        else:
+            gate_feedback.append("Missing Review gate summary or Judge scorecard.")
+        if has_delivery_mention:
+            gate_pts += 0.25
+        else:
+            gate_feedback.append("Missing Delivery gate summary.")
 
         domain_scores["gate_closure_completeness"] = ShipRubricScore(
             name="Gate Closure Completeness",
@@ -104,10 +112,14 @@ class ShipRubricEvaluator:
         has_adr_link = bool(re.search(r"(?:docs/adr/|ADR-\d{4}|architecture decision)", walkthrough_text, re.IGNORECASE))
         has_openspec = bool(re.search(r"(?:openspec/|change package|tasks\.md)", walkthrough_text, re.IGNORECASE))
 
-        if has_adr_link: des_pts += 0.60
-        else: des_feedback.append("Walkthrough lacks reference to approved ADR (docs/adr/ADR-*.md).")
-        if has_openspec: des_pts += 0.40
-        else: des_feedback.append("Walkthrough lacks reference to OpenSpec change delta.")
+        if has_adr_link:
+            des_pts += 0.60
+        else:
+            des_feedback.append("Walkthrough lacks reference to approved ADR (docs/adr/ADR-*.md).")
+        if has_openspec:
+            des_pts += 0.40
+        else:
+            des_feedback.append("Walkthrough lacks reference to OpenSpec change delta.")
 
         domain_scores["design_binding"] = ShipRubricScore(
             name="Design Binding",
@@ -122,10 +134,14 @@ class ShipRubricEvaluator:
         has_terminal_receipt = bool(re.search(r"(?:exit code:\s*0|ran \d+ tests|passed in [\d.]+s|tests passed)", walkthrough_text, re.IGNORECASE))
         has_fingerprint = bool(re.search(r"(?:fingerprint|sha|commit|tree)", walkthrough_text, re.IGNORECASE))
 
-        if has_terminal_receipt: ev_pts += 0.60
-        else: ev_feedback.append("Walkthrough lacks verified terminal test runner receipt.")
-        if has_fingerprint: ev_pts += 0.40
-        else: ev_feedback.append("Walkthrough lacks git tree/fingerprint evidence.")
+        if has_terminal_receipt:
+            ev_pts += 0.60
+        else:
+            ev_feedback.append("Walkthrough lacks verified terminal test runner receipt.")
+        if has_fingerprint:
+            ev_pts += 0.40
+        else:
+            ev_feedback.append("Walkthrough lacks git tree/fingerprint evidence.")
 
         domain_scores["evidence_integrity"] = ShipRubricScore(
             name="Evidence Integrity",
@@ -140,10 +156,14 @@ class ShipRubricEvaluator:
         has_judge_pass = bool(re.search(r"(?:judge:?\s*pass|verdict:?\s*(?:pass|ready to deploy)|scorecard)", walkthrough_text, re.IGNORECASE))
         has_zero_critical = bool(re.search(r"(?:zero (?:open )?critical|0 critical|clean review|no blocking)", walkthrough_text, re.IGNORECASE))
 
-        if has_judge_pass: rev_pts += 0.60
-        else: rev_feedback.append("Walkthrough lacks explicit Judge PASS verdict.")
-        if has_zero_critical: rev_pts += 0.40
-        else: rev_feedback.append("Walkthrough lacks explicit statement of zero open critical/high findings.")
+        if has_judge_pass:
+            rev_pts += 0.60
+        else:
+            rev_feedback.append("Walkthrough lacks explicit Judge PASS verdict.")
+        if has_zero_critical:
+            rev_pts += 0.40
+        else:
+            rev_feedback.append("Walkthrough lacks explicit statement of zero open critical/high findings.")
 
         domain_scores["review_clearance"] = ShipRubricScore(
             name="Review Clearance",
@@ -177,9 +197,12 @@ class ShipRubricEvaluator:
         overall = sum(dim.score * dim.weight for dim in domain_scores.values())
         passed = overall >= self.passing_threshold and cost_pts >= 0.50
 
-        if passed: status_str = "PASS"
-        elif overall >= 0.60: status_str = "CONDITIONAL"
-        else: status_str = "FAIL"
+        if passed:
+            status_str = "PASS"
+        elif overall >= 0.60:
+            status_str = "CONDITIONAL"
+        else:
+            status_str = "FAIL"
 
         notes = []
         notes.append(f"Ship Delivery Rubric completed with score {round(overall, 3)} ({status_str}).")

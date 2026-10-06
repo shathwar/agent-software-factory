@@ -24,6 +24,10 @@ bash -n scripts/setup/install_skills.sh 2>/dev/null || bash -n scripts/install.s
 "$PYTHON" -m py_compile skills/spike/scripts/run_spike.py
 "$PYTHON" -m py_compile scripts/verify/sync_parity.py
 "$PYTHON" -m py_compile scripts/verify/ci_gate.py
+if command -v ruff >/dev/null 2>&1; then
+  ruff check .
+  echo "✓ Ruff lint checks passed"
+fi
 echo "✓ Script syntax OK"
 echo ""
 

@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 from pathlib import Path
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 import urllib.parse
 
 HTML_TEMPLATE = """<!DOCTYPE html>

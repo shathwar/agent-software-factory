@@ -15,11 +15,10 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict, dataclass, field
 import json
-import os
 from pathlib import Path
 import re
 import sys
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence
 
 # ADR Required Structure
 ADR_TITLE_PATTERN = re.compile(r"^#\s+ADR-(\d{1,5}):\s+(.+)$", re.MULTILINE)

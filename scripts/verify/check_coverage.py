@@ -16,7 +16,7 @@ import re
 from typing import Any, Sequence
 
 
-def find_repo_root(start: Optional[Path] = None) -> Path:
+def find_repo_root(start: Path | None = None) -> Path:
     current = (start or Path(__file__)).resolve()
     for p in [current] + list(current.parents):
         if (p / "tests/skill_coverage.json").is_file():

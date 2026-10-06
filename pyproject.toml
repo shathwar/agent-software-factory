@@ -26,6 +26,11 @@ ship = ["references/*.json"]
 [tool.ruff]
 line-length = 120
 target-version = "py310"
+exclude = [
+    "tests/fixtures",
+    ".agentflow",
+    ".scratch",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "W"]

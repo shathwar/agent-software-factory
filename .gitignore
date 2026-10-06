@@ -12,6 +12,8 @@
 
 # Temporary & logs
 *.log
+*.analysis.md
+.scratch/
 
 # Python validation tools
 __pycache__/

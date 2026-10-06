@@ -9,6 +9,7 @@ Universal high-density engineering instructions for AI coding agents. Grounded i
 - **Deep Modules (Ousterhout)**: Narrow interfaces hiding substantial complexity. Reject shallow 5-line wrappers.
 - **Define Errors Out of Existence**: Boundary states (e.g., deleting missing records) are valid no-ops rather than exceptions.
 - **Zero Unrequested Abstractions**: No speculative interfaces or factories for single implementations.
+- **Clean Caller Refactoring**: Never leave backward-compatibility symlinks or alias wrappers for relocated internal scripts; update callers at source.
 - **Debt Tracking**: Mark shortcuts: `// simplify: <desc> | Ceiling: <limit> | Upgrade: <action>`.
 
 ---
@@ -60,6 +61,7 @@ Universal high-density engineering instructions for AI coding agents. Grounded i
 - **Code-First Over Judges**: Enforce objective checks (schemas, regex, tool signatures) with deterministic code.
 - **Binary Judges**: Unambiguous Pass/Fail criteria with critique-first output; zero noisy 1–5 scales.
 - **Statistical Calibration**: Isolate Train/Dev/Test splits. Use TPR/TNR; apply Rogan-Gladen correction.
+- **Artifact Isolation**: Evaluation and benchmark runs must emit outputs to `.agentflow/` or `.scratch/`, never workspace root.
 
 ---
 

@@ -24,7 +24,7 @@ import os
 from pathlib import Path
 import re
 import sys
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set
 
 TARGET_EXTENSIONS = {
     ".html", ".htm", ".jsx", ".tsx", ".vue", ".svelte", ".astro"

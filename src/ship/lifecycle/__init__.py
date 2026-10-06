@@ -178,4 +178,5 @@ __all__ = [
     "validate_delivery_readiness",
     "validate_judge_report_contract",
     "validate_review_approval",
+    "validate_walkthrough_report",
 ]

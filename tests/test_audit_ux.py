@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -134,7 +133,7 @@ class TestAuditUX(unittest.TestCase):
     def test_cli_fail_on_thresholds(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            
+
             # File with only WARNING (arbitrary token p-[17px])
             warn_file = tmppath / "Warn.tsx"
             warn_file.write_text('<div className="p-[17px]">Warn</div>', encoding="utf-8")

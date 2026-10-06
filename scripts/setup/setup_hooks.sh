@@ -37,6 +37,14 @@ if [[ -f "$REPO_ROOT/scripts/verify/check_coverage.py" ]]; then
     exit 1
   fi
 fi
+
+# 3. Pre-commit hook: verify Python linting with ruff if available
+if command -v ruff >/dev/null 2>&1; then
+  if ! ruff check "$REPO_ROOT"; then
+    echo "❌ Ruff lint check failed. Fix lint errors or run 'ruff check --fix .' before committing."
+    exit 1
+  fi
+fi
 EOF
 
 chmod +x "$PRE_COMMIT"

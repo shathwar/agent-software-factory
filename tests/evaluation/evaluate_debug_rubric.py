@@ -23,7 +23,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import json
 from pathlib import Path
-import re
 import sys
 from typing import Any, Dict, List, Optional
 
