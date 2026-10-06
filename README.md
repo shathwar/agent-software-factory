@@ -932,6 +932,22 @@ agentflow capability check <agent> --op NETWORK_READ --target "https://example.c
 These commands inspect or evaluate local state. They do not grant an agent access to
 the operating system, a secret store, a cloud account, or a remote API.
 
+Benchmark reports include an overall `status` for the selected suite and a
+`dimension_statuses` map: `passed`, `failed`, `unrun`, or `inconclusive`. Unrun or
+incompletely measured rates are JSON `null` (terminal `N/A`), never assumed success.
+Rates include failed repetitions when measurements are available; a missing or
+invalid measurement makes the aggregate rate unknown. Any failed repetition marks
+its dimension failed, even when the rate is unknown. Policy and convergence rates
+are the fraction of scenario repetitions that passed. Other rates are equally
+weighted means of the reported per-repetition metrics, not population estimates.
+Latency values are means of per-iteration summaries, not pooled percentiles.
+
+The benchmark CLI exits `0` only when the selected suite passes, `1` for failed,
+inconclusive, or empty results, and `2` for an unknown suite or invalid iteration
+count. Unselected dimensions stay `unrun` and do not fail a deliberately filtered
+suite. These benchmarks test deterministic engine scenarios; their synthetic cost
+and completion results do not measure real agent cost or task completion rates.
+
 Benchmark an empirical spike with warmup passes and latency percentiles (p50/p90/p95/p99):
 ```bash
 python3 skills/spike/scripts/run_spike.py --cmd "python3 -c 'pass'" --iterations 100

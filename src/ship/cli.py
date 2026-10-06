@@ -1462,7 +1462,10 @@ def run_benchmark_cli(argv: Sequence[str]) -> int:
     from .lifecycle.evaluation import EvaluationRunner, format_terminal_report
 
     runner = EvaluationRunner()
-    report = runner.run_suite(dimension_filter=args.suite, iterations=args.iterations)
+    try:
+        report = runner.run_suite(dimension_filter=args.suite, iterations=args.iterations)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     if args.output:
         out_path = Path(args.output)
@@ -1474,7 +1477,7 @@ def run_benchmark_cli(argv: Sequence[str]) -> int:
     else:
         print(format_terminal_report(report))
 
-    return 0 if report.failed_scenarios == 0 else 1
+    return 0 if report.status == "passed" else 1
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:

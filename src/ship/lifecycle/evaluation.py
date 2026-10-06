@@ -85,35 +85,49 @@ class EvaluationReport:
     total_scenarios: int
     passed_scenarios: int
     failed_scenarios: int
-    pass_rate_pct: float
-    policy_enforcement_rate: float
-    convergence_detection_rate: float
-    verification_quality_score: float
-    false_approval_rate: float
-    false_block_rate: float
-    recovery_success_rate: float
-    race_condition_resilience: float
+    pass_rate_pct: Optional[float]
+    policy_enforcement_rate: Optional[float]
+    convergence_detection_rate: Optional[float]
+    verification_quality_score: Optional[float]
+    false_approval_rate: Optional[float]
+    false_block_rate: Optional[float]
+    recovery_success_rate: Optional[float]
+    race_condition_resilience: Optional[float]
     latency_percentiles_ms: Dict[str, float]
     total_cost_dollars: float
-    autonomy_completion_rate: float
+    autonomy_completion_rate: Optional[float]
     scenario_results: List[ScenarioResult] = field(default_factory=list)
+    dimension_statuses: Dict[str, str] = field(default_factory=dict)
+
+    @property
+    def status(self) -> str:
+        """Overall outcome applies only to the selected suite."""
+        if self.failed_scenarios or "failed" in self.dimension_statuses.values():
+            return "failed"
+        if not self.total_scenarios:
+            return "unrun"
+        if "inconclusive" in self.dimension_statuses.values():
+            return "inconclusive"
+        return "passed"
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "timestamp": self.timestamp,
+            "status": self.status,
+            "dimension_statuses": self.dimension_statuses,
             "total_scenarios": self.total_scenarios,
             "passed_scenarios": self.passed_scenarios,
             "failed_scenarios": self.failed_scenarios,
-            "pass_rate_pct": round(self.pass_rate_pct, 1),
+            "pass_rate_pct": round(self.pass_rate_pct, 1) if self.pass_rate_pct is not None else None,
             "summary_rates": {
-                "policy_enforcement_rate": round(self.policy_enforcement_rate, 4),
-                "convergence_detection_rate": round(self.convergence_detection_rate, 4),
-                "verification_quality_score": round(self.verification_quality_score, 4),
-                "false_approval_rate": round(self.false_approval_rate, 4),
-                "false_block_rate": round(self.false_block_rate, 4),
-                "recovery_success_rate": round(self.recovery_success_rate, 4),
-                "race_condition_resilience": round(self.race_condition_resilience, 4),
-                "autonomy_completion_rate": round(self.autonomy_completion_rate, 4),
+                "policy_enforcement_rate": round(self.policy_enforcement_rate, 4) if self.policy_enforcement_rate is not None else None,
+                "convergence_detection_rate": round(self.convergence_detection_rate, 4) if self.convergence_detection_rate is not None else None,
+                "verification_quality_score": round(self.verification_quality_score, 4) if self.verification_quality_score is not None else None,
+                "false_approval_rate": round(self.false_approval_rate, 4) if self.false_approval_rate is not None else None,
+                "false_block_rate": round(self.false_block_rate, 4) if self.false_block_rate is not None else None,
+                "recovery_success_rate": round(self.recovery_success_rate, 4) if self.recovery_success_rate is not None else None,
+                "race_condition_resilience": round(self.race_condition_resilience, 4) if self.race_condition_resilience is not None else None,
+                "autonomy_completion_rate": round(self.autonomy_completion_rate, 4) if self.autonomy_completion_rate is not None else None,
             },
             "latency_percentiles_ms": {k: round(v, 2) for k, v in self.latency_percentiles_ms.items()},
             "total_cost_dollars": round(self.total_cost_dollars, 4),
@@ -776,6 +790,20 @@ STANDARD_SCENARIOS: List[Callable[[Path], ScenarioResult]] = [
 ]
 
 
+SCENARIO_DIMENSIONS = {
+    "scenario_policy_enforcement": "policy_enforcement",
+    "scenario_convergence_guardrails": "convergence",
+    "scenario_verification_quality": "verification_quality",
+    "scenario_false_approvals": "false_approvals",
+    "scenario_false_blocks": "false_blocks",
+    "scenario_recovery_reconciliation": "recovery",
+    "scenario_race_concurrency": "race_conditions",
+    "scenario_latency_profile": "latency",
+    "scenario_cost_tracking": "cost",
+    "scenario_autonomy_completion": "autonomy_completion",
+}
+
+
 # =============================================================================
 # Evaluation Runner & Scorecard Formatter
 # =============================================================================
@@ -784,7 +812,7 @@ class EvaluationRunner:
     """Executes repeatable benchmark scenarios against AgentFlow and aggregates metrics."""
 
     def __init__(self, scenarios: Optional[List[Callable[[Path], ScenarioResult]]] = None):
-        self.scenarios = scenarios or list(STANDARD_SCENARIOS)
+        self.scenarios = list(STANDARD_SCENARIOS) if scenarios is None else scenarios
 
     def run_suite(
         self,
@@ -792,6 +820,8 @@ class EvaluationRunner:
         iterations: int = 1,
     ) -> EvaluationReport:
         """Run benchmark suite across isolated temporary workspaces and compute statistical aggregates."""
+        if isinstance(iterations, bool) or not isinstance(iterations, int) or iterations < 1:
+            raise ValueError("iterations must be a positive integer")
         now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         results: List[ScenarioResult] = []
 
@@ -800,8 +830,11 @@ class EvaluationRunner:
             df = dimension_filter.lower()
             scenarios_to_run = [
                 s for s in self.scenarios
-                if df in s.__name__.lower()
+                if df in s.__name__.lower() or df == SCENARIO_DIMENSIONS.get(s.__name__)
             ]
+
+        if dimension_filter and dimension_filter.lower() != "all" and not scenarios_to_run:
+            raise ValueError(f"Unknown benchmark suite: {dimension_filter}")
 
         for scenario_fn in scenarios_to_run:
             for _ in range(iterations):
@@ -815,7 +848,7 @@ class EvaluationRunner:
                         res = ScenarioResult(
                             scenario_id=scenario_fn.__name__,
                             name=scenario_fn.__name__,
-                            dimension="unknown",
+                            dimension=SCENARIO_DIMENSIONS.get(scenario_fn.__name__, "unknown"),
                             passed=False,
                             duration_ms=0.0,
                             error=str(exc),
@@ -825,28 +858,74 @@ class EvaluationRunner:
         total = len(results)
         passed = sum(1 for r in results if r.passed)
         failed = total - passed
-        pass_rate = (passed / total * 100.0) if total > 0 else 0.0
+        pass_rate = (passed / total * 100.0) if total > 0 else None
+        by_dimension = {
+            dim: [r for r in results if r.dimension == dim]
+            for dim in sorted({d.value for d in BenchmarkDimension} | {r.dimension for r in results})
+        }
 
-        # Dimension-specific metrics extraction
-        def get_metric(dim: str, key: str, default: float) -> float:
-            matching = [r for r in results if r.dimension == dim and r.passed]
+        def get_metric(dim: str, key: str, *, rate: bool = True) -> Optional[float]:
+            # Never drop failed iterations or fabricate missing measurements.
+            matching = by_dimension[dim]
+            values = [r.metrics.get(key) for r in matching]
+            if not values or any(
+                not isinstance(v, (int, float)) or isinstance(v, bool)
+                or not math.isfinite(v) or v < 0 or (rate and v > 1)
+                for v in values
+            ):
+                return None
+            return float(statistics.mean(values))
+
+        def scenario_pass_rate(dim: str) -> Optional[float]:
+            matching = by_dimension[dim]
+            return sum(r.passed for r in matching) / len(matching) if matching else None
+
+        policy_rate = scenario_pass_rate("policy_enforcement")
+        convergence_rate = scenario_pass_rate("convergence")
+        verif_score = get_metric("verification_quality", "grounding_accuracy")
+        false_appr_rate = get_metric("false_approvals", "false_approval_rate")
+        false_block_rate = get_metric("false_blocks", "false_block_rate")
+        rec_rate = get_metric("recovery", "recovery_success")
+        race_resilience = get_metric("race_conditions", "lease_mutual_exclusion")
+        autonomy_rate = get_metric("autonomy_completion", "completion_rate")
+        rate_values = {
+            "policy_enforcement": (policy_rate, 1.0, False),
+            "convergence": (convergence_rate, 1.0, False),
+            "verification_quality": (verif_score, 0.95, False),
+            "false_approvals": (false_appr_rate, 0.0, True),
+            "false_blocks": (false_block_rate, 0.0, True),
+            "recovery": (rec_rate, 1.0, False),
+            "race_conditions": (race_resilience, 1.0, False),
+            "autonomy_completion": (autonomy_rate, 1.0, False),
+        }
+        # Average per-iteration summaries, not pooled latency percentiles.
+        lat_percentiles = {}
+        for key in ("min_ms", "p50_ms", "p90_ms", "p95_ms", "p99_ms", "max_ms", "mean_ms"):
+            value = get_metric("latency", key, rate=False)
+            if value is not None:
+                lat_percentiles[key] = value
+
+        statuses = {}
+        for dim, matching in by_dimension.items():
             if not matching:
-                return default
-            vals = [r.metrics.get(key, default) for r in matching if key in r.metrics]
-            return float(statistics.mean(vals)) if vals else default
-
-        policy_rate = 1.0 if any(r.dimension == BenchmarkDimension.POLICY_ENFORCEMENT.value and r.passed for r in results) else 0.0
-        convergence_rate = 1.0 if any(r.dimension == BenchmarkDimension.CONVERGENCE.value and r.passed for r in results) else 0.0
-        verif_score = get_metric(BenchmarkDimension.VERIFICATION_QUALITY.value, "grounding_accuracy", 1.0)
-        false_appr_rate = get_metric(BenchmarkDimension.FALSE_APPROVALS.value, "false_approval_rate", 0.0)
-        false_block_rate = get_metric(BenchmarkDimension.FALSE_BLOCKS.value, "false_block_rate", 0.0)
-        rec_rate = get_metric(BenchmarkDimension.RECOVERY.value, "recovery_success", 1.0)
-        race_resilience = get_metric(BenchmarkDimension.RACE_CONDITIONS.value, "lease_mutual_exclusion", 1.0)
-        autonomy_rate = get_metric(BenchmarkDimension.AUTONOMY_COMPLETION.value, "completion_rate", 1.0)
-
-        # Latency statistics
-        latency_res = next((r for r in results if r.dimension == BenchmarkDimension.LATENCY.value), None)
-        lat_percentiles = latency_res.metrics if latency_res else {"p50_ms": 0.0, "p95_ms": 0.0, "mean_ms": 0.0}
+                statuses[dim] = "unrun"
+            elif any(not r.passed for r in matching):
+                statuses[dim] = "failed"
+            elif dim in rate_values:
+                value, threshold, lower_is_better = rate_values[dim]
+                if value is None:
+                    statuses[dim] = "inconclusive"
+                else:
+                    meets_target = value <= threshold if lower_is_better else value >= threshold
+                    statuses[dim] = "passed" if meets_target else "failed"
+            elif dim == "latency":
+                statuses[dim] = "passed" if len(lat_percentiles) == 7 else "inconclusive"
+            elif dim == "cost":
+                complete = get_metric("cost", "total_cost_tracked", rate=False) is not None
+                halted = all(r.metrics.get("cost_halt_triggered") is True for r in matching)
+                statuses[dim] = "passed" if complete and halted else "inconclusive"
+            else:
+                statuses[dim] = "inconclusive"
 
         # Cost accumulation
         total_cost = sum(r.cost_dollars for r in results)
@@ -868,66 +947,60 @@ class EvaluationRunner:
             total_cost_dollars=total_cost,
             autonomy_completion_rate=autonomy_rate,
             scenario_results=results,
+            dimension_statuses=statuses,
         )
 
 
 def format_terminal_report(report: EvaluationReport) -> str:
     """Format an EvaluationReport into a high-visibility terminal scorecard."""
-    status_icon = "🟢" if report.failed_scenarios == 0 else "🔴"
+    status_labels = {
+        "passed": "✅ PASS", "failed": "❌ FAIL",
+        "unrun": "UNRUN", "inconclusive": "INCONCLUSIVE",
+    }
+    overall = status_labels[report.status]
+    pass_rate = f"{report.pass_rate_pct:.1f}%" if report.pass_rate_pct is not None else "N/A"
     lines = [
-        "╔═══════════════════════════════════════════════════════════════════════════════════╗",
-        f"║  {status_icon} AGENTFLOW SYSTEM BENCHMARK & EVALUATION REPORT                           ║",
-        "╠═══════════════════════════════════════════════════════════════════════════════════╣",
-        f"║  Timestamp: {report.timestamp:<30s}  Scenarios: {report.passed_scenarios}/{report.total_scenarios} Passed ({report.pass_rate_pct:.1f}%) ║",
-        "╠═══════════════════════════════════════════════════════════════════════════════════╣",
-        "║  DIMENSION                          VALUE     TARGET    STATUS                    ║",
-        "╟───────────────────────────────────────────────────────────────────────────────────╢",
+        "AGENTFLOW SYSTEM BENCHMARK & EVALUATION REPORT",
+        f"Selected suite: {overall} | {report.passed_scenarios}/{report.total_scenarios} scenarios passed ({pass_rate})",
+        f"Timestamp: {report.timestamp}",
+        "DIMENSION                          VALUE     TARGET    STATUS",
     ]
-
     dims = [
-        ("Policy Enforcement Accuracy", f"{report.policy_enforcement_rate * 100:.1f}%", "100.0%", report.policy_enforcement_rate == 1.0),
-        ("Convergence Detection Rate", f"{report.convergence_detection_rate * 100:.1f}%", "100.0%", report.convergence_detection_rate == 1.0),
-        ("Verification Quality Score", f"{report.verification_quality_score:.2f}", "1.00", report.verification_quality_score >= 0.95),
-        ("False Approval Rate (FP)", f"{report.false_approval_rate * 100:.1f}%", "0.0%", report.false_approval_rate == 0.0),
-        ("False Block Rate (FN)", f"{report.false_block_rate * 100:.1f}%", "0.0%", report.false_block_rate == 0.0),
-        ("Recovery Success Rate", f"{report.recovery_success_rate * 100:.1f}%", "100.0%", report.recovery_success_rate == 1.0),
-        ("Race Condition Resilience", f"{report.race_condition_resilience * 100:.1f}%", "100.0%", report.race_condition_resilience == 1.0),
-        ("Autonomy Completion Rate", f"{report.autonomy_completion_rate * 100:.1f}%", "100.0%", report.autonomy_completion_rate == 1.0),
+        ("policy_enforcement", "Policy Enforcement Accuracy", report.policy_enforcement_rate, "100.0%"),
+        ("convergence", "Convergence Detection Rate", report.convergence_detection_rate, "100.0%"),
+        ("verification_quality", "Verification Quality Score", report.verification_quality_score, "0.95"),
+        ("false_approvals", "False Approval Rate (FP)", report.false_approval_rate, "0.0%"),
+        ("false_blocks", "False Block Rate (FN)", report.false_block_rate, "0.0%"),
+        ("recovery", "Recovery Success Rate", report.recovery_success_rate, "100.0%"),
+        ("race_conditions", "Race Condition Resilience", report.race_condition_resilience, "100.0%"),
+        ("autonomy_completion", "Autonomy Completion Rate", report.autonomy_completion_rate, "100.0%"),
     ]
+    for dim, name, value, target in dims:
+        val = "N/A" if value is None else (f"{value:.2f}" if dim == "verification_quality" else f"{value * 100:.1f}%")
+        status = status_labels[report.dimension_statuses.get(dim, "unrun")]
+        lines.append(f"{name:<34s} {val:<9s} {target:<9s} {status}")
 
-    for name, val, target, ok in dims:
-        st = "✅ PASS" if ok else "❌ FAIL"
-        lines.append(f"║  {name:<34s} {val:<9s} {target:<9s} {st:<25s} ║")
-
-    lines.extend([
-        "╠═══════════════════════════════════════════════════════════════════════════════════╣",
-        "║  LATENCY & COST METRICS                                                           ║",
-        "╟───────────────────────────────────────────────────────────────────────────────────╢",
-    ])
-
+    lines.extend(["", "LATENCY & COST METRICS"])
+    lines.append(f"Latency: {status_labels[report.dimension_statuses.get('latency', 'unrun')]} (mean of iteration summaries)")
+    lines.append(f"Cost checks: {status_labels[report.dimension_statuses.get('cost', 'unrun')]}")
     lat = report.latency_percentiles_ms
-    p50_str = f"{lat.get('p50_ms', 0.0):.2f}ms"
-    p95_str = f"{lat.get('p95_ms', 0.0):.2f}ms"
-    p99_str = f"{lat.get('p99_ms', 0.0):.2f}ms"
-    mean_str = f"{lat.get('mean_ms', 0.0):.2f}ms"
-    lines.append(f"║  Latency Distribution : p50={p50_str}, p95={p95_str}, p99={p99_str}, mean={mean_str}            ║")
-    lines.append(f"║  Total Cost Tracked   : ${report.total_cost_dollars:.4f}                                                 ║")
+    p50_str = f"{lat['p50_ms']:.2f}ms" if 'p50_ms' in lat else "N/A"
+    p95_str = f"{lat['p95_ms']:.2f}ms" if 'p95_ms' in lat else "N/A"
+    p99_str = f"{lat['p99_ms']:.2f}ms" if 'p99_ms' in lat else "N/A"
+    mean_str = f"{lat['mean_ms']:.2f}ms" if 'mean_ms' in lat else "N/A"
+    lines.append(f"Latency Distribution: p50={p50_str}, p95={p95_str}, p99={p99_str}, mean={mean_str}")
+    lines.append(f"Total Cost Tracked: ${report.total_cost_dollars:.4f}")
 
-    lines.extend([
-        "╠═══════════════════════════════════════════════════════════════════════════════════╣",
-        "║  SCENARIO DETAILS                                                                 ║",
-        "╟───────────────────────────────────────────────────────────────────────────────────╢",
-    ])
+    lines.extend(["", "SCENARIO DETAILS"])
 
     for s in report.scenario_results:
         icon = "✅" if s.passed else "❌"
-        lines.append(f"║  {icon} {s.name:<48s} [{s.duration_ms:6.1f}ms] ║")
+        lines.append(f"{icon} {s.name} [{s.duration_ms:.1f}ms]")
         for d in s.diagnostics[:2]:
-            lines.append(f"║     └─ {d:<71s} ║")
+            lines.append(f"  {d}")
         if s.error:
-            lines.append(f"║     └─ ERROR: {s.error:<64s} ║")
+            lines.append(f"  ERROR: {s.error}")
 
-    lines.append("╚═══════════════════════════════════════════════════════════════════════════════════╝")
     return "\n".join(lines)
 
 
