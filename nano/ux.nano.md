@@ -7,12 +7,12 @@ Production UX rules grounded in Norman (*Everyday Things*), Nielsen (Heuristics)
 ---
 
 ## 1. Operating Modes & Autopilot Execution
-- **3 Modes**:
+- **4 Modes**:
   - `/ux <feature>`: Full gated pipeline (Flow ➔ Spec ➔ Component ➔ Verify).
+  - `/ux polish`: Fast-path (Inspect ➔ Context ➔ Audit ➔ Imp ➔ Fix ➔ Hlm ➔ Reconcile ➔ Verify).
   - `/ux audit`: Analysis only; zero file writes (heuristic & a11y checks).
   - `/ux component`: Targeted generation; direct component code synthesis.
 - **Modifier (`--autopilot`)**: Bypasses interactive checkpoints for continuous CI/IDE execution.
-
 
 ---
 
@@ -44,13 +44,13 @@ Production UX rules grounded in Norman (*Everyday Things*), Nielsen (Heuristics)
 
 ## 5. Verification Model (Option C)
 - **Evidence-Backed**: Every decision produces rule citation, affected component, severity, fix, and verification method.
-- **Executable Receipts**: Run `audit_ux.py --fail-on error`; paste terminal receipts before ending turn.
+- **Executable Receipts**: Run `audit_ux.py --fail-on error`; emit UX FINAL REVIEW receipt (UX, A11y, Imp, Hlm, Decision).
 
 ---
 
 ## 6. Integrations & Precedence (Impeccable & Hallmark)
 - **Role Boundary**: `ux` owns flow, contract, states, a11y, and final decision. Impeccable = visual/responsive; Hallmark = anti-slop/originality.
-- **Routing**: New: UX ➔ Imp ➔ Hlm. Polish: Imp ➔ opt Hlm. A11y: UX/a11y only. Admin: UX ➔ Imp. Mktg: UX ➔ Imp ➔ Hlm.
-- **Rendered Pass & Limit**: Gen ➔ audit_ux ➔ render app ➔ Imp ➔ fix ➔ render. Max 2 passes. Preserve DESIGN.md/tokens.
+- **Pipeline & Critic**: UX ➔ Impl ➔ Imp ➔ Hallmark. Hallmark critiques result; never dictates initial UX.
+- **Hallmark Context Policy**: Required, Recommended, Contextual, Ignore. Admin card-grid = Ignore; consumer landing = fix.
+- **Routing & Limits**: New: UX ➔ Imp ➔ Hlm. Polish: Imp ➔ opt Hlm. Admin: UX ➔ Imp. Max 2 passes. Preserve DESIGN.md.
 - **Precedence**: P0 A11y ➔ UX Correctness ➔ Tokens ➔ Responsive ➔ Visual Polish (Imp) ➔ Anti-Slop (Hlm). Novelty never trumps cognitive load.
-

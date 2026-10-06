@@ -57,6 +57,7 @@ The skill operates in **three primary operating modes** with an orthogonal **`--
 | Operating Mode | Safety Boundary | Primary Intent | Scope & Deliverables |
 |---|---|---|---|
 | **`/ux <feature>`** | 🔄 **Mutating (Interactive)** | **Full Gated Pipeline** | Flow Grilling ➔ *Checkpoint* ➔ UX Spec & State Matrix ➔ *Checkpoint* ➔ Component Generation ➔ Verification. |
+| **`/ux polish`** | ⚡ **Mutating (Code)** | **Fast-Path Polish** | 9-step refinement for existing projects: Inspect ➔ Context ➔ Audit ➔ Impeccable ➔ Fix Visual ➔ Hallmark ➔ Reconcile ➔ Fix Worthwhile ➔ Final Audit. |
 | **`/ux audit`** | 🔍 **Read-Only (Analyse)** | **Analysis Only** | Heuristic review (Nielsen/Krug) & WCAG static audit (`audit_ux.py`); **strictly zero file writes**. (Aliases: `/ux flow`, `/ux a11y`). |
 | **`/ux component`** | ⚡ **Mutating (Code)** | **Targeted Generation** | Directly generates or refactors accessible frontend code against existing design tokens. |
 
@@ -133,6 +134,29 @@ Phase 3: Component Generation (Production-Grade Accessible Code) Auto-advance)
   python3 "$SKILLS_DIR/ux/scripts/audit_ux.py" src/components/ --fail-on error
   ```
 
+### Fast-Path Refinement: `/ux polish`
+Provides existing codebases and components with a rapid visual craft and structural polish path without re-running the full Flow Grilling (Phase 1) and State Matrix (Phase 2) lifecycles:
+
+```text
+1. Inspect current implementation (Analyze component source, DOM structure, markup)
+   ↓
+2. Read project design context (Inspect root DESIGN.md, tokens, typographic scales)
+   ↓
+3. Run UX audit (Execute audit_ux.py to detect baseline a11y & token violations)
+   ↓
+4. Invoke Impeccable (Subagent runs /impeccable polish against rendered preview)
+   ↓
+5. Apply visual fixes (Surgically adjust rhythm, micro-typography, optical alignment)
+   ↓
+6. Invoke Hallmark (Subagent runs nutlope/hallmark structural anti-slop critique)
+   ↓
+7. Reconcile findings (Classify Hallmark/Impeccable findings: Required/Recommended/Contextual/Ignore)
+   ↓
+8. Fix worthwhile issues (Apply fixes for Required and accepted Recommended findings)
+   ↓
+9. Run final UX audit (Execute audit_ux.py --fail-on error to guarantee zero regressions)
+```
+
 ---
 
 ## 4. Evidence & Executable Verification Model (Option C)
@@ -164,6 +188,44 @@ python3 "$SKILLS_DIR/ux/scripts/audit_ux.py" src/components/ --fail-on error
 -------------------------------------------------------
 Summary: 0 critical, 0 error(s), 0 warning(s), 0 info.
 ```
+
+### C. The UX Final Review Reconciliation Report
+At the conclusion of `/ux <feature>` or `/ux polish`, the agent emits a unified reconciliation report summarizing UX completeness, accessibility conformance, Impeccable visual findings, Hallmark structural findings, and the final shipping decision:
+
+```text
+UX FINAL REVIEW
+════════════════════════════════
+
+UX
+✓ Flow complete
+✓ State matrix complete
+✓ Error recovery present
+
+ACCESSIBILITY
+✓ 0 blocking issues
+✓ Keyboard navigation
+✓ Focus-visible
+✓ Accessible names
+
+IMPECCABLE
+✓ Typography
+✓ Spacing
+✓ Responsive layout
+⚠ 2 minor polish findings
+
+HALLMARK
+✓ No major AI-slop patterns
+⚠ Generic card structure
+
+DECISION
+────────────────────────────────
+PASS WITH 2 P2 FINDINGS
+```
+
+**Decision Rules**:
+- **PASS**: 0 blocking issues, 0 P0/P1 findings, all critical/high items resolved.
+- **PASS WITH N FINDINGS**: 0 blocking P0/P1 issues; remaining findings are non-blocking P2/P3 items explicitly classified as `Ignore` or deferred `Contextual`.
+- **BLOCKED / FAIL**: Any unresolved P0 accessibility violation, incomplete 6-state matrix, or missing error recovery. Remediate immediately before shipping.
 
 ---
 
@@ -208,6 +270,7 @@ finding:
   source: impeccable | hallmark | ux | audit
   rule_id: "<identifier, e.g. UX-001, IMP-014, HLM-003>"
   severity: P0 | P1 | P2 | P3
+  actionability: Required | Recommended | Contextual | Ignore
   category: accessibility | usability | visual | slop | responsive
   evidence: "<exact code snippet, element, or selector>"
   recommendation: "<concrete actionable fix>"
@@ -276,7 +339,30 @@ If visual issues persist after 2 passes, halt automated polishing, log remaining
 Impeccable must respect the host project's architectural visual identity:
 > **Core Directive**: Prefer the project's existing `DESIGN.md`, design tokens, and component system over introducing new visual conventions. Do not let the visual refinement layer destroy the project's established language.
 
+### H. Hallmark as Final Structural Critic & Context-Sensitive Policy
+
+Hallmark ([nutlope/hallmark](https://github.com/nutlope/hallmark)) acts as a retrospective structural reviewer invoked via a dedicated subagent (`Role: Hallmark Structural Critic`).
+
+> [!IMPORTANT]
+> **Critique the Result, Not the Initial UX**: Run Hallmark **after** the UX and visual implementation is reasonably complete:
+> ```text
+> UX (Flow & States) ➔ Implementation ➔ Impeccable (Visual Polish) ➔ Hallmark (Structural Critic)
+> ```
+> **Never** run `UX ➔ Hallmark ➔ Implementation`. Hallmark critiques the synthesized artifact; it must never dictate the initial information architecture or user flow.
+
+#### Context-Sensitive Actionability Policy
+A Hallmark finding does not automatically mean "fix it." Standard, predictable layouts often reduce cognitive load. All findings are classified into four actionability tiers:
+
+- **`Required`**: Egregious AI cliché on a flagship view that damages credibility without serving any functional purpose (e.g. glowing border buttons on serious tools, purple gradient card soup). Fix immediately.
+- **`Recommended`**: Strong structural or typographic enhancement that noticeably elevates editorial craft without increasing cognitive friction.
+- **`Contextual`**: Applicability depends strictly on the product domain and user mental model.
+  - *Example*: *"This dashboard follows a familiar card-grid structure."*
+    - **Enterprise Admin / DevTool**: **`Ignore`**. Predictable symmetry minimizes cognitive load and speeds scanning.
+    - **Consumer Landing Page**: **`Contextual` ➔ `Recommended` (Fix)**. Asymmetric layouts and editorial pacing create brand distinction.
+- **`Ignore`**: Standard platform UI patterns (tables, forms, filter sidebars) where novelty introduces friction.
+
 - **Adapters**:
   - Detailed Impeccable specification: [integrations/impeccable.md](./integrations/impeccable.md)
   - Detailed Hallmark specification: [integrations/hallmark.md](./integrations/hallmark.md)
+
 

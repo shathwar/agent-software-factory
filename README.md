@@ -412,6 +412,7 @@ The skill clearly demarcates read-only analysis from code mutation to prevent un
 | Mode / Targeted Command | Action Type | Intent & Safety Boundary |
 |---|---|---|
 | `/ux <feature>` | Full Gated Pipeline | Drives complete lifecycle: Flow Grilling ➔ UX Spec ➔ State Matrix ➔ Component Gen ➔ Option C Verification with interactive checkpoints. |
+| `/ux polish` | Fast-Path Polish | 9-step visual craft and structural polish for existing code: Inspect ➔ Context ➔ Audit ➔ Impeccable ➔ Fix Visual ➔ Hallmark ➔ Reconcile ➔ Fix Worthwhile ➔ Final Audit. |
 | `/ux flow` | Read-only analysis | Maps user journeys, mental models, decision paths, and cognitive friction (**zero file writes**). |
 | `/ux audit` | Read-only analysis | Audits Nielsen heuristics, affordance mismatches, and dark patterns (**zero file writes**). |
 | `/ux a11y` | Read-only analysis | Evaluates WCAG 2.1/2.2 AA compliance, keyboard tab order, and screen reader names (**zero file writes**). |
@@ -504,6 +505,7 @@ finding:
   source: impeccable | hallmark | ux | audit
   rule_id: "<identifier, e.g. UX-001, IMP-014, HLM-003>"
   severity: P0 | P1 | P2 | P3
+  actionability: Required | Recommended | Contextual | Ignore
   category: accessibility | usability | visual | slop | responsive
   evidence: "<exact code snippet or computed style>"
   recommendation: "<concrete actionable fix>"
@@ -526,6 +528,20 @@ Anti-slop & originality (Hallmark)
 ```
 *Golden Rule*: Hallmark stating *"make this card grid more distinctive"* **never overrides** UX stating *"the existing familiar pattern reduces cognitive load."*
 
+#### Hallmark as Final Structural Critic & Context-Sensitive Policy
+
+- **Critique Sequence**: Hallmark ([nutlope/hallmark](https://github.com/nutlope/hallmark)) runs **after** implementation and visual polish are reasonably complete:
+  ```text
+  UX (Flow & States) ➔ Implementation ➔ Impeccable (Visual Polish) ➔ Hallmark (Structural Critic)
+  ```
+  Hallmark critiques the synthesized result; it must never dictate initial UX or information architecture.
+- **Context-Sensitive Actionability Policy**: A Hallmark finding does not automatically mandate code changes. Findings are classified into four actionability tiers:
+  - `Required`: Egregious AI cliché on a flagship view without functional purpose. Must fix.
+  - `Recommended`: Meaningful structural/editorial elevation where cognitive load is completely unaffected.
+  - `Contextual`: Applicability depends strictly on the product domain and user mental model.
+    - *Card-Grid Example*: For an **enterprise admin dashboard**, **`Ignore`** (familiar predictable pattern reduces cognitive load and accelerates scanning). For a **consumer landing page**, **`Potentially fix`** (asymmetric layouts and editorial pacing create brand distinction).
+  - `Ignore`: Standard platform UI conventions (tables, forms, filter sidebars) where novelty introduces unnecessary friction.
+
 #### Rendered UI Pass & Bounded Iteration
 
 - **Rendered Pass Workflow**:
@@ -535,6 +551,40 @@ Anti-slop & originality (Hallmark)
   Impeccable is not merely a static code checklist—it inspects optical alignments, spacing rhythm, and responsive layouts on rendered artifacts.
 - **Bounded Iteration**: Strictly capped at a **maximum of 2 refinement passes**. Halts when no P0/P1 issues remain, no visual regressions occur, and no new defects are introduced, protecting agent economics.
 - **Design System Preservation**: Impeccable must prefer the project's existing `DESIGN.md`, tokens, and component library over introducing arbitrary aesthetic novelties.
+
+#### The UX Final Review Reconciliation Report
+
+Every full lifecycle run (`/ux <feature>`) and fast-path polish run (`/ux polish`) concludes with an evidenced reconciliation receipt and shipping decision:
+
+```text
+UX FINAL REVIEW
+════════════════════════════════
+
+UX
+✓ Flow complete
+✓ State matrix complete
+✓ Error recovery present
+
+ACCESSIBILITY
+✓ 0 blocking issues
+✓ Keyboard navigation
+✓ Focus-visible
+✓ Accessible names
+
+IMPECCABLE
+✓ Typography
+✓ Spacing
+✓ Responsive layout
+⚠ 2 minor polish findings
+
+HALLMARK
+✓ No major AI-slop patterns
+⚠ Generic card structure
+
+DECISION
+────────────────────────────────
+PASS WITH 2 P2 FINDINGS
+```
 
 - **References & Adapters**:
   - [Impeccable Specialist Adapter](./skills/ux/integrations/impeccable.md)
