@@ -526,6 +526,16 @@ Anti-slop & originality (Hallmark)
 ```
 *Golden Rule*: Hallmark stating *"make this card grid more distinctive"* **never overrides** UX stating *"the existing familiar pattern reduces cognitive load."*
 
+#### Rendered UI Pass & Bounded Iteration
+
+- **Rendered Pass Workflow**:
+  ```text
+  Generate ➔ audit_ux.py ➔ Render app (live preview/DOM snapshot) ➔ Impeccable ➔ Fixes ➔ Render again
+  ```
+  Impeccable is not merely a static code checklist—it inspects optical alignments, spacing rhythm, and responsive layouts on rendered artifacts.
+- **Bounded Iteration**: Strictly capped at a **maximum of 2 refinement passes**. Halts when no P0/P1 issues remain, no visual regressions occur, and no new defects are introduced, protecting agent economics.
+- **Design System Preservation**: Impeccable must prefer the project's existing `DESIGN.md`, tokens, and component library over introducing arbitrary aesthetic novelties.
+
 - **References & Adapters**:
   - [Impeccable Specialist Adapter](./skills/ux/integrations/impeccable.md)
   - [Hallmark Specialist Adapter](./skills/ux/integrations/hallmark.md)

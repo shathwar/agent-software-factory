@@ -19,18 +19,55 @@ Invoke Impeccable during **Phase 3 (Component Generation)** or during targeted U
 
 ---
 
-## 2. Inputs to Provide
+## 2. The Rendered UI Pass Workflow
 
-Provide Impeccable with complete structural context to prevent blind styling:
-1. **Component Source Code**: Full TSX, JSX, HTML, or Vue/Svelte template.
-2. **Design Tokens & Theme**: Detected CSS custom properties, Tailwind theme configuration, or component library tokens.
-3. **UX Contract & State Matrix**: The 6 view states (Empty, Loading, Populated, Partial, Error, Unavailable) and control states (Hover, Focus-visible, Active, Disabled, Busy) to ensure all states are visually styled.
-4. **Responsive Constraints**: Target breakpoints (mobile, tablet, desktop) and container query boundaries.
-5. **Information Hierarchy**: Primary user goal, scanning anchors, and intended visual hierarchy.
+> [!IMPORTANT]
+> **Inspect the Rendered UI, Not Merely Static Code**: Do not use Impeccable merely as another static AST checklist. Its strongest value is **visual inspection + refinement** of the rendered artifact (preview server, DOM layout snapshot, browser preview, or visual render).
+
+The integrated lifecycle workflow is:
+
+```text
+Generate (Component code synthesized against UX contract & tokens)
+   ↓
+Run audit_ux.py (Deterministic static accessibility & token verification)
+   ↓
+Render application (Spin up dev server / render DOM snapshot or visual preview)
+   ↓
+Run Impeccable (Inspect rendered optical alignment, rhythm, responsive layout)
+   ↓
+Apply fixes (Surgical adjustments to CSS, tokens, spacing, typography)
+   ↓
+Render again (Confirm visual refinement and verify zero regressions)
+```
+
+Static ASTs cannot detect optical imbalances, subtle text clipping, awkward wrapping on specific viewport widths, or unbalanced whitespace between icon-label pairs. The rendered pass verifies the living UI.
 
 ---
 
-## 3. Outputs to Expect
+## 3. Preserving Established Design Systems
+
+Impeccable must respect the host project's architectural visual identity:
+
+> **Core Directive**: Prefer the project's existing `DESIGN.md`, design tokens, and component system over introducing new visual conventions. Do not let the visual refinement layer destroy the project's established language.
+
+- **`DESIGN.md` & Token Precedence**: If the project maintains a `DESIGN.md`, custom theme configuration, or component library tokens, Impeccable must compose using those existing primitives.
+- **No Rogue Aesthetic Injections**: Never introduce uncoordinated font families, foreign color palettes, or arbitrary border radii that clash with the repository's design system.
+- **Extension Over Replacement**: If a visual constraint requires an unrepresented value, extend the existing token scale coherently rather than hardcoding disconnected styles.
+
+---
+
+## 4. Inputs to Provide
+
+Provide Impeccable with complete structural context to prevent blind styling:
+1. **Component Source Code**: Full TSX, JSX, HTML, or Vue/Svelte template.
+2. **Design System & Tokens**: Project `DESIGN.md`, detected CSS custom properties, Tailwind theme configuration, or component library tokens.
+3. **UX Contract & State Matrix**: The 6 view states (Empty, Loading, Populated, Partial, Error, Unavailable) and control states (Hover, Focus-visible, Active, Disabled, Busy) to ensure all states are visually styled.
+4. **Responsive Constraints**: Target breakpoints (mobile, tablet, desktop) and container query boundaries.
+5. **Rendered State / Preview**: URL, port, or local rendering command for the live application.
+
+---
+
+## 5. Outputs to Expect
 
 Expect structured visual refinement recommendations:
 - **Micro-Typography**: `line-height` (leading), `letter-spacing` (tracking), font weight balance, and measure (45–75 character line lengths).
@@ -41,7 +78,7 @@ Expect structured visual refinement recommendations:
 
 ---
 
-## 4. Actionable Findings
+## 6. Actionable Findings
 
 Findings are actionable if they improve visual craft without breaking functional UX:
 - **Spacing Inconsistencies**: Mixing ad-hoc padding values (`p-3`, `p-4`, `p-5`) where a strict rhythmic scale should apply.
@@ -52,7 +89,27 @@ Findings are actionable if they improve visual craft without breaking functional
 
 ---
 
-## 5. Severity Mapping & Critique Normalization
+## 7. Bounded Iteration Protocol
+
+To maintain agent economics and prevent infinite visual thrashing:
+
+```yaml
+Maximum:
+  2 refinement passes
+
+Stop when:
+  - No P0/P1 findings remain
+  - No obvious visual regressions
+  - No new issues introduced
+```
+
+1. **Pass 1 (Primary Refinement)**: Ingest rendered preview ➔ identify spacing, typographic, and responsive flaws ➔ apply fixes.
+2. **Pass 2 (Verification & Convergence)**: Re-render ➔ verify fixes resolved the issues without introducing regressions.
+3. **Circuit Breaker**: If visual issues persist after Pass 2, halt automated polishing, record remaining items as advisory `P3` findings, and request human feedback.
+
+---
+
+## 8. Severity Mapping & Critique Normalization
 
 All Impeccable findings must be normalized into the unified UX Critique Contract:
 
@@ -76,7 +133,7 @@ finding:
 
 ---
 
-## 6. When to Skip
+## 9. When to Skip
 
 Skip Impeccable to preserve token budget and speed when:
 - **Read-Only Flow Analysis (`/ux flow`)**: Information architecture and user journey phases prior to visual design.
@@ -86,7 +143,7 @@ Skip Impeccable to preserve token budget and speed when:
 
 ---
 
-## 7. Handling Unavailable Tooling
+## 10. Handling Unavailable Tooling
 
 If Impeccable is not installed in the agent host or environment:
 1. **Autonomous Graceful Fallback**: The `ux` skill applies its built-in visual guidelines ([`heuristics_rubric.md`](../references/heuristics_rubric.md) Heuristic 8: Aesthetic and Minimalist Design) and the 5-step design token hierarchy.

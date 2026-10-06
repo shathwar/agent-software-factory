@@ -237,6 +237,45 @@ Anti-slop & originality (Hallmark)
 - **Accessibility Over Polish**: Impeccable saying *"reduce contrast for softer aesthetic"* DOES NOT override WCAG stating *"text contrast must meet 4.5:1 minimum."*
 - **Token Consistency Over Arbitrary Styling**: Visual suggestions must reuse detected tokens rather than introducing arbitrary hex values or ad-hoc margins.
 
+### E. The Rendered UI Pass Workflow (Impeccable)
+
+Do not use Impeccable merely as another static AST checklist; its core value is **visual inspection + refinement** of rendered output:
+
+```text
+Generate (Synthesize component against UX contract & tokens)
+   ↓
+Run audit_ux.py (Deterministic static accessibility & token verification)
+   ↓
+Render application (Spin up dev server / render DOM snapshot or visual preview)
+   ↓
+Run Impeccable (Inspect rendered optical alignment, rhythm, responsive layout)
+   ↓
+Apply fixes (Surgical adjustments to CSS, tokens, spacing, typography)
+   ↓
+Render again (Confirm visual refinement and verify zero regressions)
+```
+
+### F. Bounded Iteration Protocol
+
+To maintain agent economics and prevent infinite visual thrashing:
+
+```yaml
+Maximum:
+  2 refinement passes
+
+Stop when:
+  - No P0/P1 findings remain
+  - No obvious visual regressions
+  - No new issues introduced
+```
+
+If visual issues persist after 2 passes, halt automated polishing, log remaining items as advisory `P3` findings, and request human feedback.
+
+### G. Preserving Established Design Systems
+
+Impeccable must respect the host project's architectural visual identity:
+> **Core Directive**: Prefer the project's existing `DESIGN.md`, design tokens, and component system over introducing new visual conventions. Do not let the visual refinement layer destroy the project's established language.
+
 - **Adapters**:
   - Detailed Impeccable specification: [integrations/impeccable.md](./integrations/impeccable.md)
   - Detailed Hallmark specification: [integrations/hallmark.md](./integrations/hallmark.md)
