@@ -32,4 +32,5 @@ dist/
 .ruff_cache/
 *.pyo
 *.pyd
-
+tests/browser/node_modules/
+tests/browser/artifacts/

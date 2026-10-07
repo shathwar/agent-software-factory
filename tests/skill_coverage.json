@@ -175,6 +175,26 @@
     }
   },
   "eval_cases": {
+    "review-seeded-controls": {
+      "reference": {"path": "tests/test_review_benchmark.py", "symbol": "ReviewBenchmarkTests.test_full_control_suite_and_withheld_answers"},
+      "kind": "static_fixture",
+      "scope": "Five executable defect seeds and clean controls; checks precision/recall scoring of externally adjudicated reports, not live agents."
+    },
+    "rubric-design-adversarial": {
+      "reference": {"path": "tests/test_rubric_adversarial.py", "symbol": "RubricAdversarialTests.test_design_keyword_stuffing_and_negation_cannot_certify_quality"},
+      "kind": "static_fixture",
+      "scope": "Keyword stuffing and negation cannot produce a semantic quality pass."
+    },
+    "rubric-evals-adversarial": {
+      "reference": {"path": "tests/test_rubric_adversarial.py", "symbol": "RubricAdversarialTests.test_eval_boolean_claims_leakage_and_nonfinite_numbers_fail"},
+      "kind": "static_fixture",
+      "scope": "Rejects boolean split/correction claims, development leakage, unpinned models and invalid calibration rates."
+    },
+    "ux-rendered": {
+      "reference": {"path": "tests/browser/evaluate.cjs", "text": "async function evaluate(browser, fixture, directory, mutation = '')"},
+      "kind": "rendered_browser",
+      "scope": "Runs six fixture states, keyboard recovery, focus, contrast and layout in a real browser with negative controls; not a general accessibility audit or an agent evaluation."
+    },
     "runner-receipts": {
       "reference": {
         "path": "tests/test_readiness.py",
@@ -517,7 +537,7 @@
         "symbol": "TestDesignFixturesAndRubric.test_l5_design_rubric_evaluation"
       },
       "kind": "static_fixture",
-      "scope": "Tests L5 architectural outcome quality across the 5 Systems Inquiry Domains."
+      "scope": "Tests topic-mention lint across the five inquiry domains; high scores remain inconclusive for semantic quality."
     },
     "spike-report-format": {
       "reference": {
@@ -631,7 +651,8 @@
             "design"
           ],
           "eval_cases": [
-            "design-rubric"
+            "design-rubric",
+            "rubric-design-adversarial"
           ],
           "gaps": [
             "Seeded domain cases are static rubric fixtures; live trace evaluator pending."
@@ -682,7 +703,7 @@
             "design-rubric"
           ],
           "gaps": [
-            "Semantic closure verified by rubric; automated domain solver pending."
+            "Keyword rubric cannot verify semantic closure; an independent assessment remains required."
           ]
         },
         {
@@ -1360,9 +1381,9 @@
             "Source-grounded candidate findings with concrete trigger and impact"
           ],
           "validators": [],
-          "eval_cases": [],
+          "eval_cases": ["review-seeded-controls"],
           "gaps": [
-            "No automated real-agent precision/recall benchmark for Spec Alignment."
+            "Seeded report benchmark exists; live-agent trials and semantic adjudication must be supplied separately for Spec Alignment."
           ]
         },
         {
@@ -1380,10 +1401,11 @@
           ],
           "validators": [],
           "eval_cases": [
-            "m-clean-review"
+            "m-clean-review",
+            "review-seeded-controls"
           ],
           "gaps": [
-            "No automated real-agent precision/recall benchmark for Correctness."
+            "Seeded report benchmark exists; live-agent trials and semantic adjudication must be supplied separately for Correctness."
           ]
         },
         {
@@ -1400,9 +1422,9 @@
             "Source-grounded candidate findings with concrete trigger and impact"
           ],
           "validators": [],
-          "eval_cases": [],
+          "eval_cases": ["review-seeded-controls"],
           "gaps": [
-            "No automated real-agent precision/recall benchmark for Concurrency / Safety."
+            "Seeded stale-writer benchmark exists; real-agent coverage of broader concurrency defects remains unmeasured."
           ]
         },
         {
@@ -1419,9 +1441,9 @@
             "Source-grounded candidate findings with concrete trigger and impact"
           ],
           "validators": [],
-          "eval_cases": [],
+          "eval_cases": ["review-seeded-controls"],
           "gaps": [
-            "No automated real-agent precision/recall benchmark for Failure / Resilience."
+            "Seeded retry-exhaustion benchmark exists; real-agent failure/resilience coverage remains unmeasured."
           ]
         },
         {
@@ -1495,9 +1517,9 @@
             "Source-grounded candidate findings with concrete trigger and impact"
           ],
           "validators": [],
-          "eval_cases": [],
+          "eval_cases": ["review-seeded-controls"],
           "gaps": [
-            "No automated real-agent precision/recall benchmark for Performance."
+            "Seeded round-trip benchmark exists; real-agent performance defect recall remains unmeasured."
           ]
         },
         {
@@ -1946,9 +1968,9 @@
             "Pinned model snapshot, binary rubric, few-shot critiques and JSON output"
           ],
           "validators": [],
-          "eval_cases": [],
+          "eval_cases": ["rubric-evals-adversarial"],
           "gaps": [
-            "No automated rubric compliance or model-pin enforcement."
+            "Spec lint rejects known judge configuration errors; actual model output compliance remains unmeasured."
           ]
         },
         {
@@ -1967,9 +1989,9 @@
             "Few-shot provenance and held-out execution count"
           ],
           "validators": [],
-          "eval_cases": [],
+          "eval_cases": ["rubric-evals-adversarial"],
           "gaps": [
-            "No split-overlap or held-out reuse guard."
+            "Supplied split IDs are checked for overlap; undisclosed reuse and near-duplicate content are not detected."
           ]
         },
         {
@@ -2162,10 +2184,11 @@
           ],
           "validators": [],
           "eval_cases": [
-            "ux-fixtures"
+            "ux-fixtures",
+            "ux-rendered"
           ],
           "gaps": [
-            "No rendered six-state/control-state coverage."
+            "Six view states and core control states are rendered for a bounded fixture; generated applications and compound widgets remain unmeasured."
           ]
         },
         {
@@ -2186,10 +2209,11 @@
             "ux-audit"
           ],
           "eval_cases": [
-            "ux-keyboard"
+            "ux-keyboard",
+            "ux-rendered"
           ],
           "gaps": [
-            "Source heuristics do not execute keyboard paths or measure rendered contrast."
+            "A bounded browser fixture exercises keyboard recovery, visible focus and opaque text contrast; broader assistive-technology and application coverage remains open."
           ]
         },
         {

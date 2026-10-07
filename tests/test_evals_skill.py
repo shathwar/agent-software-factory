@@ -193,9 +193,10 @@ class EvalsSkillTests(unittest.TestCase):
             },
             "production_monitoring": {
                 "observed_pass_rate": 0.88,
-                "claimed_success_rate": 0.85,
+                "claimed_success_rate": 0.9512195121951219,
+                "corrected_rate": 0.9512195121951219,
                 "rogan_gladen_corrected": True,
-                "ci_95": [0.81, 0.89],
+                "ci_95": [0.90, 0.99],
             },
         }
 

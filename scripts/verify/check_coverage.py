@@ -26,7 +26,7 @@ def find_repo_root(start: Path | None = None) -> Path:
 
 ROOT = find_repo_root()
 MANIFEST = ROOT / "tests/skill_coverage.json"
-CASE_KINDS = {"tool_unit", "lifecycle_integration", "static_fixture", "manual_agent"}
+CASE_KINDS = {"tool_unit", "lifecycle_integration", "static_fixture", "rendered_browser", "manual_agent"}
 
 
 class CoverageError(ValueError):
@@ -128,6 +128,9 @@ def validate_manifest(data: Any, root: Path = ROOT) -> None:
                 if entry["kind"] == "manual_agent":
                     require("text" in ref and Path(ref["path"]).suffix == ".md",
                             f"{identifier}: manual case must select documented acceptance criteria")
+                elif entry['kind'] == 'rendered_browser':
+                    require('text' in ref and Path(ref['path']).suffix == '.cjs',
+                            f'{identifier}: rendered browser case must select its executable JS check')
                 else:
                     require("symbol" in ref and ref["symbol"].split(".")[-1].startswith("test_"),
                             f"{identifier}: automated case must select a test function")

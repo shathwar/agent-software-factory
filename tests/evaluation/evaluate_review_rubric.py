@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""evaluate_review_rubric.py — L5 Outcome Quality Rubric Evaluator for Code Review Reports.
+"""Artifact lint for code review reports, with optional source-line grounding.
 
 Zero external dependencies (Python 3.10+ standard library).
 
-Evaluates whether a Code Review Report represents principal-level engineering review:
+Checks report structure and surface indicators. It does not measure defect recall
+or semantic correctness; use the seeded benchmark with separate adjudication.
 - Materiality: Substantive defects (correctness, concurrency, DDIA data invariants) vs bikeshedding.
 - Source Grounding: Verbatim code snippets, exact lines, valid repository-relative files.
 - Actionability: Drop-in replacement recommendations and concrete diff guidance.
@@ -41,12 +42,13 @@ class ReviewRubricReport:
     target_name: str
     overall_score: float
     passed: bool
-    status: str  # PASS, CONDITIONAL, FAIL
+    status: str  # PASS, INCONCLUSIVE, CONDITIONAL, FAIL (artifact lint only)
     domain_scores: Dict[str, ReviewRubricScore] = field(default_factory=dict)
     summary_notes: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "assessment_kind": "artifact_lint",
             "target_name": self.target_name,
             "overall_score": round(self.overall_score, 3),
             "passed": self.passed,
@@ -65,7 +67,7 @@ class ReviewRubricReport:
 
 
 class ReviewRubricEvaluator:
-    """Evaluates Code Review reports against principal systems engineering review standards."""
+    """Lints report artifacts; source checks do not establish semantic correctness."""
 
     MATERIAL_CATEGORIES = {
         "Correctness", "Concurrency", "Failure/Resilience",
@@ -75,7 +77,28 @@ class ReviewRubricEvaluator:
     def __init__(self, passing_threshold: float = 0.80) -> None:
         self.passing_threshold = passing_threshold
 
-    def evaluate_report(self, report_dict: Dict[str, Any], target_name: str = "ReviewReport") -> ReviewRubricReport:
+    def evaluate_report(self, report_dict: Dict[str, Any], target_name: str = "ReviewReport", repo_root=None) -> ReviewRubricReport:
+        from ship.tools.review import validate_report
+        errors = validate_report(report_dict)
+        if errors:
+            return ReviewRubricReport(target_name, 0.0, False, "FAIL", summary_notes=errors)
+        if report_dict['status'] != 'complete' or not report_dict['coverage']:
+            return ReviewRubricReport(target_name, 0.0, False, "FAIL",
+                                      summary_notes=['Incomplete or absent review coverage.'])
+        if repo_root is not None:
+            root = Path(repo_root).resolve()
+            for finding in report_dict['findings']:
+                path = root / finding['file']
+                if not path.resolve().is_relative_to(root) or not path.is_file():
+                    errors.append('Referenced source is missing or outside the repository.')
+                    continue
+                lines = path.read_text(encoding='utf-8').splitlines()
+                first, _, last = finding['line'].replace('L', '').partition('-')
+                start, end = int(first), int(last or first)
+                if end > len(lines) or ' '.join(finding['evidence'].split()) not in ' '.join('\n'.join(lines[start-1:end]).split()):
+                    errors.append('Evidence does not occur in the cited line range.')
+            if errors:
+                return ReviewRubricReport(target_name, 0.0, False, 'FAIL', summary_notes=errors)
         domain_scores: Dict[str, ReviewRubricScore] = {}
         findings = report_dict.get("findings", [])
         is_clean_review = len(findings) == 0
@@ -216,10 +239,12 @@ class ReviewRubricEvaluator:
 
         # Overall score
         overall = sum(dim.score * dim.weight for dim in domain_scores.values())
-        passed = overall >= self.passing_threshold and adj_pts >= 0.80
+        passed = overall >= self.passing_threshold and adj_pts >= 0.80 and repo_root is not None
 
         if passed:
             status_str = "PASS"
+        elif repo_root is None and overall >= self.passing_threshold:
+            status_str = "INCONCLUSIVE"
         elif overall >= 0.60:
             status_str = "CONDITIONAL"
         else:
@@ -227,9 +252,12 @@ class ReviewRubricEvaluator:
 
         notes = []
         if is_clean_review:
-            notes.append("Clean review verified: zero defects reported with complete coverage.")
+            notes.append("No findings reported; defect absence and coverage completeness are not verified.")
         else:
-            notes.append(f"Adjudicated {len(findings)} finding(s): {critical_count} CRITICAL, {high_count} HIGH.")
+            notes.append(f"Reported {len(findings)} finding(s): {critical_count} CRITICAL, {high_count} HIGH.")
+        notes.append('Artifact lint only; semantic correctness and defect recall require independent adjudication.')
+        if repo_root is None:
+            notes.append('Source files were not supplied; grounding is unverified.')
 
         return ReviewRubricReport(
             target_name=target_name,
@@ -243,7 +271,7 @@ class ReviewRubricEvaluator:
 
 def main() -> None:
     if len(sys.argv) < 2:
-        print("Usage: evaluate_review_rubric.py <report.json> [--threshold <float>] [--json]")
+        print("Usage: evaluate_review_rubric.py <report.json> [--repo-root <path>] [--threshold <float>] [--json]")
         sys.exit(1)
 
     file_path = Path(sys.argv[1])
@@ -260,7 +288,13 @@ def main() -> None:
 
     report_dict = json.loads(file_path.read_text(encoding="utf-8"))
     evaluator = ReviewRubricEvaluator(passing_threshold=threshold)
-    report = evaluator.evaluate_report(report_dict, target_name=file_path.name)
+    repo_root = None
+    if '--repo-root' in sys.argv:
+        index = sys.argv.index('--repo-root')
+        if index + 1 >= len(sys.argv):
+            raise SystemExit('--repo-root requires a path')
+        repo_root = Path(sys.argv[index + 1])
+    report = evaluator.evaluate_report(report_dict, target_name=file_path.name, repo_root=repo_root)
 
     if output_json:
         print(json.dumps(report.to_dict(), indent=2))

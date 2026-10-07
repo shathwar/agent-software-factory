@@ -117,6 +117,15 @@ class SkillCoverageTests(unittest.TestCase):
         self.data['eval_cases']['ux-fixtures']['kind'] = 'automated_agent'
         self.assert_invalid('unsupported eval kind')
 
+    def test_rendered_browser_cases_remain_component_evidence(self):
+        coverage.validate_manifest(self.data)
+        case = self.data['eval_cases']['ux-rendered']
+        self.assertEqual(case['kind'], 'rendered_browser')
+        report = coverage.inventory_report(self.data, 'ux')
+        self.assertTrue(all(s['agent_evaluation'] == 'missing' for s in report['steps']))
+        case['reference'] = {'path': 'tests/skill_evaluations.md', 'text': 'Behavioral Evaluation Cases'}
+        self.assert_invalid('executable JS check')
+
     def test_manual_cases_remain_manual_and_gaps_are_not_failures(self):
         coverage.validate_manifest(self.data)
         report = coverage.inventory_report(self.data, 'design')

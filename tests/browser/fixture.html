@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projects — rendered UX fixture</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #fff; color: #202124; font: 16px/1.5 Arial, sans-serif; }
+  main { width: min(640px, calc(100% - 32px)); margin: 24px auto; }
+  input { display: block; width: 100%; padding: 12px; margin: 8px 0 16px; font: inherit; }
+  button { min-width: 120px; min-height: 44px; padding: 10px 16px; background: #174ea6; color: #fff; border: 0; border-radius: 4px; font: inherit; cursor: pointer; }
+  button:hover { background: #123c80; }
+  button:active { transform: translateY(1px); }
+  :focus-visible { outline: 3px solid #202124; outline-offset: 3px; }
+  button:disabled { background: #666; cursor: not-allowed; }
+  #panel { min-height: 180px; padding: 16px; border: 1px solid #606770; margin-top: 24px; }
+  [hidden] { display: none !important; }
+  ul { padding-left: 24px; }
+</style>
+<main>
+  <h1>Projects</h1>
+  <label for="filter">Filter projects</label>
+  <input id="filter" value="Saved query">
+  <section id="panel" aria-label="Project results">
+    <p id="message" role="status"></p>
+    <ul id="items" hidden><li>Quarterly report</li><li>Account migration</li></ul>
+    <button id="action" type="button">Create project</button>
+  </section>
+</main>
+<script>
+  const params = new URLSearchParams(location.search);
+  const mutation = params.get('mutation');
+  const initial = params.get('state') || 'populated';
+  const message = document.getElementById('message');
+  const action = document.getElementById('action');
+  const items = document.getElementById('items');
+  function render(state) {
+    if (mutation === 'missing-error' && state === 'error') state = 'populated';
+    document.body.dataset.state = state;
+    const labels = {empty: 'No projects yet. Create your first project.', loading: 'Loading projects…',
+      populated: '2 projects', partial: 'Showing 2 of 10 projects. Data may be stale.',
+      error: 'Projects could not load. Your filter is saved.', unavailable: 'You need access. Contact your administrator.'};
+    message.textContent = labels[state];
+    message.setAttribute('role', state === 'error' ? 'alert' : 'status');
+    items.hidden = !['populated', 'partial'].includes(state);
+    action.textContent = state === 'loading' ? 'Loading…' : state === 'error' ? 'Retry' : state === 'unavailable' ? 'Access required' : 'Create project';
+    action.disabled = ['loading', 'unavailable'].includes(state);
+    action.setAttribute('aria-busy', String(state === 'loading'));
+    action.setAttribute('aria-disabled', String(action.disabled));
+  }
+  action.addEventListener('click', () => {
+    render('loading');
+    setTimeout(() => render('populated'), 120);
+  });
+  if (mutation === 'keyboard') action.tabIndex = -1;
+  if (mutation === 'contrast') message.style.color = '#eee';
+  if (mutation === 'overflow') document.querySelector('main').style.width = '900px';
+  if (mutation === 'focus') {
+    const style = document.createElement('style');
+    style.textContent = ':focus-visible {outline: none}';
+    document.head.append(style);
+  }
+  render(initial);
+</script>
+</html>

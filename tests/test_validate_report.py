@@ -178,8 +178,8 @@ class ReportTests(unittest.TestCase):
         # 1. Clean review
         clean_rep = {"reviewer": "judge", "status": "complete", "findings": [], "coverage": ["All files inspected."]}
         res_clean = evaluator.evaluate_report(clean_rep, "CleanReport")
-        self.assertTrue(res_clean.passed)
-        self.assertEqual(res_clean.status, "PASS")
+        self.assertFalse(res_clean.passed)  # Missing required report fields.
+        self.assertEqual(res_clean.status, "FAIL")
 
         # 2. Material defect report
         mat_rep = {
@@ -197,8 +197,8 @@ class ReportTests(unittest.TestCase):
             ]
         }
         res_mat = evaluator.evaluate_report(mat_rep, "MaterialReport")
-        self.assertTrue(res_mat.passed)
-        self.assertEqual(res_mat.status, "PASS")
+        self.assertFalse(res_mat.passed)  # Plausible prose is not a valid report.
+        self.assertEqual(res_mat.status, "FAIL")
 
         # 3. Bikeshedding report
         bike_rep = {
@@ -219,4 +219,3 @@ class ReportTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

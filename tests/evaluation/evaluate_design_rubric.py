@@ -3,8 +3,8 @@
 
 Zero external dependencies (Python 3.10+ standard library).
 
-Evaluates whether an ADR and OpenSpec change package represent sound systems
-engineering across the 5 Systems Inquiry Domains + Capability Closure.
+Inventories topic mentions in ADR/OpenSpec text. Scores are keyword lint only;
+high scores remain INCONCLUSIVE until independently assessed for correctness.
 
 Rubric Dimensions (0.0 - 1.0 each):
 1. State & Invariants: Single source of truth, ACID/eventual consistency, invariants.
@@ -37,12 +37,13 @@ class RubricEvaluationReport:
     target_name: str
     overall_score: float
     passed: bool
-    status: str  # PASS, CONDITIONAL, FAIL
+    status: str  # INCONCLUSIVE, CONDITIONAL, FAIL
     domain_scores: Dict[str, DomainScore] = field(default_factory=dict)
     summary_notes: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "assessment_kind": "keyword_lint",
             "target_name": self.target_name,
             "overall_score": round(self.overall_score, 3),
             "passed": self.passed,
@@ -61,7 +62,7 @@ class RubricEvaluationReport:
 
 
 class DesignRubricEvaluator:
-    """Evaluates ADR text and OpenSpec files against principal engineering outcome standards."""
+    """Inventories topic mentions; cannot establish architectural correctness."""
 
     def __init__(self, passing_threshold: float = 0.80) -> None:
         self.passing_threshold = passing_threshold
@@ -206,17 +207,19 @@ class DesignRubricEvaluator:
         total_weight = sum(ds.weight for ds in domain_scores.values())
         overall_score = sum(ds.score * ds.weight for ds in domain_scores.values()) / total_weight
 
-        passed = overall_score >= self.passing_threshold
-        if passed:
-            status = "PASS"
+        # Keywords measure topic mentions, not whether the proposed design works.
+        # Even a perfect score needs an independent semantic assessment.
+        passed = False
+        if overall_score >= self.passing_threshold:
+            status = "INCONCLUSIVE"
         elif overall_score >= 0.60:
             status = "CONDITIONAL"
         else:
             status = "FAIL"
 
         notes = []
-        if passed:
-            notes.append("Design demonstrates robust systems engineering and complete capability closure.")
+        if status == "INCONCLUSIVE":
+            notes.append("Topic coverage meets the lint threshold; architectural correctness and capability closure are unverified.")
         else:
             notes.append(f"Design score ({overall_score:.2f}) falls below required threshold ({self.passing_threshold:.2f}).")
             for ds in domain_scores.values():

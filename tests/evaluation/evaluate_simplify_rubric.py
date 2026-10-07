@@ -41,7 +41,7 @@ class SimplifyRubricReport:
     target_name: str
     overall_score: float
     passed: bool
-    status: str  # PASS, CONDITIONAL, FAIL
+    status: str  # PASS, INCONCLUSIVE, CONDITIONAL, FAIL
     domain_scores: Dict[str, SimplifyRubricScore] = field(default_factory=dict)
     summary_notes: List[str] = field(default_factory=list)
 
@@ -76,6 +76,9 @@ class SimplifyRubricEvaluator:
         self.passing_threshold = passing_threshold
 
     def evaluate_code(self, code_text: str, target_name: str = "SourceFile") -> SimplifyRubricReport:
+        if not code_text.strip():
+            return SimplifyRubricReport(target_name, 0.0, False, 'INCONCLUSIVE',
+                                        summary_notes=['No source supplied; absence of detected smells is not evidence of a working solution.'])
         domain_scores: Dict[str, SimplifyRubricScore] = {}
 
         # 1. Complexity Reduction (weight: 0.25)

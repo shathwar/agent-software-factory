@@ -1,0 +1,6 @@
+{
+  "name": "skills-rendered-ux-evaluation",
+  "private": true,
+  "scripts": {"test": "node evaluate.cjs"},
+  "devDependencies": {"playwright": "1.62.1"}
+}

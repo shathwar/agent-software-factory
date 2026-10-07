@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import json
+import math
 from pathlib import Path
 import re
 import sys
@@ -47,6 +48,7 @@ class EvalsRubricReport:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "assessment_kind": "spec_lint",
             "target_name": self.target_name,
             "overall_score": round(self.overall_score, 3),
             "passed": self.passed,
@@ -75,6 +77,14 @@ class EvalsRubricEvaluator:
         eval_spec: Dict[str, Any],
         target_name: str = "EvalsSuite"
     ) -> EvalsRubricReport:
+        if not isinstance(eval_spec, dict):
+            return EvalsRubricReport(target_name, 0.0, False, 'FAIL', summary_notes=['Expected an evaluation spec object.'])
+        evaluators = eval_spec.get('evaluators', [])
+        if (not isinstance(evaluators, list) or
+                any(not isinstance(e, dict) or any(not isinstance(e.get(k, ''), str)
+                    for k in ('type', 'name', 'description', 'prompt', 'rubric', 'model')) for e in evaluators) or
+                any(not isinstance(eval_spec.get(k, {}), dict) for k in ('splits', 'calibration', 'production_monitoring'))):
+            return EvalsRubricReport(target_name, 0.0, False, 'FAIL', summary_notes=['Malformed evaluators or evidence sections.'])
         domain_scores: Dict[str, EvalsRubricScore] = {}
 
         # 1. Code-First Priority (weight: 0.20)
@@ -132,9 +142,12 @@ class EvalsRubricEvaluator:
                     flawed_judges += 1
                 # Check for pinned model
                 model = j.get("model", "")
-                if "latest" in model.lower() or (model in ["gpt-4o", "gemini-1.5-pro", "claude-3-5-sonnet"]):
+                if not re.search(r"(?:\d{4}-\d{2}-\d{2}|\d{8})$", model):
                     bjp_feedback.append(f"Judge '{j.get('name')}' uses unpinned model '{model}'. Pin snapshot date.")
-                    flawed_judges += 0.5
+                    flawed_judges += 1
+                if not (re.search(r'\bpass\b', prompt_lower) and re.search(r'\bfail\b', prompt_lower)):
+                    bjp_feedback.append('Both binary output labels Pass and Fail must be specified.')
+                    flawed_judges += 1
 
             if flawed_judges == 0:
                 bjp_pts = 1.0
@@ -153,16 +166,15 @@ class EvalsRubricEvaluator:
         sir_feedback = []
         sir_pts = 0.0
         split = eval_spec.get("splits", {})
-        train_ids = set(split.get("train", []) or split.get("few_shot", []))
-        test_ids = set(split.get("test", []) or split.get("held_out", []))
+        partitions = [split.get(k, []) for k in ('train', 'few_shot', 'dev', 'test', 'held_out')]
+        valid_ids = all(isinstance(ids, list) and all(isinstance(x, str) and x.strip() for x in ids)
+                        and len(ids) == len(set(ids)) for ids in partitions)
+        train_ids = set().union(*partitions[:3]) if valid_ids else set()
+        test_ids = set().union(*partitions[3:]) if valid_ids else set()
 
-        if not train_ids and not test_ids:
-            # Check if dataset isolation is documented
-            if eval_spec.get("splits_isolated") is True:
-                sir_pts = 1.0
-            else:
-                sir_feedback.append("Dataset splits (train/dev vs held-out test) not specified.")
-                sir_pts = 0.4
+        if not valid_ids or not train_ids or not test_ids:
+            sir_feedback.append('Provide nonempty development and held-out sample IDs without duplicates; a boolean isolation claim is insufficient.')
+            sir_pts = 0.0
         else:
             leakage = train_ids.intersection(test_ids)
             if leakage:
@@ -189,7 +201,7 @@ class EvalsRubricEvaluator:
         if accuracy_only:
             stat_feedback.append("Only raw accuracy reported without TPR/TNR. Vulnerable to imbalanced test set bias.")
             stat_pts = 0.2
-        elif tpr is not None and tnr is not None:
+        elif all(type(x) in (int, float) and math.isfinite(x) and 0 <= x <= 1 for x in (tpr, tnr)):
             if tpr >= 0.80 and tnr >= 0.80:
                 stat_pts = 1.0
                 if tpr >= 0.90 and tnr >= 0.90:
@@ -203,8 +215,8 @@ class EvalsRubricEvaluator:
                 stat_pts = 0.3
                 stat_feedback.append(f"Uncalibrated evaluator: TPR={tpr:.1%}, TNR={tnr:.1%}.")
         else:
-            stat_feedback.append("Calibration metrics (TPR and TNR) missing.")
-            stat_pts = 0.3
+            stat_feedback.append("Calibration metrics must be finite numbers between zero and one; missing values and booleans are not measurements.")
+            stat_pts = 0.0
 
         domain_scores["statistical_rigor"] = EvalsRubricScore(
             name="Statistical Rigor (TPR/TNR)",
@@ -229,10 +241,21 @@ class EvalsRubricEvaluator:
                 rg_feedback.append("Naive prevalence claim: Raw observed pass rate reported as true success rate without Rogan-Gladen correction.")
                 rg_pts = 0.1
             elif corrected is True or prod.get("corrected_rate") is not None:
-                rg_pts = 1.0
-                if not prod.get("ci_95"):
-                    rg_feedback.append("Bootstrap 95% confidence interval missing for corrected prevalence.")
-                    rg_pts = 0.85
+                rate = prod.get('corrected_rate')
+                ci = prod.get('ci_95')
+                def finite_rate(x):
+                    return type(x) in (int, float) and math.isfinite(x) and 0 <= x <= 1
+                valid = all(finite_rate(x) for x in (obs, rate, tpr, tnr))
+                valid = valid and tpr + tnr > 1
+                if valid:
+                    expected = (obs + tnr - 1) / (tpr + tnr - 1)
+                    valid = 0 <= expected <= 1 and math.isclose(rate, expected, abs_tol=1e-6)
+                valid = valid and isinstance(ci, list) and len(ci) == 2 and all(finite_rate(x) for x in ci) and ci[0] <= rate <= ci[1]
+                if claimed is not None:
+                    valid = valid and finite_rate(claimed) and math.isclose(claimed, rate, abs_tol=1e-6)
+                rg_pts = 1.0 if valid else 0.0
+                if not valid:
+                    rg_feedback.append('Correction needs a consistent numeric rate and interval; correction flags alone are not evidence.')
             else:
                 rg_pts = 0.5
                 rg_feedback.append("Production prevalence estimation lacks bias correction details.")
@@ -250,7 +273,7 @@ class EvalsRubricEvaluator:
         )
         status = "PASS" if passed else ("CONDITIONAL" if overall >= 0.65 else "FAIL")
 
-        summary_notes = []
+        summary_notes = ['Spec lint only; supplied calibration metrics and labels are not independently verified.']
         for s in domain_scores.values():
             if s.score < 0.70:
                 summary_notes.append(f"{s.name} scored low ({s.score:.2f}): " + "; ".join(s.feedback))

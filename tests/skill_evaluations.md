@@ -1,5 +1,10 @@
 # Behavioral Evaluation Cases & Pilot Benchmarks
 
+For the executable seeded review benchmark, rendered browser checks, and rubric
+negative controls, see the [outcome evaluation guide](evaluation/README.md).
+Those checks retain their fixture/measurement scope; they do not replace the
+live-agent cases below.
+
 These cases evaluate agent decisions, boundary respect, and judgment in realistic scenarios. They serve as acceptance criteria for staged manual evaluations and pilot team benchmarking, distinct from the automated fast unit-test CI job (`./scripts/test/test_full.sh`).
 
 Run them in a disposable fixture repository with the skill available by absolute path. Use a fresh agent context for each case, providing only the request and raw fixture. Keep expected outcomes with the evaluator. Replace provider access with a recording stub; never post to a live PR for a test.

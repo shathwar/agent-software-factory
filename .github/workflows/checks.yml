@@ -16,3 +16,24 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Run test suite
         run: ./scripts/test/test_full.sh
+  rendered-ux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser test dependencies
+        working-directory: tests/browser
+        run: npm ci
+      - name: Install Chromium
+        working-directory: tests/browser
+        run: npx playwright install --with-deps chromium
+      - name: Run rendered UX checks and negative controls
+        working-directory: tests/browser
+        run: npm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rendered-ux-evidence
+          path: tests/browser/artifacts/

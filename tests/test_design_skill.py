@@ -260,9 +260,9 @@ class TestDesignFixturesAndRubric(unittest.TestCase):
     def test_l5_design_rubric_evaluation(self):
         evaluator = DesignRubricEvaluator(passing_threshold=0.80)
         report = evaluator.evaluate_text(VALID_CANONICAL_ADR, "", "TestADR")
-        self.assertTrue(report.passed, f"Expected L5 pass, got score {report.overall_score:.2f} notes: {report.summary_notes}")
+        self.assertFalse(report.passed)  # Topic mentions cannot certify architecture.
         self.assertGreaterEqual(report.overall_score, 0.80)
-        self.assertEqual(report.status, "PASS")
+        self.assertEqual(report.status, "INCONCLUSIVE")
 
         # Test shallow/poor ADR
         shallow_adr = "# ADR-0001: Just Use Mongo\n\nWe decided to use MongoDB because it is easy."
