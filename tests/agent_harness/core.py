@@ -97,11 +97,11 @@ class Trace:
         return m.group(1).upper() if m else None
 
     def has_evidence_block(self) -> bool:
-        """True when the trace contains at least one verbatim code evidence block."""
+        """True when output contains a code fence; its contents are not verified."""
         return bool(re.search(r"```\w*\n.+?```", self.raw, re.DOTALL))
 
     def repair_mutations(self) -> List[str]:
-        """Return file paths mentioned in `+++ b/` diff lines (files the agent edited)."""
+        """Return paths claimed in output diff lines, not observed filesystem edits."""
         return re.findall(r"\+\+\+ b/(.+)", self.raw)
 
     def has_conversational_filler(self) -> bool:
@@ -171,7 +171,7 @@ class Scenario:
     # Human-readable identifiers
     skill: str                        # "review" | "debug" | "tdd" | "design"
     id: str                           # e.g. "review-001-clean-repo-finds-defect"
-    description: str                  # One-line explanation of what this proves
+    description: str                  # One-line description of the expected response
 
     # Input to the agent
     prompt: str                       # The exact prompt the agent receives
@@ -180,7 +180,7 @@ class Scenario:
     # Behavioural expectations
     checks: List[BehaviourCheck] = field(default_factory=list)
 
-    # Stub response used when AGENT_HARNESS_MODE=stub (CI without LLM keys)
+    # Stub response used by default, even when credentials exist
     stub_response: str = ""
 
     # Metadata
@@ -247,8 +247,8 @@ class AgentRunner:
     Invokes an AI agent against a prompt and captures the output as a Trace.
 
     Execution modes (controlled by ``AGENT_HARNESS_MODE`` env var):
-      - ``live``  (default when key present) – calls ``agy`` CLI
-      - ``stub``  – returns the scenario's ``stub_response``; no API calls
+      - ``live``  – calls ``agy`` CLI; checks captured output text
+      - ``stub``  (default regardless of credentials) – canned responses; no API calls
       - ``anthropic`` – calls Anthropic API directly via Python SDK
     """
 
@@ -419,18 +419,23 @@ class RegressionSuite:
         for scenario in targets:
             results.append(self._run_one(scenario))
 
-        passed = all(r.passed for r in results)
+        passed = bool(results) and all(r.passed for r in results)
         total = len(results)
         n_passed = sum(1 for r in results if r.passed)
 
         return {
+            "mode": self.runner.mode,
+            "assessment_kind": "stub_response_contract" if self.runner.mode == "stub" else "agent_output_contract",
+            "behavior_verified": False,
+            "status": ("pass" if passed else "fail") if total else "inconclusive",
             "passed": passed,
             "total": total,
             "n_passed": n_passed,
             "n_failed": total - n_passed,
-            "pass_rate": n_passed / total if total else 1.0,
+            "pass_rate": n_passed / total if total else None,
             "results": results,
-            "summary": self._format_summary(results),
+            "summary": f"Mode: {self.runner.mode}; output predicates only; behavior is not independently verified.\n"
+                       + self._format_summary(results),
         }
 
     def _run_one(self, scenario: Scenario) -> RunResult:
@@ -444,6 +449,10 @@ class RegressionSuite:
 
             trace = self.runner.run(scenario, workdir=workdir)
             failures: List[str] = []
+            if trace.exit_code != scenario.expected_exit_code:
+                failures.append(f"Expected exit code {scenario.expected_exit_code}, got {trace.exit_code}")
+            if not scenario.checks:
+                failures.append("No output checks configured")
             n_passed = 0
 
             for check in scenario.checks:

@@ -17,9 +17,9 @@ from uuid import uuid4
 from .events import EventLogger
 from .ledger import FileLedgerStore
 from .paths import repository_path, validate_change_id
-from .step_catalog import SKILLS
+from .step_catalog import OBSERVATION_CONTRACT, SKILLS
 
-STATUSES = ('unobserved', 'started', 'completed', 'failed', 'skipped')
+STATUSES = ('unobserved', 'started', *OBSERVATION_CONTRACT['terminal_statuses'])
 EVENTS = {status: 'STEP_' + status.upper() for status in STATUSES[1:]}
 
 
@@ -195,7 +195,8 @@ class StepTrace:
                     'model': run.payload['model'], 'skills': run.payload['skills'], 'steps': steps,
                     'counts': counts, 'evidence_issues': issues,
                     'fully_observed': counts['unobserved'] == 0 and counts['started'] == 0,
-                    'capture_kind': 'reported',
+                    'capture_kind': OBSERVATION_CONTRACT['capture_kind'],
+                    'observation_contract': deepcopy(OBSERVATION_CONTRACT),
                     'limitations': ['Recorded completion is not independent verification of behavior or quality.',
                                     'Timestamps establish recording order, not uninstrumented edit/tool chronology.',
                                     'Interrupted attempts remain started; evidence contents are not stored.']}

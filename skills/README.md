@@ -22,7 +22,7 @@ skills/<skill-name>/
 1. **`SKILL.md` (Root Manifest)**:
    - Includes YAML frontmatter with `name` and `description` triggering the skill.
    - Declares `<hard_constraints>` that the model must not violate.
-   - Defines a `<turn_contract>` checklist verified before concluding the agent turn.
+   - Defines a `<turn_contract>` checklist the agent is instructed to verify before concluding; this is not automatic behavioral verification.
    - Documents core operating workflows, CLI commands, and links to references.
 
 2. **`VERSION`**:
@@ -39,11 +39,11 @@ skills/<skill-name>/
 
 ---
 
-## The 8 Production Skills
+## The 9 Production Skills
 
 | Skill | Directory | Triggers | Primary Agents | Specialist Script |
 |---|---|---|---|---|
-| **Design** | [`design/`](./design/) | `/design`, `design`, `architecture`, `grill me` | `principal_architect` | *(Autonomous file & schema inspection)* |
+| **Design** | [`design/`](./design/) | `/design`, `design`, `architecture`, `grill me` | `principal_architect` | `scripts/validate_design.py` |
 | **Spike** | [`spike/`](./spike/) | `/spike`, `spike`, `benchmark`, `proof of concept` | `spike_prototyper` | `scripts/run_spike.py` |
 | **TDD** | [`tdd/`](./tdd/) | `/tdd`, `tdd`, `red-green-refactor`, `tests first` | `test_driver`, `simplify_implementer`, `code_refactorer` | `scripts/verify_tdd.py` |
 | **Simplify** | [`simplify/`](./simplify/) | `/simplify`, `simplify`, `yagni`, `do less` | `simplify_implementer` | `scripts/scan_debt.py` |
@@ -51,6 +51,7 @@ skills/<skill-name>/
 | **Ship** | [`ship/`](./ship/) | `/ship`, `ship`, `lifecycle`, `full lifecycle` | `lifecycle_orchestrator` | `scripts/lifecycle/*.py` |
 | **Evals** | [`evals/`](./evals/) | `/evals`, `evals`, `eval`, `ai evals`, `error discovery` | `error_analyst`, `eval_auditor`, `judge_engineer`, `calibration_statistician` | `scripts/score_calibration.py` |
 | **Debug** | [`debug/`](./debug/) | `/debug`, `debug`, `/fix`, `fix`, `bugfix`, `hotfix` | `root_cause_investigator`, `reproduction_specialist`, `surgical_fixer` | `scripts/verify_fix.py` |
+| **UX** | [`ux/`](./ux/) | `/ux`, `ux`, `ui`, `a11y` | See skill workflow | `scripts/audit_ux.py` (source heuristics) |
 
 ---
 
@@ -64,7 +65,7 @@ Agent platforms discover skills through standard directory conventions:
 
 To link all skills globally:
 ```bash
-for skill in design spike tdd simplify review ship evals debug; do
+for skill in design spike tdd simplify review ship evals debug ux; do
   ln -sfn "$(pwd)/skills/$skill" "$HOME/.gemini/config/skills/$skill"
 done
 ```
@@ -74,7 +75,7 @@ done
 - **Workspace Local**: `<workspace-root>/.claude/skills/<skill-name>/`
 
 ```bash
-for skill in design spike tdd simplify review ship evals debug; do
+for skill in design spike tdd simplify review ship evals debug ux; do
   ln -sfn "$(pwd)/skills/$skill" "$HOME/.claude/skills/$skill"
 done
 ```
@@ -83,7 +84,7 @@ done
 
 ## Zero-Drift Parity with `src/ship`
 
-All Python automation scripts inside `skills/*/scripts/` are maintained in 100% byte-for-byte parity with the packaged `src/ship/` library.
+The lifecycle modules and six mapped specialist tools (design, simplify, TDD, review, spike, UX) maintain byte-for-byte parity with `src/ship/`. Other standalone scripts are outside this mapping. See `scripts/verify/sync_parity.py` for the authoritative mappings.
 
 Parity is enforced by automated test guards (`tests/test_packaging.py`) and managed via the sync engine:
 

@@ -27,6 +27,14 @@ def find_repo_root(start: Path | None = None) -> Path:
 ROOT = find_repo_root()
 MANIFEST = ROOT / "tests/skill_coverage.json"
 CASE_KINDS = {"tool_unit", "lifecycle_integration", "static_fixture", "rendered_browser", "manual_agent"}
+OBSERVATION_CONTRACT = {
+    "capture_kind": "reported",
+    "terminal_statuses": ["completed", "failed", "skipped"],
+    "completion_is_verified": False,
+    "recording_order_is_execution_order": False,
+    "affects_delivery_gates": False,
+    "fully_observed_meaning": "Every catalog step has a terminal observation; failures and skips count. This is not success.",
+}
 
 
 class CoverageError(ValueError):
@@ -202,6 +210,7 @@ def inventory_report(data: dict, skill_name: str | None = None) -> dict:
             steps.append({**step, "agent_evaluation": "manual_only" if "manual_agent" in kinds else "missing"})
         summaries[name] = summary
     return {"inventory_status": "valid", "scope": data["scope"], "limitations": data["limitations"],
+            "observation_contract": OBSERVATION_CONTRACT.copy(),
             "skills": summaries, "total_steps": len(steps), "steps": steps}
 
 
@@ -242,7 +251,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                   f"{summary['with_automated_component_cases']:>16} {summary['with_manual_agent_cases']:>13} "
                   f"{summary['with_gaps']:>5}")
         print("Counts are steps with mapped checks, not executed tests or pass rates.")
-        print("Automated real-agent behavioral coverage: not registered.")
+        print("Host-observed agent behavior: not registered. The response harness defaults to stubs.")
         if args.gaps:
             for step in report["steps"]:
                 print(f"{step['id']} ({step['applies_when']}): {' '.join(step['gaps'])}")

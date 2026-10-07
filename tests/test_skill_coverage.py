@@ -9,6 +9,8 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,6 +35,35 @@ class SkillCoverageTests(unittest.TestCase):
         coverage.validate_manifest(self.data)
         self.assertEqual(set(self.data['skills']),
                          {p.parent.name for p in (ROOT / 'skills').glob('*/SKILL.md')})
+
+    def test_runtime_and_inventory_share_observation_semantics(self):
+        from ship.lifecycle.step_catalog import OBSERVATION_CONTRACT
+        from ship.lifecycle.step_tracing import STATUSES
+        report = coverage.inventory_report(self.data)
+        self.assertEqual(report['observation_contract'], OBSERVATION_CONTRACT)
+        self.assertEqual(list(STATUSES[2:]), OBSERVATION_CONTRACT['terminal_statuses'])
+        self.assertEqual(OBSERVATION_CONTRACT['capture_kind'], 'reported')
+
+    def test_generated_readme_drift_is_rejected(self):
+        with patch.dict(sys.modules, {'check_coverage': coverage}):
+            catalog_spec = importlib.util.spec_from_file_location(
+                'build_catalog_test', ROOT / 'scripts/verify/build_step_catalog.py')
+            generator = importlib.util.module_from_spec(catalog_spec)
+            catalog_spec.loader.exec_module(generator)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            readme = root / 'README.md'
+            readme.write_text((ROOT / 'README.md').read_text())
+            for path in ('src/ship/lifecycle/step_catalog.py', 'skills/ship/scripts/lifecycle/step_catalog.py'):
+                target = root / path
+                target.parent.mkdir(parents=True)
+                target.write_text(generator.render_catalog())
+            with patch.object(generator, 'ROOT', root), patch.object(sys, 'argv', ['catalog', '--check']):
+                self.assertEqual(generator.main(), 0)
+                readme.write_text(readme.read_text().replace('| design |', '| stale-design |'))
+                with redirect_stdout(io.StringIO()) as output:
+                    self.assertEqual(generator.main(), 1)
+                self.assertIn('README.md coverage summary', output.getvalue())
 
     def test_deleted_skill_or_contract_mapping_fails(self):
         del self.data['skills']['debug']

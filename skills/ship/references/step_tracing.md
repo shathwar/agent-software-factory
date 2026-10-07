@@ -37,4 +37,6 @@ If the tracing runtime is unavailable, continue the authorized skill workflow an
 
 ## Maintaining the catalog
 
-The canonical IDs and evidence expectations live in `tests/skill_coverage.json`. After reviewing a skill change, update its coverage source digest and run `python3 scripts/verify/build_step_catalog.py`. This generates a Python catalog shipped with both the package and standalone lifecycle scripts; consumer projects do not need the source repository or its test files. `--check` and the test suite reject catalog drift. Do not remove behavioral coverage gaps merely because a step can now be recorded.
+The canonical IDs and evidence expectations live in `tests/skill_coverage.json`. After reviewing a skill change, update its coverage source digest and run `python3 scripts/verify/build_step_catalog.py`. This generates a Python catalog shipped with both the package and standalone lifecycle scripts, plus the README coverage table. Consumer projects do not need the source repository or its test files. `--check` and the test suite reject catalog and README drift. Do not remove behavioral coverage gaps merely because a step can now be recorded.
+
+Coverage JSON reports and runtime step reports expose the same `observation_contract`: caller-reported capture, terminal statuses, and explicit limits on verification, chronology, and delivery gates. Its source is `scripts/verify/check_coverage.py`; the catalog generator includes it in both runtime distributions. This describes the reporter's semantics, not an additional attestation about a historical run.

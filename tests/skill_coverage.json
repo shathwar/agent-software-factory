@@ -3,7 +3,7 @@
   "scope": "Required workflow steps and turn contracts for the nine repository skills; conditional steps apply only in their stated modes.",
   "limitations": [
     "This is a coverage inventory, not a record of executed evaluations or a readiness score.",
-    "No automated real-agent behavioral evaluator is registered. Unit, integration, and static fixture checks do not establish agent adherence.",
+    "The response harness defaults to canned stub responses; optional model/CLI modes check output predicates without independently observing tool/edit behavior. These checks are not registered as host-observed agent adherence.",
     "Correlated step start/result recording is available through AgentFlow, but capture is caller-reported and requires runtime use; expected evidence is not independently verified."
   ],
   "source_digests": {
@@ -757,7 +757,7 @@
             "design-digest"
           ],
           "gaps": [
-            "Semantic completeness validated deterministically; live LLM generation pending."
+            "The package validator checks structure and required text; semantic completeness and agent generation are not independently verified."
           ]
         }
       ]
@@ -807,7 +807,7 @@
             "spike-isolation-leakage"
           ],
           "gaps": [
-            "Production path isolation audited deterministically; runtime compose monitoring pending."
+            "Static isolation checks do not establish runtime containment; host process and compose monitoring remain missing."
           ]
         },
         {
@@ -857,7 +857,7 @@
             "spike-report-format"
           ],
           "gaps": [
-            "Anti-contradiction verified deterministically; live LLM verdict trace pending."
+            "Rubric fixtures check verdict patterns; semantic consistency and live execution remain unverified."
           ]
         },
         {
@@ -881,7 +881,7 @@
             "spike-rubric"
           ],
           "gaps": [
-            "Configuration snippet extraction validated by rubric; automated AST injection pending."
+            "Rubric checks recognize configuration patterns; correct extraction and application are not independently verified."
           ]
         },
         {
@@ -1039,7 +1039,7 @@
           "validators": [],
           "eval_cases": [],
           "gaps": [
-            "No observation or eval of the doubt cycle."
+            "Caller-reported step observations are available; doubt-cycle execution and semantic quality are not independently evaluated."
           ]
         },
         {
@@ -1612,7 +1612,7 @@
             "runner-receipts"
           ],
           "gaps": [
-            "Manual cases exist; real-agent repair, resume and stopping behavior remain unautomated."
+            "Manual cases and harness response predicates exist; actual repair mutations, resumption and stopping behavior are not independently observed."
           ]
         },
         {
@@ -2694,7 +2694,7 @@
             "dirty-evidence"
           ],
           "gaps": [
-            "Engine checks are covered; missing step telemetry still prevents a full execution history."
+            "Engine checks and caller-reported step history are available; uninstrumented tool/edit chronology and omitted observations remain unverifiable."
           ]
         },
         {

@@ -158,6 +158,8 @@ class StepTraceTests(unittest.TestCase):
         self.assertEqual(report['counts']['completed'], 0)
         self.assertEqual(report['counts']['failed'], 1)
         self.assertEqual(report['counts']['skipped'], 5)
+        self.assertFalse(report['observation_contract']['completion_is_verified'])
+        self.assertFalse(report['observation_contract']['affects_delivery_gates'])
 
     def test_absent_provenance_stays_unknown_and_empty_selection_rejected(self):
         report = self.trace.report(self.run)

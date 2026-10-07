@@ -1,13 +1,14 @@
 """
 test_agent_regression.py
 ========================
-**The real agent regression harness.** Proves "when an agent uses this skill,
-does it actually behave as intended?" — not "does the validator script work?"
+Response-contract regression checks. Default stub runs validate predicates against
+canned outputs, not agent adherence. Optional model/CLI runs check captured text;
+they do not independently observe tool calls, edits, or workflow chronology.
 
 Architecture
 ------------
 - In CI (default):          AGENT_HARNESS_MODE=stub  → fast, no LLM calls
-- With LLM key (nightly):   AGENT_HARNESS_MODE=anthropic → real Anthropic API
+- Explicit API mode:       AGENT_HARNESS_MODE=anthropic → Anthropic text response
 - Full live integration:    AGENT_HARNESS_MODE=live → agy CLI
 
 Test structure
@@ -17,8 +18,8 @@ Each skill has a dedicated TestCase subclass.  Every scenario maps to a single
 
 Release gate
 ------------
-The full suite IS the release gate.  It is registered in pytest.ini_options as
-a required path so it cannot be silently excluded from CI.
+The default Python CI suite includes these stub checks through unittest discovery.
+It is not a live-agent release gate; non-stub modes must be selected explicitly.
 """
 
 from __future__ import annotations
@@ -53,9 +54,8 @@ def _make_runner() -> AgentRunner:
 
 class TestReviewSkillRegression(unittest.TestCase):
     """
-    Asserts that the /review skill behaves correctly across 12 representative
-    scenarios.  Every check corresponds to a hard constraint or explicit
-    behavioural guarantee from the SKILL.md.
+    Checks review output predicates for representative skill requirements.
+    Passing canned responses does not establish those behaviors in an agent.
     """
 
     @classmethod

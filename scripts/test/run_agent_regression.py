@@ -2,10 +2,10 @@
 """
 scripts/test/run_agent_regression.py
 ====================================
-CLI runner and release gate for the Real Agent Regression Harness.
+CLI runner for response-contract regression checks.
 
 Evaluates:
-  "When an agent uses this skill, does it actually behave as intended?"
+  Output predicates; default stub mode does not measure agent adherence.
 
 Usage:
   python3 scripts/test/run_agent_regression.py [--skill review|debug|tdd|design|all]
@@ -31,6 +31,7 @@ if str(ROOT) not in sys.path:
 from tests.agent_harness.core import AgentRunner, RegressionSuite  # noqa: E402
 from tests.agent_harness.scenarios_debug import DEBUG_SCENARIOS  # noqa: E402
 from tests.agent_harness.scenarios_design import DESIGN_SCENARIOS  # noqa: E402
+from tests.agent_harness.scenarios_eval_cases import TWELVE_BEHAVIORAL_SCENARIOS  # noqa: E402
 from tests.agent_harness.scenarios_review import REVIEW_SCENARIOS  # noqa: E402
 from tests.agent_harness.scenarios_tdd import TDD_SCENARIOS  # noqa: E402
 
@@ -39,17 +40,19 @@ ALL_SCENARIOS = {
     "debug": DEBUG_SCENARIOS,
     "tdd": TDD_SCENARIOS,
     "design": DESIGN_SCENARIOS,
+    "eval12": TWELVE_BEHAVIORAL_SCENARIOS,
 }
 
 
 def format_markdown_report(report: dict, mode: str) -> str:
     lines = [
-        "# 🛡️ Real Agent Regression Harness Report",
+        "# Response Contract Report",
         "",
         f"- **Execution Mode**: `{mode}`",
-        f"- **Status**: {'✅ PASSED (Release Gate Approved)' if report['passed'] else '❌ FAILED (Release Gate Blocked)'}",
+        f"- **Assessment**: `{report['assessment_kind']}`; behavior is not independently verified",
+        f"- **Status**: {report['status'].upper()}",
         f"- **Total Scenarios**: {report['total']}",
-        f"- **Passed**: {report['n_passed']} ({report['pass_rate'] * 100:.1f}%)",
+        f"- **Passed**: {report['n_passed']}",
         f"- **Failed**: {report['n_failed']}",
         "",
         "## Scenario Breakdown",
@@ -81,13 +84,18 @@ def format_markdown_report(report: dict, mode: str) -> str:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
-        description="Run real agent regression harness across critical skills as a hard release gate."
+        description="Run response predicates; defaults to canned stubs, not measured agent adherence."
     )
     parser.add_argument(
         "--skill",
-        choices=["review", "debug", "tdd", "design", "all"],
+        choices=["review", "debug", "tdd", "design", "eval12", "all"],
         default="all",
-        help="Target skill to test (default: all)",
+        help="Target skill or suite to test (default: all)",
+    )
+    parser.add_argument(
+        "--suite",
+        choices=["core", "12", "eval12", "all"],
+        help="Target benchmark suite ('12' or 'eval12' selects the 12 behavioral evaluation cases)",
     )
     parser.add_argument(
         "--mode",
@@ -115,7 +123,12 @@ def main(argv=None) -> int:
 
     # Gather scenarios
     scenarios = []
-    if args.skill == "all":
+    if args.suite in ("12", "eval12"):
+        scenarios.extend(TWELVE_BEHAVIORAL_SCENARIOS)
+    elif args.suite == "core":
+        for k in ("review", "debug", "tdd", "design"):
+            scenarios.extend(ALL_SCENARIOS[k])
+    elif args.skill == "all":
         for skill_scenarios in ALL_SCENARIOS.values():
             scenarios.extend(skill_scenarios)
     else:
@@ -140,6 +153,9 @@ def main(argv=None) -> int:
             "n_failed": report["n_failed"],
             "pass_rate": report["pass_rate"],
             "mode": args.mode,
+            "assessment_kind": report["assessment_kind"],
+            "behavior_verified": report["behavior_verified"],
+            "status": report["status"],
             "results": [
                 {
                     "scenario_id": r.scenario_id,

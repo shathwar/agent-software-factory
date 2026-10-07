@@ -28,6 +28,19 @@ Record the skill commit, model, request, fixture snapshot, tool actions, final r
 
 For publication idempotency, a further stubbed case can return an uncertain post result followed by an existing matching comment; verify that resumption finds the comment instead of creating a duplicate. Real provider integration remains a separate check requiring a designated test PR.
 
+### Automated Execution via Agent Regression Harness
+
+The 12 cases also have response-predicate scenarios in [`tests/agent_harness/scenarios_eval_cases.py`](agent_harness/scenarios_eval_cases.py). Default runs use canned stubs; optional model/CLI runs check output text. These do not independently observe the actions required by the acceptance criteria above.
+
+To execute the response-contract regression suite:
+```bash
+# Execute the 12 response scenarios (stub mode by default)
+python3 scripts/test/run_agent_regression.py --suite 12
+
+# Run via pytest
+pytest tests/test_behavioral_eval_cases.py -v
+```
+
 ---
 
 ## Realistic End-to-End Workflow Trials

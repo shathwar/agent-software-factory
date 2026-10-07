@@ -21,5 +21,6 @@ PYTHONPATH=src:.:tests "$PYTEST" \
   tests/test_audit_ux.py \
   tests/test_ux_evaluation.py \
   tests/test_agent_regression.py \
+  tests/test_behavioral_eval_cases.py \
   -q
 echo "✅ Fast unit tests passed."

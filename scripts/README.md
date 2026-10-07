@@ -5,13 +5,13 @@ This directory organizes developer tools, test runners, and setup automation int
 ```text
 scripts/
 ├── verify/                     # Verification, linting, parity & CI gates
-│   ├── check_sanity.sh         # Fast sanity check (<2s: syntax + parity + nano budget + coverage)
+│   ├── check_sanity.sh         # Syntax, parity, nano budget, and coverage checks
 │   ├── check_coverage.py       # Skill step & rubric coverage scanner
 │   ├── sync_parity.py          # Distribution parity checker & sync between src/ and skills/
 │   └── ci_gate.py              # Pull-request / CI workflow policy gate
 │
 ├── test/                       # Test runners
-│   ├── test_fast.sh            # In-memory fast unit tests (<2s, zero disk I/O)
+│   ├── test_fast.sh            # Selected unit tests
 │   └── test_full.sh            # Full test suite (all unit, integration, and policy tests)
 │
 └── setup/                      # Environment setup & installation
@@ -28,9 +28,9 @@ scripts/
 
 | Task | Command | Description |
 |---|---|---|
-| **Fast Sanity Check** | `./scripts/verify/check_sanity.sh` | Runs byte-compile, parity check, nano budget, and coverage check in <2s. |
-| **Check Parity** | `python3 scripts/verify/sync_parity.py --check` | Confirms 100% byte-for-byte parity across `src/ship/` and `skills/`. |
-| **Sync Parity** | `python3 scripts/verify/sync_parity.py` | Syncs all 33 distribution files from `src/ship/` into `skills/`. |
+| **Fast Sanity Check** | `./scripts/verify/check_sanity.sh` | Runs syntax, parity, nano budget, and coverage checks. |
+| **Check Parity** | `python3 scripts/verify/sync_parity.py --check` | Checks lifecycle modules and the six mapped specialist tools. |
+| **Sync Parity** | `python3 scripts/verify/sync_parity.py` | Syncs files selected by the parity mapping into `skills/`. |
 | **Coverage Summary** | `python3 scripts/verify/check_coverage.py` | Audits skill step and rubric verification coverage across all 9 skills. |
 | **Coverage Gaps** | `python3 scripts/verify/check_coverage.py --skill <name> --gaps` | Inspects verification gaps for a specific skill. |
 | **CI Gate** | `python3 scripts/verify/ci_gate.py` | Strict gate used in CI pipelines. |
@@ -39,8 +39,8 @@ scripts/
 
 | Task | Command | Description |
 |---|---|---|
-| **Fast Tests** | `./scripts/test/test_fast.sh` | Runs in-memory unit tests in ~1.2s. |
-| **Full Suite** | `./scripts/test/test_full.sh` | Executes the complete regression and evaluation test suite. |
+| **Fast Tests** | `./scripts/test/test_fast.sh` | Runs the selected unit test modules. |
+| **Full Suite** | `./scripts/test/test_full.sh` | Runs Python checks, regression tests (stub harness by default), and lifecycle benchmarks. Browser checks run separately. |
 
 ### 3. Setup & Environment (`scripts/setup/`)
 
