@@ -198,3 +198,42 @@ Capability checks return policy decisions for a trusted host to enforce. They do
 sandbox agents or authenticate local ledger writers. MCP mutation and shell tools
 require the operator to set `AGENTFLOW_MCP_ALLOW_MUTATIONS=1` in the server environment;
 enable this only for trusted clients. Keep host sandbox and authorization controls.
+
+### Enterprise policy integration
+
+Policy files and approval inputs must be supplied by the trusted host. A policy in
+an agent-writable checkout is configuration, not an independent organization trust
+authority. Invalid policy configuration stops execution; it never falls back to
+default permissions. Skill overrides inherit omitted fields and cannot widen the
+organization's command/tool lists or network scope.
+
+`allowed.commands` contains exact complete command strings and `allowed.tools`
+contains exact tool names. An empty list denies all; `["*"]` is unrestricted at
+that layer. Command prefixes and glob patterns are not supported. The command
+guard accepts simple invocations; shell composition and shell wrappers are rejected.
+Known Git operations are checked even with supported global options (`-C`,
+`--no-pager`, `--literal-pathspecs`); unknown aliases and other global options are
+rejected. Arbitrary approved programs can themselves access files, spawn processes,
+or use the network. Restrict those effects with the host sandbox, never with this
+command classifier alone. Hosts must call the tool policy check before dispatching
+tools and use typed action adapters for external effects.
+
+Network, GitHub, and cloud adapters require `allowed.network: external` and respect
+`forbidden.network_egress` before checking capability grants. `internal` fails closed
+because this runtime has no trusted destination classifier. Cloud mutations also
+fail closed while `forbidden.production` is true; resource strings do not prove a
+nonproduction destination. Enable these capabilities only in an appropriately
+restricted host environment. Existing capability grants do not override policy.
+
+Secret access remains forbidden by default. An intentional secret-provider integration
+requires organization policy to permit credentials, explicit host approval when
+`requires_approval.secret_access` is true, and a scoped capability grant. The
+`approval_granted` flag records a trusted host decision; it must never come directly
+from agent-controlled tool arguments.
+
+Filesystem targets are resolved before containment and secret-path checks, including
+relative symlinks. Read-only and scratch scopes remain inside the workspace; scratch
+writes must resolve beneath workspace directories named `.scratch` or `scratch`.
+This policy scope is separate from lifecycle spike artifacts in `.agentflow/spikes/`.
+These checks assume paths do not change between authorization and use. The host must prevent concurrent symlink
+replacement and enforce the same filesystem boundary during execution.

@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -15,6 +16,7 @@ class TestExecutionGuard(unittest.TestCase):
         self.change = "guard-change"
         FileLedgerStore.save(self.root, {"version": 1, "active_change_id": self.change, "changes": {self.change: {}}})
         ProvenanceManager(self.root).register_identity("agent-1", role="MAKER", change_id=self.change)
+        (self.root / ".agentflow" / "policy.json").write_text(json.dumps({"allowed": {"network": "external"}}))
         self.guard = CapabilityGuard(self.root)
 
     def tearDown(self):

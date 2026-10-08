@@ -46,20 +46,15 @@ class CapabilityGuard:
         skill = context.skill or "ship"
         op_upper = context.operation.upper()
 
-        # 1. Enterprise Policy Enforcement
-        if op_upper == "SECRET_READ":
-            pol = self.policy_engine.get_effective_policy(skill)
-            if pol.forbidden.credentials:
-                decision = AccessDecision(
-                    allowed=False,
-                    reason=f"Access to credential/secret '{context.target}' is strictly forbidden by enterprise policy.",
-                    ring="RING_1_GOVERNANCE",
-                    agent_id=context.agent_id,
-                    operation=context.operation,
-                    target=context.target,
-                    violation_code="forbidden.credentials",
-                )
-                raise CapabilityDenied(decision)
+        # Every typed external action is checked before capability grants.
+        if op_upper in {"SECRET_READ", "NETWORK", "NETWORK_READ", "NETWORK_WRITE", "CLOUD_MUTATE", "GITHUB_WRITE", "PULL_REQUEST", "GIT_PUSH"}:
+            external = self.policy_engine.evaluate_external(skill, op_upper, context.approval_granted)
+            if not external.allowed:
+                raise CapabilityDenied(AccessDecision(
+                    allowed=False, reason=external.reason, ring="RING_1_GOVERNANCE",
+                    agent_id=context.agent_id, operation=context.operation,
+                    target=context.target, violation_code=external.rule_violated,
+                ))
 
         if op_upper in {"COMMAND", "SHELL", "EXEC", "EXECUTE"}:
             cmd_dec = self.policy_engine.evaluate_command(
@@ -98,10 +93,9 @@ class CapabilityGuard:
                 )
                 raise CapabilityDenied(decision)
 
-        # Filesystem / Target checks (skip remote URLs and schemes)
-        if op_upper in {"READ", "FILE_READ", "WRITE", "FILE_WRITE", "WORKSPACE_WRITE", "DELETE", "FILE_DELETE"} or (
-            context.target and not (context.target.startswith(("http://", "https://", "arn:", "github:")) or "://" in context.target)
-        ):
+        # Only filesystem operations have filesystem targets. Commands, secret
+        # identifiers, and provider resources must not be interpreted as paths.
+        if op_upper in {"READ", "FILE_READ", "WRITE", "FILE_WRITE", "WORKSPACE_WRITE", "DELETE", "FILE_DELETE"}:
             mode = "write" if op_upper in {"WRITE", "FILE_WRITE", "WORKSPACE_WRITE", "DELETE", "FILE_DELETE"} else "read"
             fs_dec = self.policy_engine.evaluate_filesystem(
                 skill=skill,

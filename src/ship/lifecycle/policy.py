@@ -33,6 +33,8 @@ import fnmatch
 import json
 import os
 import re
+import shlex
+import textwrap
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -64,6 +66,41 @@ class PolicyDecisionStatus(str, Enum):
 class PolicyInheritanceError(PermissionError):
     """Raised when a child or custom skill attempts to relax organization-level policy."""
     pass
+
+
+class PolicyConfigurationError(ValueError):
+    """An invalid policy must never become an implicit permission grant."""
+
+
+def _validate_policy(data):
+    if not isinstance(data, dict):
+        raise PolicyConfigurationError("Policy must be a mapping")
+    schemas = {
+        "allowed": {"filesystem", "git", "network", "tools", "commands"},
+        "requires_approval": {"commit", "pull_request", "deployment", "external_call", "secret_access", "custom_actions"},
+        "forbidden": {"production", "credentials", "force_push", "network_egress", "paths"},
+    }
+    unknown = set(data) - {"skill", "risk", "name", "description", "skills", *schemas}
+    if unknown:
+        raise PolicyConfigurationError(f"Unknown policy fields: {sorted(unknown)}")
+    for section, fields in schemas.items():
+        block = data.get(section, {})
+        if not isinstance(block, dict) or set(block) - fields:
+            raise PolicyConfigurationError(f"Invalid {section} policy fields")
+        for key, value in block.items():
+            if key in {"tools", "commands", "paths", "custom_actions"}:
+                if not isinstance(value, list) or not all(isinstance(v, str) and v for v in value):
+                    raise PolicyConfigurationError(f"{section}.{key} must be a list of nonempty strings")
+            elif section != "allowed" and not isinstance(value, bool):
+                raise PolicyConfigurationError(f"{section}.{key} must be a boolean")
+    for key, choices in {"filesystem": {"workspace", "read_only", "scratch", "none"},
+                         "git": {"read/write", "read", "none"},
+                         "network": {"none", "internal", "external"}}.items():
+        value = data.get("allowed", {}).get(key)
+        if key in data.get("allowed", {}) and (not isinstance(value, str) or value not in choices):
+            raise PolicyConfigurationError(f"Invalid allowed.{key}: {value!r}")
+    if "risk" in data and data["risk"] not in [r.value for r in PolicyRisk]:
+        raise PolicyConfigurationError("Invalid risk")
 
 
 @dataclass
@@ -210,6 +247,7 @@ class EnterprisePolicy:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any], default_skill: str = "default") -> "EnterprisePolicy":
+        _validate_policy(data)
         raw_risk = data.get("risk", "high")
         try:
             risk = PolicyRisk(raw_risk)
@@ -270,7 +308,17 @@ def merge_and_validate_policy(
     Skills CANNOT relax forbidden invariants or bypass required approvals!
     Skills can only specialize or further restrict permissions.
     """
+    _validate_policy(org_policy.to_dict())
+    _validate_policy(skill_policy.to_dict())
     skill_name = skill_policy.skill
+    for key in ("tools", "commands"):
+        parent = getattr(org_policy.allowed, key)
+        child = getattr(skill_policy.allowed, key)
+        if parent != ["*"] and child != ["*"] and not set(child).issubset(parent):
+            raise PolicyInheritanceError(f"Skill '{skill_name}' cannot widen allowed.{key}")
+    network_levels = {"none": 0, "internal": 1, "external": 2}
+    if network_levels[skill_policy.allowed.network] > network_levels[org_policy.allowed.network]:
+        raise PolicyInheritanceError(f"Skill '{skill_name}' cannot widen allowed.network")
 
     # 1. Monotonicity: Forbidden rules can NEVER be relaxed
     if org_policy.forbidden.credentials and not skill_policy.forbidden.credentials:
@@ -372,7 +420,7 @@ def parse_yaml_subset(text: str) -> Dict[str, Any]:
             return True
         if v.lower() == "false":
             return False
-        if v.lower() in ("null", "none", "~"):
+        if v.lower() in ("null", "~"):
             return None
         if re.match(r"^-?\d+$", v):
             return int(v)
@@ -392,7 +440,11 @@ def parse_yaml_subset(text: str) -> Dict[str, Any]:
             if indent < current_indent:
                 break
 
+            if indent != current_indent:
+                raise PolicyConfigurationError("Invalid YAML indentation")
             if line.startswith("- "):
+                if result:
+                    raise PolicyConfigurationError("Mixed YAML mapping and list")
                 is_list = True
                 val_part = line[2:].strip()
                 if not val_part:
@@ -408,6 +460,8 @@ def parse_yaml_subset(text: str) -> Dict[str, Any]:
             if ":" in line:
                 colon_idx = line.index(":")
                 key = line[:colon_idx].strip()
+                if not key or key in result or is_list:
+                    raise PolicyConfigurationError("Invalid or duplicate YAML key")
                 val_part = line[colon_idx + 1:].strip()
 
                 if not val_part:
@@ -420,12 +474,14 @@ def parse_yaml_subset(text: str) -> Dict[str, Any]:
                     idx += 1
                     continue
 
-            idx += 1
+            raise PolicyConfigurationError(f"Unsupported YAML syntax: {line}")
 
         return (list_items if is_list else result), idx
 
-    parsed, _ = parse_block(0, 0)
-    return parsed if isinstance(parsed, dict) else {}
+    parsed, consumed = parse_block(0, clean_lines[0][0] if clean_lines else 0)
+    if not isinstance(parsed, dict) or consumed != len(clean_lines):
+        raise PolicyConfigurationError("Policy YAML must be a mapping")
+    return parsed
 
 
 # ---------------------------------------------------------------------------
@@ -444,6 +500,7 @@ class PolicyRegistry:
             forbidden=ForbiddenConfig(production=True, credentials=True, force_push=True),
             name="organization_default",
         )
+        _validate_policy(self.org_policy.to_dict())
         self.skill_policies: Dict[str, EnterprisePolicy] = {}
 
     def register_skill_policy(self, policy: EnterprisePolicy) -> EnterprisePolicy:
@@ -471,14 +528,17 @@ class PolicyRegistry:
     def load_from_text(cls, content: str) -> "PolicyRegistry":
         """Load from either YAML or JSON string."""
         data: Dict[str, Any] = {}
-        content_stripped = content.strip()
+        content_stripped = textwrap.dedent(content).strip()
         if content_stripped.startswith("{"):
             data = json.loads(content_stripped)
         else:
             data = parse_yaml_subset(content_stripped)
 
         # Extract top-level policy block if present
+        if not isinstance(data, dict) or not data:
+            raise PolicyConfigurationError("Policy must be a nonempty mapping")
         raw_policy = data.get("policy", data)
+        _validate_policy(raw_policy)
 
         # Check if this is a single skill policy (e.g. skill: ship)
         declared_skill = raw_policy.get("skill")
@@ -494,11 +554,20 @@ class PolicyRegistry:
 
         # Register additional skills if 'skills' mapping is provided
         skills_dict = raw_policy.get("skills", {})
+        if not isinstance(skills_dict, dict):
+            raise PolicyConfigurationError("skills must be a mapping")
         if isinstance(skills_dict, dict):
             for s_name, s_data in skills_dict.items():
-                if isinstance(s_data, dict):
-                    sp = EnterprisePolicy.from_dict(s_data, default_skill=s_name)
-                    registry.register_skill_policy(sp)
+                _validate_policy(s_data)
+                inherited = org_policy.to_dict()
+                inherited["skill"] = s_name
+                for key, value in s_data.items():
+                    if key in ("allowed", "requires_approval", "forbidden"):
+                        inherited[key].update(value)
+                    else:
+                        inherited[key] = value
+                sp = EnterprisePolicy.from_dict(inherited, default_skill=s_name)
+                registry.register_skill_policy(sp)
 
         return registry
 
@@ -521,12 +590,11 @@ class PolicyRegistry:
         # Fallback: check if .agentflow.json contains a 'policy' key
         af_json = root / ".agentflow.json"
         if af_json.exists():
-            try:
-                data = json.loads(af_json.read_text(encoding="utf-8"))
-                if "policy" in data:
-                    return cls.load_from_text(json.dumps(data["policy"]))
-            except Exception:
-                pass
+            data = json.loads(af_json.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                raise PolicyConfigurationError(".agentflow.json must be a mapping")
+            if "policy" in data:
+                return cls.load_from_text(json.dumps(data["policy"]))
 
         # Return default registry
         return cls()
@@ -553,6 +621,39 @@ class EnterprisePolicyEngine:
     def get_effective_policy(self, skill: str) -> EnterprisePolicy:
         return self.registry.get_policy_for_skill(skill)
 
+    @staticmethod
+    def _deny(policy, reason, rule, approval=None):
+        return PolicyDecision(
+            status=PolicyDecisionStatus.REQUIRES_APPROVAL if approval else PolicyDecisionStatus.DENIED,
+            allowed=False, reason=reason, rule_violated=rule,
+            required_approval_type=approval, skill=policy.skill,
+            risk=policy.risk.value, policy_source=policy.name,
+        )
+
+    def evaluate_external(self, skill, operation, approval_granted=False):
+        """Evaluate typed external actions; an existing capability cannot override policy.
+
+        Internal destinations cannot be authenticated from a URL alone. Until a
+        trusted host supplies destination classification, internal scope fails closed.
+        """
+        policy = self.get_effective_policy(skill)
+        if operation == "SECRET_READ":
+            if policy.forbidden.credentials:
+                return self._deny(policy, "Secret access forbidden", "forbidden.credentials")
+            if policy.requires_approval.secret_access and not approval_granted:
+                return self._deny(policy, "Secret access requires approval", "requires_approval.secret_access", "SECRET_APPROVAL")
+        else:
+            if policy.forbidden.network_egress or policy.allowed.network != "external":
+                return self._deny(policy, "External access forbidden or destination not classified", "allowed.network")
+            if policy.requires_approval.external_call and not approval_granted:
+                return self._deny(policy, "External access requires approval", "requires_approval.external_call", "EXTERNAL_APPROVAL")
+            if operation == "CLOUD_MUTATE":
+                if policy.forbidden.production:
+                    return self._deny(policy, "Cloud destination requires trusted production classification", "forbidden.production")
+                if policy.requires_approval.deployment and not approval_granted:
+                    return self._deny(policy, "Deployment requires approval", "requires_approval.deployment", "DEPLOYMENT_APPROVAL")
+        return PolicyDecision(PolicyDecisionStatus.ALLOWED, True, "External action permitted", skill=skill)
+
     # ------------------------------------------------------------------ #
     # Filesystem Evaluation                                               #
     # ------------------------------------------------------------------ #
@@ -570,6 +671,18 @@ class EnterprisePolicyEngine:
         policy = self.get_effective_policy(skill)
         risk_str = policy.risk.value
         clean_path = path.replace("\\", "/")
+        if mode not in {"read", "write", "delete"}:
+            return self._deny(policy, "Invalid filesystem mode", "allowed.filesystem")
+        try:
+            target = Path(clean_path)
+            resolved = (target if target.is_absolute() else self.repo_root / target).resolve()
+        except (OSError, RuntimeError, ValueError):
+            return self._deny(policy, "Cannot resolve filesystem target", "allowed.filesystem")
+        if not resolved.is_relative_to(self.repo_root):
+            return self._deny(policy, "Path escapes repository workspace", "allowed.filesystem: workspace_escape")
+        original_path = clean_path
+        clean_path = resolved.as_posix()
+
 
         # 1. Credential / Secret Pattern Matching (Forbidden Invariant)
         if policy.forbidden.credentials:
@@ -577,7 +690,7 @@ class EnterprisePolicyEngine:
             for pat in policy.forbidden.paths:
                 pat_clean = pat.replace("\\", "/")
                 matched = False
-                if fnmatch.fnmatchcase(clean_path, pat_clean) or fnmatch.fnmatchcase(basename, pat_clean):
+                if any(fnmatch.fnmatchcase(v, pat_clean) for v in (clean_path, original_path, basename)):
                     matched = True
                 elif pat_clean.startswith("**/"):
                     sub_pat = pat_clean[3:]
@@ -621,49 +734,11 @@ class EnterprisePolicyEngine:
                 policy_source=policy.name,
             )
 
-        # 4. Scope: scratch (only .scratch/ allowed for mutations)
+        # Scratch targets must remain under a literal in-workspace scratch root.
         if policy.allowed.filesystem == "scratch" and mode in ("write", "delete"):
-            if not clean_path.startswith((".scratch/", "scratch/")):
-                return PolicyDecision(
-                    status=PolicyDecisionStatus.DENIED,
-                    allowed=False,
-                    reason=f"File mutation outside scratch area forbidden: skill '{skill}' is restricted to .scratch/",
-                    rule_violated="allowed.filesystem: scratch",
-                    skill=skill,
-                    risk=risk_str,
-                    policy_source=policy.name,
-                )
-
-        # 5. Path Traversal escaping repository workspace
-        if policy.allowed.filesystem == "workspace":
-            try:
-                target_p = Path(path)
-                if target_p.is_absolute():
-                    resolved = target_p.resolve()
-                    if not str(resolved).startswith(str(self.repo_root)):
-                        return PolicyDecision(
-                            status=PolicyDecisionStatus.DENIED,
-                            allowed=False,
-                            reason=f"Path '{path}' escapes repository workspace boundary.",
-                            rule_violated="allowed.filesystem: workspace_escape",
-                            skill=skill,
-                            risk=risk_str,
-                            policy_source=policy.name,
-                        )
-                elif clean_path.startswith("../") or "/../" in clean_path:
-                    resolved = (self.repo_root / clean_path).resolve()
-                    if not str(resolved).startswith(str(self.repo_root)):
-                        return PolicyDecision(
-                            status=PolicyDecisionStatus.DENIED,
-                            allowed=False,
-                            reason=f"Path traversal '{clean_path}' escapes repository workspace boundary.",
-                            rule_violated="allowed.filesystem: workspace_escape",
-                            skill=skill,
-                            risk=risk_str,
-                            policy_source=policy.name,
-                        )
-            except Exception:
-                pass
+            roots = [self.repo_root / ".scratch", self.repo_root / "scratch"]
+            if not any(resolved.is_relative_to(root) for root in roots):
+                return self._deny(policy, "File mutation outside scratch area", "allowed.filesystem: scratch")
 
         return PolicyDecision(
             status=PolicyDecisionStatus.ALLOWED,
@@ -730,7 +805,7 @@ class EnterprisePolicyEngine:
             )
 
         # 4. Git scope: read (blocks commits, pushes, branches)
-        if policy.allowed.git == "read" and op in ("commit", "push", "branch", "tag", "merge"):
+        if policy.allowed.git == "read" and op != "read":
             return PolicyDecision(
                 status=PolicyDecisionStatus.DENIED,
                 allowed=False,
@@ -794,6 +869,55 @@ class EnterprisePolicyEngine:
         risk_str = policy.risk.value
         cmd_clean = command.strip()
         cmd_lower = cmd_clean.lower()
+
+        # Exact full-command allowlists, never prefix or glob matching.
+        if policy.allowed.commands != ["*"] and cmd_clean not in policy.allowed.commands:
+            return self._deny(policy, "Command is not allowlisted", "allowed.commands")
+        # This seam accepts simple invocations, not a shell language. Scripts still
+        # require host sandboxing; approval here does not constrain their effects.
+        if any(c in cmd_clean for c in (";", "&", "|", "<", ">", "`", "$", "\n", "\r")):
+            return self._deny(policy, "Shell composition requires a sandboxed host adapter", "allowed.commands")
+        try:
+            argv = shlex.split(cmd_clean)
+        except ValueError:
+            return self._deny(policy, "Invalid command syntax", "allowed.commands")
+        if not argv:
+            return self._deny(policy, "Empty command", "allowed.commands")
+        executable = Path(argv[0]).name
+        if executable in {"sh", "bash", "zsh", "fish", "env", "sudo", "xargs"}:
+            return self._deny(policy, "Indirect shell execution requires a host adapter", "allowed.commands")
+        if executable == "git":
+            args = argv[1:]
+            while args and args[0].startswith("-"):
+                option = args.pop(0)
+                if option == "-C" and args:
+                    scope = self.evaluate_filesystem(skill, args.pop(0))
+                    if not scope.allowed:
+                        return scope
+                elif option in {"--no-pager", "--literal-pathspecs"}:
+                    continue
+                else:
+                    return self._deny(policy, "Unsupported Git global option", "allowed.git")
+            if not args:
+                return self._deny(policy, "Missing Git operation", "allowed.git")
+            op = args[0]
+            reads = {"status", "diff", "log", "show", "rev-parse", "ls-files", "ls-tree"}
+            known = reads | {"commit", "push", "add", "reset", "restore", "checkout", "switch", "branch", "tag", "merge", "rebase", "fetch", "pull", "clone", "clean", "rm", "mv", "stash"}
+            if op not in known:
+                return self._deny(policy, "Unknown Git operation or alias", "allowed.git")
+            force = op == "push" and any(a.startswith("--force") or (a.startswith("-") and not a.startswith("--") and "f" in a) or a.startswith("+") for a in args[1:])
+            decision = self.evaluate_git(skill, "force_push" if force else "read" if op in reads else op,
+                                         approval_granted=approval_granted)
+            if not decision.allowed:
+                return decision
+            if op in {"push", "fetch", "pull", "clone"}:
+                decision = self.evaluate_external(skill, "NETWORK_WRITE", approval_granted)
+                if not decision.allowed:
+                    return decision
+        if executable in {"curl", "wget", "ssh", "scp", "sftp", "rsync"}:
+            decision = self.evaluate_external(skill, "NETWORK_WRITE", approval_granted)
+            if not decision.allowed:
+                return decision
 
         # 1. Intercept Credential Access Commands
         if policy.forbidden.credentials:
@@ -905,6 +1029,9 @@ class EnterprisePolicyEngine:
         """Evaluate MCP or harness tool invocation against enterprise policy."""
         policy = self.get_effective_policy(skill)
         risk_str = policy.risk.value
+
+        if policy.allowed.tools != ["*"] and tool_name not in policy.allowed.tools:
+            return self._deny(policy, "Tool is not allowlisted", "allowed.tools")
 
         # Check path argument in filesystem tools
         path_arg = arguments.get("path") or arguments.get("TargetFile") or arguments.get("file_path") or arguments.get("file")

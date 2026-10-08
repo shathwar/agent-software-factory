@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -30,11 +31,15 @@ class TestExternalActionAdapter(unittest.TestCase):
         self.assertEqual(called, [])
 
     def test_approved_secret_invokes_provider(self):
+        (self.root / ".agentflow" / "policy.json").write_text(json.dumps({
+            "forbidden": {"credentials": False},
+        }))
+        self.adapter = ExternalActionAdapter(self.root)
         CapabilityManager(self.root).grant_capability(
             "agent-1", "SECRET_READ", "secret:token", change_id=self.change, approval_ref="sec_lead:audit"
         )
         result = self.adapter.secret(
-            ActionContext("agent-1", "SECRET_READ", "secret:token", self.change),
+            ActionContext("agent-1", "SECRET_READ", "secret:token", self.change, approval_granted=True),
             lambda: "value",
         )
         self.assertEqual(result, "value")
