@@ -204,7 +204,6 @@ This inventory maps requirements to checks; it does not record test executions o
 | evals | 12 | 3 | 5 | 0 | 12 |
 | ux | 17 | 5 | 10 | 0 | 17 |
 | ship | 14 | 12 | 12 | 1 | 14 |
-| skill | 4 | 4 | 4 | 0 | 4 |
 
 Runtime capture: `reported`. Every catalog step has a terminal observation; failures and skips count. This is not success.
 

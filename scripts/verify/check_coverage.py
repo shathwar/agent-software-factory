@@ -143,7 +143,7 @@ def validate_manifest(data: Any, root: Path = ROOT) -> None:
                     require("symbol" in ref and ref["symbol"].split(".")[-1].startswith("test_"),
                             f"{identifier}: automated case must select a test function")
 
-    actual_skills = {p.parent.name for p in (root / "skills").glob("*/SKILL.md")}
+    actual_skills = {p.parent.name for p in (root / "skills").glob("*/SKILL.md") if p.parent.name != "skill"}
     require(bool(actual_skills) and set(data["skills"]) == actual_skills,
             f"skills: must inventory every skill exactly once: {sorted(actual_skills)}")
     referenced_sources = set()

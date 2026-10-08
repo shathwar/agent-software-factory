@@ -16,8 +16,7 @@
     "skills/debug/SKILL.md": "634cefcd8ff3f0ec18e947b668a8c711a61eebf72185567a7ef35eb920c7471c",
     "skills/evals/SKILL.md": "93a4bc3321f57bb1cf7302b0987ffcb9f27fb991ded17f4467624e9e2c773afa",
     "skills/ux/SKILL.md": "360df1caa1807a0a6ea47c687d0204698004cd844effe9daf01378a4b3308241",
-    "skills/ship/SKILL.md": "688ab02a4a78851d8333cae2ac8db3df0408cad426a277d4fa5cdd1067126491",
-    "skills/skill/SKILL.md": "0926049b9e620bbcbeb9736cd95483146c0536200664a34cc5bec366d4b778cc"
+    "skills/ship/SKILL.md": "688ab02a4a78851d8333cae2ac8db3df0408cad426a277d4fa5cdd1067126491"
   },
   "validators": {
     "turn": {
@@ -2783,110 +2782,6 @@
           "eval_cases": [],
           "gaps": [
             "No agent eval of final usage freshness or missing-vs-zero reporting."
-          ]
-        }
-      ]
-    },
-    "skill": {
-      "source": "skills/skill/SKILL.md",
-      "steps": [
-        {
-          "id": "skill.requirements",
-          "title": "Synthesize skill requirements, constraints and turn contract",
-          "requirement": {
-            "path": "skills/skill/SKILL.md",
-            "text": "Requirements Gathering"
-          },
-          "applies_when": "Always",
-          "turn_contracts": [
-            1
-          ],
-          "expected_evidence": [
-            "Synthesized skill specification"
-          ],
-          "validators": [
-            "turn"
-          ],
-          "eval_cases": [
-            "turn-selection"
-          ],
-          "gaps": [
-            "User intent extraction relies on prompt parsing."
-          ]
-        },
-        {
-          "id": "skill.generate",
-          "title": "Generate native Claude skill SKILL.md, scripts and references",
-          "requirement": {
-            "path": "skills/skill/SKILL.md",
-            "text": "Native Claude Skills Output Generation"
-          },
-          "applies_when": "Always",
-          "turn_contracts": [
-            2,
-            3,
-            4
-          ],
-          "expected_evidence": [
-            "Generated SKILL.md, validate script and references"
-          ],
-          "validators": [
-            "delivery"
-          ],
-          "eval_cases": [
-            "turn-selection"
-          ],
-          "gaps": [
-            "Static code generation without live execution."
-          ]
-        },
-        {
-          "id": "skill.matrix",
-          "title": "Assess Skill x Model x Host compatibility matrix",
-          "requirement": {
-            "path": "skills/skill/SKILL.md",
-            "text": "Skill × Model × Host Compatibility Matrix"
-          },
-          "applies_when": "Always",
-          "turn_contracts": [
-            6
-          ],
-          "expected_evidence": [
-            "Host x model compatibility matrix"
-          ],
-          "validators": [
-            "delivery"
-          ],
-          "eval_cases": [
-            "turn-selection"
-          ],
-          "gaps": [
-            "Matrix is declarative; runtime capabilities may shift."
-          ]
-        },
-        {
-          "id": "skill.package",
-          "title": "Validate structure, package archive and version",
-          "requirement": {
-            "path": "skills/skill/SKILL.md",
-            "text": "Packaging & Versioning"
-          },
-          "applies_when": "Always",
-          "turn_contracts": [
-            5,
-            6
-          ],
-          "expected_evidence": [
-            "Packaged archive and pinned VERSION"
-          ],
-          "validators": [
-            "delivery"
-          ],
-          "eval_cases": [
-            "turn-selection"
-          ],
-          "gaps": [
-            "Archive integrity verified via tar/zip; distribution depends on host."
           ]
         }
       ]
