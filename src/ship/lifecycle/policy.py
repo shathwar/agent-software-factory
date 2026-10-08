@@ -31,7 +31,6 @@ from __future__ import annotations
 
 import fnmatch
 import json
-import os
 import re
 import shlex
 import textwrap
@@ -191,7 +190,7 @@ class ForbiddenConfig:
     credentials: bool = True
     force_push: bool = True
     network_egress: bool = False
-    paths: List[str] = field(default_factory=lambda: list(DEFAULT_FORBIDDEN_CREDENTIAL_PATTERNS))
+    paths: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -204,14 +203,7 @@ class ForbiddenConfig:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ForbiddenConfig":
-        custom_paths = data.get("paths")
-        if custom_paths is None:
-            paths = list(DEFAULT_FORBIDDEN_CREDENTIAL_PATTERNS)
-        else:
-            paths = list(custom_paths)
-            for default_pat in DEFAULT_FORBIDDEN_CREDENTIAL_PATTERNS:
-                if default_pat not in paths:
-                    paths.append(default_pat)
+        paths = list(data.get("paths", []))
 
         return cls(
             production=bool(data.get("production", True)),
@@ -643,13 +635,13 @@ class EnterprisePolicyEngine:
             if policy.requires_approval.secret_access and not approval_granted:
                 return self._deny(policy, "Secret access requires approval", "requires_approval.secret_access", "SECRET_APPROVAL")
         else:
+            if operation == "CLOUD_MUTATE" and policy.forbidden.production:
+                return self._deny(policy, "Cloud destination requires trusted production classification", "forbidden.production")
             if policy.forbidden.network_egress or policy.allowed.network != "external":
                 return self._deny(policy, "External access forbidden or destination not classified", "allowed.network")
             if policy.requires_approval.external_call and not approval_granted:
                 return self._deny(policy, "External access requires approval", "requires_approval.external_call", "EXTERNAL_APPROVAL")
             if operation == "CLOUD_MUTATE":
-                if policy.forbidden.production:
-                    return self._deny(policy, "Cloud destination requires trusted production classification", "forbidden.production")
                 if policy.requires_approval.deployment and not approval_granted:
                     return self._deny(policy, "Deployment requires approval", "requires_approval.deployment", "DEPLOYMENT_APPROVAL")
         return PolicyDecision(PolicyDecisionStatus.ALLOWED, True, "External action permitted", skill=skill)
@@ -684,31 +676,19 @@ class EnterprisePolicyEngine:
         clean_path = resolved.as_posix()
 
 
-        # 1. Credential / Secret Pattern Matching (Forbidden Invariant)
+        # Custom exclusions are independent of the credential-access toggle.
+        # Match both canonical relative and absolute forms, so aliases cannot hide
+        # a protected target. Retain the supplied path to also protect alias names.
+        candidates = (original_path, clean_path, resolved.relative_to(self.repo_root).as_posix(), resolved.name)
+        groups = [(policy.forbidden.paths, "forbidden.paths")]
         if policy.forbidden.credentials:
-            basename = os.path.basename(clean_path)
-            for pat in policy.forbidden.paths:
-                pat_clean = pat.replace("\\", "/")
-                matched = False
-                if any(fnmatch.fnmatchcase(v, pat_clean) for v in (clean_path, original_path, basename)):
-                    matched = True
-                elif pat_clean.startswith("**/"):
-                    sub_pat = pat_clean[3:]
-                    if "/" not in sub_pat and fnmatch.fnmatchcase(basename, sub_pat):
-                        matched = True
-                    elif fnmatch.fnmatchcase(clean_path, sub_pat) or fnmatch.fnmatchcase(clean_path, f"*/{sub_pat}"):
-                        matched = True
-
-                if matched:
-                    return PolicyDecision(
-                        status=PolicyDecisionStatus.DENIED,
-                        allowed=False,
-                        reason=f"Access to credential/secret file '{clean_path}' is strictly forbidden by enterprise policy.",
-                        rule_violated="forbidden.credentials",
-                        skill=skill,
-                        risk=risk_str,
-                        policy_source=policy.name,
-                    )
+            groups.append((DEFAULT_FORBIDDEN_CREDENTIAL_PATTERNS, "forbidden.credentials"))
+        for patterns, rule in groups:
+            for pattern in patterns:
+                pattern = pattern.replace("\\", "/")
+                variants = [pattern, pattern[3:]] if pattern.startswith("**/") else [pattern]
+                if any(fnmatch.fnmatchcase(candidate, pat) for candidate in candidates for pat in variants):
+                    return self._deny(policy, f"Access to protected file '{original_path}' is forbidden", rule)
 
         # 2. Scope: none
         if policy.allowed.filesystem == "none":
@@ -910,6 +890,24 @@ class EnterprisePolicyEngine:
                                          approval_granted=approval_granted)
             if not decision.allowed:
                 return decision
+            if op == "push" and policy.forbidden.production:
+                # Implicit/configured destinations and wildcard refspecs cannot be
+                # classified from argv. Require explicit remote + destination(s).
+                operands = [arg for arg in args[1:] if not arg.startswith("-")]
+                unsupported_options = [arg for arg in args[1:] if arg.startswith("-")
+                                       and arg not in {"--force", "--force-with-lease", "-f"}]
+                if unsupported_options or len(operands) < 2:
+                    return self._deny(policy, "Push requires explicit, classifiable destinations", "forbidden.production")
+                for refspec in operands[1:]:
+                    destination = refspec.lstrip("+").rsplit(":", 1)[-1]
+                    if destination.startswith("refs/heads/"):
+                        destination = destination[len("refs/heads/"):]
+                    if not destination or destination == "HEAD" or any(c in destination for c in "*?["):
+                        return self._deny(policy, "Unclassified push destination", "forbidden.production")
+                    decision = self.evaluate_git(skill, "push", target_branch=destination,
+                                                 approval_granted=approval_granted)
+                    if not decision.allowed:
+                        return decision
             if op in {"push", "fetch", "pull", "clone"}:
                 decision = self.evaluate_external(skill, "NETWORK_WRITE", approval_granted)
                 if not decision.allowed:
@@ -979,6 +977,18 @@ class EnterprisePolicyEngine:
                     policy_source=policy.name,
                 )
 
+        # Deployment providers can select production via config/context as well
+        # as explicit flags. Route mutations through the typed cloud policy gate;
+        # approval does not establish a trusted nonproduction classification.
+        deployment = (executable == "kubectl" and any(a in {
+            "apply", "create", "delete", "patch", "replace", "rollout", "scale", "edit",
+            "set", "run", "expose", "label", "annotate", "taint", "drain", "cordon", "uncordon"
+        } for a in argv[1:])) or (executable == "terraform" and any(a in {"apply", "destroy", "import"} for a in argv[1:])) or "deploy" in argv[1:]
+        if deployment:
+            decision = self.evaluate_external(skill, "CLOUD_MUTATE", approval_granted)
+            if not decision.allowed:
+                return decision
+
         # 4. Intercept Production Deployments
         if policy.forbidden.production:
             if any(term in cmd_lower for term in ("--env=production", "--env=prod", "--context=prod", "deploy prod", "deploy production")):
@@ -1047,7 +1057,7 @@ class EnterprisePolicyEngine:
             return self.evaluate_command(skill, cmd_arg, approval_granted=approval_granted)
 
         # Check git PR / comment tools
-        if "pr" in tool_name.lower() or "pull_request" in tool_name.lower() or "comment" in tool_name.lower():
+        if "pr" in tool_name.lower().split("_") or "pull_request" in tool_name.lower() or "comment" in tool_name.lower():
             if policy.requires_approval.pull_request and not approval_granted:
                 return PolicyDecision(
                     status=PolicyDecisionStatus.REQUIRES_APPROVAL,

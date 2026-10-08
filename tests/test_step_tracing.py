@@ -136,13 +136,13 @@ class StepTraceTests(unittest.TestCase):
 
     def test_mcp_read_and_mutation_permissions(self):
         from ship.mcp.tools import dispatch_tool
-        with patch.dict('os.environ', {'AGENTFLOW_MCP_ALLOW_MUTATIONS': '0'}):
+        with patch.dict('os.environ', {'AGENTFLOW_MCP_ALLOW_MUTATIONS': '0', 'AGENTFLOW_MCP_ROOT': str(self.root)}):
             report = dispatch_tool('ship_steps_report', {'path': str(self.root), 'run_id': self.run})
             self.assertEqual(report['counts']['unobserved'], 8)
             with self.assertRaises(PermissionError):
                 dispatch_tool('ship_steps_record', {'path': str(self.root), 'run_id': self.run,
                               'step_id': 'tdd.red', 'status': 'started'})
-        with patch.dict('os.environ', {'AGENTFLOW_MCP_ALLOW_MUTATIONS': '1'}):
+        with patch.dict('os.environ', {'AGENTFLOW_MCP_ALLOW_MUTATIONS': '1', 'AGENTFLOW_MCP_ROOT': str(self.root)}):
             result = dispatch_tool('ship_steps_record', {'path': str(self.root), 'run_id': self.run,
                                    'step_id': 'tdd.red', 'status': 'started'})
             self.assertIn('attempt_id', result)

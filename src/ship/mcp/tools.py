@@ -8,6 +8,7 @@ from typing import Dict, Any
 
 from ship.lifecycle.engine import LifecycleEngine
 from ship.lifecycle.execution import ActionContext, CapabilityGuard
+from ship.lifecycle.policy import EnterprisePolicyEngine
 from ship.lifecycle.turns import format_turn_contract
 from ship.lifecycle.ledger import FileLedgerStore, record_test_run_to_ledger, record_review_to_ledger, record_turn_to_ledger
 from ship.lifecycle.checkpoints import CheckpointManager
@@ -375,4 +376,37 @@ def dispatch_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
     }
     if name in privileged and os.environ.get("AGENTFLOW_MCP_ALLOW_MUTATIONS") != "1":
         raise PermissionError("MCP mutations and shell execution are disabled. A trusted host must set AGENTFLOW_MCP_ALLOW_MUTATIONS=1 in the server environment.")
+    # The tool caller cannot select the policy authority via a path argument.
+    # Operators bind this server to one consumer workspace through its environment
+    # (or launch directory). Switching workspaces requires host reconfiguration.
+    root = Path(os.environ.get("AGENTFLOW_MCP_ROOT") or Path.cwd()).resolve()
+    arguments = dict(arguments)
+    requested = Path(arguments.get("path") or root)
+    requested = (requested if requested.is_absolute() else root / requested).resolve()
+    if requested != root:
+        raise PermissionError("MCP path must match the host-configured workspace")
+    arguments["path"] = str(root)
+    policy = EnterprisePolicyEngine(root)
+    decision = policy.evaluate_tool_call("ship", name, arguments)
+    if not decision.allowed:
+        raise PermissionError(decision.reason)
+    if name in privileged:
+        decision = policy.evaluate_filesystem("ship", str(root), mode="write")
+        if not decision.allowed:
+            raise PermissionError(decision.reason)
+    # Normalize separately supplied file arguments before handlers can read them.
+    for key in ("report_path", "paths", "files"):
+        value = arguments.get(key)
+        if value is None:
+            continue
+        values = value if isinstance(value, list) else [value]
+        normalized = []
+        for item in values:
+            if not isinstance(item, str):
+                raise ValueError(f"{key} must contain file paths")
+            decision = policy.evaluate_filesystem("ship", item)
+            if not decision.allowed:
+                raise PermissionError(decision.reason)
+            normalized.append(str((root / item).resolve()))
+        arguments[key] = normalized if isinstance(value, list) else normalized[0]
     return handler(arguments)

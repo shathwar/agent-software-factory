@@ -237,3 +237,26 @@ writes must resolve beneath workspace directories named `.scratch` or `scratch`.
 This policy scope is separate from lifecycle spike artifacts in `.agentflow/spikes/`.
 These checks assume paths do not change between authorization and use. The host must prevent concurrent symlink
 replacement and enforce the same filesystem boundary during execution.
+
+
+MCP servers are bound to one consumer workspace. Set `AGENTFLOW_MCP_ROOT` to its
+absolute path in the server environment, or launch the server from that workspace.
+Tool `path` arguments must resolve to exactly this root; they cannot select a
+nested or alternative policy authority. Omit `path` to use the configured root.
+Reconfigure the host to switch workspaces. Dispatch enforces tool policy before
+handlers, checks mutation filesystem scope, and validates supplied file paths.
+The mutation opt-in does not bypass these checks.
+
+Custom `forbidden.paths` patterns are always enforced, even when credential access
+is enabled. They match canonical workspace-relative paths, absolute paths, and
+supplied aliases. Default credential patterns are separately controlled by
+`forbidden.credentials`; they are no longer inserted into the custom path list.
+Existing policies explicitly listing credential patterns retain those exclusions.
+
+When production is forbidden, Git pushes must specify a remote and explicit,
+classifiable destination refspecs. Implicit destinations, wildcard refspecs, and
+unsupported push options are denied. Deployment mutations through kubectl and
+Terraform use the cloud policy gate, including context selected through configuration.
+Until trusted destination classification exists, that gate denies mutations when
+production is forbidden, regardless of approval. This also blocks nonproduction
+mutations that the runtime cannot distinguish safely.

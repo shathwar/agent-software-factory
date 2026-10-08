@@ -38,7 +38,7 @@ class TestExecutionGuard(unittest.TestCase):
     def test_mcp_command_is_rejected_before_side_effect(self):
         from ship.mcp.tools import dispatch_tool
         marker = self.root / "should-not-exist"
-        with patch.dict("os.environ", {"AGENTFLOW_MCP_ALLOW_MUTATIONS": "1"}):
+        with patch.dict("os.environ", {"AGENTFLOW_MCP_ALLOW_MUTATIONS": "1", "AGENTFLOW_MCP_ROOT": str(self.root)}):
             with self.assertRaises(PermissionError):
                 dispatch_tool("ship_spike_run", {
                     "path": str(self.root), "command": f"touch {marker}",

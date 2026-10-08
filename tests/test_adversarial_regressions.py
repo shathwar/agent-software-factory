@@ -141,7 +141,7 @@ class GroundingRegressions(WorkspaceTest):
 class MCPRegressions(WorkspaceTest):
     def setUp(self):
         super().setUp()
-        self.env = patch.dict(os.environ, {"AGENTFLOW_MCP_ALLOW_MUTATIONS": "1"})
+        self.env = patch.dict(os.environ, {"AGENTFLOW_MCP_ALLOW_MUTATIONS": "1", "AGENTFLOW_MCP_ROOT": str(self.root)})
         self.env.start()
         self.addCleanup(self.env.stop)
         ProvenanceManager(self.root).register_identity("worker", role="MAKER", change_id=self.change)

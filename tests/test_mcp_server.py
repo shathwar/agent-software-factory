@@ -139,7 +139,7 @@ class MCPServerTests(unittest.TestCase):
 
     def test_tools_call_simplify_scan(self):
         """Server executes ship_simplify_scan via tools/call."""
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {"AGENTFLOW_MCP_ROOT": tmp}):
             f = Path(tmp) / "module.py"
             f.write_text("# simplify: Quick stub. Ceiling: 10 calls. Upgrade: AsyncEngine.\n")
             req = {
@@ -161,7 +161,7 @@ class MCPServerTests(unittest.TestCase):
 
     def test_tools_call_lifecycle_in_git_repo(self):
         """Server executes ship_next_turn and ship_status on a real repo."""
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {"AGENTFLOW_MCP_ROOT": tmp}):
             root = Path(tmp).resolve()
             for args in [("init", "-b", "main"), ("config", "user.name", "Dev"),
                          ("config", "user.email", "dev@example.com"), ("config", "commit.gpgsign", "false")]:

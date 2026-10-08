@@ -87,7 +87,7 @@ class StabilizationTests(unittest.TestCase):
         import shlex
         import test_archive_recovery as fixtures
         from ship.lifecycle.vcs import GitClient
-        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {'AGENTFLOW_MCP_ALLOW_MUTATIONS': '1'}):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {'AGENTFLOW_MCP_ALLOW_MUTATIONS': '1', 'AGENTFLOW_MCP_ROOT': tmp}):
             root = Path(tmp)
             fixtures.ArchiveRecoveryTests().workspace(root)
             command = shlex.quote(sys.executable) + ' -c ' + shlex.quote(

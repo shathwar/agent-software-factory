@@ -112,3 +112,81 @@ class PolicyBoundaryTests(unittest.TestCase):
         self.assertFalse(self.engine.evaluate_external('ship', 'CLOUD_MUTATE', True).allowed)
         for command in ['curl https://example.com', 'bash -c true', 'true && false']:
             self.assertFalse(self.engine.evaluate_command('ship', command).allowed)
+
+    def test_custom_paths_cover_canonical_forms_without_credentials(self):
+        (self.root / 'private').mkdir()
+        (self.root / 'private' / 'data').write_text('fixture')
+        (self.root / 'alias').symlink_to(self.root / 'private', target_is_directory=True)
+        for credentials in (True, False):
+            engine = EnterprisePolicyEngine(self.root, PolicyRegistry.load_from_text(json.dumps({
+                'forbidden': {'paths': ['private/*'], 'credentials': credentials}})))
+            for target in ['private/data', str(self.root / 'private/data'), 'alias/data']:
+                with self.subTest(credentials=credentials, target=target):
+                    decision = engine.evaluate_filesystem('ship', target)
+                    self.assertFalse(decision.allowed)
+                    self.assertEqual(decision.rule_violated, 'forbidden.paths')
+            self.assertTrue(engine.evaluate_filesystem('ship', 'public.txt').allowed)
+            self.assertEqual(engine.evaluate_filesystem('ship', '.env').allowed, not credentials)
+
+    def test_production_command_destinations(self):
+        engine = EnterprisePolicyEngine(self.root, PolicyRegistry.load_from_text(json.dumps({
+            'allowed': {'network': 'external'}})))
+        for command in ['git push origin HEAD:production', 'git push origin HEAD:refs/heads/prod',
+                        'git push origin production', 'git push', 'git push --all origin',
+                        'git push origin HEAD', 'git push origin refs/heads/*:refs/heads/*',
+                        'kubectl --context prod apply -f app.yaml',
+                        'kubectl apply --context=production -f app.yaml',
+                        'kubectl apply -f app.yaml', 'terraform -chdir=infra apply']:
+            with self.subTest(command=command):
+                decision = engine.evaluate_command('ship', command, approval_granted=True)
+                self.assertFalse(decision.allowed)
+                self.assertEqual(decision.rule_violated, 'forbidden.production')
+        self.assertTrue(engine.evaluate_command('ship', 'git push origin HEAD:feature').allowed)
+        permitted = EnterprisePolicyEngine(self.root, PolicyRegistry.load_from_text(json.dumps({
+            'allowed': {'network': 'external'}, 'forbidden': {'production': False}})))
+        self.assertFalse(permitted.evaluate_command('ship', 'kubectl apply -f app.yaml').allowed)
+        self.assertTrue(permitted.evaluate_command('ship', 'kubectl apply -f app.yaml', approval_granted=True).allowed)
+
+    def test_dispatch_enforces_allowlist_before_handlers(self):
+        from unittest.mock import patch, Mock
+        from ship.mcp.tools import dispatch_tool
+        (self.root / '.agentflow').mkdir()
+        (self.root / '.agentflow/policy.json').write_text(json.dumps({'allowed': {'tools': []}}))
+        with patch.dict('os.environ', {'AGENTFLOW_MCP_ROOT': str(self.root), 'AGENTFLOW_MCP_ALLOW_MUTATIONS': '1'}):
+            for name in ['ship_review_validate', 'ship_record_tests']:
+                handler = Mock(return_value={'called': True})
+                with patch.dict('ship.mcp.tools.HANDLERS', {name: handler}):
+                    with self.assertRaises(PermissionError):
+                        dispatch_tool(name, {'path': str(self.root)})
+                    handler.assert_not_called()
+            (self.root / '.agentflow/policy.json').write_text(json.dumps({'allowed': {'tools': ['ship_review_validate']}}))
+            result = dispatch_tool('ship_review_validate', {'report_data': {'fixture': True}})
+            self.assertFalse(result['valid'])  # Real handler ran; malformed report is expected.
+
+    def test_dispatch_cannot_switch_policy_root_or_read_excluded_report(self):
+        from unittest.mock import patch, Mock
+        from ship.mcp.tools import dispatch_tool
+        (self.root / '.agentflow').mkdir()
+        (self.root / '.agentflow/policy.json').write_text(json.dumps({'forbidden': {'paths': ['private/*']}}))
+        (self.root / 'private').mkdir()
+        (self.root / 'alias').symlink_to(self.root / 'private', target_is_directory=True)
+        handler = Mock()
+        with patch.dict('os.environ', {'AGENTFLOW_MCP_ROOT': str(self.root)}), patch.dict(
+                'ship.mcp.tools.HANDLERS', {'ship_review_validate': handler}):
+            for arguments in [{'path': str(self.root.parent)}, {'path': str(self.root / 'nested')},
+                              {'report_path': 'alias/report.json'}]:
+                with self.subTest(arguments=arguments), self.assertRaises(PermissionError):
+                    dispatch_tool('ship_review_validate', arguments)
+            handler.assert_not_called()
+
+    def test_dispatch_mutation_respects_read_only_filesystem(self):
+        from unittest.mock import patch, Mock
+        from ship.mcp.tools import dispatch_tool
+        (self.root / '.agentflow').mkdir()
+        (self.root / '.agentflow/policy.json').write_text(json.dumps({'allowed': {'filesystem': 'read_only'}}))
+        handler = Mock()
+        with patch.dict('os.environ', {'AGENTFLOW_MCP_ROOT': str(self.root), 'AGENTFLOW_MCP_ALLOW_MUTATIONS': '1'}), patch.dict(
+                'ship.mcp.tools.HANDLERS', {'ship_record_tests': handler}):
+            with self.assertRaises(PermissionError):
+                dispatch_tool('ship_record_tests', {})
+            handler.assert_not_called()
