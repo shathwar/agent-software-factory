@@ -45,11 +45,16 @@ ALL_SCENARIOS = {
 
 
 def format_markdown_report(report: dict, mode: str) -> str:
+    assessment_label = (
+        f"`{report['assessment_kind']}` (causal invariants independently proven via execution trace)"
+        if report.get("behavior_verified")
+        else f"`{report['assessment_kind']}`; behavior is not independently verified"
+    )
     lines = [
         "# Response Contract Report",
         "",
         f"- **Execution Mode**: `{mode}`",
-        f"- **Assessment**: `{report['assessment_kind']}`; behavior is not independently verified",
+        f"- **Assessment**: {assessment_label}",
         f"- **Status**: {report['status'].upper()}",
         f"- **Total Scenarios**: {report['total']}",
         f"- **Passed**: {report['n_passed']}",

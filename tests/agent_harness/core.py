@@ -22,6 +22,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from ship.lifecycle.observability import (
+    CausalTraceVerifier,
+    CommandRecord,
+    ExecutionObserver,
+    ExecutionTrace,
+    FileChangeRecord,
+    LifecycleRecord,
+    TestResultRecord,
+    ToolCallRecord,
+)
+
 
 # ---------------------------------------------------------------------------
 # Trace – raw output captured from one agent invocation
@@ -35,6 +46,30 @@ class Trace:
     exit_code: int = 0
     elapsed_ms: float = 0.0
     metadata: Dict[str, Any] = field(default_factory=dict)
+    execution_trace: Optional[ExecutionTrace] = None
+
+    # ------------------------------------------------------------------ #
+    # Observability & Causal Verifier accessors                          #
+    # ------------------------------------------------------------------ #
+
+    def verifier(self) -> Optional[CausalTraceVerifier]:
+        """Return CausalTraceVerifier if an execution trace is available."""
+        return CausalTraceVerifier(self.execution_trace) if self.execution_trace else None
+
+    def tool_calls(self) -> List[ToolCallRecord]:
+        return self.execution_trace.tool_calls() if self.execution_trace else []
+
+    def file_changes(self) -> List[FileChangeRecord]:
+        return self.execution_trace.file_changes() if self.execution_trace else []
+
+    def commands(self) -> List[CommandRecord]:
+        return self.execution_trace.commands() if self.execution_trace else []
+
+    def test_results(self) -> List[TestResultRecord]:
+        return self.execution_trace.test_results() if self.execution_trace else []
+
+    def lifecycle_transitions(self) -> List[LifecycleRecord]:
+        return self.execution_trace.lifecycle_transitions() if self.execution_trace else []
 
     # ------------------------------------------------------------------ #
     # Convenience accessors                                                #
@@ -183,9 +218,112 @@ class Scenario:
     # Stub response used by default, even when credentials exist
     stub_response: str = ""
 
+    # Real-agent observable actions (host-side tool calls, file writes, commands)
+    observable_actions: Optional[Callable[[ExecutionObserver, Path], None]] = None
+    execution_trace: Optional[ExecutionTrace] = None
+
     # Metadata
     tags: List[str] = field(default_factory=list)
     expected_exit_code: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Causal BehaviourCheck Factories (Mechanical Proofs)
+# ---------------------------------------------------------------------------
+
+def check_test_failed_before_production_code_changed() -> BehaviourCheck:
+    """Prove mechanically that a test failure occurred before any production code modification."""
+    def _pred(t: Trace) -> bool:
+        v = t.verifier()
+        if not v:
+            return False
+        proven, _, _ = v.prove_test_failed_before_production_code_changed()
+        return proven
+
+    return BehaviourCheck(
+        name="test_failed_before_production_code_changed",
+        predicate=_pred,
+        description="Verify mechanically from execution trace that test failed before production code changed",
+    )
+
+
+def check_red_green_cycle() -> BehaviourCheck:
+    """Prove complete TDD Red -> Green cycle (Red test < Prod edit < Green test)."""
+    def _pred(t: Trace) -> bool:
+        v = t.verifier()
+        if not v:
+            return False
+        proven, _, _ = v.prove_red_green_cycle()
+        return proven
+
+    return BehaviourCheck(
+        name="red_green_cycle_proven",
+        predicate=_pred,
+        description="Verify mechanically that Test Red < Prod Edit < Test Green",
+    )
+
+
+def check_no_file_changes_outside(allowed_patterns: List[str]) -> BehaviourCheck:
+    """Prove zero unauthorized file mutations outside allowed patterns."""
+    def _pred(t: Trace) -> bool:
+        v = t.verifier()
+        if not v:
+            return False
+        proven, _ = v.prove_no_file_changes_outside(allowed_patterns)
+        return proven
+
+    return BehaviourCheck(
+        name=f"no_file_changes_outside({allowed_patterns})",
+        predicate=_pred,
+        description=f"Verify mechanically that zero files changed outside {allowed_patterns}",
+    )
+
+
+def check_no_test_weakening() -> BehaviourCheck:
+    """Prove no test skipping decorators or deleted assertions occurred."""
+    def _pred(t: Trace) -> bool:
+        v = t.verifier()
+        if not v:
+            return False
+        proven, _ = v.prove_no_test_weakening()
+        return proven
+
+    return BehaviourCheck(
+        name="no_test_weakening",
+        predicate=_pred,
+        description="Verify mechanically that test edits did not weaken assertions or add skips",
+    )
+
+
+def check_no_unauthorized_external_calls(forbidden_tools: Optional[List[str]] = None) -> BehaviourCheck:
+    """Prove zero external network or comment calls occurred."""
+    def _pred(t: Trace) -> bool:
+        v = t.verifier()
+        if not v:
+            return False
+        proven, _ = v.prove_no_unauthorized_external_calls(forbidden_tools)
+        return proven
+
+    return BehaviourCheck(
+        name="no_unauthorized_external_calls",
+        predicate=_pred,
+        description="Verify mechanically that zero unauthorized external API or comment calls occurred",
+    )
+
+
+def check_trace_integrity() -> BehaviourCheck:
+    """Prove cryptographic hash-chain integrity of the execution trace."""
+    def _pred(t: Trace) -> bool:
+        if not t.execution_trace:
+            return False
+        valid, _ = t.execution_trace.verify_integrity()
+        return valid
+
+    return BehaviourCheck(
+        name="trace_hash_chain_integrity",
+        predicate=_pred,
+        description="Verify cryptographic hash-chain integrity across execution trace",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +403,7 @@ class AgentRunner:
     def run(self, scenario: Scenario, workdir: Optional[Path] = None) -> Trace:
         """Execute ``scenario`` and return a Trace."""
         if self.mode == "stub":
-            return self._run_stub(scenario)
+            return self._run_stub(scenario, workdir)
         if self.mode == "anthropic":
             return self._run_anthropic(scenario, workdir)
         if self.mode == "live":
@@ -276,13 +414,18 @@ class AgentRunner:
     # Stub mode – deterministic; no LLM calls                             #
     # ------------------------------------------------------------------ #
 
-    def _run_stub(self, scenario: Scenario) -> Trace:
+    def _run_stub(self, scenario: Scenario, workdir: Optional[Path] = None) -> Trace:
         if not scenario.stub_response:
             raise ValueError(
                 f"Scenario {scenario.id!r} has no stub_response. "
                 "Either set stub_response or switch to AGENT_HARNESS_MODE=live."
             )
-        return Trace(raw=scenario.stub_response, exit_code=0, elapsed_ms=0.0)
+        exec_trace = scenario.execution_trace
+        if scenario.observable_actions and workdir:
+            observer = ExecutionObserver(workdir, run_id=f"run-{scenario.id}", skill=scenario.skill)
+            scenario.observable_actions(observer, workdir)
+            exec_trace = observer.get_trace()
+        return Trace(raw=scenario.stub_response, exit_code=0, elapsed_ms=0.0, execution_trace=exec_trace)
 
     # ------------------------------------------------------------------ #
     # Anthropic SDK mode                                                   #
@@ -423,10 +566,23 @@ class RegressionSuite:
         total = len(results)
         n_passed = sum(1 for r in results if r.passed)
 
+        has_verified_traces = bool(results) and all(
+            r.trace and r.trace.execution_trace and len(r.trace.execution_trace.events) > 0
+            for r in results
+        )
+        if has_verified_traces and passed:
+            assessment_kind = "observable_execution_trace"
+            behavior_verified = True
+            summary_prefix = f"Mode: {self.runner.mode}; execution trace verified; causal invariants independently proven.\n"
+        else:
+            assessment_kind = "stub_response_contract" if self.runner.mode == "stub" else "agent_output_contract"
+            behavior_verified = False
+            summary_prefix = f"Mode: {self.runner.mode}; output predicates only; behavior is not independently verified.\n"
+
         return {
             "mode": self.runner.mode,
-            "assessment_kind": "stub_response_contract" if self.runner.mode == "stub" else "agent_output_contract",
-            "behavior_verified": False,
+            "assessment_kind": assessment_kind,
+            "behavior_verified": behavior_verified,
             "status": ("pass" if passed else "fail") if total else "inconclusive",
             "passed": passed,
             "total": total,
@@ -434,8 +590,7 @@ class RegressionSuite:
             "n_failed": total - n_passed,
             "pass_rate": n_passed / total if total else None,
             "results": results,
-            "summary": f"Mode: {self.runner.mode}; output predicates only; behavior is not independently verified.\n"
-                       + self._format_summary(results),
+            "summary": summary_prefix + self._format_summary(results),
         }
 
     def _run_one(self, scenario: Scenario) -> RunResult:
