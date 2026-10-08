@@ -473,4 +473,22 @@ def dispatch_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
                 raise PermissionError(decision.reason)
             normalized.append(str((root / item).resolve()))
         arguments[key] = normalized if isinstance(value, list) else normalized[0]
-    return handler(arguments)
+
+    from ship.lifecycle.secrets import SecretsBroker
+    broker = SecretsBroker()
+
+    # Pre-execution secret inspection for commands
+    if "command" in arguments and isinstance(arguments["command"], str):
+        allowed, reason = broker.inspect_command(arguments["command"])
+        if not allowed:
+            raise PermissionError(f"Command blocked by secrets safety policy: {reason}")
+
+    res = handler(arguments)
+
+    # Post-execution response redaction
+    if isinstance(res, str):
+        return broker.scrub_text(res)
+    elif isinstance(res, dict):
+        if "text" in res and isinstance(res["text"], str):
+            res["text"] = broker.scrub_text(res["text"])
+    return res

@@ -100,16 +100,26 @@ class TestTwelveBehavioralScenarios(unittest.TestCase):
         """Case 12 (m-resume): Resumes at Task 2 in Red phase, preserves Task 1, no re-prompting."""
         self._run_scenario(SCENARIO_EC12)
 
-    def test_all_twelve_scenarios_pass_as_suite(self):
-        """Run all 12 behavioral scenarios as a unified batch suite."""
+    def test_13_ux_accessibility_check(self):
+        """Case 13 (m-ux-source): Source markup inspected for accessibility attributes."""
+        from tests.agent_harness.scenarios_eval_cases import SCENARIO_EC13
+        self._run_scenario(SCENARIO_EC13)
+
+    def test_14_evals_trace_failure_discovery(self):
+        """Case 14 (m-evals-trace): Execution traces analyzed to isolate failure modes."""
+        from tests.agent_harness.scenarios_eval_cases import SCENARIO_EC14
+        self._run_scenario(SCENARIO_EC14)
+
+    def test_all_behavioral_scenarios_pass_as_suite(self):
+        """Run all behavioral scenarios as a unified batch suite."""
         suite = RegressionSuite(TWELVE_BEHAVIORAL_SCENARIOS, runner=self.runner)
         report = suite.run()
         self.assertTrue(
             report["passed"],
             f"Some behavioral scenarios failed:\n{report['summary']}",
         )
-        self.assertEqual(report["total"], 12)
-        self.assertEqual(report["n_passed"], 12)
+        self.assertEqual(report["total"], len(TWELVE_BEHAVIORAL_SCENARIOS))
+        self.assertEqual(report["n_passed"], len(TWELVE_BEHAVIORAL_SCENARIOS))
         self.assertEqual(report["n_failed"], 0)
 
 

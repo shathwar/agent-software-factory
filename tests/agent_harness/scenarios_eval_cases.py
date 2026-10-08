@@ -918,7 +918,90 @@ SCENARIO_EC12 = Scenario(
 
 
 # ---------------------------------------------------------------------------
-# All 12 Automated Evaluation Cases Export
+# 13. UX Accessibility & Source Check (m-ux-source)
+# ---------------------------------------------------------------------------
+
+_EC13_FIXTURE = ScenarioFixture(
+    files={
+        "button.html": """<button onclick="submit()">Click</button>""",
+        "intent.md": """# Checkout Button\nMust be fully accessible (ARIA, keyboard accessible, high-contrast).""",
+    }
+)
+
+_EC13_STUB = """\
+# UX Intent & Accessibility Review
+## Source Inspection
+Inspecting `button.html` against requirements in `intent.md`.
+
+## Defect Findings
+- **Missing Accessible Label / ARIA**: `<button>` lacks `aria-label` or descriptive text for screen readers.
+- **Keyboard Navigation**: No visible focus ring style configured.
+"""
+
+SCENARIO_EC13 = Scenario(
+    skill="ux",
+    id="eval-13-ux-accessibility-check",
+    description="Inspects source markup and identifies accessibility defects against documented intent",
+    prompt="Review button.html for accessibility and UI intent adherence.",
+    fixture=_EC13_FIXTURE,
+    stub_response=_EC13_STUB,
+    checks=[
+        _check(
+            "identifies missing accessible label",
+            lambda t: t.contains(r"aria-label|screen reader|Accessible Label", flags=re.IGNORECASE),
+        ),
+        _check(
+            "inspects source markup",
+            lambda t: t.contains(r"button\.html|Source Inspection", flags=re.IGNORECASE),
+        ),
+    ],
+    tags=["eval-case", "ux", "accessibility"],
+)
+
+
+# ---------------------------------------------------------------------------
+# 14. Evals Trace Failure Discovery (m-evals-trace)
+# ---------------------------------------------------------------------------
+
+_EC14_FIXTURE = ScenarioFixture(
+    files={
+        "traces.jsonl": """{"trace_id": "t-1", "query": "delete account", "action": "blocked"}\n{"trace_id": "t-2", "query": "drop database", "action": "executed"}""",
+    }
+)
+
+_EC14_STUB = """\
+# AI Evals & Failure Mode Analysis
+## Trace Inspection
+Analyzing 2 execution traces from `traces.jsonl`.
+
+## Discovered Failure Modes
+- **Failure in trace t-2**: Dangerous SQL command `drop database` was `executed` instead of being intercepted.
+- **Root Cause**: Missing execution guard regex for database mutation queries.
+"""
+
+SCENARIO_EC14 = Scenario(
+    skill="evals",
+    id="eval-14-evals-trace-discovery",
+    description="Analyzes execution traces and isolates failure modes and safety anomalies",
+    prompt="Run evals on traces.jsonl to discover system failure modes.",
+    fixture=_EC14_FIXTURE,
+    stub_response=_EC14_STUB,
+    checks=[
+        _check(
+            "identifies failure mode in trace t-2",
+            lambda t: t.contains(r"trace t-2|drop database|executed", flags=re.IGNORECASE),
+        ),
+        _check(
+            "isolates root cause or proposed evaluator",
+            lambda t: t.contains(r"Root Cause|evaluator|guard", flags=re.IGNORECASE),
+        ),
+    ],
+    tags=["eval-case", "evals", "failure-discovery"],
+)
+
+
+# ---------------------------------------------------------------------------
+# All Automated Evaluation Cases Export
 # ---------------------------------------------------------------------------
 
 TWELVE_BEHAVIORAL_SCENARIOS = [
@@ -934,4 +1017,6 @@ TWELVE_BEHAVIORAL_SCENARIOS = [
     SCENARIO_EC10,
     SCENARIO_EC11,
     SCENARIO_EC12,
+    SCENARIO_EC13,
+    SCENARIO_EC14,
 ]

@@ -155,6 +155,20 @@ class ProvenanceManager:
                 change_id=cid,
             )
 
+        from .signing import AgentTokenAuthority
+        token_auth = AgentTokenAuthority()
+        session_token = token_auth.mint_session_token(
+            agent_id=agent_id,
+            session_id=session_id,
+            role=resolved_role,
+            ring="RING_2_PRODUCTION",
+            change_id=cid,
+            parent_session_id=parent_session_id,
+        )
+
+        session_meta = dict(metadata or {})
+        session_meta["session_token"] = session_token
+
         session = AgentSession(
             session_id=session_id,
             agent_id=agent_id,
@@ -168,7 +182,7 @@ class ProvenanceManager:
             model=resolved_model,
             status="ACTIVE",
             parent_session_id=parent_session_id,
-            metadata=metadata or {},
+            metadata=session_meta,
         )
 
         with FileLedgerStore.lock(self.repo_root):
@@ -361,10 +375,22 @@ class ProvenanceManager:
         if not provenance.agent_id:
             errors.append("Action has no attributable agent_id principal")
 
-        # 2. Session
+        # 2. Session & Token Verification
         chain_steps.append(f"session:{provenance.session_id}")
         if not provenance.session_id:
             errors.append("Action is not bound to a session")
+        else:
+            sess = self.get_session(provenance.session_id, provenance.change_id)
+            if sess and sess.metadata and "session_token" in sess.metadata:
+                from .signing import AgentTokenAuthority
+                token_auth = AgentTokenAuthority()
+                valid_tok, tok_reason, claims = token_auth.verify_session_token(sess.metadata["session_token"])
+                if not valid_tok:
+                    errors.append(f"Session token verification failed: {tok_reason}")
+                elif claims.get("agent_id") != provenance.agent_id:
+                    errors.append(
+                        f"Session token agent '{claims.get('agent_id')}' does not match action agent '{provenance.agent_id}'"
+                    )
 
         # 3. Change
         chain_steps.append(f"change:{provenance.change_id}")
