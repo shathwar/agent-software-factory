@@ -1,6 +1,6 @@
-# Skills
+# AgentFlow
 
-A repository of local-first engineering skills for AI agents, covering the complete lifecycle from architectural design to post-implementation code review:
+A local-first autonomous engineering lifecycle engine, state ledger, and MCP server for AI coding agents. Covers the complete lifecycle from architectural design, empirical spikes, test-driven implementation, and adversarial review to delivery sign-off, enterprise policy enforcement, and native skill authoring:
 
 ```text
                      USER REQUEST: /ship "<Feature Idea>"
@@ -88,6 +88,7 @@ For agent frameworks:
 | [**`evals`**](./skills/evals/SKILL.md) | `/evals`, `evals`, `ai evals` | AI Regressions & Evals | Parlance Labs / Hamel Husain methodology. Zero-dependency review app (`serve_review_app.py`), binary judges, Rogan-Gladen statistical calibration (`score_calibration.py`). Ref: [Taxonomy](./skills/evals/references/taxonomy_framework.md), [Math](./skills/evals/references/calibration_math.md). |
 | [**`debug`**](./skills/debug/SKILL.md) | `/debug`, `debug`, `/fix`, `fix` | Root-Cause Repair | Reproduction test first, backward data-flow tracing, multi-boundary logging, anti-cheat verification via `verify_fix.py`. Ref: [Root Cause Tracing](./skills/debug/references/root_cause_tracing.md), [Logging](./skills/debug/references/multi_component_logging.md). |
 | [**`ux`**](./skills/ux/SKILL.md) | `/ux`, `ux`, `ui`, `a11y` | Interface Engineering | Prime Directive (intent and flow before visual styling), State Completeness Law (6 view states + control states), and source-pattern linting via `audit_ux.py`. Ref: [Orchestration](./skills/ux/references/orchestration.md), [State Matrix](./skills/ux/references/state_matrix.md), [WCAG](./skills/ux/references/accessibility_wcag.md). |
+| [**`skill`**](./skills/skill/SKILL.md) | `/skill`, `skill`, `create skill` | Authoring & Capabilities | End-to-end Skill Factory: transforms requirements into standard native Claude `SKILL.md` + companion deterministic `scripts/` + `references/` + `assets/` + `evals/`, assesses host × model compatibility matrices, and computes token cost economics. Ref: [Skill Guide](./skills/skill/references/skill_factory_guide.md). |
 
 ---
 
@@ -109,6 +110,12 @@ For agent frameworks:
    - `audit_ux.py`: Checks source patterns for UI states and accessibility; does not prove rendered behavior or WCAG compliance.
 5. **Two-Phase Crash Self-Healing**:
    Authoritative multi-change ledger (`.agentflow/state.json`) with atomic two-phase commit spec archiving (`.agentflow/archive-transaction.json`) ensuring cold resumption after interrupted sessions.
+6. **Real-Agent Observability & Hash-Chained Audit Trail**:
+   Records immutable execution traces per run capturing host-observed tool calls, file diffs, shell commands, test results, and lifecycle transitions in strict chronological order. Proves invariants such as *"Test failed before production code changed"* rather than trusting agent self-reports. Events are anchored in a Ring 0 tamper-evident event stream (`.agentflow/events.jsonl`) verifiable with `agentflow events verify`.
+7. **Enterprise Policy Governance**:
+   Formal organization-wide policy layer (`.agentflow/policy.json`) inherited by every skill. Declares tool allowlists, filesystem boundaries, mandatory approval gates (`commit`, `pull_request`, `deployment`), and forbidden access (credentials, production destinations). Enforced at the MCP dispatch and CLI execution boundary.
+8. **Native Claude Skills Factory & Ecosystem Matrix**:
+   Automated synthesis pipeline for native agent skills (`agentflow skill create`) generating standard `SKILL.md`, deterministic `scripts/validate_<skill>.py`, on-demand `references/`, `assets/`, and `evals/`. Assesses compatibility across Claude Code, Antigravity, Cursor, Codex, and Claude Desktop, while tracking token economics via `agentflow cost`.
 
 ---
 
@@ -141,6 +148,18 @@ python3 skills/ux/scripts/audit_ux.py --fail-on error src/ # Accessibility and i
 python3 skills/debug/scripts/verify_fix.py --strict        # Check reproduction and assertion-change patterns
 python3 skills/evals/scripts/score_calibration.py --input test_results.jsonl --p-obs 0.80 # Calibrate judge TPR/TNR
 python3 skills/spike/scripts/run_spike.py --cmd "python3 -c 'pass'" --iterations 100     # Run empirical benchmark
+
+# AgentFlow CLI & Observability
+agentflow doctor                               # Lifecycle, runtime, and policy preflight check
+agentflow events verify                        # Verify tamper-evident hash-chained event stream
+agentflow events tail -n 10                    # Tail latest recorded lifecycle events
+
+# /skill Skill Factory & Cost Economics
+agentflow skill create <name> --role "<role>"  # Synthesize complete native Claude skill
+agentflow skill validate <dir> --strict        # Validate skill against standard layout
+agentflow skill matrix <path>                  # Render Skill × Model × Host compatibility matrix
+agentflow skill package <dir> --format tar.gz  # Package skill into distributable bundle
+agentflow cost --model <model> --input <N> --output <N> # Compute token run cost and usage metadata
 ```
 
 ---
@@ -172,15 +191,16 @@ skills/                         # Standalone modular agent skill definitions
 ├── ship/                       # Full lifecycle orchestrator with 2-phase commit recovery
 ├── evals/                      # Parlance Labs / Hamel Husain AI evaluation engine
 ├── debug/                      # Root-cause debugging engine with reproduction proofs
-└── ux/                         # Intent-first interface engineering and source checks
+├── ux/                         # Intent-first interface engineering and source checks
+└── skill/                      # Native Claude Skill Factory, validator, and compatibility matrix
 
 nano/                           # High-density, compact rules (<60 lines each)
 └── AGENTS.md                   # Universal drop-in rule (<100 lines) combining all 9 skills
 
 src/ship/                       # Unified Python package with selected standalone mirrors
-├── cli.py                      # Unified CLI entrypoint
-├── lifecycle/                  # SOLID lifecycle, gate, and transaction engine
-├── mcp/                        # Zero-dependency stdio Model Context Protocol server
+├── cli.py                      # Unified CLI entrypoint (agentflow / ship)
+├── lifecycle/                  # SOLID lifecycle, gate, policy, observability, and skill factory
+├── mcp/                        # Zero-dependency stdio Model Context Protocol server & policy gates
 └── tools/                      # Specialist tools (mirrored in skills/*/scripts/)
 
 tests/                          # Unit tests, fixtures, and evaluation suites
@@ -222,7 +242,10 @@ The [live tool-loop suite](./tests/evaluation/live_agent_regression.md) runs rea
 
 ## Team Rollout & Governance
 
+- **Enterprise Policy Engine ([`capability_permissions_and_rings.md`](./skills/ship/references/capability_permissions_and_rings.md))**: Declarative organization-wide access control inherited by all skills. Enforces filesystem boundaries, tool allowlists, path restrictions, and mandatory approval gates (`commit`, `pull_request`, `deployment`) before mutations.
+- **Cryptographic Audit Stream ([`step_tracing.md`](./skills/ship/references/step_tracing.md))**: Tamper-evident append-only ledger tracking all agent actions, tool calls, and state transitions with cryptographic hash chaining and Ring 0 protection.
+- **Multi-Agent Coordination & Ring Lattice ([`multi_agent_coordination.md`](./skills/ship/references/multi_agent_coordination.md), [`agent_identity_and_provenance.md`](./skills/ship/references/agent_identity_and_provenance.md))**: Execution rings (Ring 0 System, Ring 1 Approval, Ring 2 Execution), agent provenance binding, and cooperative task leasing with atomic handoffs.
 - **Local Rollout Guide ([`team_rollout.md`](./skills/ship/references/team_rollout.md))**: Preflight doctor checks, workflow profiles (`small-fix`, `standard`, `high-risk`), and zero-loss ledger migrations.
 - **Headless CI Guide ([`headless_ci_guide.md`](./skills/ship/references/headless_ci_guide.md))**: Gated GitHub Actions integration requiring explicit design approvals and independent delivery execution receipts.
 - **Behavioral Evaluations ([`skill_evaluations.md`](./tests/skill_evaluations.md))**: Manual acceptance scenarios and links to executable component checks.
-- **Trust Boundaries**: AgentFlow coordinates local workflow states. Sandboxing, secrets management, and network containment are enforced by the host runtime.
+- **Trust Boundaries**: AgentFlow coordinates local workflow states and policy enforcement. Sandboxing, secrets management, and network containment are reinforced by the host runtime.
