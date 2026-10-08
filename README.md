@@ -67,7 +67,7 @@ Install skills into your environment's local skills directory (defaults to `~/.g
 ```
 
 For agent frameworks:
-- **Vercel Skills CLI (70+ Agents)**: `npx skills add shathwar/skills`
+- **Vercel Skills CLI (70+ Agents)**: `npx skills add shathwar/agentflow`
 - **Cursor IDE**: Preconfigured in [`.cursor/rules/ship.mdc`](./.cursor/rules/ship.mdc)
 - **OpenAI Codex**: Manifest configured in [`.codex-plugin/plugin.json`](./.codex-plugin/plugin.json)
 - **GitHub Copilot**: Context instructions in [`.github/copilot-instructions.md`](./.github/copilot-instructions.md)
@@ -94,7 +94,7 @@ For agent frameworks:
 ## Runtime and Verification Scope
 
 1. **Standard-library core (Python 3.10+)**:
-   The lifecycle engine, standalone Python validators, and default Python tests use the standard library. Rendered UX checks require Node, Playwright, and a browser. Optional Anthropic harness mode requires its SDK and credentials; live mode requires the `agy` CLI.
+   The lifecycle engine, standalone Python validators, and default Python tests use the standard library. Rendered UX checks require Node, Playwright, and a browser. The legacy response harness has optional Anthropic SDK and `agy` CLI modes. The separate live tool-loop suite uses the standard-library HTTP client, an Anthropic API key, an explicitly configured model, and Docker.
 2. **Byte-for-Byte Distribution Parity**:
    Every specialist tool in `src/ship/tools/` mirrors its script in `skills/*/scripts/` identically. Enforced by `scripts/verify/sync_parity.py --check` and Git pre-commit hooks.
 3. **Native stdio Model Context Protocol (MCP) Server**:
@@ -204,6 +204,7 @@ This inventory maps requirements to checks; it does not record test executions o
 | evals | 12 | 3 | 5 | 0 | 12 |
 | ux | 17 | 5 | 10 | 0 | 17 |
 | ship | 14 | 12 | 12 | 1 | 14 |
+| skill | 4 | 4 | 4 | 0 | 4 |
 
 Runtime capture: `reported`. Every catalog step has a terminal observation; failures and skips count. This is not success.
 
@@ -215,6 +216,8 @@ Recorded completion does not verify behavior or quality. Recording order does no
 The table and observation contract above are generated with the runtime catalog by `scripts/verify/build_step_catalog.py`; `--check` rejects drift. Evidence hashes detect file changes, not whether the recorded claim is true.
 
 The [response harness](./tests/test_agent_regression.py) covers review, debug, TDD, and design response predicates. CI defaults to canned responses (`stub`), even when credentials exist. Explicit `anthropic` mode evaluates model text without a tool loop; `live` evaluates CLI output and depends on host skill setup. Neither mode independently captures tool/edit chronology. A passing stub suite is a harness check, not measured agent adherence.
+
+The [live tool-loop suite](./tests/evaluation/live_agent_regression.md) runs real model-selected tools against disposable fixtures, records host-observed tool calls, file diffs, commands, test results and order, and retains per-run evidence. It runs nightly and on published releases, separately from PR checks. Missing credentials or incomplete execution cannot pass. Synthetic trace fixtures never certify real-agent behavior.
 
 [Evaluation tooling](./tests/evaluation/README.md) also provides seeded review defects with clean controls, rendered UX fixture checks with negative controls, and adversarial rubric tests. These are bounded component measurements; review agent precision/recall requires actual submitted reviews and adjudication, and browser checks do not establish general accessibility compliance.
 

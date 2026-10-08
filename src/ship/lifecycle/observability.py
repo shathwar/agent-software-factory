@@ -706,6 +706,10 @@ class ExecutionObserver:
                 self.file_contents[rel] = self._read_text_safe(p)
 
     def _is_ignored(self, p: Path) -> bool:
+        # Never follow agent-created links when collecting host-side evidence.
+        # A regular file replaced by a link is recorded as deletion, not read.
+        if p.is_symlink() or not p.resolve().is_relative_to(self.repo_root):
+            return True
         parts = p.parts
         return any(
             ignored in parts

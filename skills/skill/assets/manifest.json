@@ -1,0 +1,15 @@
+{
+  "skill": "skill",
+  "name": "Skill Factory",
+  "version": "1.0.0",
+  "format": "native_claude_skill",
+  "components": [
+    "SKILL.md",
+    "VERSION",
+    "CHANGELOG.md",
+    "scripts/validate_skill.py",
+    "references/skill_factory_guide.md",
+    "assets/manifest.json",
+    "evals/eval_cases.json"
+  ]
+}

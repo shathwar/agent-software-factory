@@ -44,7 +44,7 @@ class MCPServerTests(unittest.TestCase):
 
     def test_tools_manifest_has_all_ship_tools(self):
         """TOOLS_MANIFEST contains all registered ship_* tools with valid schemas."""
-        self.assertEqual(len(TOOLS_MANIFEST), 20)
+        self.assertEqual(len(TOOLS_MANIFEST), 24)
         tool_names = {t["name"] for t in TOOLS_MANIFEST}
         expected_tools = {
             "ship_steps_begin", "ship_steps_record", "ship_steps_report",
@@ -65,6 +65,10 @@ class MCPServerTests(unittest.TestCase):
             "ship_simplify_scan",
             "ship_spike_run",
             "ship_review_validate",
+            "ship_skill_create",
+            "ship_skill_validate",
+            "ship_skill_matrix",
+            "ship_cost",
         }
         self.assertEqual(tool_names, expected_tools)
         for tool in TOOLS_MANIFEST:
@@ -111,7 +115,7 @@ class MCPServerTests(unittest.TestCase):
         resps = self._get_responses()
         self.assertEqual(len(resps), 1)
         tools = resps[0]["result"]["tools"]
-        self.assertEqual(len(tools), 20)
+        self.assertEqual(len(tools), len(TOOLS_MANIFEST))
 
     def test_unknown_method_returns_error(self):
         """Unknown methods return JSON-RPC -32601 Method not found."""

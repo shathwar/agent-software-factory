@@ -1,0 +1,29 @@
+[
+  {
+    "name": "generate_native_claude_skill",
+    "description": "Verifies Skill Factory produces standard SKILL.md + scripts/ + references/ + assets/ layout",
+    "input_prompt": "Create a new skill named 'security-audit' with role 'Principal Security Engineer'.",
+    "expected_behavior": "Generates complete native directory structure with SKILL.md, validate_security_audit.py, guide, and manifest.",
+    "required_tool_calls": ["write_to_file"],
+    "forbidden_patterns": ["Certainly"],
+    "evidence_assertions": ["VERSION: 1.0.0", "scripts/validate_security_audit.py"]
+  },
+  {
+    "name": "evaluate_compatibility_matrix",
+    "description": "Verifies Skill Factory computes 2D host x model matrix and warns on degraded combinations",
+    "input_prompt": "Evaluate compatibility matrix for 'ship' across Claude, Cursor, and Codex.",
+    "expected_behavior": "Reports full compatibility on Claude Code and partial/degraded on Cursor/Codex with actionable fallbacks.",
+    "required_tool_calls": [],
+    "forbidden_patterns": [],
+    "evidence_assertions": ["Compatibility Matrix", "Claude Code", "Cursor", "Codex"]
+  },
+  {
+    "name": "calculate_run_cost_metadata",
+    "description": "Verifies accurate token and USD calculation for model execution",
+    "input_prompt": "Compute run cost metadata for 10000 input tokens, 2000 output tokens on claude-3-7-sonnet.",
+    "expected_behavior": "Computes exact estimated cost based on $3/M in and $15/M out.",
+    "required_tool_calls": [],
+    "forbidden_patterns": [],
+    "evidence_assertions": ["estimated_cost_usd", "0.06"]
+  }
+]

@@ -341,6 +341,65 @@ def handle_ship_steps_report(args):
     return StepTrace(_get_root(args)).report(args["run_id"])
 
 
+def handle_ship_skill_create(args: Dict[str, Any]) -> Dict[str, Any]:
+    from ship.lifecycle.skill_factory import SkillFactory, SkillRequirements
+    root = _get_root(args)
+    factory = SkillFactory(root)
+    name = args.get("name")
+    if not name:
+        raise ValueError("Parameter 'name' is required for ship_skill_create.")
+    req = SkillRequirements(
+        name=name,
+        role=args.get("role", "Specialist Engineer"),
+        description=args.get("description", f"Autonomous specialist engine for {name}."),
+        domain=args.get("domain", "engineering"),
+        trigger_phrases=args.get("trigger_phrases", []),
+        hard_constraints=args.get("hard_constraints", []),
+        turn_contract_items=args.get("turn_contract", []),
+        tools_required=args.get("tools_required", []),
+    )
+    out_dir = Path(args["output_dir"]) if args.get("output_dir") else (root / "skills" / name)
+    package_archive = bool(args.get("package", False))
+    artifact = factory.build_skill(req, output_dir=out_dir, package_archive=package_archive)
+    return artifact.to_dict()
+
+
+def handle_ship_skill_validate(args: Dict[str, Any]) -> Dict[str, Any]:
+    from ship.lifecycle.skill_factory import SkillFactory
+    root = _get_root(args)
+    skill_p = Path(args.get("skill_path") or args.get("path") or ".")
+    if not skill_p.is_absolute():
+        skill_p = root / skill_p
+    return SkillFactory(root).validate_skill_structure(skill_p)
+
+
+def handle_ship_skill_matrix(args: Dict[str, Any]) -> Dict[str, Any]:
+    from ship.lifecycle.skill_factory import SkillRequirements, generate_compatibility_matrix, render_compatibility_markdown
+    skill_name = args.get("skill", "skill")
+    req = SkillRequirements(name=skill_name, role="Specialist", description="Specialist")
+    matrix = generate_compatibility_matrix(req.compatibility, skill_name, hosts=args.get("hosts"), models=args.get("models"))
+    matrix["markdown"] = render_compatibility_markdown(matrix)
+    return matrix
+
+
+def handle_ship_cost(args: Dict[str, Any]) -> Dict[str, Any]:
+    from ship.lifecycle.skill_factory import RunUsageMetadata
+    model = args.get("model", "claude-3-7-sonnet")
+    input_tokens = int(args.get("input_tokens", 0))
+    output_tokens = int(args.get("output_tokens", 0))
+    cached_tokens = int(args.get("cached_tokens", 0))
+    duration_ms = float(args.get("duration_ms", 0.0))
+    usage = RunUsageMetadata(
+        model=model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cached_tokens=cached_tokens,
+        duration_ms=duration_ms,
+        tool_calls_count=int(args.get("tool_calls_count", 0)),
+    )
+    return usage.to_dict()
+
+
 HANDLERS: Dict[str, Any] = {
     "ship_steps_begin": handle_ship_steps_begin,
     "ship_steps_record": handle_ship_steps_record,
@@ -362,6 +421,10 @@ HANDLERS: Dict[str, Any] = {
     "ship_simplify_scan": handle_ship_simplify_scan,
     "ship_spike_run": handle_ship_spike_run,
     "ship_review_validate": handle_ship_review_validate,
+    "ship_skill_create": handle_ship_skill_create,
+    "ship_skill_validate": handle_ship_skill_validate,
+    "ship_skill_matrix": handle_ship_skill_matrix,
+    "ship_cost": handle_ship_cost,
 }
 
 
@@ -373,6 +436,7 @@ def dispatch_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         "ship_steps_begin", "ship_steps_record",
         "ship_record_turn", "ship_checkpoint", "ship_rollback", "ship_approve_design",
         "ship_record_tests", "ship_record_review", "ship_archive", "ship_spike_run", "ship_verify",
+        "ship_skill_create",
     }
     if name in privileged and os.environ.get("AGENTFLOW_MCP_ALLOW_MUTATIONS") != "1":
         raise PermissionError("MCP mutations and shell execution are disabled. A trusted host must set AGENTFLOW_MCP_ALLOW_MUTATIONS=1 in the server environment.")

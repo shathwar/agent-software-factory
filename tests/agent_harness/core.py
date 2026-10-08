@@ -566,18 +566,11 @@ class RegressionSuite:
         total = len(results)
         n_passed = sum(1 for r in results if r.passed)
 
-        has_verified_traces = bool(results) and all(
-            r.trace and r.trace.execution_trace and len(r.trace.execution_trace.events) > 0
-            for r in results
-        )
-        if has_verified_traces and passed:
-            assessment_kind = "observable_execution_trace"
-            behavior_verified = True
-            summary_prefix = f"Mode: {self.runner.mode}; execution trace verified; causal invariants independently proven.\n"
-        else:
-            assessment_kind = "stub_response_contract" if self.runner.mode == "stub" else "agent_output_contract"
-            behavior_verified = False
-            summary_prefix = f"Mode: {self.runner.mode}; output predicates only; behavior is not independently verified.\n"
+        # This legacy runner captures text or scripted fixtures, not a live
+        # host-mediated tool loop. Synthetic events must never certify behavior.
+        assessment_kind = "stub_response_contract" if self.runner.mode == "stub" else "agent_output_contract"
+        behavior_verified = False
+        summary_prefix = f"Mode: {self.runner.mode}; output predicates only; behavior is not independently verified.\n"
 
         return {
             "mode": self.runner.mode,

@@ -93,7 +93,7 @@ jobs:
       - name: Checkout pinned lifecycle tools
         uses: actions/checkout@v4
         with:
-          repository: shathwar/skills
+          repository: shathwar/agentflow
           ref: ${{ vars.SHIP_SKILLS_SHA }}
           path: .agentflow/toolchain
           persist-credentials: false
@@ -133,7 +133,7 @@ jobs:
       - name: Restore pinned lifecycle tools after agent execution
         uses: actions/checkout@v4
         with:
-          repository: shathwar/skills
+          repository: shathwar/agentflow
           ref: ${{ vars.SHIP_SKILLS_SHA }}
           path: .agentflow/toolchain
           persist-credentials: false

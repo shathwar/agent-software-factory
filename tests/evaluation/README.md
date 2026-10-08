@@ -99,3 +99,8 @@ The standard Python suite includes `test_rubric_adversarial.py`:
 
 These negative controls prevent known false passes. They are not semantic judges
 and cannot prove every rubric is immune to gaming.
+
+## Live agent execution
+
+See [live agent regression](./live_agent_regression.md) for the host-mediated tool loop,
+nightly/release workflow, credential setup, retained traces, and measurement limits.

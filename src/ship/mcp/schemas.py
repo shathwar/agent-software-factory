@@ -281,5 +281,60 @@ TOOLS_MANIFEST.extend([
             "properties": {"path": {"type": "string"}, "run_id": {"type": "string"}},
             "required": ["run_id"]
         }
+    },
+    {
+        "name": "ship_skill_create",
+        "description": "Skill Factory: synthesize a complete native Claude skill with SKILL.md, scripts, references, assets, and evals.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Kebab-case skill identifier"},
+                "role": {"type": "string", "description": "Senior persona role"},
+                "description": {"type": "string", "description": "Trigger description and purpose"},
+                "domain": {"type": "string", "description": "Domain name"},
+                "output_dir": {"type": "string", "description": "Custom destination directory"},
+                "package": {"type": "boolean", "description": "Build archive package (.tar.gz)"}
+            },
+            "required": ["name"]
+        }
+    },
+    {
+        "name": "ship_skill_validate",
+        "description": "Validate skill directory structure and native Claude agent standards.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "skill_path": {"type": "string", "description": "Path to skill directory"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "ship_skill_matrix",
+        "description": "Generate Skill x Model x Host compatibility matrix assessing runtime capabilities.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "skill": {"type": "string", "description": "Skill identifier"},
+                "hosts": {"type": "array", "items": {"type": "string"}},
+                "models": {"type": "array", "items": {"type": "string"}}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "ship_cost",
+        "description": "Calculate token usage and USD estimated cost metadata for a model run.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "model": {"type": "string", "description": "Model identifier"},
+                "input_tokens": {"type": "integer"},
+                "output_tokens": {"type": "integer"},
+                "cached_tokens": {"type": "integer"},
+                "duration_ms": {"type": "number"}
+            },
+            "required": []
+        }
     }
 ])

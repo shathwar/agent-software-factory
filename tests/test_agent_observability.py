@@ -267,8 +267,8 @@ class RealAgentObservabilityTests(unittest.TestCase):
     # Regression Harness Integration with Observable Actions             #
     # ------------------------------------------------------------------ #
 
-    def test_scenario_with_observable_actions_reports_behavior_verified(self):
-        """A Scenario with observable actions produces an execution trace and reports behavior_verified=True."""
+    def test_scripted_observable_actions_do_not_certify_agent_behavior(self):
+        """Scripted observations test the verifier, not a real agent."""
         def _mock_observable_actions(observer: ExecutionObserver, workdir: Path):
             # 1. Red test failure
             observer.observe_command("pytest tests/", exit_code=1, stdout="1 failed in 0.05s")
@@ -302,9 +302,9 @@ class RealAgentObservabilityTests(unittest.TestCase):
         report = suite.run()
 
         self.assertTrue(report["passed"])
-        self.assertEqual(report["assessment_kind"], "observable_execution_trace")
-        self.assertTrue(report["behavior_verified"])
-        self.assertIn("execution trace verified", report["summary"])
+        self.assertEqual(report["assessment_kind"], "stub_response_contract")
+        self.assertFalse(report["behavior_verified"])
+        self.assertIn("behavior is not independently verified", report["summary"])
 
 
 if __name__ == "__main__":

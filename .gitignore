@@ -34,3 +34,5 @@ dist/
 *.pyd
 tests/browser/node_modules/
 tests/browser/artifacts/
+
+live-agent-artifacts/

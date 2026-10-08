@@ -121,7 +121,7 @@ def init_agentflow(
     name = root.name or "project"
 
     config_data = {
-        "$schema": "https://raw.githubusercontent.com/shathwar/skills/main/skills/ship/references/agentflow.schema.json",
+        "$schema": "https://raw.githubusercontent.com/shathwar/agentflow/main/skills/ship/references/agentflow.schema.json",
         "version": 1,
         "workflow": {
             "profile": profile,

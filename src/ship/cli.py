@@ -1482,6 +1482,178 @@ def run_benchmark_cli(argv: Sequence[str]) -> int:
     return 0 if report.status == "passed" else 1
 
 
+def run_skill_cli(argv: Sequence[str]) -> int:
+    """Handle /skill Skill Factory CLI commands."""
+    if not argv or argv[0] in ("-h", "--help"):
+        print("""Usage: agentflow skill <action> [options]
+       ship skill <action> [options]
+
+Actions:
+  create <name> [--role <role>] [--desc <text>] [--domain <domain>] [--output-dir <path>] [--package]
+      Synthesize a complete native Claude skill (SKILL.md, scripts/, references/, assets/, evals/, VERSION).
+  validate [path] [--strict] [--json]
+      Validate an existing skill directory against native agent standards.
+  matrix [path] [--hosts <h1,h2>] [--models <m1,m2>] [--json]
+      Evaluate and display the Skill × Model × Host compatibility matrix.
+  package <path> [--format tar.gz|zip]
+      Create a compressed distribution package for a skill.
+""")
+        return 0
+
+    action = argv[0].lower()
+    rem = argv[1:]
+
+    from .lifecycle.skill_factory import (
+        SkillFactory,
+        SkillRequirements,
+        generate_compatibility_matrix,
+        render_compatibility_markdown,
+    )
+
+    if action == "create":
+        parser = argparse.ArgumentParser(prog="agentflow skill create", description="Synthesize a new native agent skill")
+        parser.add_argument("name", help="Kebab-case skill identifier (e.g. perf-audit)")
+        parser.add_argument("--role", default="Specialist Engineer", help="Persona title")
+        parser.add_argument("--desc", "--description", dest="desc", default="", help="Description and triggers")
+        parser.add_argument("--domain", default="engineering", help="Functional domain")
+        parser.add_argument("--path", "--repo-root", dest="path", default=".", help="Repository root path")
+        parser.add_argument("--output-dir", default=None, help="Explicit output directory")
+        parser.add_argument("--package", action="store_true", help="Also build archive package (.tar.gz)")
+        parser.add_argument("--json", action="store_true", help="Emit JSON output")
+        args = parser.parse_args(rem)
+
+        repo_root = Path(args.path).resolve()
+        factory = SkillFactory(repo_root)
+        req = SkillRequirements(
+            name=args.name,
+            role=args.role,
+            description=args.desc or f"Autonomous specialist engine for {args.name}.",
+            domain=args.domain,
+        )
+        out_dir = Path(args.output_dir).resolve() if args.output_dir else (repo_root / "skills" / args.name)
+        artifact = factory.build_skill(req, output_dir=out_dir, package_archive=args.package)
+
+        if args.json:
+            print(json.dumps(artifact.to_dict(), indent=2))
+        else:
+            print(f"✨ Synthesized native skill '{artifact.name}' v{artifact.version}")
+            print(f"  • Root dir   : {artifact.output_dir}")
+            print(f"  • SKILL.md   : {artifact.skill_md}")
+            print(f"  • Scripts    : {len(artifact.scripts)} generated")
+            print(f"  • References : {len(artifact.references)} generated")
+            print(f"  • Evals      : {len(artifact.evals)} generated")
+            if artifact.archive_file:
+                print(f"  • Package    : {artifact.archive_file}")
+        return 0
+
+    elif action == "validate":
+        parser = argparse.ArgumentParser(prog="agentflow skill validate", description="Validate skill directory structure")
+        parser.add_argument("path", nargs="?", default=".", help="Path to skill directory")
+        parser.add_argument("--strict", action="store_true", help="Fail if warnings exist")
+        parser.add_argument("--json", action="store_true", help="Emit JSON output")
+        args = parser.parse_args(rem)
+
+        target = Path(args.path).resolve()
+        factory = SkillFactory()
+        result = factory.validate_skill_structure(target)
+
+        if args.json:
+            print(json.dumps(result, indent=2))
+        else:
+            icon = "✅" if result["valid"] else "❌"
+            print(f"{icon} Skill '{result['skill']}' validation: {'PASSED' if result['valid'] else 'FAILED'}")
+            for err in result["errors"]:
+                print(f"  • Error: {err}")
+            for warn in result["warnings"]:
+                print(f"  • Warning: {warn}")
+        return 0 if result["valid"] else 1
+
+    elif action == "matrix":
+        parser = argparse.ArgumentParser(prog="agentflow skill matrix", description="Generate Skill x Model x Host compatibility matrix")
+        parser.add_argument("path", nargs="?", default=".", help="Path to skill directory or skill name")
+        parser.add_argument("--hosts", default=None, help="Comma-separated host list")
+        parser.add_argument("--models", default=None, help="Comma-separated model list")
+        parser.add_argument("--json", action="store_true", help="Emit raw JSON")
+        args = parser.parse_args(rem)
+
+        target = Path(args.path).resolve()
+        skill_name = target.name if target.is_dir() else str(args.path)
+        factory = SkillFactory()
+        req = SkillRequirements(name=skill_name, role="Specialist", description="")
+        hosts_list = [h.strip() for h in args.hosts.split(",")] if args.hosts else None
+        models_list = [m.strip() for m in args.models.split(",")] if args.models else None
+
+        matrix = generate_compatibility_matrix(req.compatibility, skill_name, hosts=hosts_list, models=models_list)
+        if args.json:
+            print(json.dumps(matrix, indent=2))
+        else:
+            print(render_compatibility_markdown(matrix))
+        return 0
+
+    elif action == "package":
+        parser = argparse.ArgumentParser(prog="agentflow skill package", description="Package skill into distributable archive")
+        parser.add_argument("path", help="Path to skill directory")
+        parser.add_argument("--format", choices=["tar.gz", "zip"], default="tar.gz", help="Archive format")
+        parser.add_argument("--json", action="store_true", help="Emit JSON output")
+        args = parser.parse_args(rem)
+
+        target = Path(args.path).resolve()
+        factory = SkillFactory()
+        archive_path = factory.package_skill(target, archive_format=args.format)
+        if args.json:
+            print(json.dumps({"skill": target.name, "archive": str(archive_path), "format": args.format}, indent=2))
+        else:
+            print(f"📦 Packaged skill '{target.name}' -> {archive_path}")
+        return 0
+
+    else:
+        print(f"Unknown skill action: '{action}'. See 'ship skill --help'.", file=sys.stderr)
+        return 1
+
+
+def run_cost_cli(argv: Sequence[str]) -> int:
+    """Calculate and display token usage and estimated cost metadata."""
+    parser = argparse.ArgumentParser(prog="agentflow cost", description="Calculate run cost and token economics")
+    parser.add_argument("--model", default="claude-3-7-sonnet", help="Model identifier")
+    parser.add_argument("--input-tokens", "--input", dest="input_tokens", type=int, default=0, help="Input prompt tokens")
+    parser.add_argument("--output-tokens", "--output", dest="output_tokens", type=int, default=0, help="Output generated tokens")
+    parser.add_argument("--cached-tokens", "--cached", dest="cached_tokens", type=int, default=0, help="Cached read tokens")
+    parser.add_argument("--duration", type=float, default=0.0, help="Duration in milliseconds")
+    parser.add_argument("--tools", type=int, default=0, help="Tool calls count")
+    parser.add_argument("--json", action="store_true", help="Emit JSON format")
+    args = parser.parse_args(argv)
+
+    from .lifecycle.skill_factory import RunUsageMetadata, get_model_pricing
+
+    usage = RunUsageMetadata(
+        model=args.model,
+        input_tokens=args.input_tokens,
+        output_tokens=args.output_tokens,
+        cached_tokens=args.cached_tokens,
+        duration_ms=args.duration,
+        tool_calls_count=args.tools,
+    )
+    pricing = get_model_pricing(args.model)
+
+    if args.json:
+        data = usage.to_dict()
+        data["pricing"] = {
+            "input_per_m": pricing.input_per_m,
+            "output_per_m": pricing.output_per_m,
+            "cache_read_per_m": pricing.cache_read_per_m,
+        }
+        print(json.dumps(data, indent=2))
+    else:
+        print(f"💰 Run Cost & Telemetry ({args.model}):")
+        print(f"  • Input Tokens  : {usage.input_tokens:,} (cached: {usage.cached_tokens:,})")
+        print(f"  • Output Tokens : {usage.output_tokens:,}")
+        print(f"  • Total Tokens  : {usage.total_tokens:,}")
+        print(f"  • Tool Calls    : {usage.tool_calls_count}")
+        print(f"  • Duration      : {usage.duration_ms:.1f} ms")
+        print(f"  • Estimated Cost: ${usage.estimated_cost_usd:.6f} USD")
+    return 0
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """Unified entrypoint for ship CLI with subcommands, specialist tools, and MCP server."""
     if argv is None:
@@ -1525,6 +1697,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if cmd in ("benchmark", "bench", "eval", "evaluation"):
         return run_benchmark_cli(sub_args)
+
+    if cmd in ("skill", "skills"):
+        return run_skill_cli(sub_args)
+
+    if cmd in ("cost", "usage"):
+        return run_cost_cli(sub_args)
 
     # Specialist tools dispatch
     if cmd == "tdd":

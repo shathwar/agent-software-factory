@@ -1,0 +1,39 @@
+name: Live agent regression
+on:
+  schedule:
+    - cron: '23 2 * * *'
+  release:
+    types: [published]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: live-agent-regression-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    environment: live-agent-regression
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build isolated command executor
+        run: docker build -t agentflow-live:local tests/agent_harness
+      - name: Run real model scenarios
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AGENT_REGRESSION_MODEL: ${{ vars.AGENT_REGRESSION_MODEL }}
+        run: python3 scripts/test/run_live_regression.py --output live-agent-artifacts
+      - name: Retain traces and failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-agent-${{ github.run_id }}-${{ github.run_attempt }}
+          path: live-agent-artifacts/
+          if-no-files-found: error
+          retention-days: 14

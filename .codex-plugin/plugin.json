@@ -6,8 +6,8 @@
     "name": "Sumanth",
     "url": "https://github.com/shathwar"
   },
-  "homepage": "https://github.com/shathwar/skills",
-  "repository": "https://github.com/shathwar/skills",
+  "homepage": "https://github.com/shathwar/agentflow",
+  "repository": "https://github.com/shathwar/agentflow",
   "license": "MIT",
   "skills": "./skills/",
   "interface": {
