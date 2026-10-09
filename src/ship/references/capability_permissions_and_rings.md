@@ -42,7 +42,7 @@ Blast radius and asset criticality are organized into four execution rings:
  │ • Requires: Active capability grant AND valid unexpired TaskLease.      │
  ├─────────────────────────────────────────────────────────────────────────┤
  │ Ring 3: Disposable Workspace & Scratch (Sandboxed)                      │
- │ • .agentflow/spikes/**, scratch/**, build/**, dist/**, caches           │
+ │ • .scratch/**, scratch/**, build/**, dist/**, caches           │
  │ • Default Access: Disposable; broad WRITE/DELETE within sandbox targets.│
  └─────────────────────────────────────────────────────────────────────────┘
 ```

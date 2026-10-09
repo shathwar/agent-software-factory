@@ -70,7 +70,19 @@ Do not build real backends to test a frontend question; do not build real fronte
 
 ## 5. Benchmarking & Measurement Hygiene
 
-Inaccurate measurements lead to disastrous architectural choices. Follow these measurement rules:
+`run_spike.py` measures subprocess wall time (including startup and teardown) and
+completed commands per second. The legacy JSON field `rps` and flag
+`--expected-rps` refer to command runs, not application requests. JSON includes
+`measurement_scope` and `throughput_unit`; prefer `--expected-runs-per-second`.
+
+For service SLIs, use a workload harness that keeps the service running, warms the
+actual process and connection pools, records one latency sample per operation, and
+counts completed requests over the measurement interval. Record failures separately.
+Retain raw samples or the load tool report, workload size, concurrency, and environment
+with the ADR. Do not infer request counts from subprocess counts or divide a batch
+p99 by batch size. A command-level PASS alone cannot settle a service SLI.
+
+Follow these measurement rules:
 
 ### 1. Separate Warm-Up from Measurement
 - JIT compilers (V8, JVM, PyPy) optimize code over initial runs.

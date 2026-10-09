@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional
 
 from .schemas import TOOLS_MANIFEST
 from .tools import dispatch_tool
+from ship.lifecycle.secrets import SecretsBroker
 
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "ship"
@@ -15,7 +16,7 @@ SERVER_VERSION = "1.0.0"
 
 def send_response(response: Dict[str, Any]) -> None:
     """Write a JSON-RPC response to stdout as a single line and flush."""
-    line = json.dumps(response, separators=(",", ":"))
+    line = json.dumps(SecretsBroker().scrub_value(response), separators=(",", ":"))
     sys.stdout.write(line + "\n")
     sys.stdout.flush()
 
@@ -120,7 +121,8 @@ def handle_request(msg: Dict[str, Any]) -> None:
                 },
             })
         except Exception as e:
-            sys.stderr.write(f"[ship-mcp] Error in tool '{tool_name}': {traceback.format_exc()}\n")
+            sys.stderr.write(SecretsBroker().scrub_text(
+                f"[ship-mcp] Error in tool '{tool_name}': {traceback.format_exc()}\n"))
             sys.stderr.flush()
             send_response({
                 "jsonrpc": "2.0",

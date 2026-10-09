@@ -554,6 +554,9 @@ class SkillRequirements:
     version: str = "1.0.0"
     author: str = "AgentFlow"
     eval_scenarios: List[SkillEvalScenario] = field(default_factory=list)
+    model: Optional[str] = None
+    effort: Optional[str] = None
+    allowed_tools: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -570,6 +573,9 @@ class SkillRequirements:
             "version": self.version,
             "author": self.author,
             "eval_scenarios": [s.to_dict() for s in self.eval_scenarios],
+            "model": self.model,
+            "effort": self.effort,
+            "allowed_tools": list(self.allowed_tools),
         }
 
     @classmethod
@@ -595,6 +601,9 @@ class SkillRequirements:
             version=str(data.get("version", "1.0.0")),
             author=str(data.get("author", "AgentFlow")),
             eval_scenarios=scenarios,
+            model=data.get("model"),
+            effort=data.get("effort"),
+            allowed_tools=list(data.get("allowed_tools", [])),
         )
 
 
@@ -682,12 +691,22 @@ class SkillFactory:
             "---",
             f"name: {req.name}",
             f"description: {desc}",
+        ]
+        if req.model:
+            frontmatter_lines.append(f"model: {req.model}")
+        if req.effort:
+            frontmatter_lines.append(f"effort: {req.effort}")
+        if req.allowed_tools:
+            frontmatter_lines.append("allowed-tools:")
+            for tool in req.allowed_tools:
+                frontmatter_lines.append(f"  - {tool}")
+        frontmatter_lines.extend([
             f"version: {req.version}",
             "compatibility:",
             f"  recommended_tier: {req.compatibility.recommended_model_tier}",
             f"  min_reasoning: {req.compatibility.min_reasoning_score}",
             "---",
-        ]
+        ])
 
         body_lines = [
             f"# {req.name.replace('-', ' ').title()} Engine",

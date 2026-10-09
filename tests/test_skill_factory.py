@@ -65,6 +65,20 @@ class TestNativeClaudeSkillsOutput(unittest.TestCase):
         self.assertIn("1. Profile baseline latency.", content)
         self.assertIn("scripts/validate_perf_audit.py", content)
 
+    def test_generate_skill_md_with_claude_frontmatter(self):
+        req = SkillRequirements(
+            name="claude-custom",
+            role="Claude Specialist",
+            description="Specialized Claude skill with frontmatter constraints.",
+            model="claude-3-7-sonnet",
+            effort="high",
+            allowed_tools=["Read", "Edit", "Bash"],
+        )
+        content = self.factory.generate_skill_md(req)
+        self.assertIn("model: claude-3-7-sonnet", content)
+        self.assertIn("effort: high", content)
+        self.assertIn("allowed-tools:\n  - Read\n  - Edit\n  - Bash", content)
+
     def test_build_native_skill_directory_layout(self):
         req = SkillRequirements(
             name="api-linter",

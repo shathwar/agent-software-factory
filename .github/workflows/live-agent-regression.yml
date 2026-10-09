@@ -5,6 +5,10 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+  workflow_call:
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
 permissions:
   contents: read
 concurrency:
@@ -23,12 +27,17 @@ jobs:
         with:
           python-version: '3.12'
       - name: Build isolated command executor
-        run: docker build -t agentflow-live:local tests/agent_harness
+        run: docker build -t agentflow-live:local -f tests/agent_harness/Dockerfile .
       - name: Run real model scenarios
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AGENT_REGRESSION_MODEL: ${{ vars.AGENT_REGRESSION_MODEL }}
         run: python3 scripts/test/run_live_regression.py --output live-agent-artifacts
+      - name: Verify candidate evidence
+        env:
+          CANDIDATE_SHA: ${{ github.sha }}
+          APPROVED_MODEL: ${{ vars.AGENT_REGRESSION_MODEL }}
+        run: python3 scripts/verify/live_release.py live-agent-artifacts/report.json --commit "$CANDIDATE_SHA" --model "$APPROVED_MODEL"
       - name: Retain traces and failure evidence
         if: always()
         uses: actions/upload-artifact@v4

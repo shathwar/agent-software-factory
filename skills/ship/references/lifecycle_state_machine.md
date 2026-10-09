@@ -64,7 +64,7 @@ A formal specification of the 4-gate engineering lifecycle state machine, its tr
 
 ### State 2: `FRONTIER_ROUNDS` ➔ `SPIKE_ACTIVE` (Optional Branch)
 - **Guard**: An architectural decision depends on an unmeasured empirical variable (e.g. third-party rate limits, lock contention, library compatibility).
-- **Action**: Pause grilling on that branch. Scaffold a 15-30 minute spike under `.agentflow/spikes/<spike-name>/` using [spike](../../spike/SKILL.md).
+- **Action**: Pause grilling on that branch. Scaffold a 15-30 minute spike under `.scratch/<spike-name>/` using [spike](../../spike/SKILL.md).
 - **Return Guard**: The spike report delivers a concrete verdict (latency, throughput, or behavior), settling the open question on the design tree.
 
 ### State 3: `FRONTIER_ROUNDS` ➔ `SPEC_CONFIRMED`

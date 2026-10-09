@@ -486,9 +486,4 @@ def dispatch_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
     res = handler(arguments)
 
     # Post-execution response redaction
-    if isinstance(res, str):
-        return broker.scrub_text(res)
-    elif isinstance(res, dict):
-        if "text" in res and isinstance(res["text"], str):
-            res["text"] = broker.scrub_text(res["text"])
-    return res
+    return broker.scrub_value(res)

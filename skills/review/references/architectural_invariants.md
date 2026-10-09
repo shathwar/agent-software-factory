@@ -70,7 +70,7 @@ Adapted from the **Microsoft Agent Governance Toolkit (AGT ADR 0002)**, system p
  │ • Write Access: Autonomous dev agents governed by PreTool safety hooks   │
  ├─────────────────────────────────────────────────────────────────────────┤
  │ Ring 3: Disposable Workspace & Scratch (Sandboxed)                      │
- │ • .agentflow/spikes/, build/, dist/, __pycache__, .pytest_cache, node_modules│
+ │ • .scratch/, build/, dist/, __pycache__, .pytest_cache, node_modules│
  │ • Write/Delete Access: Fully disposable; approved cleanup targets       │
  └─────────────────────────────────────────────────────────────────────────┘
 ```

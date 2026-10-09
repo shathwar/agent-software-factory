@@ -17,7 +17,7 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 - Sandbox Isolation: NEVER write prototype code in production paths (`src/`, `lib/`, `app/`). Work strictly in `.scratch/<spike-name>/`.
 - Falsifiable SLI: NEVER run a spike without a clear measurable hypothesis (e.g. p99 < 15ms at 5k RPS).
 - Real Infrastructure Parity: For backend I/O spikes (Postgres, Redis, Kafka), use ephemeral local containers (`.scratch/<spike-name>/docker-compose.yml`) rather than synthetic in-memory fakes.
-- Automated Measurement: Use `run_spike.py` for statistical warmup and latency percentiles (p50/p95/p99) rather than ad-hoc timing.
+- Measurement Scope: `run_spike.py` measures whole-command wall time, including process startup, and commands/second. For service latency or request throughput, use an in-process or load-test harness that records actual request timings and counts; retain its raw results. Never label command metrics as service SLIs.
 - Throwaway Rigor: NEVER merge scratch prototypes directly to main. Extract only architectural decisions and verified configs.
 - ADR / OpenSpec Bridge: Immediately sync the empirical verdict and SLI table into the active ADR (`docs/adr/`) or OpenSpec package.
 - Teardown Mandate: ALL ephemeral containers and processes MUST be torn down upon spike completion.
@@ -26,7 +26,7 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 <turn_contract>
 Verify before ending the turn:
 ✓ 1. Sandbox Isolation Confirmed: All scratch prototype files located strictly in `.scratch/<spike-name>/`; zero files written to `src/`.
-✓ 2. Statistical Measurement Verified: Benchmarks run via `run_spike.py` with warmup and p50/p95/p99 percentiles.
+✓ 2. Statistical Measurement Verified: The measured unit and warmup scope are explicit; service SLIs come from actual request measurements.
 ✓ 3. ADR / Spec Bridge Complete: Empirical verdict and SLI table synced to active ADR or OpenSpec package.
 ✓ 4. Teardown Executed: All ephemeral containers, ports, and processes cleanly torn down.
 </turn_contract>
@@ -51,11 +51,11 @@ Verify before ending the turn:
 
 1. **Hypothesis**: Define measurable threshold (e.g. *p99 latency < 10ms at 5,000 req/sec; zero deadlocks under 50 concurrent workers*).
 2. **Sandbox**: Create `.scratch/<spike-name>/`. If external infrastructure is required, launch local ephemeral containers via Docker Compose.
-3. **Automated Measure**: Run the spike through the statistical benchmarking engine across available tiers:
+3. **Automated Measure**: For whole-command benchmarks use the runner below. Its p99 includes process startup; warmup runs do not warm a newly launched interpreter or its connection pool. For service SLIs use the workload harness described in [measurement hygiene](./references/spike_guidelines.md#5-benchmarking--measurement-hygiene).
    - **Tier A (Native MCP Tool)**: Call `ship_spike_run(command="python3 worker.py", iterations=1000, warmup=100, concurrency=20)`
    - **Tier B (Packaged CLI)**:
      ```bash
-     ship spike --cmd "python3 worker.py" --iterations 1000 --warmup 100 --concurrency 20 --expected-p99 10.0 --expected-rps 5000
+     ship spike --cmd "python3 worker.py" --iterations 1000 --warmup 100 --concurrency 20 --expected-p99 10.0 --expected-runs-per-second 5000
      ```
    - **Tier C (Path Fallback)**:
      ```bash
@@ -65,7 +65,7 @@ Verify before ending the turn:
        --warmup 100 \
        --concurrency 20 \
        --expected-p99 10.0 \
-       --expected-rps 5000
+       --expected-runs-per-second 5000
      ```
 4. **Deliver Verdict & Bridge**: Export results directly into the design ADR or OpenSpec package, clean up containers, and delete the scratch sandbox.
 
@@ -85,6 +85,7 @@ Output using this contract:
 ### 🧪 Methodology & Setup
 - **Sandbox**: `.scratch/<spike-name>/`
 - **Harness**: <Docker containers, concurrency level, warmup passes, duration>
+- **Measurement unit**: <request, transaction, or whole-command run; include startup/warmup scope and raw evidence path>
 
 ### 📊 Empirical Results
 | Metric / Condition | Expected | Observed | Status |

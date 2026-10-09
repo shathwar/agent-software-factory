@@ -114,6 +114,17 @@ class SecretsBroker:
             scrubbed = pat.sub(_repl, scrubbed)
         return scrubbed
 
+    def scrub_value(self, value: Any) -> Any:
+        """Copy JSON-compatible output, redacting strings at every depth."""
+        if isinstance(value, str):
+            return self.scrub_text(value)
+        if isinstance(value, dict):
+            return {self.scrub_text(key) if isinstance(key, str) else key: self.scrub_value(item)
+                    for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [self.scrub_value(item) for item in value]
+        return value
+
     def inspect_command(self, command: str) -> Tuple[bool, Optional[str]]:
         """Inspect a shell command for attempts to dump credentials or inject raw secrets.
 

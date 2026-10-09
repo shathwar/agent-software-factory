@@ -43,7 +43,7 @@ User Request: "/ship <idea>"
       ▼
 Design: Specification & Architecture (design)
   • Facts vs. Decisions Law ➔ Frontier Rounds (Q1/Q2)
-  • If empirical blocker ➔ run spike in .agentflow/spikes/
+  • If empirical blocker ➔ run spike in .scratch/
   • Compile ADR (docs/adr/) & OpenSpec (openspec/changes/)
   • Checkpoint: User confirms specification
       │
@@ -78,7 +78,7 @@ The filesystem is the persistent state machine. Orient using the most direct ava
 | Gate | Indicators | Action |
 |---|---|---|
 | **Design** | No `openspec/changes/<change>/` or `docs/adr/`. | Launch [`design`](../design/SKILL.md). Discover facts, present Frontier Rounds. |
-| **Spike** | Design frontier hits ungrillable question. | Launch [`spike`](../spike/SKILL.md) in `.agentflow/spikes/`. Report verdict. |
+| **Spike** | Design frontier hits ungrillable question. | Launch [`spike`](../spike/SKILL.md) in `.scratch/`. Report verdict. |
 | **Implementation** | Current design approval exists and `tasks.md` has unchecked `[ ]` tasks. | Launch [`tdd`](../tdd/SKILL.md). Resume at first unchecked task. |
 | **Review** | All tasks `[x]`, no clean review report. | Launch [`review`](../review/SKILL.md) in `review-loop` mode. |
 | **Delivery** | All tasks `[x]`, all tests pass, Judge `PASS`. | Compile Delivery Walkthrough and prepare git commit. |
@@ -92,7 +92,7 @@ Read `workflow.profile` and `workflow.execution` from inspection output. Apply t
 ### Design: Specification & Architecture
 1. Discover facts autonomously from source files. Never ask code-discoverable questions.
 2. Present Frontier Rounds: `❓ Q[N]` with `➡️ Recommended Stance`.
-3. If empirical uncertainty arises, spike in `.agentflow/spikes/` using [`spike`](../spike/SKILL.md).
+3. If empirical uncertainty arises, spike in `.scratch/` using [`spike`](../spike/SKILL.md).
 4. Compile `docs/adr/ADR-<NNNN>-<change>.md` and `openspec/changes/<change>/`.
 5. Checkpoint specification: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --checkpoint design`.
 6. Capture the design digest before presenting the package for confirmation. After explicit authorization, record that same digest and the approver identity using [design approval receipts](./references/lifecycle_state_machine.md#local-workflow-and-design-approval). Explicit approval in the current conversation is sufficient; record it without asking again. Use the known session identity or `session-user`, and apply authorization only to the reviewed design. A checkpoint alone is not approval.

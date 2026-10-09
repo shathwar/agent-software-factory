@@ -16,7 +16,7 @@
 
 1. **Design (Specification & Architecture)**:
    - Execute `design` turn (`principal_architect`).
-   - If empirical unknown blocks design, execute `spike` turn (`spike_prototyper`) in `.agentflow/spikes/`.
+   - If empirical unknown blocks design, execute `spike` turn (`spike_prototyper`) in `.scratch/`.
    - On spec confirmation, record checkpoint: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --checkpoint design`.
    - Obtain user approval to proceed.
 

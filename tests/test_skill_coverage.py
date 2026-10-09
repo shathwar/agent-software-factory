@@ -34,7 +34,7 @@ class SkillCoverageTests(unittest.TestCase):
     def test_current_inventory_covers_all_skills_and_contracts(self):
         coverage.validate_manifest(self.data)
         self.assertEqual(set(self.data['skills']),
-                         {p.parent.name for p in (ROOT / 'skills').glob('*/SKILL.md') if p.parent.name != 'skill'})
+                         {p.parent.name for p in (ROOT / 'skills').glob('*/SKILL.md') if p.parent.name not in ('skill', 'claude')})
 
     def test_runtime_and_inventory_share_observation_semantics(self):
         from ship.lifecycle.step_catalog import OBSERVATION_CONTRACT

@@ -1,0 +1,31 @@
+{
+  "scenarios": [
+    {
+      "name": "mechanical_linting_selection",
+      "description": "User requests fixing linter issues across 2 files; should recommend Haiku with low effort.",
+      "input_prompt": "Run ruff and fix lint formatting across src/utils.py and src/helpers.py",
+      "expected_behavior": "Recommends claude-3-5-haiku with low effort and scoped editing tools.",
+      "required_tool_calls": ["choose_claude_profile.py"],
+      "forbidden_patterns": ["claude-3-opus"],
+      "evidence_assertions": ["model == 'claude-3-5-haiku'", "effort == 'low'"]
+    },
+    {
+      "name": "concurrency_race_debugging",
+      "description": "User requests debugging an intermittent race condition in transaction coordinator.",
+      "input_prompt": "Debug intermittent data race in DistributedTransactionCoordinator under high load.",
+      "expected_behavior": "Recommends claude-3-7-sonnet with high effort and full diagnostic/test tools.",
+      "required_tool_calls": ["choose_claude_profile.py"],
+      "forbidden_patterns": ["claude-3-5-haiku"],
+      "evidence_assertions": ["model == 'claude-3-7-sonnet'", "effort in ('high', 'max')"]
+    },
+    {
+      "name": "frontmatter_authoring",
+      "description": "User requests generating frontmatter for a new read-only security auditor skill.",
+      "input_prompt": "Create frontmatter for a security audit skill that shouldn't touch files or run bash.",
+      "expected_behavior": "Generates valid YAML frontmatter with model, effort, and read-only allowed-tools.",
+      "required_tool_calls": [],
+      "forbidden_patterns": ["Bash", "Write"],
+      "evidence_assertions": ["allowed-tools contains Read, Glob, Grep"]
+    }
+  ]
+}

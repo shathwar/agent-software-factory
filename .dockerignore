@@ -1,0 +1,15 @@
+# The live executor image receives only runtime, skills, and its Dockerfile.
+**
+!src/
+!src/ship/
+!src/ship/**
+!skills/
+!skills/**
+!tests/
+!tests/agent_harness/
+!tests/agent_harness/Dockerfile
+**/__pycache__
+**/*.pyc
+**/.env*
+**/*.pem
+**/*.key

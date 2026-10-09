@@ -149,6 +149,13 @@ completion outcome, unnecessary approval prompts, accepted/rejected findings,
 recovery failures, elapsed time, and workflow overhead. Keep logs locally; no
 telemetry is sent by these skills. Redact proprietary code before sharing results.
 
+Before publishing a candidate, require the repository's `Release candidate` workflow
+on its exact commit, including the live Ship trial. A publishing pipeline must
+depend on that workflow; manual publishing permissions must be restricted by the
+organization. This suite currently automates one Anthropic tool-loop host. Record
+separate pilot results for each intended host/model, including changed requirements,
+repair limits, and recovery. Passing candidate checks alone does not approve rollout.
+
 Start with a few teams spanning different project types. Have a named maintainer
 triage failures, add regression coverage, and publish release notes. Expand only
 after the pilot has no unresolved data-loss/wrong-change/false-readiness failures,
@@ -234,7 +241,10 @@ from agent-controlled tool arguments.
 Filesystem targets are resolved before containment and secret-path checks, including
 relative symlinks. Read-only and scratch scopes remain inside the workspace; scratch
 writes must resolve beneath workspace directories named `.scratch` or `scratch`.
-This policy scope is separate from lifecycle spike artifacts in `.agentflow/spikes/`.
+New lifecycle spikes use `.scratch/<spike-name>/`, matching the scratch policy.
+Legacy `.agentflow/spikes/` artifacts remain discoverable for resumption but are not
+new execution locations; move an unfinished legacy prototype into `.scratch/` before
+continuing under scratch-only permissions, preserving its evidence.
 These checks assume paths do not change between authorization and use. The host must prevent concurrent symlink
 replacement and enforce the same filesystem boundary during execution.
 

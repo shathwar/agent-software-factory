@@ -1,0 +1,16 @@
+{
+  "skill": "claude",
+  "version": "1.0.0",
+  "author": "AgentFlow",
+  "domain": "capabilities",
+  "compatibility": {
+    "recommended_tier": "advanced",
+    "min_reasoning": 8
+  },
+  "assets": [
+    "references/model_selection_guide.md",
+    "references/frontmatter_spec.md",
+    "scripts/choose_claude_profile.py",
+    "scripts/validate_claude_skill.py"
+  ]
+}

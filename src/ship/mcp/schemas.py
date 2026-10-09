@@ -193,7 +193,7 @@ TOOLS_MANIFEST: List[Dict[str, Any]] = [
     },
     {
         "name": "ship_spike_run",
-        "description": "Run statistical benchmark trials measuring command execution latency percentiles (p50, p90, p99), throughput, and failure rate.",
+        "description": "Measure whole-command wall time including startup (p50, p90, p99), completed commands/second, and command failure rate. These are not service request SLIs.",
         "inputSchema": {
             "type": "object",
             "properties": {

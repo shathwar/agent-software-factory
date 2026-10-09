@@ -61,8 +61,8 @@ class TestRunSpike(unittest.TestCase):
         )
         self.assertTrue(passed)
         self.assertIn("✅ Met", table)
-        self.assertIn("Throughput / RPS", table)
-        self.assertIn("Latency (p99)", table)
+        self.assertIn("Command runs / second", table)
+        self.assertIn("Command duration (p99)", table)
 
     def test_format_markdown_table_fail(self):
         metrics = run_spike.BenchmarkMetrics(
@@ -93,6 +93,8 @@ class TestRunSpike(unittest.TestCase):
         self.assertIn("markdown_table", data)
         self.assertTrue(data["passed"])
         self.assertEqual(data["metrics"]["total_runs"], 10)
+        self.assertEqual(data["metrics"]["measurement_scope"], "subprocess_wall_time")
+        self.assertEqual(data["metrics"]["throughput_unit"], "command_runs_per_second")
 
     def test_duration_based_execution(self):
         """Duration-based runs terminate within expected timeframe and remove completed futures."""

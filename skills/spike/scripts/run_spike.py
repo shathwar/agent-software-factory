@@ -44,6 +44,8 @@ class BenchmarkMetrics:
     max_ms: float
     mean_ms: float
     stddev_ms: float
+    measurement_scope: str = "subprocess_wall_time"
+    throughput_unit: str = "command_runs_per_second"
 
 
 def run_single_iteration(cmd: str | Sequence[str], cwd: Path | None = None, timeout_sec: float | None = 60.0) -> tuple[float, bool]:
@@ -260,13 +262,13 @@ def format_markdown_table(
             all_passed = False
     else:
         rps_status = "ℹ️ Recorded"
-    rows.append(f"| Throughput / RPS | {rps_expected_str} | {metrics.rps:,.1f} | {rps_status} |")
+    rows.append(f"| Command runs / second | {rps_expected_str} | {metrics.rps:,.1f} | {rps_status} |")
 
     # p50
-    rows.append(f"| Latency (p50) | - | {metrics.p50_ms:.2f}ms | ℹ️ Recorded |")
+    rows.append(f"| Command duration (p50) | - | {metrics.p50_ms:.2f}ms | ℹ️ Recorded |")
 
     # p95
-    rows.append(f"| Latency (p95) | - | {metrics.p95_ms:.2f}ms | ℹ️ Recorded |")
+    rows.append(f"| Command duration (p95) | - | {metrics.p95_ms:.2f}ms | ℹ️ Recorded |")
 
     # p99 check
     p99_expected_str = f"< {expected_p99:.1f}ms" if expected_p99 is not None else "-"
@@ -276,10 +278,10 @@ def format_markdown_table(
             all_passed = False
     else:
         p99_status = "ℹ️ Recorded"
-    rows.append(f"| Latency (p99) | {p99_expected_str} | {metrics.p99_ms:.2f}ms | {p99_status} |")
+    rows.append(f"| Command duration (p99) | {p99_expected_str} | {metrics.p99_ms:.2f}ms | {p99_status} |")
 
     # Max Latency
-    rows.append(f"| Max Latency | - | {metrics.max_ms:.2f}ms | ℹ️ Recorded |")
+    rows.append(f"| Max command duration | - | {metrics.max_ms:.2f}ms | ℹ️ Recorded |")
 
     # Error Rate check
     err_expected_str = f"< {expected_err_pct:.1f}%" if expected_err_pct is not None else "< 1.0%"
@@ -287,7 +289,7 @@ def format_markdown_table(
     err_status = "✅ Met" if metrics.error_rate_pct <= threshold else "❌ Breached"
     if metrics.error_rate_pct > threshold:
         all_passed = False
-    rows.append(f"| Error Rate | {err_expected_str} | {metrics.error_rate_pct:.2f}% | {err_status} |")
+    rows.append(f"| Command failure rate | {err_expected_str} | {metrics.error_rate_pct:.2f}% | {err_status} |")
 
     lines = [
         "### 📊 Empirical Results",
@@ -518,8 +520,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--workers", "--concurrency", dest="concurrency", type=int, default=1, help="Concurrent worker threads (default: 1)")
     parser.add_argument("--duration", type=float, help="Run for duration in seconds instead of fixed iterations")
     parser.add_argument("--cwd", help="Working directory to run command in (defaults to current dir)")
-    parser.add_argument("--expected-p99", type=float, help="Expected p99 latency threshold in ms")
-    parser.add_argument("--expected-rps", type=float, help="Expected minimum throughput (RPS)")
+    parser.add_argument("--expected-p99", type=float, help="Maximum p99 whole-command duration in ms, including process startup")
+    parser.add_argument("--expected-runs-per-second", "--expected-rps", dest="expected_rps", type=float, help="Minimum completed commands/second; --expected-rps is a legacy alias, not service RPS")
     parser.add_argument("--expected-err", type=float, help="Expected maximum error rate percentage")
     parser.add_argument("--timeout", type=float, default=60.0, help="Timeout per iteration in seconds (default: 60.0)")
     parser.add_argument("--audit-report", help="Path to Spike Report markdown file to validate")
@@ -588,7 +590,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(table_str)
     print("")
     if passed:
-        print("✅ Verdict: Pass. All empirical thresholds met.")
+        print("✅ Verdict: Pass. Command-level thresholds met; service SLIs require workload measurements.")
         return 0
     else:
         print("❌ Verdict: Fail. One or more empirical thresholds were breached.")

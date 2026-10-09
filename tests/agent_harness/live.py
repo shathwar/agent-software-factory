@@ -68,14 +68,15 @@ def digest(path: Path) -> str:
 
 class AnthropicTransport:
     """Minimal Messages API client; no API key is passed to executed commands."""
-    def __init__(self, model: str, api_key: str):
+    def __init__(self, model: str, api_key: str, tools=None):
         if not model or not api_key:
             raise ValueError("AGENT_REGRESSION_MODEL and ANTHROPIC_API_KEY are required")
         self.model, self.api_key = model, api_key
+        self.tools = TOOLS if tools is None else tools
 
     def __call__(self, messages, system):
         body = {"model": self.model, "max_tokens": 4096, "system": system,
-                "messages": messages, "tools": TOOLS}
+                "messages": messages, "tools": self.tools}
         request = urllib.request.Request('https://api.anthropic.com/v1/messages',
             data=json.dumps(body).encode(), headers={"content-type": "application/json",
                 "anthropic-version": "2023-06-01", "x-api-key": self.api_key})
@@ -150,23 +151,7 @@ class LiveSession:
         start = time.monotonic()
         error = None
         try:
-            if name in {'read_file', 'read_skill'}:
-                base = self.root if name == 'read_file' else self.skill_dir
-                result = bounded_path(base, arguments['path']).read_text()
-            elif name == 'write_file':
-                path = bounded_path(self.root, arguments['path'])
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(arguments['content'])
-                result = 'written'
-            elif name == 'run_tests':
-                result = self.command(['python', '-B', '-m', 'unittest', 'discover', '-v'])
-            elif name == 'run_command':
-                # Git inspection uses the same isolated executor. The CI image must
-                # contain Git; unsupported executables are recorded as tool failures.
-                argv = {'git_status': ['git', 'status', '--short'], 'git_diff': ['git', 'diff']}[arguments['command']]
-                result = self.command(argv)
-            else:
-                raise ValueError('Unknown tool')
+            result = self.execute_tool(name, arguments)
         except Exception as exc:
             error = f'{type(exc).__name__}: {exc}'
             result = error
@@ -178,9 +163,36 @@ class LiveSession:
         return {'type': 'tool_result', 'tool_use_id': call_id,
                 'content': json.dumps(result), 'is_error': error is not None}
 
+    def execute_tool(self, name, arguments):
+        if name in {'read_file', 'read_skill'}:
+            base = self.root if name == 'read_file' else self.skill_dir
+            result = bounded_path(base, arguments['path']).read_text()
+        elif name == 'write_file':
+            path = bounded_path(self.root, arguments['path'])
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(arguments['content'])
+            result = 'written'
+        elif name == 'run_tests':
+            result = self.command(['python', '-B', '-m', 'unittest', 'discover', '-v'])
+        elif name == 'run_command':
+            # Git inspection uses the same isolated executor. The CI image must
+            # contain Git; unsupported executables are recorded as tool failures.
+            argv = {'git_status': ['git', 'status', '--short'], 'git_diff': ['git', 'diff']}[arguments['command']]
+            result = self.command(argv)
+        else:
+            raise ValueError('Unknown tool')
+        return result
+
+    def on_completion(self):
+        return None
+
+    def session_context(self):
+        return ""
+
     def run(self, prompt):
         skill = (self.skill_dir / 'SKILL.md').read_text()
         system = skill + '\nUse the provided tools on the disposable fixture. Available files: calc.py, CONTRACT.md, notes.txt, test_existing.py (when present). Tool calls execute sequentially in the order returned. Use unittest via run_tests. Skill references can be read with read_skill. No external side effects are available.'
+        system += self.session_context()
         self.messages = [{'role': 'user', 'content': prompt}]
         raw = []
         complete = False
@@ -195,6 +207,10 @@ class LiveSession:
                 raw.extend(block['text'] for block in content if block['type'] == 'text')
                 calls = [block for block in content if block['type'] == 'tool_use']
                 if response['stop_reason'] == 'end_turn' and not calls:
+                    continuation = self.on_completion()
+                    if continuation is not None:
+                        self.messages = [{'role': 'user', 'content': continuation}]
+                        continue
                     complete = True
                     break
                 if response['stop_reason'] != 'tool_use' or not calls:

@@ -108,6 +108,29 @@ class MCPServerTests(unittest.TestCase):
         self.assertEqual(len(resps), 1)
         self.assertEqual(resps[0]["result"], {})
 
+    def test_structured_tool_output_redacts_receipts_and_nested_values(self):
+        from ship.mcp.tools import dispatch_tool
+        secret = 'sk-' + 'A' * 40
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {"AGENTFLOW_MCP_ROOT": tmp}):
+            result = dispatch_tool('ship_tdd_verify', {'trim_receipt': 'FAILED test: ' + secret})
+            self.assertNotIn(secret, json.dumps(result))
+            payload = {'receipt': {'output': [secret, {'token': secret}]}, 'count': 2, 'passed': False}
+            with patch('ship.mcp.tools.HANDLERS', {'ship_status': lambda args: payload}):
+                result = dispatch_tool('ship_status', {})
+            self.assertNotIn(secret, json.dumps(result))
+            self.assertEqual(result['count'], 2)
+            self.assertIs(result['passed'], False)
+            self.assertIn(secret, json.dumps(payload))  # Do not mutate stored evidence.
+
+    def test_tool_exceptions_redact_both_protocol_and_stderr(self):
+        secret = 'ghp_' + 'A' * 40
+        with patch('ship.mcp.server.dispatch_tool', side_effect=RuntimeError(secret)):
+            handle_request({'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call',
+                            'params': {'name': 'ship_status', 'arguments': {}}})
+        self.assertTrue(self._get_responses()[0]['result']['isError'])
+        self.assertNotIn(secret, self.stdout_buf.getvalue())
+        self.assertNotIn(secret, self.stderr_buf.getvalue())
+
     def test_tools_list_request(self):
         """Server responds to tools/list with all registered tools."""
         req = {"jsonrpc": "2.0", "id": 3, "method": "tools/list"}

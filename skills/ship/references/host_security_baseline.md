@@ -1,80 +1,63 @@
-# Host Runtime Security Baseline & Hardening Specification
+# Host security baseline and rollout approval
 
-**Version:** 1.0.0  
-**Status:** Approved for Organization-Wide Rollout  
-**Target Systems:** Google Antigravity, Cursor, Claude Desktop, Headless CI Agents
+**Status:** Integration requirements; organization approval pending.
+**Scope:** AgentFlow's local workflow controls plus the host controls required for a pilot.
 
----
+## Implemented controls and limits
 
-## 1. Executive Summary
+AgentFlow checks lifecycle evidence, design digests, configured capabilities and policy
+at its own entry points. MCP mutations are disabled unless a trusted operator sets
+`AGENTFLOW_MCP_ALLOW_MUTATIONS=1`. Set `AGENTFLOW_MCP_ROOT` to bind the MCP server to
+one consumer workspace. The logical execution rings classify operations; they are
+not OS privilege rings or kernel isolation.
 
-The **AgentFlow / Ship SDLC Framework** enforces governance policies at the logical application and lifecycle layer:
-- Role & Ring isolation (Ring 0 Hypervisor, Ring 1 Governance, Ring 2 Production, Ring 3 Sandboxed).
-- Fine-grained capability checks (`CapabilityManager`).
-- Maker $\ne$ Checker mechanical separation.
-- Cryptographic hash-chaining of action events (`EventLogger` & `ExecutionTrace`).
-- Secrets preflight checks, command leakage prevention, and output redaction (`SecretsBroker`).
+Local ledgers, session identities, approval records, and hash-chained events are
+writable by sufficiently privileged local processes. They do not authenticate a
+human approver, prove an independent reviewer, or prevent a writer from replacing
+an entire log. Step observations can be agent-reported. Host-observed fixture traces
+have the narrower limits documented in [pilot evaluation guidance](./team_rollout.md#pilot-and-agent-behavior-evaluation).
+A sequential Judge pass does not establish organizational separation of duties.
 
-However, **logical policies cannot replace kernel-level sandboxing, OS process isolation, and physical secret vault containment**. This document outlines the mandatory baseline configuration required from host runtimes hosting AgentFlow agents.
+MCP responses, including structured values and error output, are scrubbed for known
+secret patterns. Pattern redaction is defense in depth, not guaranteed secret
+recognition. Local evidence files and arbitrary host tools are not covered by the
+MCP response filter.
 
----
+## Required host controls
 
-## 2. Per-Host Mandatory Configuration
+Before enabling mutation or shell execution, the operator must verify:
 
-### 2.1 Google Antigravity
-1. **Sandbox Mode Enforcement:**
-   - Must run with `BypassSandbox: false` (Standard Sandbox Mode) by default.
-   - Any tool requiring `BypassSandbox: true` must trigger interactive human authorization.
-2. **Path Containment:**
-   - Agent read/write paths must strictly resolve within the designated workspace root (`Cwd`).
-   - Host must block path traversal (`../`) escaping the workspace boundaries.
-3. **Network Containment:**
-   - Standard sandbox mode blocks outbound TCP/UDP traffic.
-   - Egress must remain restricted unless explicitly approved for whitelisted endpoints (e.g., git remote push).
+- Filesystem and process isolation restrict the agent and its subprocesses to the
+  intended workspace. AgentFlow's command classifier is not a sandbox; an allowed
+  Python program or test runner can itself access files or execute other programs.
+- Network egress is restricted by the host to approved destinations. Verify actual
+  host behavior; do not infer isolation from a product name or UI setting.
+- Provider credentials and production secrets are absent from the agent workspace
+  and command environment. Strip sensitive environment variables before launching
+  AgentFlow and its test runners. Use scoped, short-lived credentials only through
+  an explicitly approved host integration.
+- The agent cannot modify authoritative organization policy or forge host approval.
+  Approval flags must come from trusted host decisions, never model arguments.
+- Human review and protected CI checks remain authoritative for merge and deployment.
+  Where maker/checker separation is required, enforce distinct authenticated
+  identities outside the local ledger.
+- Evidence retention, access control, and redaction are defined. If tamper-resistant
+  auditing is required, export events and milestone anchors to an independently
+  controlled append-only store. Local hashes alone are insufficient.
 
-### 2.2 Cursor & Claude Desktop (MCP Deployments)
-1. **MCP Mutation Gate:**
-   - The environment variable `AGENTFLOW_MCP_ALLOW_MUTATIONS=1` must only be set by trusted operators for sessions explicitly intended to modify workspace code.
-   - Without this variable, all modifying tools (`ship_checkpoint`, `ship_record_turn`, `ship_record_tests`) reject execution.
-2. **Workspace Pinning:**
-   - Set `AGENTFLOW_MCP_ROOT=/path/to/repo` in MCP configuration to lock the server to a specific workspace and prevent arbitrary directory access.
-3. **Command Execution Guards:**
-   - Commands must route through the `CapabilityGuard` and `SecretsBroker.inspect_command()`.
-   - Blanket shell execution tools (`bash`, `sh`) must never run commands that dump the environment (`env`, `printenv`, `set`).
+These are integration requirements, not claims that every supported host already
+implements them. Record the tested host version, model, permissions, and isolation
+checks for each approved configuration.
 
----
+## Organization-owned rollout decision
 
-## 3. Secrets Management & Vault Integration
+A named engineering owner and security/platform owner must review the pinned
+candidate commit, passing pre-release evaluation artifacts, target host/model
+results, unresolved findings, and upgrade/rollback rehearsal. Record the decision
+in the organization's approval system with scope and owners. A repository document
+or local Judge PASS cannot grant this approval.
 
-1. **Zero Plaintext Secrets in Working Trees:**
-   - All files matching `.env*`, `*.pem`, `*.key`, `id_rsa*`, `secrets.yaml`, and `credentials.json` are classified as **Ring 1 Governance** and excluded from autonomous agent reading by default.
-2. **Indirect Credential References:**
-   - Agents must only be provided with secret references (e.g. `${env:DEPLOY_TOKEN}` or vault paths `vault:secret/data/ci`) rather than plaintext secrets.
-3. **Output Redaction (`SecretsBroker`):**
-   - All tool responses and MCP stdout streams must pass through `SecretsBroker.scrub_text()` to redact API keys (`sk-...`, `ghp_...`, `AIzaSy...`), private keys, and authorization headers.
-4. **Environment Isolation:**
-   - Sensitive environment variables must be stripped before spawning sub-processes for agents (`subprocess.run(env=sanitized_env)`).
-
----
-
-## 4. Audit Trail & Cryptographic Anchoring
-
-1. **Tamper-Evident Event Log:**
-   - All actions, lease claims, and verifications are appended to `.agentflow/events.jsonl` with SHA-256 hash chaining.
-2. **Witness Anchoring:**
-   - Host environments must invoke `AuditAnchorManager.create_anchor()` upon completing major lifecycle milestones (spec approval, TDD green, delivery).
-   - In production CI/CD pipelines, anchor records should be synced to an immutable, append-only store (e.g. S3 Object Lock, Cloud Storage Retention Policy).
-3. **Log Rotation:**
-   - When event logs exceed 10,000 entries, `AuditAnchorManager.rotate_event_log()` automatically archives the file, embeds its SHA-256 in the filename, and chains the new genesis record to the archive.
-
----
-
-## 5. Agent Identity & Provenance Verification
-
-1. **Signed Session Tokens:**
-   - All agent sessions started via `ProvenanceManager.start_session()` mint an HMAC-signed session token.
-   - The token seals `agent_id`, `role`, `ring`, and `change_id`.
-2. **Maker $\ne$ Checker Rule:**
-   - Verification records must strictly be signed by an agent whose identity differs from the implementing agent (`maker != checker`).
-3. **Multi-Agent Leases:**
-   - Task execution requires explicit leases with active TTL heartbeats to prevent concurrent file mutations and race conditions.
+Start with the [team pilot scenarios](./team_rollout.md#pilot-and-agent-behavior-evaluation).
+Do not expand while data-loss, wrong-change, false-readiness, or isolation failures
+remain unresolved. Measure completion, review accuracy, time, and cost on representative
+repositories before setting organization-specific acceptance thresholds.

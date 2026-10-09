@@ -8,7 +8,7 @@
   ],
   "source_digests": {
     "skills/design/SKILL.md": "84caa191369efc09e08091ea2e783decb13468e341e34da57819b8db3a477a48",
-    "skills/spike/SKILL.md": "046d1a7db2d54b0e51a6be5204505d714b716b8851e8ee9eb2d95bc8bf9ffa4d",
+    "skills/spike/SKILL.md": "2ed000064413f6558808da5724658c0a38e609834ac2abadfeba287340c0cec2",
     "skills/tdd/SKILL.md": "a4c2802078b8251c8ddc1725e6feb305c1d75d28bccd90abebd5d47d9fc42d50",
     "skills/simplify/SKILL.md": "9e7a06852b80872a83c68d5ee8d7c23f057fafb6dea42acaa07085cf9b11ecf4",
     "skills/review/SKILL.md": "b2283333eacc6d81c501d3688b24929c7080c5dfaa8f18104073d00318cf6099",
@@ -16,7 +16,7 @@
     "skills/debug/SKILL.md": "634cefcd8ff3f0ec18e947b668a8c711a61eebf72185567a7ef35eb920c7471c",
     "skills/evals/SKILL.md": "93a4bc3321f57bb1cf7302b0987ffcb9f27fb991ded17f4467624e9e2c773afa",
     "skills/ux/SKILL.md": "360df1caa1807a0a6ea47c687d0204698004cd844effe9daf01378a4b3308241",
-    "skills/ship/SKILL.md": "688ab02a4a78851d8333cae2ac8db3df0408cad426a277d4fa5cdd1067126491"
+    "skills/ship/SKILL.md": "06ae4a8184d9bf40d606f6f98159efa8a22f26d65a0ada7fbc135fd558e8f95c"
   },
   "validators": {
     "turn": {
@@ -815,13 +815,14 @@
           "title": "Execute benchmark with warmup and workload",
           "requirement": {
             "path": "skills/spike/SKILL.md",
-            "text": "Automated Measurement"
+            "text": "Measurement Scope"
           },
           "applies_when": "Always",
           "turn_contracts": [],
           "expected_evidence": [
             "Command, warmup, iterations, concurrency, timeouts",
-            "Raw measurements and latency/error/throughput summary"
+            "Explicit measured unit: subprocess wall time and commands/second, or raw per-request workload samples",
+            "Service SLI conclusions tied to request-level measurements rather than subprocess counts"
           ],
           "validators": [
             "spike"

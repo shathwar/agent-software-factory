@@ -112,10 +112,10 @@ def get_next_turn_contract(
             inputs={
                 "change_id": target_change,
                 "active_spikes": spikes,
-                "sandbox_dir": str(spikes[0]) if spikes else ".agentflow/spikes/",
+                "sandbox_dir": str(spikes[0]) if spikes else ".scratch/",
             },
             hard_constraints=[
-                "Sandbox Isolation: NEVER write prototype code to production paths (src/, lib/). Work strictly in .agentflow/spikes/.",
+                "Sandbox Isolation: NEVER write prototype code to production paths (src/, lib/). Work strictly in .scratch/.",
                 "Falsifiable SLI: Define explicit numerical hypothesis before measuring.",
                 "Teardown Mandate: ALL ephemeral containers and processes must be torn down upon completion.",
             ],
@@ -125,7 +125,7 @@ def get_next_turn_contract(
                 "Verdict and SLI table synced to active ADR or OpenSpec package.",
             ],
             output_evidence="Empirical benchmark report and verdict bridged to design specification",
-            action_prompt=f"Execute spike in .agentflow/spikes/ to answer empirical blocker for '{target_change}'. Settle design question and bridge verdict.",
+            action_prompt=f"Execute spike in .scratch/ to answer empirical blocker for '{target_change}'. Settle design question and bridge verdict.",
             suggested_command="ship spike '<benchmark_command>'",
             suggested_mcp_tool="ship_spike_run",
             suggested_mcp_args={"command": "<benchmark_command>"},

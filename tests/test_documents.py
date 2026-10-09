@@ -43,7 +43,7 @@ class DocumentTests(unittest.TestCase):
             self.assertEqual(validator.validate_report(data), [])
 
     def test_no_legacy_workspace_references(self):
-        """Ensure legacy .ship.json, .ship/, and .scratch/ in lifecycle docs never regress."""
+        """Ensure obsolete ledger names never regress; .scratch/ is the spike workspace."""
         result = subprocess.run(
             ["git", "ls-files", "-z"],
             cwd=ROOT, check=True, capture_output=True)
@@ -62,8 +62,5 @@ class DocumentTests(unittest.TestCase):
                 content = p.read_text(encoding="utf-8", errors="ignore")
                 self.assertNotIn(".ship/", content, f"Found legacy .ship/ reference in {p.relative_to(ROOT)}")
 
-            # 3. .scratch/ must never appear in ship, review, or template workflow docs
-            rel_str = str(p.relative_to(ROOT))
-            if rel_str.startswith(("skills/ship/", "skills/review/", "templates/ci/")) and p.suffix in (".md", ".yml", ".yaml"):
-                content = p.read_text(encoding="utf-8", errors="ignore")
-                self.assertNotIn(".scratch/", content, f"Found legacy .scratch/ reference in {rel_str}")
+            # Scratch prototypes intentionally use .scratch/. Their compatibility
+            # with runtime policy is exercised by test_ship_rollout_fixes.

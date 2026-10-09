@@ -1,0 +1,36 @@
+name: Release candidate
+on:
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+permissions:
+  contents: read
+jobs:
+  deterministic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: bash scripts/test/test_full.sh
+  live:
+    uses: ./.github/workflows/live-agent-regression.yml
+    secrets: inherit
+  candidate-gate:
+    if: ${{ always() }}
+    needs: [deterministic, live]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require successful checks
+        env:
+          DETERMINISTIC_RESULT: ${{ needs.deterministic.result }}
+          LIVE_RESULT: ${{ needs.live.result }}
+        run: |
+          test "$DETERMINISTIC_RESULT" = success
+          test "$LIVE_RESULT" = success
+          echo 'Candidate checks passed. Organization host approval is still required before rollout.'

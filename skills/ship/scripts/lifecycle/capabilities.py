@@ -199,6 +199,7 @@ class CapabilityManager:
             return ExecutionRing.RING_3_WORKSPACE
 
         ring_3_patterns = [
+            ".scratch/*",
             ".agentflow/spikes/*",
             "scratch/*",
             "*/scratch/*",

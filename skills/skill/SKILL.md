@@ -50,6 +50,7 @@ Requirements Analysis ➔ SKILL.md Generation ➔ scripts/ & references/ ➔ eva
    - `description`: Trigger phrases, domain, and scope.
    - `hard_constraints`: 3–5 non-negotiable execution rules.
    - `turn_contract`: Checkpoints to verify before completing a turn.
+   - `model` / `effort` / `allowed_tools`: Optional runtime execution & tool sandboxing configuration for Claude frontmatter.
    - `tools_required`: Required environment tools.
 
 2. **Native Claude Skills Output Generation**:
