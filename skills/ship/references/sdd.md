@@ -30,8 +30,8 @@ Skill values identify installed skills or their readable SKILL.md locations, not
 executable shell commands. All four operations are required.
 Configure the provider in repository `.agentflow.json`; per-command config overrides
 cannot select a different provider. Pin external skill versions using the team's
-normal distribution mechanism. Ship's doctor does not certify their availability
-or behavior: the host must resolve and read them before running their operations.
+normal distribution mechanism. Run `ship --doctor` (or `--update-dependencies`) to verify
+external provider discovery and fast-forward git-backed dependencies.
 
 | Operation | Responsibility |
 |---|---|

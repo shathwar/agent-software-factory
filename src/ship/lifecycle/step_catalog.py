@@ -439,7 +439,7 @@ SKILLS = {'design': {'version': '1.0.0',
                    'expected_evidence': ['Flow/state/a11y/visual/structural outcomes, skips and unresolved '
                                          'issues']}]},
  'ship': {'version': '1.0.0',
-          'source_digests': {'skills/ship/SKILL.md': 'aa6b070a5f12bb8c300c6e0f7e9d2179ca46011da5259e9597a7c9d88ddedd0e'},
+          'source_digests': {'skills/ship/SKILL.md': '3d07451f1b6392e20c447faa9522112e25107f195c25ab1002791c594ce74e4f'},
           'steps': [{'id': 'ship.preflight',
                      'title': 'Run installed-project doctor',
                      'applies_when': 'Always',

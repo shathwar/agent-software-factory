@@ -134,6 +134,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--turns", "--provenance", action="store_true", dest="show_turns", help="Display turn provenance audit.")
     parser.add_argument("--harness", default=None, help="Harness identifier for recorded turn.")
     parser.add_argument("--doctor", action="store_true", help="Check local installation and workspace.")
+    parser.add_argument("--update-dependencies", action="store_true", help="Update git-backed external SDD and Simplify dependencies.")
     parser.add_argument("--migrate-state", action="store_true", help="Migrate legacy versionless ledger to v1.")
     parser.add_argument("--verify", action="store_true", help="Run independent multi-tier verification.")
     parser.add_argument("--tier", choices=["execution", "grounding", "mutation", "coverage", "all"], default=None, help="Specific verification tier.")
@@ -172,8 +173,8 @@ def run_lifecycle(argv: Sequence[str]) -> int:
         bar = "═" * 69
         return [bar, f" {title}", bar, *lines, bar]
 
-    if args.doctor:
-        res = doctor(repo_root, initialize=True)
+    if args.doctor or getattr(args, "update_dependencies", False):
+        res = doctor(repo_root, initialize=True, update=bool(getattr(args, "update_dependencies", False)))
         output_result(res, [f"Ship {res['version']}"] + [f"{'OK' if c['ok'] else 'FAIL'} {c['name']}: {c['detail']}" for c in res['checks']])
         return 0 if res["ok"] else 1
 

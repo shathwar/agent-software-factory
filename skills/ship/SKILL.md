@@ -15,9 +15,11 @@ folder. Run project commands from the consumer project.
 ## Start or resume
 
 1. On first use or upgrade, run `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --doctor`
-   with Python 3.10+. Doctor installs the pinned default OpenSpec dependency when
-   it is absent and initializes a new project with `sdd.provider: openspec`.
-   Resolve failed checks before claiming preflight success. Existing explicit SDD
+   (or with `--update-dependencies` / `SHIP_UPDATE_DEPENDENCIES=1`) with Python 3.10+.
+   Doctor verifies and installs external SDD (`openspec`) and simplify (`ponytail`)
+   dependencies when absent, checks git upstream updates when requested, and initializes
+   a new project with `sdd.provider: openspec` and `simplify.provider: ponytail`.
+   Resolve failed checks before claiming preflight success. Existing explicit provider
    configuration remains authoritative.
 2. Read `.agentflow.json` and [SDD integration](./references/sdd.md). For new
    integrations configure `sdd.provider` and the external skill operations. Read

@@ -8,7 +8,7 @@ A guide to tracking deliberate shortcuts, defining operational ceilings, and pre
 
 In high-velocity engineering, building the ultimate distributed, infinitely-scalable solution on day one is premature optimization. However, taking a quick shortcut without documentation is reckless.
 
-The `simplify:` comment strikes the balance:
+The `simplify:` or `ponytail:` comment strikes the balance:
 - **It documents the shortcut explicitly**.
 - **It specifies the operational ceiling** (when this shortcut will break or saturate).
 - **It specifies the concrete upgrade path** (what to do when the ceiling is reached).
@@ -17,16 +17,16 @@ The `simplify:` comment strikes the balance:
 
 ## 2. Syntax & Required Fields
 
-Every `simplify:` comment must include three components:
-1. **The Shortcut**: What pragmatic simplification was chosen over a heavier architecture.
-2. **The Ceiling**: The numeric or architectural boundary where this solution becomes inadequate.
-3. **The Upgrade**: The specific pattern or technology to replace it with.
-
-### Standard Format
-
-```text
-// simplify: <Shortcut>. Ceiling: <Threshold/Limit>. Upgrade: <Next Architecture>.
-```
+Supported formats:
+1. **Standard Format**:
+   ```text
+   // simplify: <Shortcut>. Ceiling: <Threshold/Limit>. Upgrade: <Next Architecture>.
+   // ponytail: <Shortcut>. Ceiling: <Threshold/Limit>. Upgrade: <Next Architecture>.
+   ```
+2. **Compact Ponytail Format**:
+   ```text
+   # ponytail: <ceiling>, <upgrade>
+   ```
 
 ### Examples by Domain
 
@@ -67,10 +67,10 @@ Use `--strict` in CI pipelines or pre-commit hooks to fail if any marker is miss
 python3 "$SKILLS_DIR/simplify/scripts/scan_debt.py" --strict
 ```
 
-Or perform a manual text search:
+Or perform a text search or run `ponytail-debt`:
 
 ```bash
-git grep -n "simplify:"
+git grep -En "(simplify|ponytail):"
 ```
 
 ### Organizing the Ledger Report

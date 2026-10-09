@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import test_archive_recovery as fixtures
 from lifecycle.config import ShipConfigManager
-from lifecycle.operations import doctor, migrate_state
+from lifecycle.operations import doctor, migrate_state, ensure_simplify_dependency
 from lifecycle.ledger import FileLedgerStore
 
 
@@ -121,3 +121,25 @@ class TeamOperationsTests(unittest.TestCase):
             result = fixtures.lifecycle.apply_and_archive_openspec(root, 'alpha')
             self.assertIn('Ship-Review: PASS (by judge)', result['trailers'])
             self.assertEqual(fixtures.lifecycle.generate_gate_trailers(root, 'alpha'), result['trailers'])
+
+    def test_doctor_initializes_and_reports_sdd_and_simplify_providers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result = doctor(root, initialize=True)
+            self.assertTrue(result['ok'], result)
+            self.assertIn('sdd', result)
+            self.assertIn('simplify', result)
+            check_names = {c['name'] for c in result['checks']}
+            self.assertIn('sdd:openspec', check_names)
+            self.assertIn('simplify:ponytail', check_names)
+
+    def test_ensure_simplify_dependency_builtin_and_external(self):
+        cur_file = Path(__file__).resolve()
+        ship = cur_file.parents[1] / "skills" / "ship"
+        res_builtin = ensure_simplify_dependency(ship, config={"simplify": {"provider": "builtin"}})
+        self.assertEqual(res_builtin["provider"], "builtin")
+        self.assertEqual(res_builtin["status"], "present")
+
+        res_missing = ensure_simplify_dependency(ship, config={"simplify": {"provider": "custom", "skills": {"refactor": "non-existent-skill"}}})
+        self.assertEqual(res_missing["status"], "missing")
+        self.assertIn("non-existent-skill", res_missing["missing"])

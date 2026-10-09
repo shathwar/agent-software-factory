@@ -475,6 +475,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
 
     parser.add_argument("--doctor", action="store_true", help="Check the local installation and workspace without modifying them.")
+    parser.add_argument("--update-dependencies", action="store_true", help="Update git-backed external SDD and Simplify dependencies.")
     parser.add_argument("--migrate-state", action="store_true", help="Back up and migrate a supported legacy versionless ledger to v1.")
     parser.add_argument("--version", action="store_true", help="Print the installed suite version.")
     parser.add_argument("--verify", action="store_true", help="Execute independent verification and record its receipt.")
@@ -498,9 +499,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.version:
         print((Path(__file__).resolve().parent.parent / "VERSION").read_text().strip())
         return 0
-    if args.doctor:
+    if args.doctor or args.update_dependencies:
         from lifecycle.operations import doctor
-        result = doctor(repo_root)
+        result = doctor(repo_root, initialize=True, update=args.update_dependencies)
         output_result(result, [f"Ship {result['version']}"] + [f"{'OK' if c['ok'] else 'FAIL'} {c['name']}: {c['detail']}" for c in result['checks']])
         return 0 if result["ok"] else 1
     if args.migrate_state:

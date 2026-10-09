@@ -5,13 +5,10 @@ from the consumer project. CI is optional.
 
 ## SDD provider selection
 
-For new integrations configure an external SDD skill through [SDD integration](./sdd.md).
-OpenSpec is one adapter, not a required artifact format. Pin the selected skill,
-verify all four operations on the intended host, and include interruption during
-provider finalization in pilot scenarios. Existing projects default to `legacy`;
-upgrade their provider only after preserving active artifacts and obtaining approval
-of the newly computed design digest. Doctor validates configuration, not installation
-or live behavior of external skills. Legacy CI templates require provider adaptation.
+Configure external SDD and Simplify skills through [SDD integration](./sdd.md) and
+the `simplify` configuration in `.agentflow.json`. Pin the selected skills and
+verify all operations using `ship --doctor` (or `--update-dependencies`).
+New projects initialize with default providers `openspec` and `ponytail`.
 
 ## Preflight and supported environments
 
