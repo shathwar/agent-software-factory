@@ -47,5 +47,5 @@ To calculate the confidence bounds for $\hat{\theta}$:
 
 Run this calculation deterministically via:
 ```bash
-python3 "$SKILLS_DIR/evals/scripts/score_calibration.py" --input test_results.jsonl --p-obs 0.80
+node "$SKILLS_DIR/evals/scripts/score_calibration.ts" --input test_results.jsonl --p-obs 0.80
 ```

@@ -66,7 +66,7 @@ Verify before ending the turn:
        ```
      - **Tier C (Path Fallback)**:
        ```bash
-       python3 "$SKILLS_DIR/spike/scripts/run_spike.py" \
+       node "$SKILLS_DIR/spike/scripts/run_spike.ts" \
          --cmd "python3 worker.py" \
          --iterations 1000 \
          --warmup 100 \

@@ -8,8 +8,8 @@ skills/<skill-name>/
 ├── SKILL.md            # Primary agent instruction file with YAML frontmatter
 ├── VERSION             # Single-line SemVer string (e.g. 1.0.0)
 ├── CHANGELOG.md        # Monotonic revision log
-├── scripts/            # Zero-dependency deterministic Python/shell tools
-│   └── validate_<name>.py
+├── scripts/            # Zero-dependency deterministic TypeScript/Node tools
+│   └── validate_<name>.ts
 ├── references/         # In-depth domain manuals, templates, checklists
 │   └── <name>_guide.md
 ├── assets/             # Static files, schemas, diagrams, template JSONs
@@ -34,7 +34,7 @@ Skills specify compatibility targets to allow graceful degradation across runtim
 ### Fallback Strategy
 When a host lacks native terminal execution:
 1. Fallback to MCP tools (e.g. `ship_spike_run`, `ship_tdd_verify`).
-2. If MCP is unavailable, fallback to deterministic python assertions in-process.
+2. If MCP is unavailable, fallback to deterministic assertions in-process.
 
 ## 3. Run Cost & Usage Economics
 

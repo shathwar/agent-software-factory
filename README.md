@@ -1,4 +1,4 @@
-# AgentFlow
+# Agentic Software Factory
 
 A local-first autonomous engineering lifecycle engine, state ledger, and MCP server for AI coding agents. Covers the complete lifecycle from architectural design, empirical spikes, test-driven implementation, and adversarial review to delivery sign-off, enterprise policy enforcement, and native skill authoring:
 

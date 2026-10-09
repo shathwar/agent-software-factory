@@ -108,10 +108,10 @@ Audit and enforce TDD compliance across available tiers:
 - **Tier C (Path Fallback)**:
 ```bash
 # Check test-to-code parity and scan for anti-patterns across staged changes
-python3 "$SKILLS_DIR/tdd/scripts/verify_tdd.py" --strict
+node "$SKILLS_DIR/tdd/scripts/verify_tdd.ts" --strict
 
 # Trim verbose runner output for compact, token-efficient receipts
-python3 "$SKILLS_DIR/tdd/scripts/verify_tdd.py" --trim-receipt test_run.log
+node "$SKILLS_DIR/tdd/scripts/verify_tdd.ts" --trim-receipt test_run.log
 ```
 
 ---

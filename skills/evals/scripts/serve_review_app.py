@@ -368,7 +368,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     args.data_dir.mkdir(parents=True, exist_ok=True)
     if args.samples and args.samples.exists():
         # Copy or convert samples into data_dir/samples.json
-        from sample_traces import load_traces
+        try:
+            from sample_traces import load_traces
+        except ImportError:
+            from ship.tools.sample_traces import load_traces
         traces = load_traces(args.samples)
         (args.data_dir / "samples.json").write_text(json.dumps(traces, indent=2, ensure_ascii=False), encoding="utf-8")
         print(f"Loaded {len(traces)} samples from {args.samples}")

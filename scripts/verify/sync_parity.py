@@ -20,16 +20,16 @@ from typing import List, Optional, Sequence, Tuple
 
 
 TOOL_MODULES = {
-    "debug": ("src/ship/tools/debug.py", "skills/debug/scripts/verify_fix.py"),
-    "design": ("src/ship/tools/design.py", "skills/design/scripts/validate_design.py"),
-    "evals": ("src/ship/tools/evals.py", "skills/evals/scripts/score_calibration.py"),
-    "sample_traces": ("src/ship/tools/sample_traces.py", "skills/evals/scripts/sample_traces.py"),
-    "simplify": ("src/ship/tools/simplify.py", "skills/simplify/scripts/scan_debt.py"),
-    "skill": ("src/ship/tools/skill.py", "skills/skill/scripts/validate_skill.py"),
-    "tdd": ("src/ship/tools/tdd.py", "skills/tdd/scripts/verify_tdd.py"),
-    "review": ("src/ship/tools/review.py", "skills/review/scripts/validate_report.py"),
-    "spike": ("src/ship/tools/spike.py", "skills/spike/scripts/run_spike.py"),
-    "ux": ("src/ship/tools/ux.py", "skills/ux/scripts/audit_ux.py"),
+    "debug": ("src/ship/tools/debug.ts", "skills/debug/scripts/verify_fix.ts"),
+    "design": ("src/ship/tools/design.ts", "skills/design/scripts/validate_design.ts"),
+    "evals": ("src/ship/tools/evals.ts", "skills/evals/scripts/score_calibration.ts"),
+    "sample_traces": ("src/ship/tools/sample_traces.ts", "skills/evals/scripts/sample_traces.ts"),
+    "simplify": ("src/ship/tools/simplify.ts", "skills/simplify/scripts/scan_debt.ts"),
+    "skill": ("src/ship/tools/skill.ts", "skills/skill/scripts/validate_skill.ts"),
+    "tdd": ("src/ship/tools/tdd.ts", "skills/tdd/scripts/verify_tdd.ts"),
+    "review": ("src/ship/tools/review.ts", "skills/review/scripts/validate_report.ts"),
+    "spike": ("src/ship/tools/spike.ts", "skills/spike/scripts/run_spike.ts"),
+    "ux": ("src/ship/tools/ux.ts", "skills/ux/scripts/audit_ux.ts"),
 }
 
 

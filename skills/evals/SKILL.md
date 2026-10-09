@@ -47,7 +47,7 @@ Identify the user's situation and immediately activate the matching workflow:
 | Has existing eval pipeline, wants sanity audit | **Eval Audit** | [eval_auditor.md](./agents/eval_auditor.md) |
 | Known failure mode checkable by rules/schema | **Code-First Eval** | Deterministic Python assertions |
 | Known subjective failure mode (tone, relevance, style) | **LLM Judge Prompt** | [judge_engineer.md](./agents/judge_engineer.md) & [judge_rubric_templates.md](./references/judge_rubric_templates.md) |
-| Has judge predictions and human ground truth | **Validate Evaluator** | [calibration_statistician.md](./agents/calibration_statistician.md) & `scripts/score_calibration.py` |
+| Has judge predictions and human ground truth | **Validate Evaluator** | [calibration_statistician.md](./agents/calibration_statistician.md) & `scripts/score_calibration.ts` |
 | RAG retrieval or hallucination evaluation | **RAG Evaluation** | [rag_metrics_handbook.md](./references/rag_metrics_handbook.md) |
 | No production traces available yet | **Synthetic Data Bootstrap** | [synthetic_data_generation.md](./references/synthetic_data_generation.md) |
 
@@ -58,7 +58,7 @@ Identify the user's situation and immediately activate the matching workflow:
 ### A. Error Discovery (The Core Diagnostic)
 1. **Diverse Sampling**: Do not review only the first 20 traces. Run diverse sampling across feature strata and random picks:
    ```bash
-   python3 "$SKILLS_DIR/evals/scripts/sample_traces.py" --input traces.jsonl --count 30 --output samples.jsonl
+   python3 "$SKILLS_DIR/evals/scripts/sample_traces.ts" --input traces.jsonl --count 30 --output samples.jsonl
    ```
 2. **Review Interface**: Launch the zero-dependency local annotation interface:
    ```bash
@@ -95,7 +95,7 @@ When criteria require semantic interpretation (tone, faithfulness, nuance):
    - Structured JSON Output with **Critique preceding Result**.
    See [judge_rubric_templates.md](./references/judge_rubric_templates.md).
 3. **1-Click Ready-to-Run Pydantic Schema**:
-   Generate instantly via `python3 "$SKILLS_DIR/evals/scripts/score_calibration.py" --template` or drop in:
+   Generate instantly via `python3 "$SKILLS_DIR/evals/scripts/score_calibration.ts" --template` or drop in:
    ```python
    from pydantic import BaseModel, Field
 
@@ -111,7 +111,7 @@ Validate judges against human labels without data leakage:
    - Production Tier (≥50 traces): Train (15%), Dev (45%), Test (40%).
 2. **Run Calibration CLI**:
    ```bash
-   python3 "$SKILLS_DIR/evals/scripts/score_calibration.py" \
+   python3 "$SKILLS_DIR/evals/scripts/score_calibration.ts" \
      --input test_predictions.jsonl \
      --infer-p-obs \
      --bootstrap 2000
@@ -132,9 +132,9 @@ Decompose evaluation into independent stages:
 
 | Script | Purpose | Arguments |
 |---|---|---|
-| `scripts/sample_traces.py` | Stratified & diverse trace sampler | `--input <path> --count <n> --output <path>` |
+| `scripts/sample_traces.ts` | Stratified & diverse trace sampler | `--input <path> --count <n> --output <path>` |
 | `scripts/serve_review_app.py` | Local trace review & annotation server | `--samples <path> --port <int> --data-dir <path>` |
-| `scripts/score_calibration.py` | TPR/TNR, confusion matrix & Rogan-Gladen CIs | `--input <path> [--p-obs <float> \| --infer-p-obs] [--template] [--bootstrap <int>]` |
+| `scripts/score_calibration.ts` | TPR/TNR, confusion matrix & Rogan-Gladen CIs | `--input <path> [--p-obs <float> \| --infer-p-obs] [--template] [--bootstrap <int>]` |
 
 ## Step observations
 

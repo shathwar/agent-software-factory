@@ -2,7 +2,7 @@
 
 ## Engineering Lifecycle Standards
 
-This repository develops the **AgentFlow / Ship Engineering Lifecycle Engine** and modular agent skills. When operating in this project:
+This repository develops the **Agentic Software Factory** (AgentFlow / Ship Engineering Lifecycle Engine) and modular agent skills. When operating in this project:
 
 ### 1. Directness & Zero Conversational Filler
 - Never start responses with conversational fluff ("Certainly", "I'd be happy to", etc.).

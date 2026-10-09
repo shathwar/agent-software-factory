@@ -1,6 +1,6 @@
 ---
 name: ux
-description: Product UX, interface engineering, and usability design engine. Enforces Don Norman affordances, Jakob Nielsen 10 heuristics, Steve Krug cognitive friction reduction ("Don't Make Me Think"), WCAG 2.1/2.2 AA accessibility, and Brad Frost 6-state completeness. Drives frontend features through a 3-phase lifecycle (Flow Grilling ➔ UX Design & State Matrix ➔ Component Generation), supporting interactive checkpoints and headless CI/IDE execution via --autopilot. Enforces explicit safety boundaries: read-only analysis (flow, audit, a11y), specification generation (spec), and code mutation (component). Automated linting via audit_ux.py. Use for "/ux", "ux", "ui", "frontend ux", "design system", "usability review", "accessibility audit", "a11y", or "component design".
+description: Product UX, interface engineering, and usability design engine. Enforces Don Norman affordances, Jakob Nielsen 10 heuristics, Steve Krug cognitive friction reduction ("Don't Make Me Think"), WCAG 2.1/2.2 AA accessibility, and Brad Frost 6-state completeness. Drives frontend features through a 3-phase lifecycle (Flow Grilling ➔ UX Design & State Matrix ➔ Component Generation), supporting interactive checkpoints and headless CI/IDE execution via --autopilot. Enforces explicit safety boundaries: read-only analysis (flow, audit, a11y), specification generation (spec), and code mutation (component). Automated linting via audit_ux.ts. Use for "/ux", "ux", "ui", "frontend ux", "design system", "usability review", "accessibility audit", "a11y", or "component design".
 ---
 
 # Product UX & Interface Engineering Engine
@@ -16,7 +16,7 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 
 <hard_constraints>
 - Prime Directive (UX ≠ Styling): NEVER treat UX requests as cosmetic CSS makeovers. You MUST establish user intent, flow, system states, accessibility contracts, error recovery, and interaction behavior before visual implementation.
-- Tiered Scope Fast-Path: For micro UI fixes and targeted component adjustments (<50 lines diff or isolated component edits), bypass Phase 1 Flow Grilling and Phase 2 State Matrix markdown authoring. Directly implement accessible production code (native semantic elements, :focus-visible rings, 6-state resilience) and verify with `audit_ux.py` inline. Reserve the full 3-phase lifecycle for multi-screen, multi-journey features.
+- Tiered Scope Fast-Path: For micro UI fixes and targeted component adjustments (<50 lines diff or isolated component edits), bypass Phase 1 Flow Grilling and Phase 2 State Matrix markdown authoring. Directly implement accessible production code (native semantic elements, :focus-visible rings, 6-state resilience) and verify with `audit_ux.ts` inline. Reserve the full 3-phase lifecycle for multi-screen, multi-journey features.
 - Safety Boundary Enforcement: Commands marked READ-ONLY / ANALYSE (`/ux audit`) MUST NEVER create or modify files. `/ux spec` may author specification docs (`docs/specs/`, `docs/ux/`). Only `/ux component` and full lifecycle runs may mutate source code.
 - Autopilot Execution Mode (`--autopilot`) & Single-Handoff Gate: When `/ux <feature> --autopilot` is invoked, execute all 3 phases sequentially without stopping for user interaction. When `--autopilot` is omitted, require explicit user confirmation checkpoints between phases. If the user confirms with "LGTM", "Proceed", or "Accept all", immediately advance to the next phase without conversational preamble.
 - State Completeness Law: Every component MUST define all applicable states for its interaction model:
@@ -35,8 +35,8 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 - Arbitrary Values: Avoid arbitrary values when an existing semantic token satisfies the requirement. Arbitrary values are permitted when justified by the design system or a genuine visual constraint.
 - Cognitive Clarity (Krug's Law): Eliminate unneeded decision forks, cryptic icons without tooltips/labels, and unconfirmed destructive actions.
 - Integration Precedence Law: When integrating specialist design capabilities (Impeccable, Hallmark), strict precedence applies: P0 Accessibility / Functional ➔ UX Correctness ➔ Design System Consistency ➔ Responsive Quality ➔ Visual Polish (Impeccable) ➔ Anti-Slop (Hallmark). Hallmark's "make this more distinctive" MUST NEVER override UX's "the existing familiar pattern reduces cognitive load."
-- Graceful Degradation Law: Neither Impeccable nor Hallmark is a hard prerequisite for the UX pipeline. If Impeccable is unavailable, UX + `audit_ux.py` continue autonomously. If Hallmark is unavailable, UX + Impeccable continue autonomously. If both are unavailable, UX core + `audit_ux.py` operate fully standalone. Tooling absence MUST NEVER fail the UX pipeline, block deployment, or halt `--autopilot`.
-- Evidence & Executable Verification Mandate (Option C): Reject purely advisory guidance (Option A). Every material UX decision, review finding, or generated component MUST produce an evidence record (rule/heuristic reference, affected component, severity, recommended fix, verification method) AND execute verification via `audit_ux.py` (or DOM/browser tests where available), pasting raw terminal receipts before ending the turn.
+- Graceful Degradation Law: Neither Impeccable nor Hallmark is a hard prerequisite for the UX pipeline. If Impeccable is unavailable, UX + `audit_ux.ts` continue autonomously. If Hallmark is unavailable, UX + Impeccable continue autonomously. If both are unavailable, UX core + `audit_ux.ts` operate fully standalone. Tooling absence MUST NEVER fail the UX pipeline, block deployment, or halt `--autopilot`.
+- Evidence & Executable Verification Mandate (Option C): Reject purely advisory guidance (Option A). Every material UX decision, review finding, or generated component MUST produce an evidence record (rule/heuristic reference, affected component, severity, recommended fix, verification method) AND execute verification via `audit_ux.ts` (or DOM/browser tests where available), pasting raw terminal receipts before ending the turn.
 </hard_constraints>
 
 <turn_contract>
@@ -47,7 +47,7 @@ Verify before ending the turn:
 ✓ 4. WCAG AA Accessibility Audited: Contrast, keyboard tabbing, focus indicators, and screen-reader labels verified.
 ✓ 5. Design System & Tokens Honored: Existing project tokens detected and reused; fallback tokens or justified arbitrary values applied without overriding established systems.
 ✓ 6. Specialist Integration Boundaries & Graceful Degradation Upheld: Normalized findings schema applied; precedence order enforced; unavailable tools cleanly bypassed without error or pipeline failure.
-✓ 7. Option C Verification Receipts Pasted: Structured evidence records produced and executable verification run via `audit_ux.py` (`--fail-on error`), with raw terminal receipts pasted.
+✓ 7. Option C Verification Receipts Pasted: Structured evidence records produced and executable verification run via `audit_ux.ts` (`--fail-on error`), with raw terminal receipts pasted.
 </turn_contract>
 
 ---
@@ -60,7 +60,7 @@ The skill operates in **four primary operating modes** with an orthogonal **`--a
 |---|---|---|---|
 | **`/ux <feature>`** | 🔄 **Mutating (Interactive)** | **Full Gated Pipeline** | Flow Grilling ➔ *Checkpoint* ➔ UX Spec & State Matrix ➔ *Checkpoint* ➔ Component Generation ➔ Verification. |
 | **`/ux polish`** | ⚡ **Mutating (Code)** | **Fast-Path Polish** | 9-step refinement for existing projects: Inspect ➔ Context ➔ Audit ➔ Impeccable ➔ Fix Visual ➔ Hallmark ➔ Reconcile ➔ Fix Worthwhile ➔ Final Audit. |
-| **`/ux audit`** | 🔍 **Read-Only (Analyse)** | **Analysis Only** | Heuristic review (Nielsen/Krug) & WCAG static audit (`audit_ux.py`); **strictly zero file writes**. (Aliases: `/ux flow`, `/ux a11y`). |
+| **`/ux audit`** | 🔍 **Read-Only (Analyse)** | **Analysis Only** | Heuristic review (Nielsen/Krug) & WCAG static audit (`audit_ux.ts`); **strictly zero file writes**. (Aliases: `/ux flow`, `/ux a11y`). |
 | **`/ux component`** | ⚡ **Mutating (Code)** | **Targeted Generation** | Directly generates or refactors accessible frontend code against existing design tokens. |
 
 ### Execution Modifier: `--autopilot`
@@ -98,7 +98,7 @@ Phase 3: Component Generation (Production-Grade Accessible Code) Auto-advance)
   • Native semantic HTML (<button>, <dialog>, <form>, <nav>)
   • Full 6-state implementation with animated skeletons and recovery actions
   • Complete :focus-visible styling and keyboard navigation
-  • Verification Receipt: python3 "$SKILLS_DIR/ux/scripts/audit_ux.py" <components>
+  • Verification Receipt: node "$SKILLS_DIR/ux/scripts/audit_ux.ts" <components>
 ```
 
 ---
@@ -132,14 +132,14 @@ Phase 3: Component Generation (Production-Grade Accessible Code) Auto-advance)
 - **Stack & Convention Fidelity**: Autonomously inspect `package.json` and styles to generate idiomatic code matching the project's framework (React, Vue, Svelte, Web Components) and styling system (CSS tokens, Tailwind, CSS-in-JS).
 - **Code Implementation**: Write production-quality component code implementing all specified states, semantic elements, and `:focus-visible` rings.
 - **Universal Accessible Component Blueprints**:
-  Run `python3 "$SKILLS_DIR/ux/scripts/audit_ux.py" --template` for ready-to-paste blueprints:
+  Run `node "$SKILLS_DIR/ux/scripts/audit_ux.ts" --template` for ready-to-paste blueprints:
   - Accessible Button with focus ring & loading state (`<button type="button" aria-busy="false" className="focus-visible:ring-2 ...">`)
   - Accessible Icon-Only Button (`<button type="button" aria-label="Action"><svg aria-hidden="true" /><span className="sr-only">Action</span></button>`)
   - Accessible Form Field with Associated Label & Recovery (`<label htmlFor="id">...</label><input id="id" aria-invalid="true" aria-describedby="err-id" />`)
   - Accessible Modal Dialog with ESC trap (`<dialog aria-labelledby="dialog-title" onKeyDown={(e) => e.key === "Escape" && onClose()}>`)
 - **Automated Verification**: Run static audit tool and paste receipt:
   ```bash
-  python3 "$SKILLS_DIR/ux/scripts/audit_ux.py" src/components/ --fail-on error
+  node "$SKILLS_DIR/ux/scripts/audit_ux.ts" src/components/ --fail-on error
   ```
 
 ### Fast-Path Refinement: `/ux polish`
@@ -150,7 +150,7 @@ Provides existing codebases and components with a rapid visual craft and structu
    ↓
 2. Read project design context (Inspect root DESIGN.md, tokens, typographic scales)
    ↓
-3. Run UX audit (Execute audit_ux.py to detect baseline a11y & token violations)
+3. Run UX audit (Execute audit_ux.ts to detect baseline a11y & token violations)
    ↓
 4. Invoke Impeccable (Subagent runs /impeccable polish against rendered preview)
    ↓
@@ -162,7 +162,7 @@ Provides existing codebases and components with a rapid visual craft and structu
    ↓
 8. Fix worthwhile issues (Apply fixes for Required and accepted Recommended findings)
    ↓
-9. Run final UX audit (Execute audit_ux.py --fail-on error to guarantee zero regressions)
+9. Run final UX audit (Execute audit_ux.ts --fail-on error to guarantee zero regressions)
 ```
 
 ---
@@ -180,14 +180,14 @@ Every material finding, decision, or audit item must produce this structured rec
 - **Affected Component**: `src/components/InviteModal.tsx:42` (<div onClick=...>)
 - **Severity**: ERROR
 - **Recommended Fix**: Replace `div` with native `<button type="button">`; add `:focus-visible` ring.
-- **Verification Method**: `audit_ux.py --fail-on error` + keyboard Tab reachability.
+- **Verification Method**: `audit_ux.ts --fail-on error` + keyboard Tab reachability.
 ```
 
 ### B. Executable Verification Receipts
 Material changes and audits require pasting raw terminal receipts verifying that no blocking errors remain:
 
 ```bash
-python3 "$SKILLS_DIR/ux/scripts/audit_ux.py" src/components/ --fail-on error
+node "$SKILLS_DIR/ux/scripts/audit_ux.ts" src/components/ --fail-on error
 ```
 ```text
 🎨 UX & Accessibility Audit Scanner
@@ -249,12 +249,12 @@ Impeccable (pbakaus/impeccable)
     ↓ (visual implementation expertise: optical balance, rhythm, micro-typography)
 Hallmark (nutlope/hallmark)
     ↓ (anti-slop expertise: eliminating generic AI tropes, editorial originality)
-audit_ux.py (skills/ux/scripts/audit_ux.py)
+audit_ux.ts (skills/ux/scripts/audit_ux.ts)
     ↓ (deterministic checks: static AST a11y, focus indicators, keyboard reachable)
 ```
 
 > [!NOTE]
-> **No Overlapping Rule Duplication**: The core UX skill and its references ([`references/orchestration.md`](./references/orchestration.md)) define high-level requirements and orchestration principles. They do **not** duplicate the specialist rule catalogs of Impeccable or Hallmark. Visual implementation craft is owned by Impeccable; anti-slop expertise is owned by Hallmark; deterministic compliance is enforced by `audit_ux.py`.
+> **No Overlapping Rule Duplication**: The core UX skill and its references ([`references/orchestration.md`](./references/orchestration.md)) define high-level requirements and orchestration principles. They do **not** duplicate the specialist rule catalogs of Impeccable or Hallmark. Visual implementation craft is owned by Impeccable; anti-slop expertise is owned by Hallmark; deterministic compliance is enforced by `audit_ux.ts`.
 
 ### A. Responsibility Boundary
 
@@ -263,7 +263,7 @@ audit_ux.py (skills/ux/scripts/audit_ux.py)
 | **User goal / flow** | `ux` | Information architecture, user mental models, decision paths |
 | **UX contract** | `ux` | Interaction specs, escape hatches, undo paths, error boundaries |
 | **State matrix** | `ux` | 6 view states (Empty, Loading, Populated, Partial, Error, Unavailable) + control states |
-| **Accessibility requirements** | `ux` + `audit_ux.py` | WCAG 2.1/2.2 AA, keyboard navigation, focus traps, accessible names |
+| **Accessibility requirements** | `ux` + `audit_ux.ts` | WCAG 2.1/2.2 AA, keyboard navigation, focus traps, accessible names |
 | **Component implementation** | `ux` | Production JSX/TSX/HTML code generation and semantic markup |
 | **Visual refinement** | `Impeccable` | Spacing rhythm, micro-typography, optical alignment, depth layering |
 | **Responsive visual quality** | `Impeccable` | Fluid wrapping, container queries, viewport adaptations, touch targets |
@@ -280,7 +280,7 @@ Do not run all specialists indiscriminately; route based on surface type and goa
 |---|---|---|
 | **New feature** | `UX ➔ Impeccable ➔ Hallmark` | Full pipeline: UX establishes flow and states, Impeccable refines layout/tokens, Hallmark eliminates AI defaults. |
 | **Existing UI polish** | `Impeccable ➔ optional Hallmark` | Focus on visual craft and responsive refinement; Hallmark optional if redesigning structure. |
-| **Accessibility-only** | `UX/a11y ➔ audit_ux.py` | Run a11y pass only; **skip Hallmark and Impeccable** entirely. |
+| **Accessibility-only** | `UX/a11y ➔ audit_ux.ts` | Run a11y pass only; **skip Hallmark and Impeccable** entirely. |
 | **Internal CRUD / admin** | `UX ➔ Impeccable` | UX enforces efficiency, Impeccable aligns tokens/spacing; **skip Hallmark** unless visual differentiation explicitly matters. Familiar patterns reduce cognitive load. |
 | **Marketing / consumer-facing** | `UX ➔ Impeccable ➔ Hallmark` | Run all three: UX intent, Impeccable polish, and Hallmark visual distinction. |
 
@@ -330,7 +330,7 @@ Do not use Impeccable merely as another static AST checklist; its core value is 
 ```text
 Generate (Synthesize component against UX contract & tokens)
    ↓
-Run audit_ux.py (Deterministic static accessibility & token verification)
+Run audit_ux.ts (Deterministic static accessibility & token verification)
    ↓
 Render application (Spin up dev server / render DOM snapshot or visual preview)
    ↓
@@ -391,7 +391,7 @@ The UX skill must operate reliably in environments where either or both speciali
 ```text
 Impeccable unavailable
        ↓
-UX + audit_ux.py continue autonomously
+UX + audit_ux.ts continue autonomously
 
 Hallmark unavailable
        ↓
@@ -399,7 +399,7 @@ UX + Impeccable continue autonomously
 
 Neither installed
        ↓
-UX core + audit_ux.py operate fully standalone
+UX core + audit_ux.ts operate fully standalone
 ```
 
 **Cardinal Rules of Degradation**:
@@ -407,7 +407,7 @@ UX core + audit_ux.py operate fully standalone
 2. **Autonomous Fallbacks**:
    - If **Impeccable** is missing: UX core applies its 5-step token hierarchy and basic visual heuristics ([`heuristics_rubric.md`](./references/heuristics_rubric.md) Heuristic 8).
    - If **Hallmark** is missing: UX core applies Krug's cognitive friction test and native semantic controls.
-   - If **Both** are missing: Full pipeline executes using UX core and `audit_ux.py` without disruption.
+   - If **Both** are missing: Full pipeline executes using UX core and `audit_ux.ts` without disruption.
 3. **Execution Logging**: Unavailable tools are marked `SKIPPED (Tooling unavailable; applied core UX standards)` in execution logs and the Final Reconciliation Report.
 
 - **Adapters & Architecture References**:

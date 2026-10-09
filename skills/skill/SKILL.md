@@ -23,7 +23,7 @@ set to the consumer project.
 - Tiered Skill Archetypes: Support both Micro Skills and Standard Enterprise Packages.
   - *Micro / Self-Contained Skill*: Single, standalone `SKILL.md` (with frontmatter, `<hard_constraints>`, and `<turn_contract>`). Zero boilerplate directories required when instructions fit cleanly in one file.
   - *Standard Enterprise Package*: Comprehensive capability producing standard `SKILL.md` + `VERSION` + `CHANGELOG.md` + `scripts/` + `references/` + `assets/` + `evals/`.
-- Deterministic Companion: Standard enterprise skills MUST provide an executable `scripts/validate_<skill>.py` script.
+- Deterministic Companion: Standard enterprise skills MUST provide an executable `scripts/validate_<skill>.ts` script.
 - SemVer & Version Invariant: Standard enterprise skills MUST have an explicit `VERSION` file (starting at `1.0.0`) and `CHANGELOG.md`.
 - Compatibility Evaluated: Every skill MUST specify and validate its Skill × Model × Host compatibility matrix.
 - Behavioral Evals Included: Standard enterprise skills MUST include structured behavioral evaluation scenarios in `evals/eval_cases.json`.
@@ -33,7 +33,7 @@ set to the consumer project.
 Verify before ending the turn:
 ✓ 1. Requirements Synthesized: Mapped role, domain, constraints, trigger phrases, and tools.
 ✓ 2. Native SKILL.md Generated: Formatted with standard YAML frontmatter, `<hard_constraints>`, and `<turn_contract>`.
-✓ 3. Companion Scripts Created: `scripts/validate_<skill>.py` executable created and verified.
+✓ 3. Companion Scripts Created: `scripts/validate_<skill>.ts` executable created and verified.
 ✓ 4. References & Assets Created: `references/` guide and `assets/` created.
 ✓ 5. Behavioral Evals Created: `evals/eval_cases.json` populated with representative scenarios.
 ✓ 6. Compatibility & Versioning Verified: Evaluated host × model compatibility and pinned `VERSION`.
@@ -76,10 +76,10 @@ Requirements Analysis ➔ SKILL.md Generation ➔ scripts/ & references/ ➔ eva
 3. **Instant Scaffolding CLI**:
    ```bash
    # Scaffold an instant micro skill
-   python3 "$SKILLS_DIR/skill/scripts/validate_skill.py" --init my-utility --micro
+   node "$SKILLS_DIR/skill/scripts/validate_skill.ts" --init my-utility --micro
 
    # Scaffold a full enterprise package
-   python3 "$SKILLS_DIR/skill/scripts/validate_skill.py" --init my-feature
+   node "$SKILLS_DIR/skill/scripts/validate_skill.ts" --init my-feature
    ```
 
 4. **Skill × Model × Host Compatibility Matrix**:
@@ -93,8 +93,8 @@ Requirements Analysis ➔ SKILL.md Generation ➔ scripts/ & references/ ➔ eva
 Run the companion validator:
 ```bash
 # Validate standard skill
-python3 "$SKILLS_DIR/skill/scripts/validate_skill.py" path/to/skill --strict
+node "$SKILLS_DIR/skill/scripts/validate_skill.ts" path/to/skill --strict
 
 # Validate micro skill
-python3 "$SKILLS_DIR/skill/scripts/validate_skill.py" path/to/skill --micro
+node "$SKILLS_DIR/skill/scripts/validate_skill.ts" path/to/skill --micro
 ```

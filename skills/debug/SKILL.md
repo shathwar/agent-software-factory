@@ -60,7 +60,7 @@ Bug Report / Log ➔ Phase 1: Investigate & Trace ➔ Phase 2: Pattern Analysis 
 2. **Apply Minimal Fix**: Edit production code at the root cause. Climb the Laziness Ladder (smallest diff).
 3. **Anti-Cheat Audit**: Run the verification auditor:
    ```bash
-   python3 "$SKILLS_DIR/debug/scripts/verify_fix.py" --strict --test-cmd "pytest"
+   node "$SKILLS_DIR/debug/scripts/verify_fix.ts" --strict --test-cmd "pytest"
    ```
 4. **Three-Strike Circuit Breaker**: If 3 fixes fail, STOP. Report the architectural contradiction to the user. See [defensive_masking_antipatterns.md](./references/defensive_masking_antipatterns.md).
 
@@ -85,10 +85,10 @@ Audit bugfix diffs for reproduction test parity, test weakening, and symptom mas
 
 ```bash
 # Audit working tree changes
-python3 "$SKILLS_DIR/debug/scripts/verify_fix.py" --strict
+node "$SKILLS_DIR/debug/scripts/verify_fix.ts" --strict
 
 # Audit against specific test command
-python3 "$SKILLS_DIR/debug/scripts/verify_fix.py" --strict --test-cmd "pytest tests/test_my_fix.py"
+node "$SKILLS_DIR/debug/scripts/verify_fix.ts" --strict --test-cmd "pytest tests/test_my_fix.py"
 ```
 
 ## Step observations
