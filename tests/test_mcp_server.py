@@ -131,6 +131,39 @@ class MCPServerTests(unittest.TestCase):
         self.assertNotIn(secret, self.stdout_buf.getvalue())
         self.assertNotIn(secret, self.stderr_buf.getvalue())
 
+    def test_record_turn_redacts_named_credentials_without_provider_prefixes(self):
+        credentials = {'password': 'synthetic-password', 'api_key': 'synthetic-api-value',
+                       'nested': [{'Access-Token': 'synthetic-access',
+                                   'private_key': {'data': 'synthetic-private'}}],
+                       'token_count': 12, 'password_policy': 'minimum length'}
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {'AGENTFLOW_MCP_ROOT': tmp}):
+            handle_request({'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call', 'params': {
+                'name': 'ship_record_turn', 'arguments': {'change': 'redaction-test', 'skill': 'ship',
+                                                       'evidence': credentials}}})
+        response = self._get_responses()[0]['result']
+        self.assertFalse(response['isError'])
+        output = self.stdout_buf.getvalue()
+        for secret in ('synthetic-password', 'synthetic-api-value', 'synthetic-access', 'synthetic-private'):
+            self.assertNotIn(secret, output)
+        self.assertIn('token_count', output)
+        self.assertIn('minimum length', output)
+        self.assertEqual(credentials['password'], 'synthetic-password')
+
+    def test_json_credentials_in_receipts_and_errors_are_redacted(self):
+        receipt = 'FAILED test_login: {"password": "synthetic-json-password", "api_key": "synthetic-json-key"}'
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {'AGENTFLOW_MCP_ROOT': tmp}):
+            handle_request({'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call', 'params': {
+                'name': 'ship_tdd_verify', 'arguments': {'trim_receipt': receipt}}})
+        self.assertFalse(self._get_responses()[0]['result']['isError'])
+        with patch('ship.mcp.server.dispatch_tool', side_effect=RuntimeError(receipt)):
+            handle_request({'jsonrpc': '2.0', 'id': 2, 'method': 'tools/call',
+                            'params': {'name': 'ship_status', 'arguments': {}}})
+        self.assertTrue(self._get_responses()[1]['result']['isError'])
+        for output in (self.stdout_buf.getvalue(), self.stderr_buf.getvalue()):
+            self.assertNotIn('synthetic-json-password', output)
+            self.assertNotIn('synthetic-json-key', output)
+            self.assertIn('[REDACTED]', output)
+
     def test_tools_list_request(self):
         """Server responds to tools/list with all registered tools."""
         req = {"jsonrpc": "2.0", "id": 3, "method": "tools/list"}

@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import subprocess
+import shutil
 import tempfile
 import unittest
 
@@ -135,6 +136,41 @@ class TestInstallScript(unittest.TestCase):
 
         res_agy = self.run_installer("--target-antigravity", "--dry-run")
         self.assertIn("/.gemini/config/skills", res_agy.stdout)
+
+    def test_install_from_other_git_repository_uses_distribution(self):
+        consumer = self.target_dir / 'consumer repo'
+        consumer.mkdir()
+        subprocess.run(['git', 'init', '-q', str(consumer)], check=True)
+        # A conflicting local skill must not be selected as the distribution.
+        decoy = consumer / 'skills/ship'
+        decoy.mkdir(parents=True)
+        (decoy / 'SKILL.md').write_text('consumer decoy')
+        target = self.target_dir / 'installed skills'
+        result = subprocess.run(['bash', str(INSTALL_SCRIPT), '--target', str(target), '--mode', 'copy'],
+                                cwd=consumer, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for skill in ('ship', 'design', 'spike', 'tdd', 'simplify', 'review'):
+            self.assertEqual((target / skill / 'SKILL.md').read_bytes(),
+                             (ROOT / 'skills' / skill / 'SKILL.md').read_bytes())
+
+    def test_incomplete_distribution_fails_before_touching_target(self):
+        distribution = self.target_dir / 'incomplete'
+        script = distribution / 'scripts/setup/install_skills.sh'
+        script.parent.mkdir(parents=True)
+        shutil.copyfile(INSTALL_SCRIPT, script)
+        for skill in ('ship', 'design', 'spike', 'tdd', 'simplify'):
+            path = distribution / 'skills' / skill / 'SKILL.md'
+            path.parent.mkdir(parents=True)
+            path.write_text('fixture')
+        target = self.target_dir / 'existing'
+        target.mkdir()
+        (target / 'canary').write_text('preserve')
+        for extra in (['--target', str(target), '--mode', 'copy', '--overwrite'], ['--list']):
+            result = subprocess.run(['bash', str(script), *extra], cwd=ROOT, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('Incomplete skill distribution', result.stderr)
+        self.assertEqual(list(target.iterdir()), [target / 'canary'])
+        self.assertEqual((target / 'canary').read_text(), 'preserve')
 
 
 if __name__ == "__main__":

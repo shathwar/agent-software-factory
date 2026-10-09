@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
 import os
+import json
 import re
 from typing import Any, Dict, List, Optional, Protocol, Tuple
 
@@ -73,6 +74,16 @@ class EnvSecretProvider:
 class SecretsBroker:
     """Manages secret verification, preflight checks, command leakage prevention, and output scrubbing."""
 
+    # Normalize separators/case, but match whole field names: token_count and
+    # password_policy are metadata, not credentials. Redact credential containers
+    # too, rather than relying on a particular scalar value or provider prefix.
+    SECRET_FIELDS = frozenset({
+        "password", "passwd", "pwd", "apikey", "secret", "token",
+        "accesstoken", "refreshtoken", "idtoken", "clientsecret",
+        "awssecretaccesskey", "awssessiontoken", "authorization",
+        "proxyauthorization", "privatekey",
+    })
+
     SCRUB_PATTERNS = [
         re.compile(r'(?i)(password|passwd|pwd)\s*[=:]\s*["\']?([^"\'\s]+)["\']?'),
         re.compile(r'(?i)(api[_-]?key|apikey)\s*[=:]\s*["\']?([^"\'\s]+)["\']?'),
@@ -104,7 +115,28 @@ class SecretsBroker:
         """Redact known secret patterns from output text, tool responses, and diffs."""
         if not text:
             return ""
-        scrubbed = text
+        # Logs often contain JSON inside prose. Decode each quoted field value
+        # so escaped strings and credential containers are removed in full.
+        decoder = json.JSONDecoder()
+        pieces = []
+        cursor = 0
+        for match in re.finditer(r'"(?:[^"\\]|\\.)*"\s*:\s*', text):
+            if match.start() < cursor:
+                continue
+            try:
+                key = decoder.raw_decode(match.group())[0]
+            except ValueError:
+                continue
+            if re.sub(r"[\s_-]", "", key).lower() not in self.SECRET_FIELDS:
+                continue
+            try:
+                _, end = decoder.raw_decode(text, match.end())
+            except ValueError:
+                continue
+            pieces.extend((text[cursor:match.end()], '"[REDACTED]"'))
+            cursor = end
+        pieces.append(text[cursor:])
+        scrubbed = ''.join(pieces)
         for pat in self.SCRUB_PATTERNS:
             def _repl(match):
                 # If groups exist, preserve key name and redact value
@@ -119,8 +151,12 @@ class SecretsBroker:
         if isinstance(value, str):
             return self.scrub_text(value)
         if isinstance(value, dict):
-            return {self.scrub_text(key) if isinstance(key, str) else key: self.scrub_value(item)
-                    for key, item in value.items()}
+            result = {}
+            for key, item in value.items():
+                sensitive = isinstance(key, str) and re.sub(r"[\s_-]", "", key).lower() in self.SECRET_FIELDS
+                safe_key = self.scrub_text(key) if isinstance(key, str) else key
+                result[safe_key] = "[REDACTED]" if sensitive else self.scrub_value(item)
+            return result
         if isinstance(value, (list, tuple)):
             return [self.scrub_value(item) for item in value]
         return value

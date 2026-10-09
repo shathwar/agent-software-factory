@@ -52,6 +52,17 @@ class ReleaseEvidenceTests(unittest.TestCase):
             self.assertTrue(engine.evaluate_filesystem('spike', path, mode='write').allowed)
             self.assertEqual(CapabilityManager.classify_target_ring(path), ExecutionRing.RING_3_WORKSPACE)
 
+    def test_release_requires_review_adjudication_and_clean_control(self):
+        report = self.report()
+        report['results'] = [r for r in report['results'] if r['case'] != 'review-average-clean']
+        self.assertTrue(validate(report, 'candidate', 'approved'))
+        report = self.report()
+        review = next(r for r in report['results'] if r['case'] == 'review-average')
+        review['checks'] = {'completed': True, 'no_symlinks': True, 'trace_integrity': True,
+                            'tools_observed': True, 'notes_preserved': True, 'source_read': True,
+                            'contract_read': True, 'no_edits': True, 'defect_reported': True}
+        self.assertTrue(validate(report, 'candidate', 'approved'))
+
 
 class ShipLiveHarnessTests(unittest.TestCase):
     def test_full_lifecycle_context_reset_and_stale_delivery(self):

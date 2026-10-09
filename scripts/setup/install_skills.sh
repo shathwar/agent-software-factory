@@ -14,7 +14,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR/../.." && pwd))"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SKILLS_DIR="$REPO_ROOT/skills"
 
 DEFAULT_TARGET="$HOME/.gemini/config/skills"
@@ -58,7 +58,19 @@ EOF
     exit "$code"
 }
 
+validate_distribution() {
+    # Validate the orchestration dependency set before changing the target.
+    local skill
+    for skill in ship design spike tdd simplify review; do
+        if [[ ! -s "$SKILLS_DIR/$skill/SKILL.md" ]]; then
+            echo "Error: Incomplete skill distribution: missing $SKILLS_DIR/$skill/SKILL.md" >&2
+            exit 1
+        fi
+    done
+}
+
 list_skills() {
+    validate_distribution
     echo "Available skills in $SKILLS_DIR:"
     for skill_path in "$SKILLS_DIR"/*; do
         if [[ -d "$skill_path" && -f "$skill_path/SKILL.md" ]]; then
@@ -135,6 +147,8 @@ if [[ "$INSTALL_MODE" != "symlink" && "$INSTALL_MODE" != "copy" ]]; then
     echo "Error: --mode must be either 'symlink' or 'copy'." >&2
     exit 1
 fi
+
+validate_distribution
 
 if [[ $INSTALL_MCP -eq 1 && $INSTALL_PIP -eq 0 && $DRY_RUN -eq 0 ]] && ! command -v ship >/dev/null 2>&1; then
     echo "Error: --mcp requires the ship CLI. Install it first or pass --pip --mcp." >&2

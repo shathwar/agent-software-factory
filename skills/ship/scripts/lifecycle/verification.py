@@ -1,6 +1,8 @@
 """Independent verification engine eliminating circular trust in AgentFlow lifecycle."""
 
 import hashlib
+import os
+import signal
 from pathlib import Path
 import re
 import shutil
@@ -235,18 +237,34 @@ def execute_and_verify_tests(
     before_fingerprint = GitClient().compute_working_tree_fingerprint(repo_root)
     start_time = time.time()
     try:
-        proc = subprocess.run(
+        proc = subprocess.Popen(
             cmd,
             shell=True,
             cwd=str(repo_root),
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout,
+            start_new_session=(os.name == "posix"),
         )
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            # Killing only the shell leaves its test runner alive. Stop the
+            # entire group before returning a receipt or allowing a retry.
+            if os.name == "posix":
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            else:
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                               capture_output=True, check=True)
+            proc.communicate()
+            raise
         duration = time.time() - start_time
         exit_code = proc.returncode
-        stdout = proc.stdout or ""
-        stderr = proc.stderr or ""
+        stdout = stdout or ""
+        stderr = stderr or ""
     except subprocess.TimeoutExpired:
         return VerificationRecord(
             claim="Test suite passes cleanly when executed by engine",

@@ -19,8 +19,11 @@ have the narrower limits documented in [pilot evaluation guidance](./team_rollou
 A sequential Judge pass does not establish organizational separation of duties.
 
 MCP responses, including structured values and error output, are scrubbed for known
-secret patterns. Pattern redaction is defense in depth, not guaranteed secret
-recognition. Local evidence files and arbitrary host tools are not covered by the
+secret patterns and common structured credential fields, including password, API key,
+access/refresh token, authorization, and private key fields. This includes JSON
+credential fields embedded in receipt and error text. Field matching ignores
+case and separators; metadata such as token_count remains visible. Redaction is
+defense in depth, not guaranteed recognition of arbitrarily named secrets. Local evidence files and arbitrary host tools are not covered by the
 MCP response filter.
 
 ## Required host controls

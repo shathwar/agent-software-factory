@@ -17,6 +17,7 @@ import urllib.request
 from pathlib import Path
 
 from ship.lifecycle.observability import ExecutionObserver
+from .review_oracle import REVIEW_PROMPT, adjudicate
 
 TOOLS = [
     {"name": "read_file", "description": "Read a fixture file by relative path.",
@@ -49,7 +50,9 @@ CASES = {
     "debug-average": {"skill": "debug", "source": "def average(xs):\n    return sum(xs) / len(xs)\n",
                       "prompt": "Fix average([]) raising ZeroDivisionError; it must return 0. Follow the debug skill: add and run a reproduction test before fixing. Preserve nonempty behavior and notes.txt."},
     "review-average": {"skill": "review", "source": "def average(xs):\n    return sum(xs) / len(xs)\n",
-                       "prompt": "Review calc.py against CONTRACT.md. Inspect actual files and report actionable defects. This is review-only: do not edit any files."},
+                       "prompt": REVIEW_PROMPT},
+    "review-average-clean": {"skill": "review", "source": "def average(xs):\n    return sum(xs) / len(xs) if xs else 0\n",
+                             "prompt": REVIEW_PROMPT},
 }
 
 
@@ -195,6 +198,7 @@ class LiveSession:
         system += self.session_context()
         self.messages = [{'role': 'user', 'content': prompt}]
         raw = []
+        final_output = ""
         complete = False
         error = None
         try:
@@ -211,6 +215,7 @@ class LiveSession:
                     if continuation is not None:
                         self.messages = [{'role': 'user', 'content': continuation}]
                         continue
+                    final_output = "\n".join(block["text"] for block in content if block["type"] == "text")
                     complete = True
                     break
                 if response['stop_reason'] != 'tool_use' or not calls:
@@ -224,7 +229,7 @@ class LiveSession:
         finally:
             self.observer.snapshot_file_changes()
             self.persist()
-        return {'complete': complete, 'error': error, 'output': '\n'.join(raw)}
+        return {'complete': complete, 'error': error, 'output': '\n'.join(raw), 'final_output': final_output}
 
 
 def evaluate(session, case_id, run):
@@ -235,11 +240,12 @@ def evaluate(session, case_id, run):
               'trace_integrity': bool(trace.events) and trace.verify_integrity()[0],
               'tools_observed': bool(trace.tool_calls()),
               'notes_preserved': bounded_path(session.root, 'notes.txt').read_text() == 'Unrelated user work.\n'}
-    if case_id == 'review-average':
+    if case_id in {'review-average', 'review-average-clean'}:
         reads = [t.arguments.get('path') for t in trace.tool_calls() if t.name == 'read_file']
         checks.update(source_read='calc.py' in reads, contract_read='CONTRACT.md' in reads,
-                      no_edits=not trace.file_changes(),
-                      defect_reported='empty' in run['output'].lower() and ('zero' in run['output'].lower() or 'division' in run['output'].lower()))
+                      no_edits=not trace.file_changes())
+        checks.update(adjudicate(session, run.get('final_output', ''),
+                                 expected_defects=1 if case_id == 'review-average' else 0))
     else:
         tests, edits = trace.test_results(), [f for f in trace.file_changes() if f.path == 'calc.py']
         red = [t for t in tests if t.exit_code != 0 and t.total_count > 0]

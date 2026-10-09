@@ -80,11 +80,23 @@ independent identity. Agent-written test output is not an unforgeable attestatio
 ## Coverage and limits
 
 The bounded suite covers TDD implementation, debug repair, read-only review of an
-empty-input arithmetic defect, and a Ship lifecycle trial. TDD/debug require observed test edits,
+empty-input arithmetic defect with a matching clean control, and a Ship lifecycle trial. TDD/debug require observed test edits,
 a failing test before the first production edit, a passing test after the final
 production edit, preserved unrelated work, and separate functional acceptance tests.
-Review requires actual source/contract reads, no edits, and a relevant defect report;
-its report check is a text predicate, not an independent semantic review judge.
+Review requires actual source/contract reads, no edits, and a final structured JSON
+verdict with concrete findings (file, line, function, reproducing input, expected
+value, and actual value or exception). The final response alone is adjudicated;
+intermediate reasoning is not treated as a verdict. A host-owned probe executes
+the fixture after the model finishes and checks the declared facts against observed
+results. Incorrect approvals, negated/keyword-only prose, fabricated locations or
+outcomes, duplicate findings, and false positives on the clean control fail. Both
+review cases use the same prompt without exposing the host probe or expected verdict.
+
+`review-oracle.json` retains the probe command result; `review-adjudication.json`
+records the schema, execution, verdict, and finding checks. The release gate requires
+both review cases and these checks; older keyword-only evidence is insufficient.
+This is deterministic adjudication of the arithmetic fixtures, not a general semantic
+review judge or proof of review quality on arbitrary repositories.
 
 The Ship trial starts without a design package. The model compiles ADR/OpenSpec
 artifacts and stops for a synthetic host approval. The host records the design digest

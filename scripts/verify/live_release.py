@@ -7,17 +7,20 @@ import argparse
 import json
 from pathlib import Path
 
-REQUIRED_CASES = {'tdd-average', 'debug-average', 'review-average', 'ship-average'}
+REQUIRED_CASES = {'tdd-average', 'debug-average', 'review-average', 'review-average-clean', 'ship-average'}
 SHIP_CHECKS = {'design_approved_before_code', 'resumed_after_approval', 'stale_delivery_rejected',
                'fresh_delivery_after_drift', 'archived_through_runtime', 'archive_exists',
                'red_before_edit_before_green', 'independent_acceptance', 'config_preserved', 'host_edit_preserved'}
 COMMON_CHECKS = {'completed', 'no_symlinks', 'trace_integrity', 'tools_observed', 'notes_preserved'}
 IMPLEMENTATION_CHECKS = {'red_before_edit_before_green', 'test_edited', 'existing_tests_preserved',
                          'scope_preserved', 'independent_acceptance'}
+REVIEW_CHECKS = COMMON_CHECKS | {'source_read', 'contract_read', 'no_edits', 'review_schema_valid',
+                                 'review_oracle_executed', 'review_verdict_correct', 'review_findings_grounded'}
 CASE_CHECKS = {
     'tdd-average': COMMON_CHECKS | IMPLEMENTATION_CHECKS,
     'debug-average': COMMON_CHECKS | IMPLEMENTATION_CHECKS,
-    'review-average': COMMON_CHECKS | {'source_read', 'contract_read', 'no_edits', 'defect_reported'},
+    'review-average': REVIEW_CHECKS,
+    'review-average-clean': REVIEW_CHECKS,
     'ship-average': COMMON_CHECKS | IMPLEMENTATION_CHECKS | SHIP_CHECKS,
 }
 

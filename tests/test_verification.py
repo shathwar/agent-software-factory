@@ -2,6 +2,10 @@
 
 from pathlib import Path
 import tempfile
+import os
+import shlex
+import sys
+import time
 import unittest
 
 from ship.lifecycle.models import VerificationRecord
@@ -161,6 +165,22 @@ class TestExecuteAndVerifyTests(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    @unittest.skipUnless(os.name == 'posix', 'POSIX shell process group regression')
+    def test_timeout_stops_child_before_it_can_modify_workspace(self):
+        worker = self.root / 'worker.py'
+        worker.write_text(
+            'from pathlib import Path\nimport time\n'
+            'Path("started").touch()\ntime.sleep(1)\n'
+            'Path("after-timeout").touch()\n'
+        )
+        command = shlex.join([sys.executable, str(worker)]) + '; :'
+        result = execute_and_verify_tests(self.root, command, timeout=0.5)
+        self.assertEqual(result.verdict, 'NOT_VERIFIED')
+        self.assertIn('timed out', result.findings[0])
+        self.assertTrue((self.root / 'started').exists())
+        time.sleep(0.8)
+        self.assertFalse((self.root / 'after-timeout').exists())
 
     def test_noop_command_is_inconclusive(self):
         rec = execute_and_verify_tests(self.root, "true")
