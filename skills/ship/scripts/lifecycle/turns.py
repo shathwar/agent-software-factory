@@ -6,7 +6,65 @@ from typing import Any, Dict, List, Optional
 from .models import TurnContract
 
 
-def get_next_turn_contract(
+def get_next_turn_contract(repo_eval: Dict[str, Any], execution_mode: Optional[str] = None) -> TurnContract:
+    """Add external SDD operations to Ship's engineering turn contracts."""
+    contract = _build_turn_contract(repo_eval, execution_mode)
+    sdd = repo_eval.get("config", {}).get("sdd", {"provider": "legacy"})
+    if sdd["provider"] == "legacy":
+        return contract
+    contract.inputs["sdd"] = sdd
+    phase = contract.phase
+    cid = contract.change_id
+    skills = sdd["skills"]
+    if phase in {"INITIAL_PROPOSAL", "FRONTIER_ROUNDS", "ADR_PROPOSED", "ADR_ACCEPTED", "SPEC_UNFINISHED"}:
+        contract.skill = skills["prepare"]
+        contract.inputs.pop("existing_adrs", None)
+        contract.exit_criteria = [
+            "Specification and task scope prepared by the configured SDD skill.",
+            "Provider inspect skill refreshed the normalized SDD handoff, including all design artifacts.",
+            "Design digest and checkpoint recorded; explicit design approval required before implementation.",
+        ]
+        contract.output_evidence = "Provider-owned specification artifacts and Ship design checkpoint"
+        contract.action_prompt = f"Use {skills['prepare']} for '{cid}', then {skills['inspect']} to refresh the handoff. Use design questioning only for unresolved decisions. Present the resulting package for approval."
+        contract.suggested_command = None
+        contract.suggested_mcp_tool = None
+        contract.suggested_mcp_args = None
+    elif phase in {"SPEC_CONFIRMED", "DESIGN_APPROVAL_REQUIRED"}:
+        contract.inputs.pop("specs_dir", None)
+        contract.inputs["artifacts"] = next((p.get("sdd", {}).get("artifacts", []) for p in repo_eval.get("sdd_packages", []) if p["change"] == cid), [])
+    elif phase == "TDD_ACTIVE":
+        contract.inputs.pop("tasks_file", None)
+        contract.exit_criteria = [
+            "Behavioral test fails before production implementation; relevant tests pass after implementation and refactoring.",
+            f"Provider task state updated and {skills['inspect']} refreshed the SDD handoff.",
+            "Test receipt recorded in Ship with turn provenance.",
+        ]
+        contract.output_evidence = "Passing test receipts and provider task progress"
+    elif phase == "REVIEW_ACTIVE":
+        contract.inputs["spec_verification_skill"] = skills["verify"]
+        contract.exit_criteria.insert(0, f"Run {skills['verify']}; record its report and current design/tree fingerprints in the SDD handoff. Resolve specification mismatches before Judge PASS.")
+    elif phase == "DELIVERY_READY":
+        contract.inputs.pop("living_specs_dir", None)
+        contract.hard_constraints = [
+            "Current specification verification, executed tests, and Judge PASS remain required.",
+            "Only the configured SDD skill reconciles or archives its own artifacts.",
+        ]
+        contract.exit_criteria = [
+            f"Run {skills['finalize']} and retain its finalization report; refresh the handoff using {skills['inspect']}.",
+            "If finalization changes the working tree, refresh provider verification, tests and review before recording delivery.",
+            f"Record finalized delivery with ship archive {cid}; generate trailers and present the walkthrough.",
+        ]
+        contract.output_evidence = "Provider finalization report and Ship delivery receipt"
+        contract.action_prompt = f"Finalize '{cid}' through {skills['finalize']}, then record delivery in Ship. Ship does not move or merge provider artifacts."
+        contract.suggested_command = None
+        contract.suggested_mcp_tool = None
+        contract.suggested_mcp_args = None
+    elif phase == "SPIKE_ACTIVE":
+        contract.exit_criteria = [c.replace("ADR or OpenSpec package", "provider specification") for c in contract.exit_criteria]
+    return contract
+
+
+def _build_turn_contract(
     repo_eval: Dict[str, Any],
     execution_mode: Optional[str] = None,
 ) -> TurnContract:

@@ -373,6 +373,38 @@
           ]
         }
       }
+    },
+    "sdd": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "External SDD provider label (e.g. openspec)."
+        },
+        "snapshot": {
+          "type": "string",
+          "description": "Repository-relative handoff file under .agentflow/."
+        },
+        "skills": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "prepare": {
+              "type": "string"
+            },
+            "inspect": {
+              "type": "string"
+            },
+            "verify": {
+              "type": "string"
+            },
+            "finalize": {
+              "type": "string"
+            }
+          }
+        }
+      }
     }
   },
   "additionalProperties": false

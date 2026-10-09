@@ -173,7 +173,7 @@ def run_lifecycle(argv: Sequence[str]) -> int:
         return [bar, f" {title}", bar, *lines, bar]
 
     if args.doctor:
-        res = doctor(repo_root)
+        res = doctor(repo_root, initialize=True)
         output_result(res, [f"Ship {res['version']}"] + [f"{'OK' if c['ok'] else 'FAIL'} {c['name']}: {c['detail']}" for c in res['checks']])
         return 0 if res["ok"] else 1
 
@@ -443,6 +443,9 @@ def run_lifecycle(argv: Sequence[str]) -> int:
         try:
             res_archive = engine.archive_change(repo_root, target, force=args.force)
             trailers = res_archive.get("trailers", [])
+            if res_archive.get("provider"):
+                output_result(res_archive, [f"Finalized {target} via {res_archive['provider']}; receipt: {res_archive['finalization']}"] + trailers)
+                return 0
             a_path = res_archive.get("archived_path", "")
             output_result({"trailers": trailers, "archive_path": str(a_path)}, [f"Archived {target} to {a_path}"] + trailers)
             return 0

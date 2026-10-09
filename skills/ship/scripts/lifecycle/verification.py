@@ -433,7 +433,12 @@ def verify_spec_coverage(
 ) -> VerificationRecord:
     """Report the absence of automated requirement-to-test verification honestly."""
     now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    pkg_dir = repo_root / "openspec" / "changes" / change
+    from .sdd import external, selected
+    if external(repo_root):
+        selected(repo_root, change)
+        pkg_dir = repo_root  # Coverage remains advisory regardless of provider layout.
+    else:
+        pkg_dir = repo_root / "openspec" / "changes" / change
     if not pkg_dir.exists() or not pkg_dir.is_dir():
         return VerificationRecord(
             claim="Specifications and requirements are covered by tests and review",

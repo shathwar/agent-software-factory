@@ -685,6 +685,12 @@ class CoordinationManager:
 
     def _mark_task_completed_in_markdown(self, change_id: str, task_id: str) -> None:
         """Mark the corresponding item completed [x] in tasks.md."""
+        from .sdd import external, selected
+        if external(self.repo_root):
+            tasks = selected(self.repo_root, change_id)["tasks"]
+            if not any(t["id"] == task_id and t["completed"] for t in tasks):
+                raise ValueError("Update task completion through the configured SDD skill and refresh its handoff before releasing as completed")
+            return
         candidates = [
             self.repo_root / "openspec" / "changes" / change_id / "tasks.md",
             self.repo_root / ".ship" / "changes" / change_id / "tasks.md",

@@ -2,7 +2,7 @@
 
 Specifications written by AI agents frequently suffer from "happy path myopia"—they detail how to create and read an entity, but forget state transitions, deletion semantics, role-based authorization, subsystem integrations, or implicit user expectations.
 
-Before confirming an architectural specification or OpenSpec change package, the Principal Architect must execute the **Four Capability Closure Checklists**.
+Before confirming an architectural specification or provider change package, the Principal Architect must execute the **Four Capability Closure Checklists**.
 
 ---
 

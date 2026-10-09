@@ -7,7 +7,7 @@
 ## 1. Strict Scope
 
 - **Write tests only. NEVER write production code.**
-- Translate requirements from [OpenSpec `specs/`](../../design/references/openspec_template.md) or prompt into executable tests.
+- Translate requirements from the selected SDD provider’s approved artifacts or the user prompt into executable tests.
 
 ---
 

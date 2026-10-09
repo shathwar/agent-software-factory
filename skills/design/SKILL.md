@@ -1,6 +1,6 @@
 ---
 name: design
-description: Relentlessly stress-tests and interviews the user on proposed system architecture, database schemas, or feature plans before implementation. Adopts the persona of a Senior Principal Systems Architect. Uses the Design Tree & Frontier Algorithm to batch unblocked questions into rounds with recommended engineering stances. Enforces the Facts vs. Decisions Law. Compiles an authoritative Architecture Decision Record (ADR) and OpenSpec package. Use whenever the user asks for "design", "system design", "architecture", "grill me on this design", "stress test my plan", or invokes /design.
+description: Relentlessly stress-tests and interviews the user on proposed system architecture, database schemas, or feature plans before implementation. Adopts the persona of a Senior Principal Systems Architect. Uses the Design Tree & Frontier Algorithm to batch unblocked questions into rounds with recommended engineering stances. Enforces the Facts vs. Decisions Law. Feeds settled decisions to the configured external SDD skill and records ADRs when repository conventions require them. Use whenever the user asks for "design", "system design", "architecture", "grill me on this design", "stress test my plan", or invokes /design.
 ---
 
 # Systems Design & Architecture Engine
@@ -20,7 +20,7 @@ For script commands in the references, resolve `SKILLS_DIR` to the absolute pare
 - Lazy Ergonomics: ALWAYS allow single-phrase confirmation ("LGTM", "Accept all", or "1") to adopt all recommended stances in a round without friction.
 - Tiered Ceremony: Scale ceremony to change size. Small/targeted changes (Tier 1: bugfix, local refactor, single-component enhancement) require at most 1 round and permit single uncontested options. Multi-system/high-risk architectural changes (Tier 2) execute full frontier grilling.
 - Ungrillable Questions: NEVER speculate on empirical limits. Spin off an isolated spike via `spike`.
-- Confirmation Gate: NEVER compile final ADR/OpenSpec until the user explicitly confirms the design frontier.
+- Confirmation Gate: Resolve material design decisions with the user before finalizing them. Existing authorization applies; do not ask again for settled decisions.
 </hard_constraints>
 
 <turn_contract>
@@ -28,7 +28,7 @@ Verify before ending the turn:
 ✓ 1. Facts Autonomously Discovered: Inspected existing schemas, routes, and configs without asking the author code-discoverable facts.
 ✓ 2. Decision Frontier Batched: Frontier questions batched into a numbered round with a recommended engineering stance.
 ✓ 3. Ungrillable Isolated: Empirical blockers branched to `spike` in `.scratch/`.
-✓ 4. Checkpoint Recorded: Design package compiled (`docs/adr/`, `openspec/changes/<change>/`) and checkpoint recorded via `inspect_lifecycle.py --checkpoint design`.
+✓ 4. Checkpoint Recorded: Settled decisions passed to the configured SDD prepare skill; when running under Ship, its handoff and design checkpoint are recorded.
 </turn_contract>
 
 ---
@@ -58,7 +58,7 @@ Verify before ending the turn:
 ## 2. Interview Execution Flow
 
 ```text
-User Proposal ➔ 1. Fact Discovery (Autonomous) ➔ 2. Frontier Rounds ➔ 3. Confirmation Gate ➔ 4. ADR / OpenSpec Generation
+User Proposal ➔ 1. Fact Discovery (Autonomous) ➔ 2. Frontier Rounds ➔ 3. Confirmation Gate ➔ 4. SDD Provider Handoff
 ```
 
 ### Round Format
@@ -90,10 +90,11 @@ Traverse these 5 domains during grilling (details in [`systems_inquiry_matrix.md
 
 1. **Iterate Rounds**: Update tree, recompute frontier, batch next round.
 2. **Capability Closure & Confirmation Gate**: Verify the [Capability Closure Checklists](./references/capability_closure.md) (Entity lifecycle CRUD, subsystem integration, role matrix, and expectation sweep). Present executive synthesis of decisions: *"Does this capture our shared architectural understanding?"*
-3. **Compile Specifications**:
-   - **ADR**: Write `docs/adr/ADR-<NNNN>-<change>.md` using [`adr_template.md`](./references/adr_template.md).
-   - **OpenSpec**: When tasks or executable specs are needed, write `openspec/changes/<change>/` using [`openspec_template.md`](./references/openspec_template.md).
-   - Serves as immutable contract for implementation and [`review`](../review/SKILL.md).
+3. **Hand Off Settled Decisions**:
+   - Under Ship, read `sdd` configuration and follow [SDD integration](../ship/references/sdd.md). Invoke the configured external `prepare` skill to own specification artifacts and task scope; do not author a competing package format.
+   - Record a separate ADR using [`adr_template.md`](./references/adr_template.md) only when repository conventions call for one. Include it in the provider handoff's approved artifact inventory.
+   - In standalone design work, deliver the requested decisions in the repository's existing format; an SDD dependency is not required merely to discuss architecture.
+   - Ship approves the resulting package and uses it as the implementation/review contract.
 
 ---
 
@@ -103,7 +104,7 @@ Traverse these 5 domains during grilling (details in [`systems_inquiry_matrix.md
 - [Systems Inquiry Matrix (`systems_inquiry_matrix.md`)](./references/systems_inquiry_matrix.md): Checklists across all 5 systems domains.
 - [Capability Closure Checklists (`capability_closure.md`)](./references/capability_closure.md): Entity lifecycle CRUD, subsystem integration, role matrix, and expectation sweep.
 - [Architecture Decision Record Template (`adr_template.md`)](./references/adr_template.md): Standard contract format for ADRs.
-- [OpenSpec Change Package Template (`openspec_template.md`)](./references/openspec_template.md): Schema for `proposal.md`, `specs/`, and `tasks.md`.
+- [External SDD integration](../ship/references/sdd.md): Provider handoff when design runs under Ship.
 
 ## Step observations
 

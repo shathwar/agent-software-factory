@@ -712,6 +712,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         try:
             change_id = args.archive if args.archive else args.change
             res = apply_and_archive_openspec(repo_root, change=change_id, force=args.force)
+            if res.get("provider"):
+                output_result(res, banner(f"SDD DELIVERY RECORDED: {res.get('change')}", [
+                    f"Provider: {res['provider']}", f"Finalization report: {res['finalization']}"]))
+                return 0
             specs_str = f"{', '.join(res['synced_specs'])} -> {res['living_specs_dir']}/" if res["synced_specs"] else "None"
             output_result(res, banner(f"📦 OPENSPEC APPLIED & ARCHIVED: {res.get('change')}", [
                 f"• Synced Specs   : {specs_str}",

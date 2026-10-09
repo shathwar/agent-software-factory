@@ -114,7 +114,15 @@ class RecoveryManager:
             # 4. Reconcile Markdown tasks.md vs Ledger task_status
             # -------------------------------------------------------------
             tasks_md_path = self.repo_root / "openspec" / "changes" / cid / "tasks.md"
-            if tasks_md_path.is_file():
+            from .sdd import external, packages
+            external_package = packages(self.repo_root, target=cid)[0] if external(self.repo_root) else None
+            if external_package:
+                change["task_status"] = {"total": external_package["total_tasks"],
+                                         "completed": external_package["completed_tasks"],
+                                         "pending": external_package["pending_tasks"],
+                                         "next": external_package["next_task"]}
+                reconciled.append("Synchronized task progress from SDD provider handoff")
+            elif tasks_md_path.is_file():
                 try:
                     content = tasks_md_path.read_text(encoding="utf-8")
                     total_tasks = 0
@@ -176,6 +184,8 @@ class RecoveryManager:
                 "completed_tasks": change.get("task_status", {}).get("completed", 0),
                 "pending_tasks": change.get("task_status", {}).get("pending", 0),
             }
+            if external_package:
+                pkg = external_package
             try:
                 eval_phase, reason_code, message = validate_delivery_readiness(
                     review_report={"status": "pass"} if change.get("evidence", {}).get("review", {}).get("verdict") == "PASS" else None,

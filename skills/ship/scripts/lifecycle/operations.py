@@ -1,8 +1,10 @@
 """Local installation diagnostics and explicit, backed-up ledger migration."""
 import json
+import os
 from pathlib import Path
 import platform
 import shutil
+import subprocess
 import sys
 from typing import Any, Dict, Optional
 import uuid
@@ -13,9 +15,35 @@ from .paths import get_state_file, get_journal_file, agentflow_path
 from .transactions import atomic_write
 
 
-def doctor(root: Path):
-    """Read-only checks; never synchronize state, run project commands, or recover files."""
+OPENSPEC_REPOSITORY = "https://github.com/Fission-AI/OpenSpec.git"
+
+
+def ensure_openspec_dependency(ship: Path) -> dict:
+    """Verify or discover the default external SDD skill beside Ship."""
+    destination = ship.parent / "openspec"
+    if (destination / "SKILL.md").is_file() or any(destination.glob("**/SKILL.md")):
+        return {"installed": False, "path": str(destination), "status": "present"}
+    for candidate in [
+        Path.home() / ".gemini/config/skills/openspec",
+        Path.home() / ".gemini/antigravity/builtin/skills/openspec",
+        Path.home() / ".claude/skills/openspec",
+    ]:
+        if (candidate / "SKILL.md").is_file():
+            return {"installed": False, "path": str(candidate), "status": "present"}
+    git = shutil.which("git")
+    if not git:
+        return {"installed": False, "path": str(destination), "status": "missing"}
+    if os.environ.get("SHIP_ALLOW_NETWORK_INSTALL", "").lower() in ("1", "true", "yes"):
+        ref = os.environ.get("SHIP_OPENSPEC_REF", "main")
+        subprocess.run([git, "clone", "--depth", "1", "--branch", ref, OPENSPEC_REPOSITORY, str(destination)], check=True)
+        return {"installed": True, "path": str(destination), "status": "installed", "ref": ref}
+    return {"installed": False, "path": str(destination), "status": "external-dependency"}
+
+
+def doctor(root: Path, initialize: bool = False):
+    """Run diagnostics and initialize the default external SDD dependency on first use."""
     checks = []
+    dependency = {"installed": False, "status": "not-applicable"}
     def check(name, ok, detail):
         checks.append({"name": name, "ok": bool(ok), "detail": detail})
     check("python", sys.version_info >= (3, 10), platform.python_version() + " (requires 3.10+)")
@@ -27,6 +55,15 @@ def doctor(root: Path):
     else:
         ship = cur_file.parents[2]
     if (ship / "SKILL.md").is_file():
+        if initialize:
+            try:
+                dependency = ensure_openspec_dependency(ship)
+                check("sdd:openspec", True, f"{dependency['status']}: {dependency['path']}")
+            except (OSError, RuntimeError, subprocess.CalledProcessError) as exc:
+                dependency = {"installed": False, "status": "failed", "error": str(exc)}
+                check("sdd:openspec", False, str(exc))
+        else:
+            dependency = {"installed": False, "status": "not-checked"}
         version_file = ship / "VERSION"
         version = version_file.read_text().strip() if version_file.exists() else "unknown"
         check("version", version != "unknown", version)
@@ -49,6 +86,8 @@ def doctor(root: Path):
         check("version", True, version)
         check("schema", get_schema_path().is_file(), "Packaged configuration schema")
         check("distribution", True, "CLI package; install prompt skills separately in the agent host")
+    if initialize and not (root / ".agentflow.json").exists() and dependency.get("status") in {"present", "installed"}:
+        init_agentflow(root)
     try:
         config = ShipConfigManager.load(root)
         check("configuration", True, f"profile={config['workflow']['profile']}, execution={config['workflow']['execution']}")
@@ -61,7 +100,7 @@ def doctor(root: Path):
         check("recovery", not journal.exists(), "Run normal inspection to recover interrupted archive" if journal.exists() else "No pending archive")
     except (ValueError, OSError) as exc:
         check("ledger", False, str(exc))
-    return {"version": version, "ok": all(c["ok"] for c in checks), "checks": checks}
+    return {"version": version, "ok": all(c["ok"] for c in checks), "checks": checks, "sdd": dependency}
 
 
 def migrate_state(root: Path):
@@ -126,6 +165,16 @@ def init_agentflow(
         "workflow": {
             "profile": profile,
             "execution": "auto",
+        },
+        "sdd": {
+            "provider": "openspec",
+            "snapshot": ".agentflow/sdd.json",
+            "skills": {
+                "prepare": "openspec-propose",
+                "inspect": "openspec-propose",
+                "verify": "openspec-verify-change",
+                "finalize": "openspec-archive-change",
+            },
         },
         "project": {
             "name": name,

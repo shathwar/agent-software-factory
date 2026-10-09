@@ -575,7 +575,8 @@ class FileLedgerStore:
             from .config import ShipConfigManager
             from .specs import OpenSpecRepository
             from .paths import resolve_change_path
-            packages = OpenSpecRepository().inspect_openspec(repo_root, target_change=cid) if resolve_change_path(repo_root, cid).is_dir() else []
+            from .sdd import external
+            packages = OpenSpecRepository().inspect_openspec(repo_root, target_change=cid) if external(repo_root) or resolve_change_path(repo_root, cid).is_dir() else []
             package = packages[0] if packages else {"change": cid, "has_tasks": False, "total_tasks": 0}
             entry["phase"] = validate_delivery_readiness(ev, package, git_info, entry, design_error=design_error, spikes=inspect_spikes(repo_root), repo_root=repo_root, verification_config=ShipConfigManager.load(repo_root))[0]
 

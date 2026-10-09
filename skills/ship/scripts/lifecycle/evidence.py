@@ -516,6 +516,9 @@ def validate_review_snapshot(
 def design_fingerprint(repo_root: Path, change: str) -> str:
     """Bind approval to package contents and ADRs; task completion is not design."""
     from .paths import repository_path, resolve_change_path
+    from .sdd import external, fingerprint
+    if external(repo_root):
+        return fingerprint(repo_root, change)
     package = resolve_change_path(repo_root, change)
     if not package.is_dir():
         raise ValueError(f"Missing design package: {change}")

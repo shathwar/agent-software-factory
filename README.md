@@ -10,7 +10,7 @@ A local-first autonomous engineering lifecycle engine, state ledger, and MCP ser
 │                 DESIGN: SPECIFICATION & ARCHITECTURE (design)               │
 │   • Persona: Senior Principal Systems Architect                             │
 │   • Model: Design Tree & Frontier Algorithm (Round-based batching)          │
-│   • Output: Architecture Decision Record (ADR) & OpenSpec Change Package    │
+│   • Output: Provider-owned specifications and design decisions            │
 └──────────────────────┬───────────────────────────────┬──────────────────────┘
                        │                               │
                        ▼ (Ungrillable Question?)       │
@@ -27,7 +27,7 @@ A local-first autonomous engineering lifecycle engine, state ledger, and MCP ser
 │   • Test Driver: Writes failing behavioral test (Red Phase)                 │
 │   • Simplify Implementer: Climbs Laziness Ladder, stdlib-first (Green)      │
 │   • Code Refactorer: Simplifies under green; adds simplify: debt markers    │
-│   • Inputs: OpenSpec tasks.md & specs/ acceptance criteria                  │
+│   • Inputs: SDD provider tasks and acceptance criteria                       │
 │   • Output: Self-verifying, lean production implementation                  │
 └──────────────────────────────────────┬──────────────────────────────────────┘
                                        │
@@ -83,7 +83,7 @@ For agent frameworks:
 | [**`review`**](./skills/review/SKILL.md) | `/review`, `review`, `adversarial review` | Post-implementation | **Recommended Pilot**. 10-stage systems review with evidence-based Judge. Ref: [Security](./skills/review/references/handbook_security.md), [WebPerf](./skills/review/references/handbook_webperf.md), [Architectural Invariants](./skills/review/references/architectural_invariants.md), [Finding Schema](./skills/review/references/finding_schema.md). |
 | [**`simplify`**](./skills/simplify/SKILL.md) | `/simplify`, `simplify`, `lazy senior dev` | Simplicity & Anti-Bloat | Laziness Ladder (YAGNI, stdlib first, zero unrequested abstractions). Debt auditing via `scan_debt.py`. Ref: [Laziness Ladder](./skills/simplify/references/laziness_ladder.md), [Debt Tracking](./skills/simplify/references/debt_tracking.md). |
 | [**`tdd`**](./skills/tdd/SKILL.md) | `/tdd`, `tdd`, `red-green-refactor` | Implementation | Iron Law of Test-First, Doubt Cycle, fast fakes over DB mocks. Diff auditor via `verify_tdd.py`. Ref: [Doubt Cycle](./skills/tdd/references/doubt_cycle.md), [TDD Patterns](./skills/tdd/references/tdd_patterns.md), [Anti-Patterns](./skills/tdd/references/anti_patterns.md). |
-| [**`design`**](./skills/design/SKILL.md) | `/design`, `design`, `grill me on this design` | Pre-implementation | Facts vs. Decisions Law, batched Frontier Rounds, Capability Closure checklists. Ref: [Capability Closure](./skills/design/references/capability_closure.md), [ADR Template](./skills/design/references/adr_template.md), [OpenSpec Template](./skills/design/references/openspec_template.md). |
+| [**`design`**](./skills/design/SKILL.md) | `/design`, `design`, `grill me on this design` | Pre-implementation | Facts vs. Decisions Law, batched Frontier Rounds, Capability Closure checklists. Ref: [Capability Closure](./skills/design/references/capability_closure.md), [ADR Template](./skills/design/references/adr_template.md), [External SDD integration](./skills/ship/references/sdd.md). |
 | [**`spike`**](./skills/spike/SKILL.md) | `/spike`, `spike`, `throwaway spike` | Empirical Validation | Rapid disposable prototypes in `.scratch/`. Benchmark runner (`run_spike.py`) measuring p50/p90/p95/p99 and RSS memory. Ref: [Guidelines](./skills/spike/references/spike_guidelines.md), [Templates](./skills/spike/references/experiment_templates.md). |
 | [**`ship`**](./skills/ship/SKILL.md) | `/ship`, `ship`, `/lifecycle` | Full Lifecycle | Chains all skills with transition gates, 2-phase atomic transactions, and working tree fingerprinting. Ref: [State Machine](./skills/ship/references/lifecycle_state_machine.md), [Team Rollout](./skills/ship/references/team_rollout.md), [Headless CI](./skills/ship/references/headless_ci_guide.md). |
 | [**`evals`**](./skills/evals/SKILL.md) | `/evals`, `evals`, `ai evals` | AI Regressions & Evals | Parlance Labs / Hamel Husain methodology. Zero-dependency review app (`serve_review_app.py`), binary judges, Rogan-Gladen statistical calibration (`score_calibration.py`). Ref: [Taxonomy](./skills/evals/references/taxonomy_framework.md), [Math](./skills/evals/references/calibration_math.md). |
@@ -250,3 +250,10 @@ The [live tool-loop suite](./tests/evaluation/live_agent_regression.md) runs rea
 - **Headless CI Guide ([`headless_ci_guide.md`](./skills/ship/references/headless_ci_guide.md))**: Gated GitHub Actions integration requiring explicit design approvals and independent delivery execution receipts.
 - **Behavioral Evaluations ([`skill_evaluations.md`](./tests/skill_evaluations.md))**: Manual acceptance scenarios and links to executable component checks.
 - **Trust Boundaries**: AgentFlow coordinates local workflow states and policy enforcement. Sandboxing, secrets management, and network containment are reinforced by the host runtime.
+
+### Configurable specification workflow
+
+Ship delegates specification preparation, inspection, verification, and finalization
+to an external SDD skill selected in `.agentflow.json`. Ship retains approval, TDD,
+engineering review, and delivery evidence. See [the handoff contract and configuration](./skills/ship/references/sdd.md)
+and the initial [OpenSpec adapter](./skills/ship/references/sdd_openspec.md).

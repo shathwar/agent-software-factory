@@ -1,152 +1,101 @@
 ---
 name: ship
-description: Complete autonomous engineering lifecycle orchestrator. Chains design, spike, tdd, simplify, and review into a single, unified workflow with explicit phase transition gates. Takes an idea or feature request from initial architectural design to tested, simplified, and production-reviewed code ready to ship. Use for "/ship", "ship", "/lifecycle", "lifecycle", "full engineering lifecycle", or "build and review this feature".
+description: Coordinate specification-driven delivery through a configured external SDD skill, test-first implementation, simplification, engineering review, and evidence-backed handoff. Use for "/ship", "/lifecycle", "full engineering lifecycle", or "build and review this feature".
 ---
 
-# The Ship Engine: Autonomous Engineering Lifecycle Orchestrator
+# Ship
 
-**Role**: Principal Tech Lead & Delivery Orchestrator. Drive features from raw idea to production PR across 4 deterministic gates.
+Ship owns delivery gates. A configured external specification-driven development
+(SDD) skill owns specifications, task representation, spec verification, and
+finalization. Do not impose a provider's directories, filenames, or archive format.
 
-Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder (the folder containing this `SKILL.md`). Use that actual location for the commands below; do not assume a provider-specific install path or a `skills/` directory in the project. Keep the working directory set to the project being developed.
+Resolve `SKILLS_DIR` to the absolute directory containing this installed `ship`
+folder. Run project commands from the consumer project.
 
+## Start or resume
 
-> [!IMPORTANT]
-> **Zero Conversational Filler**: Never say "Certainly", "I'd be happy to", or provide conversational preamble. Start directly with state inspection, active gate execution, or delivery walkthrough.
+1. On first use or upgrade, run `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --doctor`
+   with Python 3.10+. Doctor installs the pinned default OpenSpec dependency when
+   it is absent and initializes a new project with `sdd.provider: openspec`.
+   Resolve failed checks before claiming preflight success. Existing explicit SDD
+   configuration remains authoritative.
+2. Read `.agentflow.json` and [SDD integration](./references/sdd.md). For new
+   integrations configure `sdd.provider` and the external skill operations. Read
+   only the selected provider's instructions. Missing skills block their operation;
+   do not silently replace them with locally invented specification templates.
+3. Refresh the handoff using the configured `inspect` skill before inspecting
+   lifecycle state. Run `ship turn --change <id>`, `ship_next_turn`, or
+   `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --next-turn --change <id>`.
+   Select the intended change explicitly when more than one is active.
+4. Resume the required gate. Finished work remains valid only while its scope and
+   evidence remain current. Apply the configured [team profile](./references/team_rollout.md#team-profiles).
 
-<hard_constraints>
-- Local Preflight: On first use in a project or after an upgrade, run the installed inspector with `--doctor`. If the default Python is unsupported, select an available Python 3.10+ interpreter and use it consistently. Do not claim a successful preflight when checks fail.
-- Re-Entrant State: Inspect filesystem state (`inspect_lifecycle.py`) first. Resume cleanly; never re-run finished gates.
-- Express Ship Profile: For small, focused bugfixes or targeted enhancements (<50 lines diff), execute the streamlined flow: single-pass design (uncontested `tasks.md`), 1 targeted TDD cycle, compact review, and delivery. Scale ceremony to risk.
-- Harness Independence: The workflow does NOT depend on recursive subagents. Specialist activities execute as independent agent turns orchestrated by the workflow controller, supporting sequential execution or parallel passes where supported. Subagents are an optional optimization, never a core dependency. Disclose the execution mode honestly.
-- Git Restrictions: Checkpoints and Git notes create internal commit objects. Respect explicit no-Git-mutation restrictions; use local evidence and disclose skipped checkpoint/note capabilities as described in [team rollout](./references/team_rollout.md#git-mutation-restrictions).
-- Design Checkpoint & Single-Handoff: Record `inspect_lifecycle.py --checkpoint design`. NEVER proceed to implementation without explicit user confirmation of the ADR/OpenSpec package. Upon confirmation (`"Proceed"` or `"LGTM"`), record approval and immediately execute Task 1 in that exact turn.
-- Test-First Law: In implementation, every task MUST follow strict Red-Green-Refactor with failing behavioral tests before code. Enforce `.agentflow.json` test commands when present.
-- Terminal Receipts: Gate transitions (implementation ➔ review and review ➔ delivery) REQUIRE pasting the raw terminal test runner output (exit code, test count, duration). Unsubstantiated claims of "tests pass" are rejected.
-- Replan Guard: If review detects a broken architectural invariant, preserve the working tree and return to design. Whole-checkout rollback is operator-authorized recovery, not an automatic review action; see [recovery boundaries](./references/headless_ci_guide.md#recovery-boundaries).
-- Review Clearance: Delivery REQUIRES an explicit PASS report from the review Judge, zero open CRITICAL/HIGH defects, and verified test evidence bound to current code.
-</hard_constraints>
+## Prepare and approve
+
+- Invoke the configured `prepare` skill. Use [`design`](../design/SKILL.md) for
+  unresolved architectural decisions and [`spike`](../spike/SKILL.md) for empirical
+  uncertainty. Feed decisions back to the SDD skill; create a separate ADR only
+  when repository conventions require one.
+- Refresh the provider handoff, including all specification/design artifacts and
+  task scope. Compute the design digest and record `--checkpoint design`.
+- Present the actual specification and tasks for explicit approval before
+  implementation. Record existing authorization without asking again:
+  `--approve-design <digest> --approved-by <identity> --change <id>`.
+  A checkpoint alone is not approval. Changed scope requires renewed approval.
+- Once approved, record it and begin the first pending task in the same turn.
+
+## Implement
+
+- Take pending tasks from the provider's handoff. Execute [`tdd`](../tdd/SKILL.md)
+  and [`simplify`](../simplify/SKILL.md): demonstrate a failing behavioral test,
+  implement the minimum change, then refactor under passing tests.
+- Use repository test commands, including `gates.implementation.test` when set.
+  Capture command, raw result, exit code, executed-test count, and duration.
+- Update task progress through the provider's workflow and refresh its handoff.
+  Ship must not edit provider task files or invent a second task representation.
+- Record test evidence, turn provenance, and the implementation checkpoint.
+
+## Verify and review
+
+- Invoke the configured `verify` skill to check implementation against the approved
+  specification. Retain its findings/report and bind the result to the current
+  design and working-tree fingerprints in the handoff.
+- Run [`review`](../review/SKILL.md) in `review-loop` mode against the full working
+  tree, including staged, unstaged, and untracked changes. Provider spec verification
+  feeds Stage 0; engineering review adds correctness and applicable risk checks.
+- Fix adjudicated defects within the configured repair limit. Broken design
+  invariants return to preparation while preserving existing edits.
+- Require Judge PASS, zero open CRITICAL/HIGH defects, and current evidence.
+  Disclose sequential or parallel execution honestly; subagents are optional.
+
+## Deliver
+
+1. After the last source edit, run `--verify --tier execution --change <id>` and
+   `--status-check --change <id>` using the installed inspector. Require VERIFIED,
+   positive executed-test counts, and a ready status. Missing, failed, or stale
+   evidence blocks delivery; provider verification cannot replace executed tests.
+2. Invoke the configured `finalize` skill, then refresh the handoff with its
+   finalization report and current artifact locations. The provider owns syncing,
+   archiving, and recovery of its artifacts. If it changes the working tree,
+   refresh provider verification, test receipts, and review before recording delivery.
+3. Run `--archive <id>` to record the external finalization in Ship's ledger. In
+   external mode this command validates gates and records delivery; it never moves
+   or merges provider files. Interrupted finalization resumes through the provider.
+4. Deliver a concise walkthrough: changes, specification links, review findings,
+   test receipts, and remaining operational considerations. Generate commit
+   trailers with `--generate-trailers --change <id>` when useful. Report tracked
+   tokens/cost using `agentflow budget show`, or `not recorded` if unavailable.
+
+Respect [Git mutation restrictions](./references/team_rollout.md#git-mutation-restrictions).
+Whole-checkout rollback is unavailable in external SDD mode; use provider recovery
+and explicit operator authorization for any separate restoration. Local handoffs
+and approval receipts are workflow records, not authenticated attestations.
+
+For headless execution, see [CI guidance](./references/headless_ci_guide.md). For optional local step observations, see [step tracing](./references/step_tracing.md).
 
 <turn_contract>
-Verify before ending the turn:
-✓ 1. Turn Contract Inspected: Inspected `inspect_lifecycle.py --next-turn` before executing or advancing.
-✓ 2. Receipts Pasted: Terminal receipts (command, exit code, test count, duration) pasted for any test or gate execution.
-✓ 3. Ledger Synchronized & Provenance Recorded: Gate transitions, design approvals, test runs, or evidence records committed to `.agentflow/state.json` with turn provenance.
-✓ 4. Zero Unsubstantiated Claims: No phase marked complete without verifiable filesystem or command evidence.
+✓ 1. Refresh provider state and inspect the selected change's next turn before work.
+✓ 2. Retain terminal receipts for executed tests and gate checks.
+✓ 3. Record approvals, evidence, and turn provenance in the Ship ledger.
+✓ 4. Claim completion only when current artifact and execution evidence supports it.
 </turn_contract>
-
----
-
-## 1. The Engineering Lifecycle Pipeline
-
-```text
-User Request: "/ship <idea>"
-      │
-      ▼
-Design: Specification & Architecture (design)
-  • Facts vs. Decisions Law ➔ Frontier Rounds (Q1/Q2)
-  • If empirical blocker ➔ run spike in .scratch/
-  • Compile ADR (docs/adr/) & OpenSpec (openspec/changes/)
-  • Checkpoint: User confirms specification
-      │
-      ▼ (User clicks "Proceed")
-Implementation: Test-First Development (tdd + simplify)
-  • Sequentially process openspec/changes/<change>/tasks.md
-  • Red (test_driver) ➔ Green (simplify_implementer) ➔ Refactor (code_refactorer)
-  • Check off tasks (- [x]) under green test protection
-      │
-      ▼ (All tasks complete & tests pass)
-Review: Adversarial Review & Auto-Fix (review)
-  • Stage 0: Spec alignment against ADR & OpenSpec
-  • Stages 1–9: Concurrency, correctness, chaos, craftsmanship
-  • Review-Loop: Fix defects & prove zero regressions
-  • Judge issues official PASS verdict
-      │
-      ▼ (Judge PASS)
-Delivery: PR Sign-Off & Handoff (delivery)
-  • Final test suite verification
-  • Delivery Walkthrough Report & PR summary ready
-```
-
----
-
-## 2. Re-Entrant State Machine (Filesystem as State)
-
-The filesystem is the persistent state machine. Orient using the most direct available tier:
-- **Tier A (Native MCP Tool)**: Call `ship_next_turn` or `ship_status`.
-- **Tier B (Packaged CLI)**: Run `ship turn` or `ship status`.
-- **Tier C (Path-Based Fallback)**: Run `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --next-turn`.
-
-| Gate | Indicators | Action |
-|---|---|---|
-| **Design** | No `openspec/changes/<change>/` or `docs/adr/`. | Launch [`design`](../design/SKILL.md). Discover facts, present Frontier Rounds. |
-| **Spike** | Design frontier hits ungrillable question. | Launch [`spike`](../spike/SKILL.md) in `.scratch/`. Report verdict. |
-| **Implementation** | Current design approval exists and `tasks.md` has unchecked `[ ]` tasks. | Launch [`tdd`](../tdd/SKILL.md). Resume at first unchecked task. |
-| **Review** | All tasks `[x]`, no clean review report. | Launch [`review`](../review/SKILL.md) in `review-loop` mode. |
-| **Delivery** | All tasks `[x]`, all tests pass, Judge `PASS`. | Compile Delivery Walkthrough and prepare git commit. |
-
----
-
-## 3. Execution Protocol
-
-Read `workflow.profile` and `workflow.execution` from inspection output. Apply the [team profile and host capability rules](./references/team_rollout.md#team-profiles). Use repository test commands and conventions; do not invent an independent approval service.
-
-### Design: Specification & Architecture
-1. Discover facts autonomously from source files. Never ask code-discoverable questions.
-2. Present Frontier Rounds: `❓ Q[N]` with `➡️ Recommended Stance`.
-3. If empirical uncertainty arises, spike in `.scratch/` using [`spike`](../spike/SKILL.md).
-4. Compile `docs/adr/ADR-<NNNN>-<change>.md` and `openspec/changes/<change>/`.
-5. Checkpoint specification: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --checkpoint design`.
-6. Capture the design digest before presenting the package for confirmation. After explicit authorization, record approval with `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --approve-design auto` (or pass explicit digest with `--approve-design <sha256> --approved-by session-user`). Explicit approval in the current conversation is sufficient; record it without asking again. Use the known session identity or `session-user`, and apply authorization only to the reviewed design. A checkpoint alone is not approval.
-7. **Single-Handoff Transition**: Present confirmation call-to-action: *"Reply 'Proceed' or 'LGTM' to approve specification and start implementation."* When the user confirms, record approval and immediately execute Task 1 in that exact turn.
-
-### Implementation: Test-First Development
-Iterate sequentially through `openspec/changes/<change>/tasks.md` using single-agent Inline Micro-Cycles:
-1. **Red**: [Test Driver](../tdd/agents/test_driver.md) writes failing behavioral test; prove assertion failure with targeted runner (`pytest -k <test> -q --tb=short`).
-2. **Green**: [Simplify Implementer](../tdd/agents/simplify_implementer.md) writes minimal code using [Laziness Ladder](../simplify/SKILL.md) and custom test commands defined in `.agentflow.json`.
-3. **Refactor**: [Code Refactorer](../tdd/agents/code_refactorer.md) cleans code; adds [debt markers](../simplify/references/debt_tracking.md) with ceilings.
-4. Mark task completed `- [x]` and repeat.
-5. Checkpoint implementation: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --checkpoint implementation`.
-
-### Review: Code Verification
-1. Inspect implementation changes across the working tree (staged, unstaged, and untracked) against the base branch:
-   - Resolve `inspect_changes.sh` from the installed skill directory (`$SKILLS_DIR/review/scripts/inspect_changes.sh`) or local workspace path.
-   - Execute `bash <resolved_path>/inspect_changes.sh --base <base-branch>` (default: `main`). Never restrict to `main...HEAD` as that omits uncommitted working-tree implementation edits.
-2. Launch [`review`](../review/SKILL.md) in `review-loop` mode.
-3. Stage 0 verifies code against OpenSpec/ADR; Stages 1–9 review concurrency, chaos, correctness.
-4. Auto-fix defects under green test protection until Judge issues an explicit `PASS` report. Package `.agentflow/delivery_evidence.json` (Delivery Evidence Envelope) bundling the Judge report, verified test runner evidence, and reviewed commit/tree snapshot.
-5. **Replan Guard**: If an ADR invariant is fundamentally broken, retain current edits and re-open design. Do not restore the checkpoint automatically: it includes unrelated work. Use `--rollback design --force --change <change>` only when the operator has explicitly authorized the inspected whole-checkout restoration.
-
-### Delivery: Sign-Off & Handoff
-1. After the final source edit, execute the configured full test suite and record its independent receipt: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --verify --tier execution --change <change>`. Packaged equivalent: `agentflow verify --tier execution --change <change>`. The path command works with a copy-only installation; no CLI package is required. Stop on any nonzero exit or non-`VERIFIED` receipt.
-2. Verify gate status on that same snapshot: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --status-check --change <change>`. A later source edit requires fresh test and review evidence. Verification must report positive executed-test counts; no-op commands and entirely skipped suites cannot pass. See [supported runners and non-test work](./references/team_rollout.md#verification-and-host-permissions).
-3. Deliver Walkthrough: changes summary, ADR links, review scorecard, `scan_debt.py` ledger.
-4. Apply & Archive OpenSpec: Sync delta specs to `openspec/specs/` and move completed package to `openspec/archive/<YYYY-MM-DD>-<change>/` via `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --archive [change]`.
-5. Attach Git Notes & Commit Trailers:
-   - Deep validation evidence (review reports, test logs) can be attached to the commit object via Git notes (`refs/notes/ship-evidence`).
-   - Format standard RFC 5133 commit trailers using `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --generate-trailers --change <change>` (`Ship-Change: <change>`, `Ship-<GateName>: <status>`). In lightweight local workflows, workspace inspection tracks provenance automatically.
-6. Always report task cost in the final Ship Walkthrough: after the last usage-affecting action, run `agentflow budget show --path <project> --change <change>` (or the installed equivalent) when budget tracking is active, and include the recorded totals (`Tokens: <count>`, `Cost: $<amount> USD`). If unrecorded, report `not recorded`.
-
----
-
-## 4. Interaction Boundaries
-
-- **Involve user for**: Frontier Round stances, design confirmation, external service blockers.
-- **Execute autonomously for**: Code fact discovery, individual TDD cycles, test runner executions, review-loop fixes.
-
----
-
-## 5. Engineering References (Loaded On-Demand)
-
-- [Lifecycle State Machine & Transition Rules (`lifecycle_state_machine.md`)](./references/lifecycle_state_machine.md): Deep-dive into transitions and rollback gates.
-- [Headless CI & Multi-Team Orchestration Guide (`headless_ci_guide.md`)](./references/headless_ci_guide.md): GitHub Actions automation and asynchronous approval flows.
-- [Design Engine (`design`)](../design/SKILL.md): Architecture grilling and specification contracts.
-- [Spike Engine (`spike`)](../spike/SKILL.md): Throwaway spike methodology.
-- [TDD Engine (`tdd`)](../tdd/SKILL.md): Red-Green-Refactor implementation.
-- [Simplify Engine (`simplify`)](../simplify/SKILL.md): Laziness Ladder and debt markers.
-- [Review Engine (`review`)](../review/SKILL.md): 10-stage systems code review.
-
-- [Local team rollout](./references/team_rollout.md): Doctor, profiles, supported environments, pinned upgrades, state migration, and pilot scenarios.
-
-## Step observations
-
-When the AgentFlow runtime is available and local telemetry writes are allowed, use `agentflow steps catalog --skill ship` / `python3 "$SKILLS_DIR/ship/scripts/trace_steps.py"` to record step lifecycles. See [step tracing](./references/step_tracing.md) for arguments and evidence expectations. If unavailable, proceed with the requested workflow.

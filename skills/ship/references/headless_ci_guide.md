@@ -1,5 +1,11 @@
 # Headless CI integration
 
+The package-layout and archive instructions in this document describe `sdd.provider: legacy`.
+For external SDD skills, use [SDD integration](./sdd.md); Ship retains its approval,
+test, review, and delivery gates, while the provider owns its artifacts. Existing
+CI templates must be adapted and validated before use with an external provider.
+
+
 These are pilot templates for an explicitly approved design, not an issue-to-production
 service. Local approval receipts do not authenticate people or sandbox agents. Keep
 human PR review and the repository's protected merge checks.

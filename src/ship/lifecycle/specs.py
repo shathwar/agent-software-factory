@@ -135,11 +135,14 @@ def _locked_workspace(method):
     return run
 
 
-class OpenSpecRepository:
+class SpecificationRepository:
     """Manages discovery and manipulation of OpenSpec change packages, ADRs, and living specs."""
 
     def inspect_adrs(self, repo_root: Path) -> List[Dict[str, Any]]:
         """Scan docs/adr/ for architecture decision records."""
+        from .sdd import external
+        if external(repo_root):
+            return []  # Architecture artifacts belong to the configured provider.
         adr_dir = repo_root / "docs" / "adr"
         adrs = []
         if not adr_dir.exists():
@@ -167,6 +170,9 @@ class OpenSpecRepository:
         clear_active_fn: Optional[Callable[[Path], Any]] = None,
     ) -> List[Dict[str, Any]]:
         """Scan openspec/changes/ for active change packages and parse tasks.md."""
+        from .sdd import external, packages
+        if external(repo_root):
+            return packages(repo_root, target_change, get_active_fn(repo_root) if get_active_fn else None)
         resolved_target = validate_change_id(target_change) if target_change is not None else None
         changes_dir = repository_path(repo_root, "openspec/changes")
         archive_dir = repository_path(repo_root, "openspec/archive")
@@ -289,6 +295,9 @@ class OpenSpecRepository:
 
     def inspect_archived_openspec(self, repo_root: Path) -> List[Dict[str, Any]]:
         """Scan openspec/archive/ for completed historical change packages."""
+        from .sdd import external
+        if external(repo_root):
+            return []  # Finalization history is recorded in the Ship ledger.
         archive_dir = repository_path(repo_root, "openspec/archive")
         archived = []
         if not archive_dir.exists():
@@ -304,6 +313,9 @@ class OpenSpecRepository:
 
     def inspect_living_specs(self, repo_root: Path) -> List[Dict[str, Any]]:
         """Scan openspec/specs/ for living cumulative system specifications."""
+        from .sdd import external
+        if external(repo_root):
+            return []
         specs_dir = repository_path(repo_root, "openspec/specs")
         specs = []
         if not specs_dir.exists():
@@ -331,6 +343,9 @@ class OpenSpecRepository:
         get_active_fn: Optional[Callable[[Path], Optional[str]]] = None,
     ) -> Dict[str, Any]:
         """Sync delta specs from changes to openspec/specs/, then move change package to openspec/archive/."""
+        from .sdd import external, finalize
+        if external(repo_root):
+            return finalize(repo_root, change, force)
         changes_dir = repository_path(repo_root, "openspec/changes")
         if not changes_dir.exists():
             raise FileNotFoundError(f"No openspec/changes directory found at {changes_dir}")
@@ -466,3 +481,7 @@ class OpenSpecRepository:
             "archived_path": str(dest_archive.relative_to(repo_root)),
             "trailers": trailers,
         }
+
+
+# Public compatibility name for existing integrations.
+OpenSpecRepository = SpecificationRepository

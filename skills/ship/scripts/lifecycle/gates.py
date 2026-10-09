@@ -24,15 +24,17 @@ def validate_delivery_readiness(
         return ("spike", "SPIKE_ACTIVE", f"Complete empirical spike in '{spikes[0]}'.")
 
     pkg_change = active_pkg.get("change", "")
+    external_sdd = "sdd" in active_pkg
     if not active_pkg.get("has_tasks", True):
-        return ("design", "SPEC_UNFINISHED", "tasks.md does not exist. Compile tasks.md and specs/ before implementation.")
+        return ("design", "SPEC_UNFINISHED", "Prepare specification artifacts and tasks through the SDD provider." if external_sdd else "tasks.md does not exist. Compile tasks.md and specs/ before implementation.")
     if active_pkg.get("total_tasks", 0) == 0:
-        return ("design", "SPEC_UNFINISHED", "tasks.md contains no tasks. Compile tasks.md and specs/ before implementation.")
+        return ("design", "SPEC_UNFINISHED", "The SDD handoff contains no tasks; refresh it through the provider." if external_sdd else "tasks.md contains no tasks. Compile tasks.md and specs/ before implementation.")
     design_blockers = [b for b in (active_change or {}).get("blockers", []) if b.startswith("Design:")]
     if design_error or design_blockers:
         return ("design", "DESIGN_APPROVAL_REQUIRED", design_error or design_blockers[0])
+    task_source = "provider handoff" if external_sdd else "tasks.md"
     if active_pkg.get("pending_tasks", 0) > 0:
-        return ("implementation", "TDD_ACTIVE", f"Implement pending tasks ({active_pkg['completed_tasks']}/{active_pkg['total_tasks']} tasks complete): pending tasks in tasks.md. Next: '{active_pkg.get('next_task')}'. Run Red-Green-Refactor.")
+        return ("implementation", "TDD_ACTIVE", f"Implement pending tasks ({active_pkg['completed_tasks']}/{active_pkg['total_tasks']} tasks complete): pending tasks in {task_source}. Next: '{active_pkg.get('next_task')}'. Run Red-Green-Refactor.")
 
     if active_change:
         blockers = active_change.get("blockers", [])
@@ -62,6 +64,13 @@ def validate_delivery_readiness(
             if isinstance(v, dict) and v.get("verdict") == "NOT_VERIFIED":
                 findings_str = "; ".join(v.get("findings", [])[:2])
                 return ("review", "VERIFICATION_FAILED", f"Independent verification failed at tier '{tier}': {findings_str}")
+
+    if repo_root:
+        from .sdd import external, verification_error
+        if external(repo_root):
+            error = verification_error(repo_root, pkg_change, git_info.get("working_tree_fingerprint"))
+            if error:
+                return review_blocked(error)
 
     if not review_report:
         return review_blocked("no passing review report found. Run 'review' in review-loop mode against base branch.")
@@ -104,7 +113,8 @@ def validate_delivery_readiness(
     return (
         "delivery",
         "DELIVERY_READY",
-        f"All tasks complete, tests verified green, and Judge review PASSED. Ready to deliver Delivery Walkthrough. Run the installed inspect_lifecycle.py with --archive to sync living specs and archive '{pkg_change}'.",
+        (f"All tasks complete, tests and review current. Finalize '{pkg_change}' through the configured SDD skill, then record delivery with --archive."
+         if external_sdd else f"All tasks complete, tests verified green, and Judge review PASSED. Ready to deliver Delivery Walkthrough. Run the installed inspect_lifecycle.py with --archive to sync living specs and archive '{pkg_change}'."),
     )
 
 

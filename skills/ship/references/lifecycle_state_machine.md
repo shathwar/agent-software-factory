@@ -1,5 +1,9 @@
 # Lifecycle State Machine & Transition Rules
 
+For external SDD skills (such as OpenSpec), see [SDD integration](./sdd.md); Ship retains its approval,
+test, review, and delivery gates, while the provider owns its artifacts.
+
+
 Commands below assume `SKILLS_DIR` is set to the absolute parent directory of the installed `ship` folder. Keep the working directory set to the consumer project.
 
 
@@ -71,7 +75,7 @@ A formal specification of the 4-gate engineering lifecycle state machine, its tr
 - **Guard**: The Design Frontier is completely empty (zero unstated assumptions, all architectural forks settled).
 - **Artifacts Generated**:
   - `docs/adr/ADR-<NNNN>-<change>.md` ([ADR Template](../../design/references/adr_template.md))
-  - `openspec/changes/<change>/proposal.md`, `specs/`, and `tasks.md` ([OpenSpec Template](../../design/references/openspec_template.md))
+  - Specification and task artifacts via the configured SDD skill (see [SDD Integration](./sdd.md))
 - **Confirmation Gate**: The agent presents the Executive Synthesis. The user must approve ("Proceed") before code is modified.
 
 ### State 4: `SPEC_CONFIRMED` ➔ `TDD_ACTIVE`

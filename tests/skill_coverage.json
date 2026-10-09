@@ -7,16 +7,16 @@
     "Correlated step start/result recording is available through AgentFlow, but capture is caller-reported and requires runtime use; expected evidence is not independently verified."
   ],
   "source_digests": {
-    "skills/design/SKILL.md": "f34d8d3e67a54097ab58263bd61eb870a84a13eaf512c65836afad5e19deb78b",
+    "skills/design/SKILL.md": "d3c8d1bce59b983fc6a27b86e347e7159ffb435d3931c0b898c7d46c882f9138",
     "skills/spike/SKILL.md": "96442849acec0cf3ed1d74a065a5fe46f12f8a2a68df10d3856caf50677b88e1",
     "skills/tdd/SKILL.md": "0029b148966c49e2702bab2acfaed143cf613af3825f4be3664d678497d6402f",
     "skills/simplify/SKILL.md": "22b6401efc7ef1bd242acf5fca97ac4ac6e5169e7077bf1c1a28c59e11f4b69c",
     "skills/review/SKILL.md": "18af2bcff523afbfe72a585a8e1669ed224f410f465b3fedde120a3f7a2c7a40",
-    "skills/review/references/review_pipeline.md": "67299c5862bb8a50b2f8d0d5e1021aee7b8fc41e6fc10b628f9a46d9df8ac1d2",
+    "skills/review/references/review_pipeline.md": "07ac965f2c7cae705fbca7230de78fed194890875446c2212dc5372e362bf4cc",
     "skills/debug/SKILL.md": "c6b126b46990536900072753a5f05dcb6ad2b1d09ae9f8b57addbffd79f2c395",
     "skills/evals/SKILL.md": "ac0ad2b1bf2d027b54004c74d407849a5eb26072d40c98840c10b8ffae7fe34c",
     "skills/ux/SKILL.md": "8e11d776906ef088e10e5a00c33e6d61d5a8cce9c8cd11fccb03d8ad546e1574",
-    "skills/ship/SKILL.md": "629c4342ced18ca4ff32fbd48d5ddd43c1b6fca5ca6617f4c6ca5fabc781029e"
+    "skills/ship/SKILL.md": "b4a3794792f6340dcd21cb2066d7b1f3c9653303c794c9e1d3028ec70daada64"
   },
   "validators": {
     "turn": {
@@ -176,22 +176,34 @@
   },
   "eval_cases": {
     "review-seeded-controls": {
-      "reference": {"path": "tests/test_review_benchmark.py", "symbol": "ReviewBenchmarkTests.test_full_control_suite_and_withheld_answers"},
+      "reference": {
+        "path": "tests/test_review_benchmark.py",
+        "symbol": "ReviewBenchmarkTests.test_full_control_suite_and_withheld_answers"
+      },
       "kind": "static_fixture",
       "scope": "Five executable defect seeds and clean controls; checks precision/recall scoring of externally adjudicated reports, not live agents."
     },
     "rubric-design-adversarial": {
-      "reference": {"path": "tests/test_rubric_adversarial.py", "symbol": "RubricAdversarialTests.test_design_keyword_stuffing_and_negation_cannot_certify_quality"},
+      "reference": {
+        "path": "tests/test_rubric_adversarial.py",
+        "symbol": "RubricAdversarialTests.test_design_keyword_stuffing_and_negation_cannot_certify_quality"
+      },
       "kind": "static_fixture",
       "scope": "Keyword stuffing and negation cannot produce a semantic quality pass."
     },
     "rubric-evals-adversarial": {
-      "reference": {"path": "tests/test_rubric_adversarial.py", "symbol": "RubricAdversarialTests.test_eval_boolean_claims_leakage_and_nonfinite_numbers_fail"},
+      "reference": {
+        "path": "tests/test_rubric_adversarial.py",
+        "symbol": "RubricAdversarialTests.test_eval_boolean_claims_leakage_and_nonfinite_numbers_fail"
+      },
       "kind": "static_fixture",
       "scope": "Rejects boolean split/correction claims, development leakage, unpinned models and invalid calibration rates."
     },
     "ux-rendered": {
-      "reference": {"path": "tests/browser/evaluate.cjs", "text": "async function evaluate(browser, fixture, directory, mutation = '')"},
+      "reference": {
+        "path": "tests/browser/evaluate.cjs",
+        "text": "async function evaluate(browser, fixture, directory, mutation = '')"
+      },
       "kind": "rendered_browser",
       "scope": "Runs six fixture states, keyboard recovery, focus, contrast and layout in a real browser with negative controls; not a general accessibility audit or an agent evaluation."
     },
@@ -578,6 +590,14 @@
       },
       "kind": "static_fixture",
       "scope": "Tests L5 outcome quality across statistical rigor, falsifiability, and decision bridge."
+    },
+    "external-sdd": {
+      "kind": "lifecycle_integration",
+      "reference": {
+        "path": "tests/test_sdd_provider.py",
+        "symbol": "ExternalSDDTests.test_verified_delivery_finalize_and_stale_evidence"
+      },
+      "scope": "Exercises external provider handoff, stale verification gates, real test execution, and non-mutating finalization; does not invoke a live external skill."
     }
   },
   "skills": {
@@ -711,7 +731,7 @@
           "title": "Capture explicit design confirmation",
           "requirement": {
             "path": "skills/design/SKILL.md",
-            "text": "Confirmation Gate: NEVER"
+            "text": "Confirmation Gate: Resolve"
           },
           "applies_when": "Always",
           "turn_contracts": [],
@@ -732,7 +752,7 @@
         },
         {
           "id": "design.package",
-          "title": "Compile ADR/OpenSpec and checkpoint",
+          "title": "Hand off design decisions and checkpoint",
           "requirement": {
             "path": "skills/design/SKILL.md",
             "text": "Checkpoint Recorded"
@@ -742,8 +762,8 @@
             4
           ],
           "expected_evidence": [
-            "ADR/OpenSpec files",
-            "Specification digest and design checkpoint"
+            "Provider-owned specification artifacts",
+            "Specification digest and design checkpoint under Ship"
           ],
           "validators": [
             "design",
@@ -1382,7 +1402,9 @@
             "Source-grounded candidate findings with concrete trigger and impact"
           ],
           "validators": [],
-          "eval_cases": ["review-seeded-controls"],
+          "eval_cases": [
+            "review-seeded-controls"
+          ],
           "gaps": [
             "Seeded report benchmark exists; live-agent trials and semantic adjudication must be supplied separately for Spec Alignment."
           ]
@@ -1423,7 +1445,9 @@
             "Source-grounded candidate findings with concrete trigger and impact"
           ],
           "validators": [],
-          "eval_cases": ["review-seeded-controls"],
+          "eval_cases": [
+            "review-seeded-controls"
+          ],
           "gaps": [
             "Seeded stale-writer benchmark exists; real-agent coverage of broader concurrency defects remains unmeasured."
           ]
@@ -1442,7 +1466,9 @@
             "Source-grounded candidate findings with concrete trigger and impact"
           ],
           "validators": [],
-          "eval_cases": ["review-seeded-controls"],
+          "eval_cases": [
+            "review-seeded-controls"
+          ],
           "gaps": [
             "Seeded retry-exhaustion benchmark exists; real-agent failure/resilience coverage remains unmeasured."
           ]
@@ -1518,7 +1544,9 @@
             "Source-grounded candidate findings with concrete trigger and impact"
           ],
           "validators": [],
-          "eval_cases": ["review-seeded-controls"],
+          "eval_cases": [
+            "review-seeded-controls"
+          ],
           "gaps": [
             "Seeded round-trip benchmark exists; real-agent performance defect recall remains unmeasured."
           ]
@@ -1969,7 +1997,9 @@
             "Pinned model snapshot, binary rubric, few-shot critiques and JSON output"
           ],
           "validators": [],
-          "eval_cases": ["rubric-evals-adversarial"],
+          "eval_cases": [
+            "rubric-evals-adversarial"
+          ],
           "gaps": [
             "Spec lint rejects known judge configuration errors; actual model output compliance remains unmeasured."
           ]
@@ -1990,7 +2020,9 @@
             "Few-shot provenance and held-out execution count"
           ],
           "validators": [],
-          "eval_cases": ["rubric-evals-adversarial"],
+          "eval_cases": [
+            "rubric-evals-adversarial"
+          ],
           "gaps": [
             "Supplied split IDs are checked for overlap; undisclosed reuse and near-duplicate content are not detected."
           ]
@@ -2472,7 +2504,7 @@
           "title": "Run installed-project doctor",
           "requirement": {
             "path": "skills/ship/SKILL.md",
-            "text": "Local Preflight"
+            "text": "On first use or upgrade"
           },
           "applies_when": "Always",
           "turn_contracts": [],
@@ -2494,7 +2526,7 @@
           "title": "Inspect state and next turn before work",
           "requirement": {
             "path": "skills/ship/SKILL.md",
-            "text": "Turn Contract Inspected"
+            "text": "Resume the required gate"
           },
           "applies_when": "Always",
           "turn_contracts": [
@@ -2519,7 +2551,7 @@
           "title": "Run fact discovery, frontier and empirical branches",
           "requirement": {
             "path": "skills/ship/SKILL.md",
-            "text": "Design: Specification & Architecture"
+            "text": "Prepare and approve"
           },
           "applies_when": "Always",
           "turn_contracts": [],
@@ -2541,7 +2573,7 @@
           "title": "Checkpoint reviewed design and record authorization",
           "requirement": {
             "path": "skills/ship/SKILL.md",
-            "text": "Capture the design digest"
+            "text": "Compute the design digest"
           },
           "applies_when": "Always",
           "turn_contracts": [],
@@ -2552,7 +2584,8 @@
             "delivery"
           ],
           "eval_cases": [
-            "design-digest"
+            "design-digest",
+            "external-sdd"
           ],
           "gaps": [
             "Engine validates binding; real-agent authorization sequencing is not evaluated."
@@ -2563,7 +2596,7 @@
           "title": "Execute per-task red, green and refactor",
           "requirement": {
             "path": "skills/ship/SKILL.md",
-            "text": "Implementation: Test-First Development"
+            "text": "## Implement"
           },
           "applies_when": "Always",
           "turn_contracts": [],
@@ -2587,7 +2620,7 @@
           "title": "Update tasks and implementation checkpoint",
           "requirement": {
             "path": "skills/ship/SKILL.md",
-            "text": "Checkpoint implementation"
+            "text": "implementation checkpoint"
           },
           "applies_when": "Always",
           "turn_contracts": [],
@@ -2609,7 +2642,7 @@
           "title": "Review staged, unstaged and untracked implementation",
           "requirement": {
             "path": "skills/ship/SKILL.md",
-            "text": "Inspect implementation changes across the working tree"
+            "text": "full working"
           },
           "applies_when": "Always",
           "turn_contracts": [],
@@ -2631,7 +2664,7 @@
           "title": "Obtain judge clearance and delivery evidence",
           "requirement": {
             "path": "skills/ship/SKILL.md",
-            "text": "Package `.agentflow/delivery_evidence.json`"
+            "text": "Require Judge PASS"
           },
           "applies_when": "Always",
           "turn_contracts": [],
@@ -2644,7 +2677,8 @@
           ],
           "eval_cases": [
             "review-schema",
-            "gate-contradictions"
+            "gate-contradictions",
+            "external-sdd"
           ],
           "gaps": [
             "Inherits review stage recall and repair-loop behavioral gaps."
@@ -2655,7 +2689,7 @@
           "title": "Return architectural contradictions to design",
           "requirement": {
             "path": "skills/ship/SKILL.md",
-            "text": "Replan Guard"
+            "text": "Broken design"
           },
           "applies_when": "Review finds broken architectural invariant",
           "turn_contracts": [],
@@ -2675,7 +2709,7 @@
           "title": "Independently execute final tests and check current gates",
           "requirement": {
             "path": "skills/ship/SKILL.md",
-            "text": "After the final source edit"
+            "text": "After the last source edit"
           },
           "applies_when": "Always",
           "turn_contracts": [
@@ -2692,7 +2726,8 @@
           ],
           "eval_cases": [
             "runner-receipts",
-            "dirty-evidence"
+            "dirty-evidence",
+            "external-sdd"
           ],
           "gaps": [
             "Engine checks and caller-reported step history are available; uninstrumented tool/edit chronology and omitted observations remain unverifiable."
@@ -2703,7 +2738,7 @@
           "title": "Deliver evidence-backed handoff",
           "requirement": {
             "path": "skills/ship/SKILL.md",
-            "text": "Deliver Walkthrough"
+            "text": "Deliver a concise walkthrough"
           },
           "applies_when": "Always",
           "turn_contracts": [],
@@ -2718,25 +2753,28 @@
         },
         {
           "id": "ship.archive",
-          "title": "Apply and archive specs with recovery",
+          "title": "Finalize through the SDD provider and record delivery",
           "requirement": {
             "path": "skills/ship/SKILL.md",
-            "text": "Apply & Archive OpenSpec"
+            "text": "record the external finalization"
           },
           "applies_when": "Always",
           "turn_contracts": [],
           "expected_evidence": [
-            "Merged specs, archive destination and recovery journal outcome"
+            "Provider finalization report and current artifact inventory",
+            "Ship delivery receipt after readiness checks"
           ],
           "validators": [
             "delivery"
           ],
           "eval_cases": [
             "archive",
-            "resume"
+            "resume",
+            "external-sdd"
           ],
           "gaps": [
-            "Operation tests do not establish end-to-end agent behavior."
+            "Operation tests do not establish end-to-end agent behavior.",
+            "External provider skill invocation and recovery require host-specific live trials."
           ]
         },
         {
@@ -2744,7 +2782,7 @@
           "title": "Attach notes/trailers and synchronize provenance",
           "requirement": {
             "path": "skills/ship/SKILL.md",
-            "text": "Attach Git Notes & Commit Trailers"
+            "text": "Generate commit"
           },
           "applies_when": "Always",
           "turn_contracts": [
@@ -2769,7 +2807,7 @@
           "title": "Report recorded final task usage",
           "requirement": {
             "path": "skills/ship/SKILL.md",
-            "text": "Always report task cost"
+            "text": "Report tracked"
           },
           "applies_when": "Always",
           "turn_contracts": [],

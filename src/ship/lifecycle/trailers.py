@@ -90,7 +90,8 @@ class CommitTrailerGenerator:
         impl_ev = evidence.get("implementation", {})
         from .specs import OpenSpecRepository
         from .paths import resolve_change_path
-        packages = OpenSpecRepository().inspect_openspec(repo_root, target_change=cid) if resolve_change_path(repo_root, cid).is_dir() else []
+        from .sdd import external
+        packages = OpenSpecRepository().inspect_openspec(repo_root, target_change=cid) if external(repo_root) or resolve_change_path(repo_root, cid).is_dir() else []
         package = packages[0] if packages else {"change": cid, "has_tasks": False, "total_tasks": 0, "pending_tasks": 0}
         tasks = {"total": package["total_tasks"], "completed": package.get("completed_tasks", 0), "pending": package["pending_tasks"]}
         blockers = change_entry.get("blockers", [])

@@ -75,7 +75,11 @@ class CheckpointManager:
 
         canonical_tag = canonicalize_gate_name(gate_name)
         self._validate_names(resolved_change, canonical_tag)
-        resolve_change_path(repo_root, resolved_change)
+        from .sdd import external, selected
+        if external(repo_root):
+            selected(repo_root, resolved_change)
+        else:
+            resolve_change_path(repo_root, resolved_change)
         ref_name = f"refs/ship/{resolved_change}/{canonical_tag}"
         tag_name = f"ship/{resolved_change}/{canonical_tag}"
         commit_sha = git_info.get("commit")
@@ -165,6 +169,9 @@ class CheckpointManager:
         change_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         resolved_change = change or change_id or self.ledger.get_active_change(repo_root) or "default"
+        from .sdd import external
+        if external(repo_root):
+            raise RuntimeError("External SDD recovery belongs to the configured provider; Ship whole-checkout rollback is unavailable")
         canonical_tag = canonicalize_gate_name(target_gate)
         self._validate_names(resolved_change, canonical_tag)
         resolve_change_path(repo_root, resolved_change)

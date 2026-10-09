@@ -14,6 +14,10 @@ class ShipConfigManager:
         return {
             "version": 1,
             "workflow": {"profile": "standard", "execution": "auto"},
+            "sdd": {"provider": "openspec", "snapshot": ".agentflow/sdd.json", "skills": {
+                "prepare": "openspec-propose", "inspect": "openspec-propose",
+                "verify": "openspec-verify-change", "finalize": "openspec-archive-change",
+            }},
             "project": {
                 "name": "",
                 "root": ".",
@@ -91,6 +95,9 @@ class ShipConfigManager:
         if explicit_path and not config_file.is_absolute():
             config_file = repo_root / config_file
         if not explicit_path and not config_file.exists() and not config_file.is_symlink():
+            # Uninitialized legacy workspaces remain resumable; `ship doctor` or
+            # `ship init` writes the new OpenSpec-backed default explicitly.
+            default_config["sdd"] = {"provider": "legacy", "snapshot": ".agentflow/sdd.json", "skills": {}}
             return default_config
 
         try:
@@ -139,9 +146,27 @@ class ShipConfigManager:
                     else:
                         target[k] = v
 
+            if "sdd" not in loaded:
+                default_config["sdd"] = {"provider": "legacy", "snapshot": ".agentflow/sdd.json", "skills": {}}
             deep_merge(default_config, loaded)
+            loaded_sdd = loaded.get("sdd")
+            if isinstance(loaded_sdd, dict) and loaded_sdd.get("provider") not in (None, "legacy"):
+                skills = loaded_sdd.get("skills")
+                if not isinstance(skills, dict) or any(not isinstance(skills.get(op), str) or not skills[op].strip() for op in ("prepare", "inspect", "verify", "finalize")):
+                    raise ValueError("sdd.skills must define prepare, inspect, verify, and finalize for an external provider")
             schema = json.loads(get_schema_path().read_text(encoding="utf-8"))
             validate(default_config, schema, "config")
+            sdd = default_config["sdd"]
+            if not sdd["provider"].strip():
+                raise ValueError("sdd.provider must be nonempty")
+            from .paths import repository_path
+            snapshot = repository_path(repo_root, sdd["snapshot"])
+            if not snapshot.is_relative_to(repo_root / ".agentflow"):
+                raise ValueError("sdd.snapshot must be inside .agentflow/")
+            if sdd["provider"] != "legacy":
+                for operation in ("prepare", "inspect", "verify", "finalize"):
+                    if not sdd["skills"].get(operation, "").strip():
+                        raise ValueError(f"sdd.skills.{operation} is required for an external provider")
             try:
                 default_config["config_source"] = str(config_file.relative_to(repo_root))
             except ValueError:

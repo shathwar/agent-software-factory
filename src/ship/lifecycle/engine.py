@@ -12,7 +12,7 @@ from .evidence import (
 )
 from .gates import determine_lifecycle_state
 from .ledger import FileLedgerStore
-from .specs import OpenSpecRepository
+from .specs import SpecificationRepository
 from .trailers import CommitTrailerGenerator
 from .vcs import GitClient
 
@@ -114,12 +114,12 @@ class LifecycleEngine:
         self,
         vcs_client: Optional[GitClient] = None,
         config_manager: Optional[ShipConfigManager] = None,
-        spec_repo: Optional[OpenSpecRepository] = None,
+        spec_repo: Optional[SpecificationRepository] = None,
         ledger_store: Optional[FileLedgerStore] = None,
     ):
         self.vcs = vcs_client or GitClient()
         self.config_manager = config_manager or ShipConfigManager()
-        self.spec_repo = spec_repo or OpenSpecRepository()
+        self.spec_repo = spec_repo or SpecificationRepository()
         self.ledger = ledger_store or FileLedgerStore()
         self.checkpoints = CheckpointManager(self.vcs, self.config_manager, self.ledger)
 
@@ -133,6 +133,8 @@ class LifecycleEngine:
         with self.ledger.lock(repo_root):
             pass  # Recover interrupted archives before inspecting workspace or Git state.
         config = self.config_manager.load(repo_root, explicit_path=config_path)
+        if config_path and config["sdd"] != self.config_manager.load(repo_root)["sdd"]:
+            raise ValueError("SDD provider configuration must be set in repository .agentflow.json")
         git_info = self.vcs.get_info(repo_root)
         adrs = self.spec_repo.inspect_adrs(repo_root)
         resolved_target = target_change
@@ -177,7 +179,8 @@ class LifecycleEngine:
             "next_action": next_action,
             "git": git_info,
             "adrs": adrs,
-            "openspec_packages": openspec_packages,
+            "sdd_packages": openspec_packages,
+            "openspec_packages": openspec_packages,  # Compatibility output alias.
             "openspec_archived": archived_packages,
             "openspec_living_specs": living_specs,
             "active_spikes": spikes,
