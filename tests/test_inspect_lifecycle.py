@@ -15,6 +15,7 @@ INSPECT_LIFECYCLE = ROOT / "skills" / "ship" / "scripts" / "inspect_lifecycle.py
 sys.path.insert(0, str(INSPECT_LIFECYCLE.parent))
 import inspect_lifecycle
 from verification_fixture import verify_fixture
+from ship.tool_runtime import bun_executable
 
 
 class TestInspectLifecycle(unittest.TestCase):
@@ -493,10 +494,10 @@ class TestInspectLifecycle(unittest.TestCase):
                 "questions": [],
                 "routing_notes": [],
             }
-            # Verify validate_report.py accepts this report
-            validate_script = ROOT / "skills" / "review" / "scripts" / "validate_report.py"
+            # Verify the Python review validator accepts this report
+            validate_script = ROOT / "src" / "ship" / "tools" / "review.ts"
             val_proc = subprocess.run(
-                [sys.executable, str(validate_script), "-"],
+                [bun_executable(), str(validate_script), "-"],
                 input=json.dumps(canonical_judge_report),
                 text=True,
                 capture_output=True,

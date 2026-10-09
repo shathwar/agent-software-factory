@@ -5,7 +5,6 @@ import json
 import os
 from pathlib import Path
 import subprocess
-import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -24,10 +23,6 @@ from ship.mcp.server import run_stdio_server
 from ship.mcp.tools import dispatch_tool
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "skills/evals/scripts"))
-sys.path.insert(0, str(ROOT / "skills/debug/scripts"))
-import score_calibration
-import verify_fix
 
 
 class WorkspaceTest(unittest.TestCase):
@@ -176,42 +171,12 @@ class MCPRegressions(WorkspaceTest):
 
 
 class ToolRegressions(WorkspaceTest):
-    def test_blank_csv_columns_fall_back_without_losing_false_labels(self):
-        path = self.root / "labels.csv"
-        path.write_text("human,ground_truth,evaluator,prediction\n,Fail,,Pass\nPass,,Pass,\n")
-        pairs = score_calibration.load_pairs(path)
-        self.assertEqual(pairs, [("Fail", "Pass"), ("Pass", "Pass")])
-        self.assertEqual(score_calibration.compute_metrics(pairs)["accuracy"], 0.5)
-
     def test_hook_preserves_wrapped_deletion_and_database_guards(self):
         hook = ROOT / "templates/ci/safety/block-destructive.sh"
         for command in ("sudo rm -rf /var/data", "command rm -rf /var/data", "db.users.drop()"):
             with self.subTest(command=command):
                 result = subprocess.run(["bash", str(hook)], input=command, text=True, capture_output=True, cwd=self.root, env={**os.environ, "AGT_VELOCITY_LIMITER_DISABLED": "1"})
                 self.assertEqual(result.returncode, 2, result.stdout)
-
-    def test_calibration_default_report_and_false_labels(self):
-        records = [{"human": True, "evaluator": True}, {"human": False, "evaluator": True}, {"human": 0, "evaluator": 0}]
-        for suffix in (".json", ".jsonl"):
-            path = self.root / ("labels" + suffix)
-            path.write_text(json.dumps(records) if suffix == ".json" else "\n".join(map(json.dumps, records)))
-            pairs = score_calibration.load_pairs(path)
-            self.assertEqual(pairs, [("Pass", "Pass"), ("Fail", "Pass"), ("Fail", "Fail")])
-        report = score_calibration.format_report(score_calibration.evaluate_calibration([("Pass", "Fail"), ("Fail", "Fail")]))
-        self.assertIn("1 (FN", report)
-
-    def test_calibration_default_markdown_command(self):
-        path = self.root / "labels.json"
-        path.write_text('[{"human": "Pass", "evaluator": "Fail"}]')
-        with patch("sys.stdout", io.StringIO()) as output:
-            self.assertEqual(score_calibration.main(["--input", str(path)]), 0)
-        self.assertIn("1 (FN", output.getvalue())
-
-    def test_bugfix_audit_rejects_non_git_workspace(self):
-        with self.assertRaises(RuntimeError):
-            verify_fix.get_git_diff(self.root)
-        with patch("sys.stderr", io.StringIO()):
-            self.assertEqual(verify_fix.main(["--path", str(self.root), "--strict"]), 1)
 
     def test_hook_checks_quoted_and_traversing_operands(self):
         hook = ROOT / "templates/ci/safety/block-destructive.sh"

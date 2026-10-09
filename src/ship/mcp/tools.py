@@ -2,7 +2,6 @@
 
 import json
 import os
-from dataclasses import asdict
 from pathlib import Path
 from typing import Dict, Any
 
@@ -16,10 +15,7 @@ from ship.lifecycle.operations import doctor
 from ship.lifecycle.trailers import CommitTrailerGenerator
 from ship.lifecycle.specs import OpenSpecRepository
 
-from ship.tools.tdd import verify_tdd, trim_test_receipt
-from ship.tools.simplify import scan_debt, format_table
-from ship.tools.spike import run_benchmark, format_markdown_table
-from ship.tools.review import validate_report, parse_report
+from ship.tool_runtime import call_tool
 
 
 def _get_root(args: Dict[str, Any]) -> Path:
@@ -239,46 +235,12 @@ def handle_ship_doctor(args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def handle_ship_tdd_verify(args: Dict[str, Any]) -> Dict[str, Any]:
-    root = _get_root(args)
-    trim_text = args.get("trim_receipt")
-    if trim_text:
-        return {"trimmed_receipt": trim_test_receipt(trim_text)}
-    ref_range = args.get("ref_range")
-    files = args.get("files")
-    strict = bool(args.get("strict", False))
-    res = verify_tdd(ref_range=ref_range, files=files, repo_root=root, strict=strict)
-    return {
-        "passed": res.passed,
-        "production_files": res.production_files,
-        "test_files": res.test_files,
-        "untested_files": res.untested_files,
-        "findings": [
-            {
-                "category": f.category,
-                "file": f.file,
-                "line": f.line,
-                "message": f.message,
-                "severity": f.severity,
-            }
-            for f in res.findings
-        ],
-        "error": res.error,
-    }
+    return call_tool("tdd", {**args, "path": str(_get_root(args))})
 
 
 def handle_ship_simplify_scan(args: Dict[str, Any]) -> Dict[str, Any]:
-    paths = args.get("paths")
-    strict = bool(args.get("strict", False))
-    root = _get_root(args)
-    target_paths = [Path(p) if Path(p).is_absolute() else (root / p) for p in paths] if paths else [root]
-    markers, has_errors = scan_debt(target_paths, strict=strict)
-    table = format_table(markers, markdown=True)
-    return {
-        "passed": not has_errors,
-        "total_markers": len(markers),
-        "markers": markers,
-        "table": table,
-    }
+    return call_tool("simplify", {**args, "path": str(_get_root(args))})
+
 
 
 def handle_ship_spike_run(args: Dict[str, Any]) -> Dict[str, Any]:
@@ -299,27 +261,19 @@ def handle_ship_spike_run(args: Dict[str, Any]) -> Dict[str, Any]:
         change_id=args.get("change"), task_id=args.get("task_id"),
         session_id=args.get("session_id"), lease_token=args.get("lease_token"),
     ))
-    result = run_benchmark(cmd, iterations=iterations, concurrency=concurrency, warmup=warmup, timeout_sec=timeout, cwd=cwd)
-    table, passed = format_markdown_table(result)
-    return {
-        "summary": asdict(result),
-        "table": table,
-        "passed": passed,
-    }
+    # Authorization above must complete before the specialist process can execute.
+    budget = max(1, iterations + warmup) * max(0.1, timeout) + 10
+    return call_tool("spike", {**args, "iterations": iterations, "concurrency": concurrency,
+                              "warmup": warmup, "timeout_sec": timeout,
+                              "path": str(cwd) if cwd else None}, timeout=budget)
 
 
 def handle_ship_review_validate(args: Dict[str, Any]) -> Dict[str, Any]:
-    report_data = args.get("report_data")
-    if not report_data and args.get("report_path"):
-        raw = Path(args["report_path"]).read_text(encoding="utf-8")
-        report_data = parse_report(raw)
-    if report_data is None:
-        raise ValueError("Either report_data or report_path is required.")
-    errors = validate_report(report_data)
-    return {
-        "valid": len(errors) == 0,
-        "errors": errors,
-    }
+    if args.get("report_data") is not None:
+        return call_tool("review", {"report_data": args["report_data"]})
+    if args.get("report_path"):
+        return call_tool("review", {"report_text": Path(args["report_path"]).read_text(encoding="utf-8")})
+    raise ValueError("Either report_data or report_path is required.")
 
 
 def handle_ship_steps_begin(args):

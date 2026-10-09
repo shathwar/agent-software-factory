@@ -97,9 +97,16 @@ def validate_reference(reference: Any, root: Path, context: str) -> None:
     path = local_file(root, reference["path"])
     if "symbol" in reference:
         text(reference["symbol"], context)
-        require(path.suffix == ".py", f"{context}: symbol selector requires Python")
-        require(reference["symbol"] in python_symbols(path),
-                f"{context}: missing symbol {reference['symbol']} in {reference['path']}")
+        if path.suffix == ".py":
+            symbols = python_symbols(path)
+            found = reference["symbol"] in symbols
+        elif path.suffix in {".ts", ".js"}:
+            source = path.read_text(encoding="utf-8")
+            name = reference["symbol"].split(".")[-1]
+            found = bool(re.search(rf"\b{re.escape(name)}\b", source))
+        else:
+            found = False
+        require(found, f"{context}: missing symbol {reference['symbol']} in {reference['path']}")
     else:
         text(reference["text"], context)
         require(reference["text"] in path.read_text(encoding="utf-8"),

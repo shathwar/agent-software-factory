@@ -35,6 +35,7 @@ function parseJsonWithDuplicateKeyCheck(jsonString: string): any {
   let inString = false;
   let isEscaped = false;
   let currentToken = "";
+  let stringStart = 0;
 
   for (let i = 0; i < jsonString.length; i++) {
     const char = jsonString[i];
@@ -45,6 +46,7 @@ function parseJsonWithDuplicateKeyCheck(jsonString: string): any {
         isEscaped = true;
       } else if (char === '"') {
         inString = false;
+        currentToken = JSON.parse(jsonString.slice(stringStart, i + 1));
         // Check if this string was an object key (followed by colon after whitespace)
         let j = i + 1;
         while (j < jsonString.length && /\s/.test(jsonString[j])) {
@@ -63,6 +65,7 @@ function parseJsonWithDuplicateKeyCheck(jsonString: string): any {
     } else {
       if (char === '"') {
         inString = true;
+        stringStart = i;
         currentToken = "";
       } else if (char === "{") {
         currentKeys = new Set();

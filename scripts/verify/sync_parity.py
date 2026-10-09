@@ -5,7 +5,7 @@ Zero external dependencies (Python 3.10+ standard library).
 
 Validates and enforces 100% byte-for-byte parity between:
 1. src/ship/lifecycle/*.py <-> skills/ship/scripts/lifecycle/*.py
-2. src/ship/tools/*.py    <-> skills/*/scripts/*.py
+2. src/ship/tools/*.ts    <-> skills/*/scripts/*.ts
 """
 
 from __future__ import annotations
@@ -47,6 +47,11 @@ def get_file_mappings(repo_root: Path) -> List[Tuple[Path, Path]]:
     for tool, (src_rel, skills_rel) in TOOL_MODULES.items():
         mappings.append((repo_root / src_rel, repo_root / skills_rel))
 
+    mappings.append((repo_root / "src/ship/tool_runtime.py", repo_root / "skills/ship/scripts/tool_runtime.py"))
+    for tool in sorted((repo_root / "src/ship/tools").glob("*.ts")):
+        mappings.append((tool, repo_root / "skills/ship/scripts/tools" / tool.name))
+    for skill in ("tdd", "simplify"):
+        mappings.append((repo_root / "src/ship/tools/python_source.ts", repo_root / f"skills/{skill}/scripts/python_source.ts"))
     return mappings
 
 

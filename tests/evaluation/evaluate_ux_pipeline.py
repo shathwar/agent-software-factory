@@ -29,7 +29,8 @@ from typing import Any, Dict, List
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from ship.tools import ux
+from ship.tool_runtime import call_tool
+from types import SimpleNamespace
 
 
 @dataclass
@@ -61,7 +62,7 @@ class UXPipelineEvaluator:
 
     def evaluate_audit_ux(self, file_path: Path) -> List[Finding]:
         """Run deterministic AST scanner."""
-        violations = ux.audit_file(file_path)
+        violations = [SimpleNamespace(**v) for v in call_tool("ux", {"path": str(file_path)})]
         findings = []
         for v in violations:
             sev = "P0" if v.severity in ("CRITICAL", "ERROR") else ("P2" if v.severity == "WARNING" else "P3")

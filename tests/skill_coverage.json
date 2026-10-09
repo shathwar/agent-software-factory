@@ -8,14 +8,14 @@
   ],
   "source_digests": {
     "skills/design/SKILL.md": "d3c8d1bce59b983fc6a27b86e347e7159ffb435d3931c0b898c7d46c882f9138",
-    "skills/spike/SKILL.md": "96442849acec0cf3ed1d74a065a5fe46f12f8a2a68df10d3856caf50677b88e1",
-    "skills/tdd/SKILL.md": "0029b148966c49e2702bab2acfaed143cf613af3825f4be3664d678497d6402f",
-    "skills/simplify/SKILL.md": "0372946f3f9df1a29862b593762997d06e6901b2e8f5ae5538f357dd13af2f13",
+    "skills/spike/SKILL.md": "d750cbe01429e939011b7d27448d2dcc1a56fe29453c158340b3fbe9df36c4cb",
+    "skills/tdd/SKILL.md": "9341d1edb08df80ea8a9b530ffefb5a80fee6fac924335b694ae8b9a134ffe7e",
+    "skills/simplify/SKILL.md": "3fcc696f93387cad121514e6e172136d79c2dc280a057b20f540f68c3c4352c8",
     "skills/review/SKILL.md": "7ff2519a27d32ac61d654f24002a853969a772942232480f70af1eba359625fc",
     "skills/review/references/review_pipeline.md": "f81ba0a14ea3a9e8980e90520a408a1cf67d92e8283dd21b4cdc998bef2981c4",
-    "skills/debug/SKILL.md": "c6b126b46990536900072753a5f05dcb6ad2b1d09ae9f8b57addbffd79f2c395",
-    "skills/evals/SKILL.md": "ac0ad2b1bf2d027b54004c74d407849a5eb26072d40c98840c10b8ffae7fe34c",
-    "skills/ux/SKILL.md": "8e11d776906ef088e10e5a00c33e6d61d5a8cce9c8cd11fccb03d8ad546e1574",
+    "skills/debug/SKILL.md": "8cb0923076e1f29358b2894449295e2f57eec409055baa92c0c9cea409d5c6d2",
+    "skills/evals/SKILL.md": "a36c0be0cc59a29b7ecba252d637acd3b847f65c5597ba176cd355b20e846e79",
+    "skills/ux/SKILL.md": "ce2b6e3b2b16056daaeb2dc92789062a951e028fa2190b1f4c0d33e33c5a59a1",
     "skills/ship/SKILL.md": "3d07451f1b6392e20c447faa9522112e25107f195c25ab1002791c594ce74e4f"
   },
   "validators": {
@@ -49,85 +49,85 @@
     },
     "review-schema": {
       "reference": {
-        "path": "src/ship/tools/review.py",
-        "symbol": "validate_report"
+        "path": "src/ship/tools/review.ts",
+        "symbol": "validateReport"
       },
       "scope": "Validates report structure, not adjudication quality."
     },
     "tdd-audit": {
       "reference": {
-        "path": "src/ship/tools/tdd.py",
-        "symbol": "audit_tdd"
+        "path": "src/ship/tools/tdd.ts",
+        "symbol": "auditTDD"
       },
       "scope": "Checks file parity and static test anti-patterns, not red-before-edit ordering."
     },
     "debt": {
       "reference": {
-        "path": "src/ship/tools/simplify.py",
+        "path": "src/ship/tools/simplify.ts",
         "symbol": "main"
       },
       "scope": "Checks debt marker syntax, not runtime threshold attainment or solution simplicity."
     },
     "spike": {
       "reference": {
-        "path": "src/ship/tools/spike.py",
-        "symbol": "run_benchmark"
+        "path": "src/ship/tools/spike.ts",
+        "symbol": "runBenchmark"
       },
       "scope": "Measures command execution; experiment representativeness remains unvalidated."
     },
     "spike-report": {
       "reference": {
-        "path": "src/ship/tools/spike.py",
-        "symbol": "validate_spike_report"
+        "path": "src/ship/tools/spike.ts",
+        "symbol": "validateSpikeReport"
       },
       "scope": "Validates spike report format, falsifiable hypothesis SLIs, results table, and anti-contradiction verdicts."
     },
     "spike-isolation": {
       "reference": {
-        "path": "src/ship/tools/spike.py",
-        "symbol": "audit_spike_isolation"
+        "path": "src/ship/tools/spike.ts",
+        "symbol": "auditSpikeIsolation"
       },
       "scope": "Audits changed paths to guarantee prototype code never leaks into production directories (src/, lib/, app/)."
     },
     "fix": {
       "reference": {
-        "path": "skills/debug/scripts/verify_fix.py",
-        "symbol": "audit_diff"
+        "path": "skills/debug/scripts/verify_fix.ts",
+        "symbol": "auditDiff"
       },
       "scope": "Checks diff patterns for reproduction tests, masking, and weakening; heuristics do not prove root cause."
     },
     "fix-tests": {
       "reference": {
-        "path": "skills/debug/scripts/verify_fix.py",
-        "symbol": "run_test_command"
+        "path": "skills/debug/scripts/verify_fix.ts",
+        "symbol": "runTestCommand"
       },
       "scope": "Executes the provided command; does not prove prior red state or causal repair."
     },
     "sample": {
       "reference": {
-        "path": "skills/evals/scripts/sample_traces.py",
-        "symbol": "select_diverse_sample"
+        "path": "skills/evals/scripts/sample_traces.ts",
+        "symbol": "selectDiverseSample"
       },
       "scope": "Samples trace features; does not validate failure taxonomies."
     },
     "calibration": {
       "reference": {
-        "path": "skills/evals/scripts/score_calibration.py",
-        "symbol": "compute_metrics"
+        "path": "skills/evals/scripts/score_calibration.ts",
+        "symbol": "computeMetrics"
       },
       "scope": "Computes TPR/TNR from supplied labels; does not enforce split isolation."
     },
     "bootstrap": {
       "reference": {
-        "path": "skills/evals/scripts/score_calibration.py",
-        "symbol": "bootstrap_ci"
+        "path": "skills/evals/scripts/score_calibration.ts",
+        "symbol": "bootstrapCi"
       },
       "scope": "Computes correction intervals from supplied pairs, not label or sampling validity."
     },
     "ux-audit": {
       "reference": {
-        "path": "src/ship/tools/ux.py",
-        "symbol": "audit_file"
+        "path": "src/ship/tools/ux.ts",
+        "symbol": "auditFile"
       },
       "scope": "Static source heuristics only; no browser, contrast measurement, or keyboard execution."
     },
@@ -154,22 +154,22 @@
     },
     "design": {
       "reference": {
-        "path": "src/ship/tools/design.py",
-        "symbol": "validate_repository"
+        "path": "src/ship/tools/design.ts",
+        "symbol": "validateRepository"
       },
       "scope": "Validates ADR and OpenSpec structure, invariants, downstream criteria, and idempotency."
     },
     "design-interview": {
       "reference": {
-        "path": "src/ship/tools/design.py",
-        "symbol": "validate_interview_round"
+        "path": "src/ship/tools/design.ts",
+        "symbol": "validateInterviewRound"
       },
       "scope": "Validates frontier round batching, questions, and non-vacuous recommended stances."
     },
     "design-gate": {
       "reference": {
-        "path": "src/ship/tools/design.py",
-        "symbol": "validate_confirmation_gate"
+        "path": "src/ship/tools/design.ts",
+        "symbol": "validateConfirmationGate"
       },
       "scope": "Enforces confirmation gate: halts turns without mutating spec files prior to confirmation."
     }
@@ -185,16 +185,16 @@
     },
     "rubric-design-adversarial": {
       "reference": {
-        "path": "tests/test_rubric_adversarial.py",
-        "symbol": "RubricAdversarialTests.test_design_keyword_stuffing_and_negation_cannot_certify_quality"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "static_fixture",
       "scope": "Keyword stuffing and negation cannot produce a semantic quality pass."
     },
     "rubric-evals-adversarial": {
       "reference": {
-        "path": "tests/test_rubric_adversarial.py",
-        "symbol": "RubricAdversarialTests.test_eval_boolean_claims_leakage_and_nonfinite_numbers_fail"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "static_fixture",
       "scope": "Rejects boolean split/correction claims, development leakage, unpinned models and invalid calibration rates."
@@ -249,120 +249,120 @@
     },
     "tdd-parity": {
       "reference": {
-        "path": "tests/test_verify_tdd.py",
-        "symbol": "TestVerifyTDD.test_audit_tdd_parity_failure"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests source/test file parity heuristic."
     },
     "tdd-assertions": {
       "reference": {
-        "path": "tests/test_verify_tdd.py",
-        "symbol": "TestVerifyTDD.test_anti_pattern_assertless_test"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests static assertion detection."
     },
     "debt-format": {
       "reference": {
-        "path": "tests/test_scan_debt.py",
-        "symbol": "TestScanDebt.test_parse_valid_marker"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests marker parsing."
     },
     "spike-execution": {
       "reference": {
-        "path": "tests/test_run_spike.py",
-        "symbol": "TestRunSpike.test_run_benchmark_execution"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests actual benchmark command execution and metrics."
     },
     "spike-timeout": {
       "reference": {
-        "path": "tests/test_run_spike.py",
-        "symbol": "TestRunSpike.test_timeout_terminates_child_process_group"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests timed-out child process cleanup, not all ephemeral infrastructure."
     },
     "fix-repro": {
       "reference": {
-        "path": "tests/test_debug_skill.py",
-        "symbol": "DebugSkillTests.test_audit_diff_missing_repro_test"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests missing reproduction-file heuristic."
     },
     "fix-masking": {
       "reference": {
-        "path": "tests/test_debug_skill.py",
-        "symbol": "DebugSkillTests.test_audit_diff_symptom_masking"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests masking pattern detection."
     },
     "fix-weakening": {
       "reference": {
-        "path": "tests/test_debug_skill.py",
-        "symbol": "DebugSkillTests.test_audit_diff_test_weakening"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests assertion weakening patterns."
     },
     "sampling": {
       "reference": {
-        "path": "tests/test_evals_skill.py",
-        "symbol": "EvalsSkillTests.test_sample_traces_diversity"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests sample size and unique trace IDs."
     },
     "calibration-math": {
       "reference": {
-        "path": "tests/test_evals_skill.py",
-        "symbol": "EvalsSkillTests.test_score_calibration_metrics"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests confusion matrix and TPR/TNR calculations."
     },
     "bootstrap-math": {
       "reference": {
-        "path": "tests/test_evals_skill.py",
-        "symbol": "EvalsSkillTests.test_bootstrap_ci"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests bootstrap result bounds."
     },
     "review-schema": {
       "reference": {
-        "path": "tests/test_validate_report.py",
-        "symbol": "ReportTests.test_invalid_finding_fields"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests malformed finding rejection."
     },
     "ux-keyboard": {
       "reference": {
-        "path": "tests/test_audit_ux.py",
-        "symbol": "TestAuditUX.test_clickable_div_lacking_keyboard"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests static keyboard-handler heuristics."
     },
     "ux-tokens": {
       "reference": {
-        "path": "tests/test_audit_ux.py",
-        "symbol": "TestAuditUX.test_arbitrary_tokens_and_allowlist"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests arbitrary token and allowlist heuristics."
     },
     "ux-recovery": {
       "reference": {
-        "path": "tests/test_audit_ux.py",
-        "symbol": "TestAuditUX.test_dead_end_error_detection"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests dead-end error text heuristic."
@@ -513,80 +513,80 @@
     },
     "design-adr": {
       "reference": {
-        "path": "tests/test_design_skill.py",
-        "symbol": "TestDesignSkillValidators.test_adr_validation_happy_path"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests ADR structural validation, invariants, and downstream checklist."
     },
     "design-openspec": {
       "reference": {
-        "path": "tests/test_design_skill.py",
-        "symbol": "TestDesignSkillValidators.test_openspec_validation_happy_path"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests OpenSpec change package validation, RFC 2119 keywords, and tasks.md."
     },
     "design-anti-cheat": {
       "reference": {
-        "path": "tests/test_design_skill.py",
-        "symbol": "TestDesignAntiCheatAndBypass.test_interview_round_vacuous_stance_rejection"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests anti-cheat rejection of vacuous stances and single-question drip rounds."
     },
     "design-gate-halt": {
       "reference": {
-        "path": "tests/test_design_skill.py",
-        "symbol": "TestDesignAntiCheatAndBypass.test_confirmation_gate_halt_enforcement"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests confirmation gate halt enforcement to prevent premature spec mutation."
     },
     "design-rubric": {
       "reference": {
-        "path": "tests/test_design_skill.py",
-        "symbol": "TestDesignFixturesAndRubric.test_l5_design_rubric_evaluation"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "static_fixture",
       "scope": "Tests topic-mention lint across the five inquiry domains; high scores remain inconclusive for semantic quality."
     },
     "spike-report-format": {
       "reference": {
-        "path": "tests/test_run_spike.py",
-        "symbol": "TestRunSpike.test_validate_spike_report_happy_path"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests spike report schema validation and results table parsing."
     },
     "spike-unfalsifiable": {
       "reference": {
-        "path": "tests/test_run_spike.py",
-        "symbol": "TestRunSpike.test_validate_spike_report_unfalsifiable_hypothesis"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests rejection of vague hypotheses lacking numerical SLI thresholds."
     },
     "spike-verdict-contradiction": {
       "reference": {
-        "path": "tests/test_run_spike.py",
-        "symbol": "TestRunSpike.test_validate_spike_report_verdict_contradiction"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests anti-cheat rejection of CONFIRMED verdicts when empirical metrics are breached."
     },
     "spike-isolation-leakage": {
       "reference": {
-        "path": "tests/test_run_spike.py",
-        "symbol": "TestRunSpike.test_audit_spike_isolation_leakage"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "tool_unit",
       "scope": "Tests detection of prototype code leaking into production paths."
     },
     "spike-rubric": {
       "reference": {
-        "path": "tests/test_run_spike.py",
-        "symbol": "TestRunSpike.test_l5_spike_rubric"
+        "path": "tests/test_migration_contracts.test.ts",
+        "symbol": "test_migration_contracts"
       },
       "kind": "static_fixture",
       "scope": "Tests L5 outcome quality across statistical rigor, falsifiability, and decision bridge."

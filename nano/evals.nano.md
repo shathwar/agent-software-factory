@@ -14,11 +14,11 @@
 ## CLI Tooling
 ```bash
 # Diverse trace sampling
-python3 skills/evals/scripts/sample_traces.py --input traces.jsonl --count 30 --output samples.jsonl
+bun skills/evals/scripts/sample_traces.ts --input traces.jsonl --count 30 --output samples.jsonl
 
 # Local trace review & annotation app
 python3 skills/evals/scripts/serve_review_app.py --samples samples.jsonl --port 8000
 
 # Judge calibration & Rogan-Gladen statistics
-python3 skills/evals/scripts/score_calibration.py --input test_results.jsonl --p-obs 0.80
+bun skills/evals/scripts/score_calibration.ts --input test_results.jsonl --p-obs 0.80
 ```

@@ -8,7 +8,7 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from test_validate_report import validator
+from ship.tool_runtime import call_tool
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,7 +40,7 @@ class DocumentTests(unittest.TestCase):
             if "reviewer" not in data:
                 data = {"reviewer": "judge", "status": "complete", "findings": [data],
                         "coverage": [], "questions": [], "routing_notes": []}
-            self.assertEqual(validator.validate_report(data), [])
+            self.assertEqual(call_tool("review", {"report_data": data})["errors"], [])
 
     def test_no_legacy_workspace_references(self):
         """Ensure obsolete ledger names never regress; .scratch/ is the spike workspace."""

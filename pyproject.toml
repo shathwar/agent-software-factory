@@ -21,7 +21,7 @@ ship = "ship.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-ship = ["references/*.json"]
+ship = ["references/*.json", "tools/*.ts"]
 
 [tool.ruff]
 line-length = 120

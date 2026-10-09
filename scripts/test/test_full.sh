@@ -14,14 +14,9 @@ PYTHON="${PYTHON:-python3}"
 echo "=== 1. Checking Bash & Python Syntax ==="
 bash -n skills/review/scripts/inspect_changes.sh
 bash -n scripts/setup/install_skills.sh 2>/dev/null || bash -n scripts/install.sh
-"$PYTHON" -m py_compile skills/review/scripts/validate_report.py
-"$PYTHON" -m py_compile skills/simplify/scripts/scan_debt.py
 "$PYTHON" -m py_compile skills/ship/scripts/inspect_lifecycle.py
 "$PYTHON" -m py_compile skills/ship/scripts/lifecycle/*.py
-"$PYTHON" -m py_compile src/ship/*.py src/ship/lifecycle/*.py src/ship/mcp/*.py src/ship/tools/*.py
-"$PYTHON" -m py_compile skills/tdd/scripts/verify_tdd.py
-"$PYTHON" -m py_compile skills/design/scripts/validate_design.py
-"$PYTHON" -m py_compile skills/spike/scripts/run_spike.py
+"$PYTHON" -m py_compile src/ship/*.py src/ship/lifecycle/*.py src/ship/mcp/*.py
 "$PYTHON" -m py_compile scripts/verify/sync_parity.py
 "$PYTHON" -m py_compile scripts/verify/ci_gate.py
 if command -v ruff >/dev/null 2>&1; then
@@ -45,4 +40,8 @@ echo ""
 echo "=== 4. Running AgentFlow Evaluation Benchmark Suite ==="
 "$PYTHON" -m ship.cli benchmark --suite all
 echo ""
+echo "=== 5. Running TypeScript Unit and CLI Tests ==="
+bun run test
+echo ""
+
 echo "All checks and tests passed successfully!"

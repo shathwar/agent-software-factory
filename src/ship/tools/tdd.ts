@@ -10,6 +10,7 @@
  */
 
 import fs from "node:fs";
+import { pythonSource, pythonBlocks } from "./python_source.ts";
 import path from "node:path";
 import process from "node:process";
 import { execFileSync } from "node:child_process";
@@ -169,7 +170,18 @@ export function checkAntiPatterns(filePath: string): Finding[] {
   }
 
   const findings: Finding[] = [];
+  const isPython = path.extname(filePath) === ".py";
+  const cleanPython = isPython ? pythonSource(content).code : content;
   const lines = content.split(/\r?\n/);
+  if (isPython) {
+    for (const block of pythonBlocks(cleanPython, "def").filter(b => b.name.startsWith("test"))) {
+      const hasAssertion = /\bassert(?:_|\b)|\brequire\.|\bassert\w*\s*\(|\b(?:raises|warns|fail)\s*\(/.test(block.body);
+      if (!hasAssertion) findings.push({category: "assertless_test", file: filePath, line: block.line, message: `Test '${block.name}' contains no detectable assertion. Tests must verify observable behavior.`, severity: "ERROR", ruleId: "TDD-ASRT-001"});
+      for (const [offset, line] of block.body.split(/\r?\n/).entries()) {
+        if (/\bassert\s+True\s*(?:$|,)|\bassert_?[Tt]rue\(\s*True\s*\)/.test(line)) findings.push({category: "tautological_assertion", file: filePath, line: block.line + offset, message: "Tautological assertion detected. Tests must assert actual observable behavior.", severity: "ERROR", ruleId: "TDD-TAUT-001"});
+      }
+    }
+  }
 
   let inTestFunc = false;
   let currentFuncName = "";
@@ -204,7 +216,7 @@ export function checkAntiPatterns(filePath: string): Finding[] {
       });
     }
 
-    if (tautologicalPattern.test(line)) {
+    if (!isPython && tautologicalPattern.test(line)) {
       findings.push({
         category: "tautological_assertion",
         file: filePath,
@@ -236,7 +248,7 @@ export function checkAntiPatterns(filePath: string): Finding[] {
     }
 
     const testDefMatch = testDefPattern.exec(line);
-    if (testDefMatch) {
+    if (!isPython && testDefMatch) {
       if (inTestFunc && !funcHasAssertion) {
         findings.push({
           category: "assertless_test",
@@ -326,11 +338,12 @@ export function auditTDD(files: string[], repoRoot?: string, strict: boolean = f
     testFiles,
     untestedFiles,
     findings,
+    error: null,
   };
 }
 
 export function trimTestReceipt(rawOutput: string, maxLines: number = 40): string {
-  const lines = rawOutput.split(/\r?\n/);
+  const lines = rawOutput.replace(/\r?\n$/, "").split(/\r?\n/);
   if (lines.length <= maxLines) {
     return rawOutput;
   }
@@ -344,7 +357,7 @@ export function trimTestReceipt(rawOutput: string, maxLines: number = 40): strin
 
   for (const line of lines) {
     if (summaryMarkers.test(line)) {
-      summaryLines.append ? summaryLines.push(line) : summaryLines.push(line);
+      summaryLines.push(line);
       captureFailure = false;
     } else if (failureMarkers.test(line)) {
       captureFailure = true;

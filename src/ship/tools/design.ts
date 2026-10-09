@@ -77,7 +77,7 @@ export class ValidationResult {
 
 export function validateAdrContent(content: string, filename: string = "ADR.md"): ValidationResult {
   const findings: Finding[] = [];
-  const lines = content.split(/\r?\n/);
+  const lines = content.replace(/\r?\n$/, "").split(/\r?\n/);
 
   // 1. Title
   if (!ADR_TITLE_PATTERN.test(content)) {

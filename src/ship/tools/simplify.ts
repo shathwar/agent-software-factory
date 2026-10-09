@@ -9,6 +9,7 @@
  */
 
 import fs from "node:fs";
+import { pythonSource, pythonBlocks } from "./python_source.ts";
 import path from "node:path";
 import process from "node:process";
 
@@ -211,11 +212,10 @@ export function scanFile(filePath: string, baseDir: string): DebtMarker[] {
     return [];
   }
 
-  let relPath: string;
-  try {
-    relPath = path.relative(process.cwd(), filePath);
-  } catch {
-    relPath = path.relative(baseDir, filePath);
+  const relative = path.relative(process.cwd(), filePath);
+  const relPath = relative.startsWith("..") ? path.relative(baseDir, filePath) : relative;
+  if (ext === ".py") {
+    return pythonSource(content).comments.map(({text, line}) => parseDebtMarker(text, relPath, line)).filter((m): m is DebtMarker => "isValid" in m);
   }
 
   const markers: DebtMarker[] = [];
@@ -324,7 +324,7 @@ export function formatTable(markers: DebtMarker[], markdown: boolean = true): st
 }
 
 export function auditCodeSimplicity(filePath: string, content?: string): SimplicityFinding[] {
-  if (content === undefined) {
+  if (content == null) {
     try {
       content = fs.readFileSync(filePath, "utf-8");
     } catch {
@@ -358,6 +358,17 @@ export function auditCodeSimplicity(filePath: string, content?: string): Simplic
         });
       }
     }
+  }
+
+  if (path.extname(filePath) === ".py") {
+    for (const block of pythonBlocks(pythonSource(content).code, "class")) {
+      const methods = pythonBlocks(block.body, "def");
+      const statements = block.body.split(/\r?\n/).filter(l => l.trim() && !l.trim().startsWith("@") && (l.match(/^\s*/)?.[0].length ?? 0) === block.indent + 4);
+      if (block.name.endsWith("Factory") && statements.length <= 3) findings.push({ruleId: "SMP-ABS-001", file: filePath, line: block.line, severity: "WARNING", message: `Speculative factory class '${block.name}' detected with minimal implementation. Favor direct concrete instantiation.`});
+      const nonDunder = methods.filter(m => !m.name.startsWith("__"));
+      if (nonDunder.length && nonDunder.every(m => /^return\s+\w+\.(?:_\w*|repo\w*|inner\w*|service\w*)\.\w+\([\s\S]*\)\s*$/.test(m.body.trim()))) findings.push({ruleId: "SMP-WRAP-001", file: filePath, line: block.line, severity: "WARNING", message: `Shallow wrapper class '${block.name}' forwards all calls without domain logic. Deepen the module or eliminate the wrapper layer.`});
+    }
+    return findings;
   }
 
   // 2. Speculative factories and shallow wrappers in TS / JS / Python

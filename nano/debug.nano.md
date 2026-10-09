@@ -19,5 +19,5 @@
 
 ## CLI Tooling
 ```bash
-python3 skills/debug/scripts/verify_fix.py --strict --test-cmd "pytest"
+bun skills/debug/scripts/verify_fix.ts --strict --test-cmd "pytest"
 ```

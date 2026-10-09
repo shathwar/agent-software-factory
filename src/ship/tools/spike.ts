@@ -13,7 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { execSync, spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { performance } from "node:perf_hooks";
 
 export interface BenchmarkMetrics {
@@ -35,22 +35,31 @@ export interface BenchmarkMetrics {
   throughput_unit?: string;
 }
 
-export function runSingleIteration(cmd: string, cwd?: string, timeoutSec: number = 60.0): [number, boolean] {
+export async function runSingleIteration(cmd: string | string[], cwd?: string, timeoutSec: number | null = 60): Promise<[number, boolean]> {
   const start = performance.now();
-  try {
-    const res = spawnSync(cmd, {
-      shell: true,
-      cwd,
-      timeout: timeoutSec * 1000,
-      stdio: "ignore",
-    });
-    const elapsed = performance.now() - start;
-    const ok = res.status === 0 && !res.error;
-    return [elapsed, ok];
-  } catch {
-    const elapsed = performance.now() - start;
-    return [elapsed, false];
-  }
+  return new Promise(resolve => {
+    let settled = false, timedOut = false;
+    const child = Array.isArray(cmd)
+      ? spawn(cmd[0], cmd.slice(1), {cwd, stdio: "ignore", detached: process.platform !== "win32"})
+      : spawn(cmd, {shell: true, cwd, stdio: "ignore", detached: process.platform !== "win32"});
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true; clearTimeout(timer);
+      resolve([performance.now() - start, ok && !timedOut]);
+    };
+    child.once("error", () => finish(false));
+    child.once("close", code => finish(code === 0));
+    if (timeoutSec != null) timer = setTimeout(() => {
+      timedOut = true;
+      if (child.pid) {
+        try {
+          if (process.platform === "win32") spawnSync("taskkill", ["/F", "/T", "/PID", String(child.pid)], {stdio: "ignore"});
+          else process.kill(-child.pid, "SIGKILL");
+        } catch { child.kill("SIGKILL"); }
+      }
+    }, Math.max(0, timeoutSec * 1000));
+  });
 }
 
 export function calculatePercentile(sortedData: number[], percentile: number): number {
@@ -69,38 +78,40 @@ export function calculatePercentile(sortedData: number[], percentile: number): n
 }
 
 export interface BenchmarkOptions {
-  cmd: string;
+  cmd: string | string[];
   iterations: number;
   warmup?: number;
   concurrency?: number;
   durationSec?: number | null;
   cwd?: string | null;
-  timeoutSec?: number;
+  timeoutSec?: number | null;
 }
 
-export function runBenchmark(options: BenchmarkOptions): BenchmarkMetrics {
-  const { cmd, iterations, warmup = 0, cwd = undefined, timeoutSec = 60.0 } = options;
-
-  // 1. Warmup
-  for (let i = 0; i < warmup; i++) {
-    runSingleIteration(cmd, cwd ?? undefined, timeoutSec);
+export async function runBenchmark(options: BenchmarkOptions): Promise<BenchmarkMetrics> {
+  const {cmd, cwd, timeoutSec = 60} = options;
+  const iterations = Math.max(0, Math.trunc(options.iterations));
+  const warmup = Math.max(0, Math.trunc(options.warmup ?? 0));
+  const concurrency = Math.max(1, Math.trunc(options.concurrency ?? 1));
+  if (![iterations, warmup, concurrency].every(Number.isFinite)) throw new Error("Benchmark counts must be finite integers");
+  if (options.durationSec != null && (!Number.isFinite(options.durationSec) || options.durationSec < 0)) throw new Error("Duration must be finite and nonnegative");
+  if (timeoutSec != null && (!Number.isFinite(timeoutSec) || timeoutSec < 0)) throw new Error("Timeout must be finite and nonnegative");
+  async function pool(count: number, deadline: number | null, record: (result: [number, boolean]) => void) {
+    let launched = 0;
+    const worker = async () => {
+      while (deadline === null ? launched < count : performance.now() < deadline) {
+        launched++;
+        record(await runSingleIteration(cmd, cwd ?? undefined, timeoutSec));
+      }
+    };
+    // Only active workers allocate promises; pending iterations never form an unbounded queue.
+    await Promise.all(Array.from({length: deadline === null ? Math.min(count, concurrency) : concurrency}, worker));
   }
-
-  // 2. Measurement
+  await pool(warmup, null, () => {});
   const latencies: number[] = [];
-  let successes = 0;
-  let failures = 0;
+  let successes = 0, failures = 0;
   const startTotal = performance.now();
-
-  for (let i = 0; i < iterations; i++) {
-    const [elapsed, ok] = runSingleIteration(cmd, cwd ?? undefined, timeoutSec);
-    latencies.push(elapsed);
-    if (ok) {
-      successes++;
-    } else {
-      failures++;
-    }
-  }
+  const deadline = options.durationSec != null ? startTotal + options.durationSec * 1000 : null;
+  await pool(iterations, deadline, ([elapsed, ok]) => {latencies.push(elapsed); if (ok) successes++; else failures++;});
 
   const totalDurationSec = (performance.now() - startTotal) / 1000.0;
   const totalRuns = latencies.length;
@@ -281,151 +292,83 @@ export function auditSpikeIsolation(filePaths: (string | any)[]): SpikeValidatio
   });
 }
 
-export function validateSpikeReport(reportText: string, filename: string = "SpikeReport.md"): SpikeValidationResult {
+export function validateSpikeReport(reportText: string, filename = "SpikeReport.md"): SpikeValidationResult {
   const findings: SpikeFinding[] = [];
-
-  // 1. Header
-  if (!/^##\s+🧪\s*Spike\s+Report:\s*(.+)$/m.test(reportText)) {
-    findings.push({
-      rule_id: "SPK-REP-001",
-      severity: "ERROR",
-      message: "Missing required header: '## 🧪 Spike Report: <Spike Name>'",
-      file_path: filename,
-    });
+  const add = (rule_id: string, message: string, severity: "ERROR" | "WARNING" = "ERROR") => findings.push({rule_id, message, severity, file_path: filename});
+  if (!/^##\s+🧪\s*Spike\s+Report:\s*(.+)$/m.test(reportText)) add("SPK-REP-001", "Missing required header: '## 🧪 Spike Report: <Spike Name>'");
+  if (!reportText.includes("Empirical Question & Hypothesis")) add("SPK-REP-002", "Missing Empirical Question & Hypothesis section");
+  else {
+    const question = /-\s+\*\*Question\*\*:\s*(.+)$/m.exec(reportText);
+    const hypothesis = /-\s+\*\*Hypothesis\*\*:\s*(.+)$/m.exec(reportText);
+    if (!question?.[1].trim()) add("SPK-REP-003", "Missing or empty Question");
+    if (!hypothesis?.[1].trim()) add("SPK-REP-004", "Missing or empty Hypothesis");
+    else if (!/(?:[<>]=?\s*\d|\d+(?:\.\d+)?\s*(?:ms|s\b|rps|tps|qps|%|req|ops|writes|reads))/i.test(hypothesis[1])) add("SPK-HYP-001", "Hypothesis lacks a falsifiable numerical threshold");
   }
-
-  // 2. Question & Hypothesis
-  if (!reportText.includes("Empirical Question & Hypothesis")) {
-    findings.push({
-      rule_id: "SPK-REP-002",
-      severity: "ERROR",
-      message: "Missing required section: '### 🎯 Empirical Question & Hypothesis'",
-      file_path: filename,
-    });
+  if (!reportText.includes("Methodology & Setup") && !reportText.includes("Experimental Setup & Reproduction")) add("SPK-REP-005", "Missing Methodology & Setup section");
+  else if (!reportText.includes("scratch/")) add("SPK-REP-006", "Methodology should document isolated sandbox location", "WARNING");
+  const hasBreached = reportText.includes("❌ Breached");
+  if (!reportText.includes("Empirical Results")) add("SPK-REP-007", "Missing Empirical Results section");
+  else if (!reportText.includes("| Metric") || !reportText.includes("| Status")) add("SPK-REP-008", "Empirical Results table requires Metric, Expected, Observed, Status columns");
+  if (!reportText.includes("Architectural Verdict")) add("SPK-REP-009", "Missing Architectural Verdict section");
+  else {
+    const verdict = /-\s+\*\*Verdict\*\*:\s*\*{0,2}(CONFIRMED|REFUTED|QUALIFIED)\*{0,2}/i.exec(reportText);
+    if (!verdict) add("SPK-VER-001", "Verdict must state CONFIRMED, REFUTED, or QUALIFIED");
+    else if (verdict[1].toUpperCase() === "CONFIRMED" && hasBreached) add("SPK-VER-002", "Verdict contradiction: CONFIRMED despite breached empirical metrics");
   }
-
-  // 3. Setup & Reproduction
-  if (!reportText.includes("Experimental Setup & Reproduction")) {
-    findings.push({
-      rule_id: "SPK-REP-003",
-      severity: "ERROR",
-      message: "Missing required section: '### 🔬 Experimental Setup & Reproduction'",
-      file_path: filename,
-    });
-  }
-
-  // 4. Empirical Results
-  if (!reportText.includes("Empirical Results")) {
-    findings.push({
-      rule_id: "SPK-REP-004",
-      severity: "ERROR",
-      message: "Missing required section: '### 📊 Empirical Results'",
-      file_path: filename,
-    });
-  }
-
-  // 5. Architectural Verdict
-  if (!reportText.includes("Architectural Verdict & Settled Frontier")) {
-    findings.push({
-      rule_id: "SPK-REP-005",
-      severity: "ERROR",
-      message: "Missing required section: '### ⚖️ Architectural Verdict & Settled Frontier'",
-      file_path: filename,
-    });
-  }
-
-  const errors = findings.filter((f) => f.severity === "ERROR");
-  return new SpikeValidationResult(errors.length === 0, findings, {
-    findings_count: findings.length,
-    errors: errors.length,
-  });
+  if (!reportText.includes("Reusable Snippets")) add("SPK-REP-010", "Include reusable snippets in the report", "WARNING");
+  const errors = findings.filter(f => f.severity === "ERROR").length;
+  return new SpikeValidationResult(errors === 0, findings, {errors, warnings: findings.length - errors, has_breached_row: hasBreached});
 }
 
-export function main(argv: string[] = process.argv.slice(2)): number {
-  let cmd: string | undefined;
-  let iterations = 10;
-  let warmup = 0;
-  let format: "table" | "json" = "table";
-  let expectedP99: number | undefined;
-  let expectedRps: number | undefined;
-  let expectedErrPct: number | undefined;
-  let reportFile: string | undefined;
-
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    if (arg === "--cmd") {
-      cmd = argv[++i];
-    } else if (arg.startsWith("--cmd=")) {
-      cmd = arg.split("=")[1];
-    } else if (arg === "--iterations") {
-      iterations = parseInt(argv[++i], 10);
-    } else if (arg.startsWith("--iterations=")) {
-      iterations = parseInt(arg.split("=")[1], 10);
-    } else if (arg === "--warmup") {
-      warmup = parseInt(argv[++i], 10);
-    } else if (arg.startsWith("--warmup=")) {
-      warmup = parseInt(arg.split("=")[1], 10);
-    } else if (arg === "--format") {
-      const next = argv[++i];
-      if (next === "json" || next === "table") {
-        format = next;
+export async function main(argv = process.argv.slice(2)): Promise<number> {
+  const values: Record<string, string> = {};
+  const flags = new Set<string>();
+  const auditPaths: string[] = [];
+  const aliases: Record<string, string> = {"--workers": "--concurrency", "--expected-runs-per-second": "--expected-rps", "--expected-err-pct": "--expected-err", "--validate-report": "--audit-report"};
+  const valueOptions = new Set(["--cmd", "--iterations", "--warmup", "--concurrency", "--duration", "--cwd", "--expected-p99", "--expected-rps", "--expected-err", "--timeout", "--audit-report", "--cleanup", "--format"]);
+  try {
+    for (let i = 0; i < argv.length; i++) {
+      const eq = argv[i].indexOf("=");
+      let key = eq < 0 ? argv[i] : argv[i].slice(0, eq);
+      key = aliases[key] ?? key;
+      if (["--help", "-h"].includes(key)) {
+        console.log("Usage: run_spike.ts --cmd <command> [--iterations N] [--warmup N] [--workers N] [--duration seconds] [--timeout seconds] [--cwd path] [--probe] [--cleanup path] [--json] [--format json|table] [--expected-p99 ms] [--expected-rps N] [--expected-err percent] [--audit-report file] [--audit-paths paths...]"); return 0;
       }
-    } else if (arg.startsWith("--format=")) {
-      const val = arg.split("=")[1];
-      if (val === "json" || val === "table") {
-        format = val;
-      }
-    } else if (arg === "--expected-p99") {
-      expectedP99 = parseFloat(argv[++i]);
-    } else if (arg.startsWith("--expected-p99=")) {
-      expectedP99 = parseFloat(arg.split("=")[1]);
-    } else if (arg === "--expected-rps") {
-      expectedRps = parseFloat(argv[++i]);
-    } else if (arg.startsWith("--expected-rps=")) {
-      expectedRps = parseFloat(arg.split("=")[1]);
-    } else if (arg === "--expected-err-pct") {
-      expectedErrPct = parseFloat(argv[++i]);
-    } else if (arg.startsWith("--expected-err-pct=")) {
-      expectedErrPct = parseFloat(arg.split("=")[1]);
-    } else if (arg === "--validate-report") {
-      reportFile = argv[++i];
-    } else if (arg.startsWith("--validate-report=")) {
-      reportFile = arg.split("=")[1];
+      if (["--json", "--probe"].includes(key)) flags.add(key);
+      else if (key === "--audit-paths") { while (i + 1 < argv.length && !argv[i + 1].startsWith("--")) auditPaths.push(argv[++i]); }
+      else if (valueOptions.has(key)) {
+        const value = eq >= 0 ? argv[i].slice(eq + 1) : argv[++i];
+        if (value === undefined) throw new Error(`Missing value for ${key}`);
+        values[key] = value;
+      } else throw new Error(`Unknown option: ${key}`);
     }
-  }
-
-  if (reportFile) {
-    const text = fs.readFileSync(reportFile, "utf-8");
-    const res = validateSpikeReport(text, reportFile);
-    if (format === "json") {
-      console.log(JSON.stringify(res.to_dict(), null, 2));
+    const json = flags.has("--json") || values["--format"] === "json";
+    if (values["--audit-report"] || auditPaths.length) {
+      const result = values["--audit-report"] ? validateSpikeReport(fs.readFileSync(values["--audit-report"], "utf8"), path.basename(values["--audit-report"])) : auditSpikeIsolation(auditPaths);
+      console.log(json ? JSON.stringify(result.to_dict(), null, 2) : `Spike Validation: ${result.passed ? "PASSED" : "FAILED"}\n${result.findings.map(f => `[${f.rule_id}] ${f.message}`).join("\n")}`);
+      return result.passed ? 0 : 1;
+    }
+    const cmd = values["--cmd"];
+    if (!cmd) throw new Error("--cmd is required outside audit mode");
+    const number = (key: string, fallback?: number) => {
+      const result = values[key] === undefined ? fallback : Number(values[key]);
+      if (result !== undefined && !Number.isFinite(result)) throw new Error(`Invalid number for ${key}`);
+      return result;
+    };
+    const cwd = values["--cwd"], timeout = number("--timeout", 60);
+    let passed: boolean, result: any;
+    if (flags.has("--probe")) {
+      const [elapsed_ms, success] = await runSingleIteration(cmd, cwd, timeout);
+      passed = success; result = {probe: true, passed, elapsed_ms, cmd};
     } else {
-      console.log(`Spike Report Validation: ${res.passed ? "PASSED" : "FAILED"}`);
-      for (const f of res.findings) {
-        console.log(`  • [${f.severity}] ${f.rule_id}: ${f.message}`);
-      }
+      const metrics = await runBenchmark({cmd, iterations: number("--iterations", 100)!, warmup: number("--warmup", 10), concurrency: number("--concurrency", 1), durationSec: number("--duration"), cwd, timeoutSec: timeout});
+      const [markdown_table, success] = formatMarkdownTable(metrics, number("--expected-p99"), number("--expected-rps"), number("--expected-err"));
+      passed = success; result = {metrics, markdown_table, passed};
     }
-    return res.passed ? 0 : 1;
-  }
-
-  if (!cmd) {
-    process.stderr.write("Usage: run_spike.ts --cmd '<command>' [--iterations <n>] [--warmup <n>] [--format json|table]\n");
-    return 1;
-  }
-
-  const metrics = runBenchmark({ cmd, iterations, warmup });
-
-  if (format === "json") {
-    console.log(JSON.stringify(metrics, null, 2));
-    return 0;
-  }
-
-  const [table, passed] = formatMarkdownTable(metrics, expectedP99, expectedRps, expectedErrPct);
-  console.log(table);
-  return passed ? 0 : 1;
+    if (passed && values["--cleanup"]) fs.rmSync(values["--cleanup"], {recursive: true, force: true});
+    console.log(json ? JSON.stringify(flags.has("--json") || result.probe ? result : result.metrics, null, 2) : result.markdown_table ?? `Probe: ${passed ? "PASSED" : "FAILED"}`);
+    return passed ? 0 : 1;
+  } catch (error: any) { console.error(error.message); return 1; }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const exitCode = main();
-  process.exit(exitCode);
-}
+if (import.meta.url === `file://${process.argv[1]}`) process.exit(await main());

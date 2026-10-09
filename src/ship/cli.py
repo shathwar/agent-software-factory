@@ -1717,25 +1717,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if cmd in ("cost", "usage"):
         return run_cost_cli(sub_args)
 
-    # Specialist tools dispatch
-    if cmd == "tdd":
-        from ship.tools.tdd import main as tdd_main
-        return tdd_main(sub_args)
-
-    if cmd == "simplify":
-        from ship.tools.simplify import main as simplify_main
-        return simplify_main(sub_args)
-
-    if cmd == "spike":
-        from ship.tools.spike import main as spike_main
-        return spike_main(sub_args)
-
-    if cmd == "review":
-        if sub_args and sub_args[0] == "validate":
-            from ship.tools.review import main as review_main
-            return review_main(sub_args[1:])
-        from ship.tools.review import main as review_main
-        return review_main(sub_args)
+    # Specialist implementations live in TypeScript; retain the public Python CLI.
+    if cmd in ("tdd", "simplify", "spike", "review"):
+        from ship.tool_runtime import run_tool_cli
+        if cmd == "review" and sub_args and sub_args[0] == "validate":
+            sub_args = sub_args[1:]
+        return run_tool_cli(cmd, sub_args)
 
     # Subcommands mapping to lifecycle operations
     if cmd == "init":

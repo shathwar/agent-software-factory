@@ -207,7 +207,7 @@ def doctor(root: Path, initialize: bool = False, update: bool = False):
         version_file = ship / "VERSION"
         version = version_file.read_text().strip() if version_file.exists() else "unknown"
         check("version", version != "unknown", version)
-        for skill, script in {"ship": "inspect_lifecycle.py", "review": "validate_report.py", "tdd": "verify_tdd.py", "simplify": "scan_debt.py", "spike": "run_spike.py"}.items():
+        for skill, script in {"ship": "inspect_lifecycle.py", "review": "validate_report.ts", "tdd": "verify_tdd.ts", "simplify": "scan_debt.ts", "spike": "run_spike.ts"}.items():
             folder = ship.parent / skill
             check(f"skill:{skill}", (folder / "SKILL.md").is_file() and (folder / "scripts" / script).is_file(), str(folder))
         check("skill:design", (ship.parent / "design/SKILL.md").is_file(), str(ship.parent / "design"))

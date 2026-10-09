@@ -1,4 +1,4 @@
-import test, { describe, it } from "node:test";
+import { describe, it } from "bun:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -31,8 +31,8 @@ describe("TypeScript Prototype Spike Benchmark & Isolation Validator (run_spike.
     assert.equal(calculatePercentile([42.0], 50), 42.0);
   });
 
-  it("runs benchmark command iterations and records metrics", () => {
-    const metrics = runBenchmark({
+  it("runs benchmark command iterations and records metrics", async () => {
+    const metrics = await runBenchmark({
       cmd: `${process.execPath} -e "process.exit(0)"`,
       iterations: 15,
       warmup: 3,
@@ -106,6 +106,7 @@ describe("TypeScript Prototype Spike Benchmark & Isolation Validator (run_spike.
 | p99 | < 5.0ms | 2.8ms | ✅ Met |
 
 ### ⚖️ Architectural Verdict & Settled Frontier
+- **Verdict**: CONFIRMED
 - **Decision Settled**: We will adopt Redis Streams.
 - **Architectural Trade-offs**: High memory consumption accepted in exchange for sub-3ms latency.
 `;

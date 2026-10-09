@@ -13,5 +13,5 @@
 
 ## CLI Runner
 ```bash
-python3 skills/spike/scripts/run_spike.py --cmd "python3 worker.py" --iterations 1000 --warmup 100 --concurrency 20
+bun skills/spike/scripts/run_spike.ts --cmd "python3 worker.py" --iterations 1000 --warmup 100 --concurrency 20
 ```

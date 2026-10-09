@@ -98,7 +98,7 @@ For agent frameworks:
 1. **Standard-library core (Python 3.10+)**:
    The lifecycle engine, standalone Python validators, and default Python tests use the standard library. Rendered UX checks require Node, Playwright, and a browser. The legacy response harness has optional Anthropic SDK and `agy` CLI modes. The separate live tool-loop suite uses the standard-library HTTP client, an Anthropic API key, an explicitly configured model, and Docker.
 2. **Byte-for-Byte Distribution Parity**:
-   Every specialist tool in `src/ship/tools/` mirrors its script in `skills/*/scripts/` identically. Enforced by `scripts/verify/sync_parity.py --check` and Git pre-commit hooks.
+   Every specialist tool in `src/ship/tools/` has a TypeScript distribution under `skills/*/scripts/`. Enforced by `scripts/verify/sync_parity.py --check` and Git pre-commit hooks.
 3. **Native stdio Model Context Protocol (MCP) Server**:
    Built-in zero-dependency stdio server (`src/ship/mcp/`) connecting lifecycle management, gate checks, checkpoints, and verifications to Cursor, Claude Desktop, and Antigravity.
 4. **Checks with explicit evidence limits**:
@@ -124,6 +124,11 @@ For agent frameworks:
 
 Run these commands from the repository root. Browser checks run separately as described in [evaluation instructions](./tests/evaluation/README.md).
 
+TypeScript tests use [Bun's native test runner](https://bun.sh/docs/test) (Bun 1.3.0 or newer).
+No npm dependencies or build step are needed. Tool regressions migrated from
+Python live alongside the TypeScript tool tests. Python tests remain for the
+Python lifecycle, MCP runtime, and maintained Python tool implementations.
+
 ```bash
 # Verification & Parity
 ./scripts/verify/check_sanity.sh               # Sanity checks (syntax, parity, nano budget, coverage)
@@ -133,6 +138,8 @@ python3 scripts/verify/build_step_catalog.py --check # Verify shipped runtime st
 python3 scripts/verify/ci_gate.py              # Strict CI pull-request policy gate
 
 # Test Suites
+bun run test                                # Bun unit, regression, and CLI tests
+PYTHONPATH=src:tests:. python3 -m pytest     # Python tests, including subprocesses
 ./scripts/test/test_fast.sh                   # Selected unit tests
 ./scripts/test/test_full.sh                   # Full regression and evaluation test suite
 
@@ -142,13 +149,13 @@ python3 scripts/verify/ci_gate.py              # Strict CI pull-request policy g
 
 # Specialist CLI Diagnostics
 python3 skills/ship/scripts/inspect_lifecycle.py --doctor  # Lifecycle preflight diagnostics
-python3 skills/simplify/scripts/scan_debt.py --strict      # Check debt markers and static thresholds
-python3 skills/tdd/scripts/verify_tdd.py --strict          # Check test diff patterns and detect assertless tests
-python3 skills/review/scripts/validate_report.py report.json # Validate review report schema
-python3 skills/ux/scripts/audit_ux.py --fail-on error src/ # Accessibility and interaction source-pattern checks
-python3 skills/debug/scripts/verify_fix.py --strict        # Check reproduction and assertion-change patterns
-python3 skills/evals/scripts/score_calibration.py --input test_results.jsonl --p-obs 0.80 # Calibrate judge TPR/TNR
-python3 skills/spike/scripts/run_spike.py --cmd "python3 -c 'pass'" --iterations 100     # Run empirical benchmark
+bun skills/simplify/scripts/scan_debt.ts --strict      # Check debt markers and static thresholds
+bun skills/tdd/scripts/verify_tdd.ts --strict          # Check test diff patterns and detect assertless tests
+bun skills/review/scripts/validate_report.ts report.json # Validate review report schema
+bun skills/ux/scripts/audit_ux.ts --fail-on error src/ # Accessibility and interaction source-pattern checks
+bun skills/debug/scripts/verify_fix.ts --strict        # Check reproduction and assertion-change patterns
+bun skills/evals/scripts/score_calibration.ts --input test_results.jsonl --p-obs 0.80 # Calibrate judge TPR/TNR
+bun skills/spike/scripts/run_spike.ts --cmd "python3 -c 'pass'" --iterations 100     # Run empirical benchmark
 
 # AgentFlow CLI & Observability
 agentflow doctor                               # Lifecycle, runtime, and policy preflight check

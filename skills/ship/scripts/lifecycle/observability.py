@@ -29,7 +29,18 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .events import GENESIS_PREV_HASH, compute_event_hash
 from .models import EventType, ExecutionEvent
-from ship.tools.tdd import is_production_code, is_test_file
+try:
+    from ..tool_runtime import classify_file
+except ImportError:  # Standalone copied skill distribution.
+    from tool_runtime import classify_file
+
+
+def is_test_file(path):
+    return classify_file(str(path))["is_test"]
+
+
+def is_production_code(path):
+    return classify_file(str(path))["is_production"]
 
 
 def _now_iso() -> str:

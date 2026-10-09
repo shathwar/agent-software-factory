@@ -264,45 +264,5 @@ class TestMcpToolIntegration(unittest.TestCase):
             self.assertEqual(res_cost["estimated_cost_usd"], 0.06)
 
 
-class TestValidateSkillTool(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.root = Path(self.tmp.name)
-
-    def tearDown(self):
-        self.tmp.cleanup()
-
-    def test_scaffold_and_validate_micro_skill(self):
-        from ship.tools.skill import scaffold_skill, validate_skill_dir
-        sdir = scaffold_skill(self.root, "quick-audit", micro=True)
-        self.assertTrue((sdir / "SKILL.md").exists())
-        self.assertFalse((sdir / "scripts").exists())
-
-        res = validate_skill_dir(sdir, strict=True, micro=True)
-        self.assertTrue(res["passed"])
-        self.assertEqual(res["type"], "micro")
-        self.assertEqual(len(res["errors"]), 0)
-        self.assertEqual(len(res["warnings"]), 0)
-
-    def test_scaffold_and_validate_standard_skill(self):
-        from ship.tools.skill import scaffold_skill, validate_skill_dir
-        sdir = scaffold_skill(self.root, "full-audit", micro=False)
-        self.assertTrue((sdir / "SKILL.md").exists())
-        self.assertTrue((sdir / "scripts").exists())
-        self.assertTrue((sdir / "evals").exists())
-
-        res = validate_skill_dir(sdir, strict=True, micro=False)
-        self.assertTrue(res["passed"])
-        self.assertEqual(res["type"], "standard")
-        self.assertEqual(len(res["errors"]), 0)
-        self.assertEqual(len(res["warnings"]), 0)
-
-    def test_validate_skill_cli_init(self):
-        from ship.tools.skill import main as validate_main
-        exit_code = validate_main(["--init", "cli-test-skill", "--micro", str(self.root)])
-        self.assertEqual(exit_code, 0)
-        self.assertTrue((self.root / "cli-test-skill" / "SKILL.md").exists())
-
-
 if __name__ == "__main__":
     unittest.main()

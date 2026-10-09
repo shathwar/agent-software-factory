@@ -75,8 +75,8 @@ def provision(case_id, destination):
 
 def validate_submission(report, root):
     # Keep this import local so provisioning does not require an installed package.
-    from ship.tools.review import validate_report
-    errors = validate_report(report)
+    from ship.tool_runtime import call_tool
+    errors = call_tool("review", {"report_data": report})["errors"]
     if errors:
         return errors
     if report['status'] != 'complete' or 'subject.py' not in report['coverage']:
