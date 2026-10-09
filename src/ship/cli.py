@@ -120,8 +120,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--record-tests", default=None, metavar="TEST_DATA", help="Record test results into ledger.")
     parser.add_argument("--generate-trailers", action="store_true", help="Generate RFC 5133 commit trailers.")
     parser.add_argument("--design-fingerprint", action="store_true", help="Print design digest for --change.")
-    parser.add_argument("--approve-design", metavar="SHA256", help="Record design approval; requires --change and --approved-by.")
-    parser.add_argument("--approved-by", help="Identity supplied by approving user.")
+    parser.add_argument(
+        "--approve-design",
+        nargs="?",
+        const="auto",
+        default=None,
+        metavar="SHA256",
+        help="Record design approval; pass SHA256 or 'auto' (default: auto). Requires --change or active change.",
+    )
+    parser.add_argument("--approved-by", help="Identity supplied by approving user (default: session-user).")
     parser.add_argument("--next-turn", action="store_true", help="Output deterministic Turn Contract.")
     parser.add_argument("--record-turn", default=None, metavar="TURN_JSON_OR_PATH", help="Record turn provenance.")
     parser.add_argument("--turns", "--provenance", action="store_true", dest="show_turns", help="Display turn provenance audit.")
@@ -223,16 +230,18 @@ def run_lifecycle(argv: Sequence[str]) -> int:
         output_result({"change": args.change, "fingerprint": fp}, [fp])
         return 0
 
-    if args.approve_design:
-        if not args.change:
+    if args.approve_design is not None:
+        target_ch = args.change or ledger_store.get_active_change(repo_root)
+        if not target_ch:
             print("Error: --approve-design requires --change <ID>", file=sys.stderr)
             return 1
-        if not args.approved_by:
-            print("Error: --approve-design requires --approved-by <identity>", file=sys.stderr)
-            return 1
+        approver = args.approved_by or "session-user"
+        digest = args.approve_design
+        if not digest or digest.lower() == "auto":
+            digest = design_fingerprint(repo_root, target_ch)
         try:
-            a_res = ledger_store.approve_design(repo_root, args.change, args.approve_design, args.approved_by)
-            output_result(a_res, [f"Design approved for {args.change} ({args.approve_design[:12]}...) by {args.approved_by}"])
+            a_res = ledger_store.approve_design(repo_root, target_ch, digest, approver)
+            output_result(a_res, [f"Design approved for {target_ch} ({digest[:12]}...) by {approver}"])
             return 0
         except Exception as exc:
             print(f"Error: {exc}", file=sys.stderr)

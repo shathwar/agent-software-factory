@@ -440,8 +440,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
 
     parser.add_argument("--design-fingerprint", action="store_true", help="Print the design digest for --change.")
-    parser.add_argument("--approve-design", metavar="SHA256", help="Record external approval of this design digest; requires --change and --approved-by.")
-    parser.add_argument("--approved-by", help="Identity supplied by the approving user or trusted host.")
+    parser.add_argument(
+        "--approve-design",
+        nargs="?",
+        const="auto",
+        default=None,
+        metavar="SHA256",
+        help="Record external approval of this design digest; pass SHA256 or 'auto' (default: auto). Uses --change or auto-detected active change.",
+    )
+    parser.add_argument("--approved-by", help="Identity supplied by the approving user or trusted host (default: session-user).")
 
     parser.add_argument(
         "--next-turn",
@@ -515,9 +522,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.verify:
         from lifecycle.verification import format_verification_summary
         try:
-            records = _engine.verify_change(repo_root, change=args.change, tiers=[args.tier])
+            target_change = args.change or _ledger_store.get_active_change(repo_root)
+            if not target_change:
+                packages = _spec_repo.inspect_openspec(repo_root)
+                if len(packages) == 1:
+                    target_change = packages[0]["change"]
+            records = _engine.verify_change(repo_root, change=target_change, tiers=[args.tier])
             output_result({k: v.to_dict() for k, v in records.items()},
-                          [format_verification_summary(records, change=args.change or "")])
+                          [format_verification_summary(records, change=target_change or "")])
             return 0 if records and all(r.verdict == "VERIFIED" for r in records.values()) else 1
         except Exception as exc:
             print(f"Error during verification: {exc}", file=sys.stderr)
@@ -566,14 +578,29 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.design_fingerprint or args.approve_design is not None:
         from lifecycle.evidence import design_fingerprint
         try:
-            if not args.change:
-                raise ValueError("Design approval requires explicit --change")
+            target_change = args.change
+            if not target_change:
+                active = _ledger_store.get_active_change(repo_root)
+                if active:
+                    target_change = active
+                else:
+                    packages = _spec_repo.inspect_openspec(repo_root)
+                    if len(packages) == 1:
+                        target_change = packages[0]["change"]
+                    elif packages:
+                        raise ValueError("Multiple active changes found. Please specify --change <name>")
+                    else:
+                        raise ValueError("Design approval requires explicit --change (no active change package found)")
             if args.design_fingerprint:
-                digest = design_fingerprint(repo_root, args.change)
+                digest = design_fingerprint(repo_root, target_change)
                 output_result({"fingerprint": digest}, [digest])
             else:
-                res = _ledger_store.approve_design(repo_root, args.change, args.approve_design, args.approved_by)
-                output_result(res, [f"Design approval recorded for {args.change}"])
+                digest = args.approve_design
+                if not digest or digest.lower() == "auto":
+                    digest = design_fingerprint(repo_root, target_change)
+                approver = args.approved_by or "session-user"
+                res = _ledger_store.approve_design(repo_root, target_change, digest, approver)
+                output_result(res, [f"Design approval recorded for {target_change}"])
             return 0
         except (ValueError, OSError) as exc:
             print(f"Error recording design approval: {exc}", file=sys.stderr)
@@ -635,10 +662,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.checkpoint:
         try:
+            target_change = args.change or _ledger_store.get_active_change(repo_root)
+            if not target_change:
+                packages = _spec_repo.inspect_openspec(repo_root)
+                if len(packages) == 1:
+                    target_change = packages[0]["change"]
             res = create_checkpoint(
                 repo_root,
                 args.checkpoint,
-                change=args.change,
+                change=target_change,
                 create_git_tag=args.create_git_tag,
             )
             tag_display = f" ({res['tag']})" if res.get("tag") else ""

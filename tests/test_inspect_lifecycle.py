@@ -3359,6 +3359,34 @@ class TestInspectLifecycle(unittest.TestCase):
         self.assertTrue(rep_good.passed)
         self.assertEqual(rep_good.status, "PASS")
 
+    def test_approve_design_auto_and_smart_resolution(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            pkg_dir = tmppath / "openspec" / "changes" / "streamlined-feature"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "proposal.md").write_text("# Proposal\n")
+            (pkg_dir / "tasks.md").write_text("# Tasks\n- [ ] 1. Build\n")
+
+            # Test 1: Run inspect_lifecycle main with --approve-design auto and --change
+            with patch.object(sys, "argv", ["inspect_lifecycle.py", "--path", str(tmppath), "--approve-design", "auto", "--change", "streamlined-feature"]):
+                self.assertEqual(inspect_lifecycle.main(), 0)
+
+            state = inspect_lifecycle.load_ledger(tmppath)
+            self.assertIn("streamlined-feature", state.get("changes", {}))
+            self.assertEqual(state["changes"]["streamlined-feature"]["evidence"]["design"]["approval"]["approved_by"], "session-user")
+
+            # Test 2: Modify proposal and approve with --approve-design without arguments (const="auto") and auto-detected change
+            (pkg_dir / "proposal.md").write_text("# Proposal updated\n")
+            with patch.object(sys, "argv", ["inspect_lifecycle.py", "--path", str(tmppath), "--approve-design"]):
+                self.assertEqual(inspect_lifecycle.main(), 0)
+
+            state2 = inspect_lifecycle.load_ledger(tmppath)
+            self.assertEqual(state2["changes"]["streamlined-feature"]["evidence"]["design"]["approval"]["approved_by"], "session-user")
+            self.assertNotEqual(
+                state["changes"]["streamlined-feature"]["evidence"]["design"]["approval"]["fingerprint"],
+                state2["changes"]["streamlined-feature"]["evidence"]["design"]["approval"]["fingerprint"],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

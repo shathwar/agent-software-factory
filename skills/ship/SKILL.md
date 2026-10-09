@@ -96,7 +96,7 @@ Read `workflow.profile` and `workflow.execution` from inspection output. Apply t
 3. If empirical uncertainty arises, spike in `.scratch/` using [`spike`](../spike/SKILL.md).
 4. Compile `docs/adr/ADR-<NNNN>-<change>.md` and `openspec/changes/<change>/`.
 5. Checkpoint specification: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --checkpoint design`.
-6. Capture the design digest before presenting the package for confirmation. After explicit authorization, record that same digest and the approver identity using [design approval receipts](./references/lifecycle_state_machine.md#local-workflow-and-design-approval). Explicit approval in the current conversation is sufficient; record it without asking again. Use the known session identity or `session-user`, and apply authorization only to the reviewed design. A checkpoint alone is not approval.
+6. Capture the design digest before presenting the package for confirmation. After explicit authorization, record approval with `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --approve-design auto` (or pass explicit digest with `--approve-design <sha256> --approved-by session-user`). Explicit approval in the current conversation is sufficient; record it without asking again. Use the known session identity or `session-user`, and apply authorization only to the reviewed design. A checkpoint alone is not approval.
 7. **Single-Handoff Transition**: Present confirmation call-to-action: *"Reply 'Proceed' or 'LGTM' to approve specification and start implementation."* When the user confirms, record approval and immediately execute Task 1 in that exact turn.
 
 ### Implementation: Test-First Development
@@ -122,12 +122,9 @@ Iterate sequentially through `openspec/changes/<change>/tasks.md` using single-a
 3. Deliver Walkthrough: changes summary, ADR links, review scorecard, `scan_debt.py` ledger.
 4. Apply & Archive OpenSpec: Sync delta specs to `openspec/specs/` and move completed package to `openspec/archive/<YYYY-MM-DD>-<change>/` via `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --archive [change]`.
 5. Attach Git Notes & Commit Trailers:
-   - Deep validation evidence (review reports, test logs) is attached to the commit object via Git notes (`refs/notes/ship-evidence`).
-   - Format standard RFC 5133 commit trailers using `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --generate-trailers --change <change>` (`Ship-Change: <change>`, `Ship-<GateName>: <status>`).
-6. **Always report task cost in the final Ship Walkthrough**: after the last usage-affecting action, run `agentflow budget show --path <project> --change <change>` (or the installed equivalent) and include the recorded totals exactly as:
-   - `Tokens: <count>`
-   - `Cost: $<amount> USD`
-   Use the ledger's totals, not estimates; if either metric was not recorded, say `not recorded` instead of inferring or fabricating a value. This cost summary is required for successful, failed, cancelled, and blocked Ship tasks whenever a change ledger exists.
+   - Deep validation evidence (review reports, test logs) can be attached to the commit object via Git notes (`refs/notes/ship-evidence`).
+   - Format standard RFC 5133 commit trailers using `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --generate-trailers --change <change>` (`Ship-Change: <change>`, `Ship-<GateName>: <status>`). In lightweight local workflows, workspace inspection tracks provenance automatically.
+6. Always report task cost in the final Ship Walkthrough: after the last usage-affecting action, run `agentflow budget show --path <project> --change <change>` (or the installed equivalent) when budget tracking is active, and include the recorded totals (`Tokens: <count>`, `Cost: $<amount> USD`). If unrecorded, report `not recorded`.
 
 ---
 
@@ -152,6 +149,4 @@ Iterate sequentially through `openspec/changes/<change>/tasks.md` using single-a
 
 ## Step observations
 
-When the AgentFlow runtime is available and local telemetry writes are allowed, use `agentflow steps catalog --skill ship` to discover the stable step IDs and evidence expectations. Begin one run per task/invocation with `agentflow steps begin --skill ship`; retain its run ID across resumption. Record each step as `started` before execution and `completed` with actual evidence files, or `failed`/`skipped` with a reason. Finish with `agentflow steps report <run_id>` and disclose unobserved steps or unfinished attempts; completion records are not independent quality verdicts.
-
-The standalone equivalent is `python3 "$SKILLS_DIR/ship/scripts/trace_steps.py"`. See [step tracing](./references/step_tracing.md) for arguments, retries, evidence and read-only behavior when that companion skill is installed. If neither runtime is available, continue the requested workflow and report capture unavailable; do not fabricate a trace.
+When the AgentFlow runtime is available and local telemetry writes are allowed, use `agentflow steps catalog --skill ship` / `python3 "$SKILLS_DIR/ship/scripts/trace_steps.py"` to record step lifecycles. See [step tracing](./references/step_tracing.md) for arguments and evidence expectations. If unavailable, proceed with the requested workflow.
