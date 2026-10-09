@@ -18,6 +18,9 @@ class ShipConfigManager:
                 "prepare": "openspec-propose", "inspect": "openspec-propose",
                 "verify": "openspec-verify-change", "finalize": "openspec-archive-change",
             }},
+            "simplify": {"provider": "ponytail", "skills": {
+                "refactor": "ponytail", "review": "ponytail-review", "debt": "ponytail-debt",
+            }},
             "project": {
                 "name": "",
                 "root": ".",
@@ -167,6 +170,10 @@ class ShipConfigManager:
                 for operation in ("prepare", "inspect", "verify", "finalize"):
                     if not sdd["skills"].get(operation, "").strip():
                         raise ValueError(f"sdd.skills.{operation} is required for an external provider")
+            simplify = default_config.get("simplify")
+            if isinstance(simplify, dict):
+                if not simplify.get("provider", "").strip():
+                    raise ValueError("simplify.provider must be nonempty")
             try:
                 default_config["config_source"] = str(config_file.relative_to(repo_root))
             except ValueError:

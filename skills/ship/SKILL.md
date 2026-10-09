@@ -47,8 +47,8 @@ folder. Run project commands from the consumer project.
 ## Implement
 
 - Take pending tasks from the provider's handoff. Execute [`tdd`](../tdd/SKILL.md)
-  and [`simplify`](../simplify/SKILL.md): demonstrate a failing behavioral test,
-  implement the minimum change, then refactor under passing tests.
+  and the configured simplify provider (e.g. `ponytail` or [`simplify`](../simplify/SKILL.md)):
+  demonstrate a failing behavioral test, implement the minimum change, then refactor under passing tests.
 - Use repository test commands, including `gates.implementation.test` when set.
   Capture command, raw result, exit code, executed-test count, and duration.
 - Update task progress through the provider's workflow and refresh its handoff.
@@ -62,7 +62,8 @@ folder. Run project commands from the consumer project.
   design and working-tree fingerprints in the handoff.
 - Run [`review`](../review/SKILL.md) in `review-loop` mode against the full working
   tree, including staged, unstaged, and untracked changes. Provider spec verification
-  feeds Stage 0; engineering review adds correctness and applicable risk checks.
+  feeds Stage 0; configured simplify review (`ponytail-review`) checks over-engineering;
+  engineering review adds correctness and applicable risk checks.
 - Fix adjudicated defects within the configured repair limit. Broken design
   invariants return to preparation while preserving existing edits.
 - Require Judge PASS, zero open CRITICAL/HIGH defects, and current evidence.

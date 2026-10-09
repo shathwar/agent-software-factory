@@ -36,10 +36,20 @@ class TestScanDebt(unittest.TestCase):
         self.assertEqual(res["line"], 42)
         self.assertEqual(len(res["errors"]), 0)
 
-    def test_legacy_ponytail_marker_ignored(self):
+    def test_ponytail_marker_supported(self):
         line = "// ponytail: In-memory cache. Ceiling: 1,000 items. Upgrade: Redis."
         res = scan_debt.parse_debt_marker(line, "src/cache.ts", 42)
-        self.assertEqual(res, {})
+        self.assertTrue(res["is_valid"])
+        self.assertEqual(res["shortcut"], "In-memory cache")
+        self.assertEqual(res["ceiling"], "1,000 items")
+        self.assertEqual(res["upgrade"], "Redis")
+
+    def test_compact_ponytail_marker_supported(self):
+        line = "# ponytail: global lock, per-account locks if throughput matters"
+        res = scan_debt.parse_debt_marker(line, "src/sync.py", 12)
+        self.assertTrue(res["is_valid"])
+        self.assertEqual(res["shortcut"], "global lock")
+        self.assertEqual(res["upgrade"], "per-account locks if throughput matters")
 
     def test_parse_missing_ceiling(self):
         line = "# simplify: Simple SQLite. Upgrade: Postgres RDS."

@@ -56,9 +56,9 @@ IGNORE_EXTENSIONS = {
     ".zip", ".tar", ".gz", ".lock", ".lockb", ".woff", ".woff2", ".ttf", ".eot",
 }
 
-# Regex to find simplify: marker comment line
+# Regex to find simplify: or ponytail: marker comment line
 MARKER_PATTERN = re.compile(
-    r"(?:^\s*(?://|#|/\*|\*|--|<!--|;|%)?|(?<=[\s;])(?://|#|/\*|\*|--|<!--|;|%))\s*simplify:\s*(.+)$",
+    r"(?:^\s*(?://|#|/\*|\*|--|<!--|;|%)?|(?<=[\s;])(?://|#|/\*|\*|--|<!--|;|%))\s*(?:simplify|ponytail):\s*(.+)$",
     re.IGNORECASE,
 )
 
@@ -74,7 +74,7 @@ UPGRADE_PATTERN = re.compile(
 
 
 def parse_debt_marker(raw_text: str, file_path: str, line_number: int) -> Dict[str, Any]:
-    """Parse and validate a single simplify debt marker line."""
+    """Parse and validate a single simplify or ponytail debt marker line."""
     match = MARKER_PATTERN.search(raw_text)
     if not match:
         return {}
@@ -92,32 +92,40 @@ def parse_debt_marker(raw_text: str, file_path: str, line_number: int) -> Dict[s
     shortcut: str = ""
     errors: List[str] = []
 
-    if ceiling_match:
-        extracted_ceiling = ceiling_match.group(1).strip().strip(".|; ")
-        if extracted_ceiling:
-            ceiling = extracted_ceiling
+    if ceiling_match or upgrade_match:
+        if ceiling_match:
+            extracted_ceiling = ceiling_match.group(1).strip().strip(".|; ")
+            if extracted_ceiling:
+                ceiling = extracted_ceiling
+            else:
+                errors.append("Empty 'Ceiling:' threshold")
         else:
-            errors.append("Empty 'Ceiling:' threshold")
+            errors.append("Missing 'Ceiling:' threshold")
+
+        if upgrade_match:
+            extracted_upgrade = upgrade_match.group(1).strip().strip(".|; ")
+            if extracted_upgrade:
+                upgrade = extracted_upgrade
+            else:
+                errors.append("Empty 'Upgrade:' path")
+        else:
+            errors.append("Missing 'Upgrade:' path")
+
+        first_start = len(body)
+        if ceiling_match:
+            first_start = min(first_start, ceiling_match.start())
+        if upgrade_match:
+            first_start = min(first_start, upgrade_match.start())
+        shortcut = body[:first_start].strip().strip(".|; ")
+    elif "," in body:
+        parts = [p.strip() for p in body.split(",", 1)]
+        shortcut = parts[0]
+        ceiling = parts[0]
+        upgrade = parts[1]
     else:
+        shortcut = body.strip().strip(".|; ")
         errors.append("Missing 'Ceiling:' threshold")
-
-    if upgrade_match:
-        extracted_upgrade = upgrade_match.group(1).strip().strip(".|; ")
-        if extracted_upgrade:
-            upgrade = extracted_upgrade
-        else:
-            errors.append("Empty 'Upgrade:' path")
-    else:
         errors.append("Missing 'Upgrade:' path")
-
-    # Extract shortcut (everything before the first field)
-    first_start = len(body)
-    if ceiling_match:
-        first_start = min(first_start, ceiling_match.start())
-    if upgrade_match:
-        first_start = min(first_start, upgrade_match.start())
-
-    shortcut = body[:first_start].strip().strip(".|; ")
 
     if not shortcut or shortcut.lower() in {"todo", "fixme", "clean this up", "optimize", "temp"}:
         errors.append(f"Vague or missing shortcut description: '{shortcut}'")

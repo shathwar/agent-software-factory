@@ -58,7 +58,7 @@ Review every active stage. Higher stages prioritise impact, not block later chec
 1. **Correctness**: Logic bugs, off-by-one, boundary values, null/None, float precision, presentation vs domain state.
 2. **Concurrency / Safety**: Race windows, lock ordering, double release, atomicity, virtual thread pinning, task lifecycles.
 3. **Failure / Resilience**: Deadlines/timeouts, backoff with jitter, error containment, poison-pill defense.
-4. **Simplicity (YAGNI & Smells)**: Minimal diff, dead code deletion, eliminate Fowler smells (Speculative Generality, Middle Man).
+4. **Simplicity (YAGNI & Smells)**: Minimal diff, dead code deletion, eliminate speculative abstractions. Evaluated via configured simplify review skill (e.g. `ponytail-review`) with net line reduction metrics.
 5. **Maintainability**: Flat control flow, guard clauses, low indirection, domain naming, testability.
 6. **Reuse (DRY)**: Reuse existing project utilities; prevent magic string and prefix drift.
 7. **Performance**: Relevant input sizes, query plans, allocation hot-paths, N+1 queries. Require proven cost before optimising.

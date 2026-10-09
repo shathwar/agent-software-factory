@@ -405,6 +405,32 @@
           }
         }
       }
+    },
+    "simplify": {
+      "type": "object",
+      "description": "Simplify / anti-bloat provider configuration.",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "Simplify provider label (e.g. ponytail, builtin)."
+        },
+        "skills": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "refactor": {
+              "type": "string"
+            },
+            "review": {
+              "type": "string"
+            },
+            "debt": {
+              "type": "string"
+            }
+          }
+        }
+      }
     }
   },
   "additionalProperties": false

@@ -7,7 +7,7 @@
 ## 1. Strict Scope
 
 - **Write minimal production code.**
-- Climb the [Simplify Laziness Ladder](../../simplify/SKILL.md). Never add unrequested abstractions, extra files, or new dependencies.
+- Climb the [Laziness Ladder](../../simplify/SKILL.md) (or configured `ponytail` skill). Never add unrequested abstractions, extra files, or new dependencies.
 
 ---
 

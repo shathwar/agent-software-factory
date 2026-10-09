@@ -10,13 +10,13 @@
     "skills/design/SKILL.md": "d3c8d1bce59b983fc6a27b86e347e7159ffb435d3931c0b898c7d46c882f9138",
     "skills/spike/SKILL.md": "96442849acec0cf3ed1d74a065a5fe46f12f8a2a68df10d3856caf50677b88e1",
     "skills/tdd/SKILL.md": "0029b148966c49e2702bab2acfaed143cf613af3825f4be3664d678497d6402f",
-    "skills/simplify/SKILL.md": "22b6401efc7ef1bd242acf5fca97ac4ac6e5169e7077bf1c1a28c59e11f4b69c",
-    "skills/review/SKILL.md": "18af2bcff523afbfe72a585a8e1669ed224f410f465b3fedde120a3f7a2c7a40",
-    "skills/review/references/review_pipeline.md": "07ac965f2c7cae705fbca7230de78fed194890875446c2212dc5372e362bf4cc",
+    "skills/simplify/SKILL.md": "0372946f3f9df1a29862b593762997d06e6901b2e8f5ae5538f357dd13af2f13",
+    "skills/review/SKILL.md": "7ff2519a27d32ac61d654f24002a853969a772942232480f70af1eba359625fc",
+    "skills/review/references/review_pipeline.md": "f81ba0a14ea3a9e8980e90520a408a1cf67d92e8283dd21b4cdc998bef2981c4",
     "skills/debug/SKILL.md": "c6b126b46990536900072753a5f05dcb6ad2b1d09ae9f8b57addbffd79f2c395",
     "skills/evals/SKILL.md": "ac0ad2b1bf2d027b54004c74d407849a5eb26072d40c98840c10b8ffae7fe34c",
     "skills/ux/SKILL.md": "8e11d776906ef088e10e5a00c33e6d61d5a8cce9c8cd11fccb03d8ad546e1574",
-    "skills/ship/SKILL.md": "b4a3794792f6340dcd21cb2066d7b1f3c9653303c794c9e1d3028ec70daada64"
+    "skills/ship/SKILL.md": "aa6b070a5f12bb8c300c6e0f7e9d2179ca46011da5259e9597a7c9d88ddedd0e"
   },
   "validators": {
     "turn": {

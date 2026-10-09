@@ -18,7 +18,7 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 - Zero Unrequested Abstractions: NEVER introduce speculative interfaces, factories, or wrappers. Single-implementation interfaces are permitted ONLY when required by established team architecture, DI frameworks, RPC contracts, or repository conventions.
 - Team Conventions Precedence: Documented repository conventions (`CONTRIBUTING.md`, `CODING_STANDARDS.md`) always supersede baseline heuristics.
 - Deletion Priority: Shortest sound working diff wins. Delete dead boilerplate aggressively.
-- Explicit Debt Markers: ANY intentional shortcut MUST match: `simplify: <desc> | Ceiling: <limit> | Upgrade: <action>`.
+- Explicit Debt Markers: ANY intentional shortcut MUST match: `simplify: <desc> | Ceiling: <limit> | Upgrade: <action>` (or `ponytail: <desc> | Ceiling: <limit> | Upgrade: <action>`).
 </hard_constraints>
 
 <turn_contract>
@@ -110,7 +110,8 @@ Audit markers across tiers:
 
 - [Simplify Implementer Role (`simplify_implementer.md`)](./agents/simplify_implementer.md): Minimal production code agent prompt for green-phase implementation.
 - [The Laziness Ladder Guide (`laziness_ladder.md`)](./references/laziness_ladder.md): Language-by-language stdlib replacements and anti-bloat patterns.
-- [Debt Tracking & Ledger Protocol (`debt_tracking.md`)](./references/debt_tracking.md): Auditing and cleaning up `simplify:` shortcuts.
+- [Debt Tracking & Ledger Protocol (`debt_tracking.md`)](./references/debt_tracking.md): Auditing and cleaning up `simplify:` and `ponytail:` shortcuts.
+- External Provider Integration: When `.agentflow.json` configures `simplify.provider: ponytail`, execution delegates to the external `ponytail` plugin skills (`ponytail` for refactoring, `ponytail-review` for over-engineering diff audits, and `ponytail-debt` for ledger scanning).
 
 ## Step observations
 
