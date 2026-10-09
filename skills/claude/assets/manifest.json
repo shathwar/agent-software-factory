@@ -10,7 +10,7 @@
   "assets": [
     "references/model_selection_guide.md",
     "references/frontmatter_spec.md",
-    "scripts/choose_claude_profile.py",
-    "scripts/validate_claude_skill.py"
+    "scripts/choose_claude_profile.ts",
+    "scripts/validate_claude_skill.ts"
   ]
 }

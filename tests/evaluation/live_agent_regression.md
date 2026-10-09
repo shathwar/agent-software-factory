@@ -26,7 +26,7 @@ A published-release run is post-publication validation, not a pre-publication ga
 Before publishing, run the **Release candidate** workflow on the exact candidate commit.
 It runs deterministic checks and calls the live workflow; its `candidate-gate` job
 requires both to succeed. The live job validates the complete case set, requested
-model, clean checkout, and candidate SHA with `scripts/verify/live_release.py`.
+model, clean checkout, and candidate SHA with `bun scripts/verify/live_release.ts`.
 Missing credentials, missing Ship observations, or stale reports fail closed.
 
 A publishing workflow must call `release-candidate.yml` and depend on its success.

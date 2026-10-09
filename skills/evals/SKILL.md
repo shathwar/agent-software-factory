@@ -62,7 +62,7 @@ Identify the user's situation and immediately activate the matching workflow:
    ```
 2. **Review Interface**: Launch the zero-dependency local annotation interface:
    ```bash
-   python3 "$SKILLS_DIR/evals/scripts/serve_review_app.py" --samples samples.jsonl --port 8000
+   bun "$SKILLS_DIR/evals/scripts/serve_review_app.ts" --samples samples.jsonl --port 8000
    ```
 3. **Trace Review Protocol**:
    - Inspect full traces (input, context, tool calls, output).
@@ -133,7 +133,7 @@ Decompose evaluation into independent stages:
 | Script | Purpose | Arguments |
 |---|---|---|
 | `scripts/sample_traces.ts` | Stratified & diverse trace sampler | `--input <path> --count <n> --output <path>` |
-| `scripts/serve_review_app.py` | Local trace review & annotation server | `--samples <path> --port <int> --data-dir <path>` |
+| `scripts/serve_review_app.ts` | Local trace review & annotation server | `--samples <path> --port <int> --data-dir <path>` |
 | `scripts/score_calibration.ts` | TPR/TNR, confusion matrix & Rogan-Gladen CIs | `--input <path> [--p-obs <float> \| --infer-p-obs] [--template] [--bootstrap <int>]` |
 
 ## Step observations

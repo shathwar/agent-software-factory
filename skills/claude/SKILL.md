@@ -33,7 +33,7 @@ set to the consumer project.
 - Cost-Performance Pareto Law: Route mechanical tasks to Haiku, complex engineering to Sonnet, and extreme ambiguity/novel proofs to Opus. Never use Opus when Sonnet satisfies requirements.
 - Calibrated Reasoning Effort: Match reasoning effort (`low`, `medium`, `high`, `max`) to task ambiguity, branching factor, and blast radius. Do not default to `high` on deterministic tasks.
 - Frontmatter Standard Compliance: When outputting or authoring Claude Code skills, ALWAYS output standard YAML frontmatter with `name`, `description`, `model`, `effort`, and `allowed-tools`.
-- Deterministic Verification: Verify model, effort, and tool recommendations using `scripts/choose_claude_profile.py`.
+- Deterministic Verification: Verify model, effort, and tool recommendations using `scripts/choose_claude_profile.ts`.
 </hard_constraints>
 
 <turn_contract>
@@ -43,7 +43,7 @@ Verify before ending the turn:
 ✓ 3. Reasoning Effort Calibrated: Selected `low`, `medium`, `high`, or `max` with reasoning rationale.
 ✓ 4. Tool Access Scoped: Defined the minimal `allowed-tools` set (e.g. read-only, scoped editing, full workspace).
 ✓ 5. Claude Frontmatter Rendered: Produced valid, copy-pasteable YAML frontmatter for the target task or skill.
-✓ 6. Profile Validated: Ran `python3 scripts/choose_claude_profile.py` or verified profile compatibility.
+✓ 6. Profile Validated: Ran `bun scripts/choose_claude_profile.ts` or verified profile compatibility.
 </turn_contract>
 
 ---
@@ -196,8 +196,8 @@ Run the companion CLI to deterministically select the optimal profile for any ta
 
 ```bash
 # Interactive or parameterized profile recommendation
-python3 "$SKILLS_DIR/claude/scripts/choose_claude_profile.py" --task "debug concurrency race" --risk high --files 4
+ bun "$SKILLS_DIR/claude/scripts/choose_claude_profile.ts" --task "debug concurrency race" --risk high --files 4
 
 # Validate skill structure
-python3 "$SKILLS_DIR/claude/scripts/validate_claude_skill.py" --strict
+bun "$SKILLS_DIR/claude/scripts/validate_claude_skill.ts" --strict
 ```

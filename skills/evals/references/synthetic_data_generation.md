@@ -30,4 +30,4 @@ Instead, define the **variation dimensions** of your problem space and compute a
    - Filter identical intents.
    - Run character length and token distribution checks.
 4. **Execution**: Pass synthetic queries through your AI pipeline to generate candidate traces.
-5. **Bootstrap Review**: Feed the resulting traces into the Error Discovery workflow (`scripts/serve_review_app.py`) to discover initial failure modes before real users ever hit the product.
+5. **Bootstrap Review**: Feed the resulting traces into the Error Discovery workflow (`scripts/serve_review_app.ts`) to discover initial failure modes before real users ever hit the product.

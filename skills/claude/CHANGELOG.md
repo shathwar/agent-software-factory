@@ -7,5 +7,5 @@
 - Standard YAML frontmatter with `model`, `effort`, and `allowed-tools`.
 - Multi-dimensional decision matrix for model, reasoning effort, and tool permissions.
 - Reference guides for model selection and Claude Code frontmatter specification.
-- Deterministic helper scripts: `choose_claude_profile.py` and `validate_claude_skill.py`.
+- Deterministic helper scripts: `choose_claude_profile.ts` and `validate_claude_skill.ts`.
 - Behavioral evaluation cases and asset manifest.
