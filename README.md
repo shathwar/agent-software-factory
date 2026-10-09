@@ -68,6 +68,7 @@ Install skills into your environment's local skills directory (defaults to `~/.g
 
 For agent frameworks:
 - **Vercel Skills CLI (70+ Agents)**: `npx skills add shathwar/agentflow`
+- **Claude Code**: Workspace skills in [`.claude/skills/`](./.claude/skills/) and guidelines in [`CLAUDE.md`](./CLAUDE.md)
 - **Cursor IDE**: Preconfigured in [`.cursor/rules/ship.mdc`](./.cursor/rules/ship.mdc)
 - **OpenAI Codex**: Manifest configured in [`.codex-plugin/plugin.json`](./.codex-plugin/plugin.json)
 - **GitHub Copilot**: Context instructions in [`.github/copilot-instructions.md`](./.github/copilot-instructions.md)
