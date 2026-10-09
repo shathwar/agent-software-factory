@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Adversarial review agent report",
+  "type": "object",
+  "required": [
+    "reviewer",
+    "status",
+    "findings",
+    "coverage",
+    "questions",
+    "routing_notes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "reviewer": {
+      "enum": [
+        "correctness",
+        "concurrency",
+        "design",
+        "judge"
+      ]
+    },
+    "status": {
+      "enum": [
+        "complete",
+        "incomplete",
+        "skipped"
+      ]
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "severity",
+          "category",
+          "file",
+          "line",
+          "title",
+          "problem",
+          "evidence",
+          "impact",
+          "recommendation",
+          "confidence",
+          "fixability"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^FINDING-[0-9]{3,}$"
+          },
+          "severity": {
+            "enum": [
+              "CRITICAL",
+              "HIGH",
+              "MEDIUM",
+              "LOW"
+            ]
+          },
+          "category": {
+            "enum": [
+              "SpecAlignment",
+              "Correctness",
+              "Concurrency",
+              "Failure/Resilience",
+              "Simplicity",
+              "Maintainability",
+              "Reuse",
+              "Performance",
+              "SOLID",
+              "Patterns",
+              "ProductionRisk"
+            ]
+          },
+          "file": {
+            "type": "string",
+            "minLength": 1
+          },
+          "line": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^L[1-9][0-9]*(-L[1-9][0-9]*)?$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "problem": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidence": {
+            "type": "string",
+            "minLength": 1
+          },
+          "impact": {
+            "type": "string",
+            "minLength": 1
+          },
+          "recommendation": {
+            "type": "string",
+            "minLength": 1
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "fixability": {
+            "enum": [
+              "autonomous",
+              "requires-human"
+            ]
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "routing_notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

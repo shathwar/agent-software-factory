@@ -9,6 +9,12 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "skills/review/scripts/validate_report.py"
+if not SCRIPT.exists() or not SCRIPT.is_file():
+    SCRIPT = ROOT / "src/ship/tools/review.py"
+try:
+    SCRIPT.read_bytes()
+except (PermissionError, OSError):
+    SCRIPT = ROOT / "src/ship/tools/review.py"
 spec = importlib.util.spec_from_file_location("validate_report", SCRIPT)
 validator = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(validator)
@@ -93,8 +99,15 @@ class ReportTests(unittest.TestCase):
 
     def test_schema_json_alignment(self):
         schema_path = ROOT / "skills/review/references/agent_report.schema.json"
-        with open(schema_path, "r", encoding="utf-8") as f:
-            schema = json.load(f)
+        if not schema_path.exists() or not schema_path.is_file():
+            schema_path = ROOT / "src/ship/references/agent_report.schema.json"
+        try:
+            with open(schema_path, "r", encoding="utf-8") as f:
+                schema = json.load(f)
+        except (PermissionError, OSError):
+            schema_path = ROOT / "src/ship/references/agent_report.schema.json"
+            with open(schema_path, "r", encoding="utf-8") as f:
+                schema = json.load(f)
         self.assertEqual(set(schema["required"]), validator.TOP_REQUIRED)
         self.assertEqual(set(schema["properties"]["reviewer"]["enum"]), validator.REVIEWERS)
         self.assertEqual(set(schema["properties"]["status"]["enum"]), validator.STATUSES)

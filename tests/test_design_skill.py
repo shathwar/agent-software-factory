@@ -99,7 +99,15 @@ class TestDesignSkillValidators(unittest.TestCase):
         result = design.validate_adr_content(adr_one_option, "ADR-0001.md")
         self.assertFalse(result.passed)
         error_rules = [e.rule_id for e in result.errors]
-        self.assertIn("DES-ADR-009", error_rules)  # Missing Option B
+        self.assertIn("DES-ADR-009", error_rules)  # Missing Option B without uncontested tag
+
+    def test_adr_validation_uncontested_single_option(self):
+        adr_uncontested = VALID_CANONICAL_ADR.replace(
+            "### Option A: Synchronous Two-Phase Commit across Postgres shards\n- **Pros**: Strong immediate consistency\n- **Cons**: High latency, brittle availability\n\n### Option B: Transactional Outbox with Redis Streams Partitioning *(Chosen)*\n- **Pros**: High throughput, isolated failure domains\n- **Cons**: Requires consumer deduplication and eventual consistency",
+            "### Option A: Transactional Outbox *(Chosen - Uncontested)*\n- **Pros**: Standard library approach\n- **Cons**: None",
+        )
+        result = design.validate_adr_content(adr_uncontested, "ADR-0001.md")
+        self.assertTrue(result.passed, f"Expected pass for uncontested option, got: {[e.message for e in result.errors]}")
 
     def test_adr_validation_missing_verification_criteria(self):
         adr_no_criteria = VALID_CANONICAL_ADR.replace("## 6. Downstream Verification Criteria (For review)\n- [ ] Concurrency stress test verifies zero double-orders under 50 concurrent requests.\n- [ ] Outbox publisher retries with jitter on broker disconnection.\n- [ ] Database migration runs without acquiring exclusive table lock.", "")

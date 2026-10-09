@@ -26,6 +26,13 @@ REDUNDANT_DEPENDENCIES: Dict[str, str] = {
     "mkdirp": "Use fs.promises.mkdir(dir, { recursive: true })",
     "node-fetch": "Use native global fetch()",
     "pytz": "Use standard library zoneinfo.ZoneInfo (Python 3.9+)",
+    "mock": "Use standard library unittest.mock (Python 3.3+)",
+    "six": "Remove dead Python 2 compatibility layer",
+    "simplejson": "Use standard library json",
+    "pathlib2": "Use standard library pathlib (Python 3.4+)",
+    "axios": "Use native global fetch() in Node 18+ or standard library",
+    "dotenv": "Use Node 20+ native flag (--env-file=.env) or standard library os.environ",
+    "chalk": "Use native ANSI escape codes or Node util.styleText()",
 }
 
 

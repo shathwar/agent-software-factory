@@ -7,11 +7,19 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "skills/evals/scripts"))
 sys.path.insert(0, str(ROOT / "tests/evaluation"))
 
-import sample_traces
-import score_calibration
+try:
+    import score_calibration
+except (ImportError, PermissionError):
+    from ship.tools import evals as score_calibration
+
+try:
+    import sample_traces
+except (ImportError, PermissionError):
+    from ship.tools import sample_traces
 from evaluate_evals_rubric import EvalsRubricEvaluator
 
 
@@ -231,6 +239,33 @@ class EvalsSkillTests(unittest.TestCase):
         report_bad = evaluator.evaluate_eval_suite(flawed_spec)
         self.assertFalse(report_bad.passed)
         self.assertLess(report_bad.overall_score, 0.50)
+
+    def test_pydantic_judge_template(self):
+        """Test that the 1-click Pydantic judge template is present and contains required fields."""
+        tmpl = score_calibration.PYDANTIC_JUDGE_TEMPLATE
+        self.assertIn("class JudgeVerdict(BaseModel):", tmpl)
+        self.assertIn("reasoning: str", tmpl)
+        self.assertIn("passed: bool", tmpl)
+        self.assertIn("gpt-4o-2024-08-06", tmpl)
+
+    def test_infer_p_obs_calculation(self):
+        """Test that infer_p_obs automatically calculates sample pass rate when p_obs is None."""
+        pairs = [("Pass", "Pass")] * 8 + [("Fail", "Fail")] * 2
+        # Evaluator judged 8 passes out of 10 -> 80% pass rate
+        res = score_calibration.evaluate_calibration(pairs, p_obs=None, infer_p_obs=True, n_bootstrap=100)
+        self.assertIn("bias_correction", res)
+        bc = res["bias_correction"]
+        self.assertTrue(bc["inferred"])
+        self.assertAlmostEqual(bc["p_obs"], 0.80)
+        self.assertIsNotNone(bc["corrected_rate"])
+
+    def test_micro_tier_split_isolation(self):
+        """Test 2-way split verification for micro tier (<50 traces)."""
+        few_shots = ["seed_trace_1", "seed_trace_2", "seed_trace_3"]
+        held_out_test = ["test_trace_1", "test_trace_2", "test_trace_3", "test_trace_4"]
+        passed, errors = score_calibration.verify_split_isolation(few_shots, held_out_test)
+        self.assertTrue(passed)
+        self.assertEqual(len(errors), 0)
 
 
 if __name__ == "__main__":

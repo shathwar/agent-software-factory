@@ -16,8 +16,9 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 
 <hard_constraints>
 - Prime Directive (UX ≠ Styling): NEVER treat UX requests as cosmetic CSS makeovers. You MUST establish user intent, flow, system states, accessibility contracts, error recovery, and interaction behavior before visual implementation.
+- Tiered Scope Fast-Path: For micro UI fixes and targeted component adjustments (<50 lines diff or isolated component edits), bypass Phase 1 Flow Grilling and Phase 2 State Matrix markdown authoring. Directly implement accessible production code (native semantic elements, :focus-visible rings, 6-state resilience) and verify with `audit_ux.py` inline. Reserve the full 3-phase lifecycle for multi-screen, multi-journey features.
 - Safety Boundary Enforcement: Commands marked READ-ONLY / ANALYSE (`/ux audit`) MUST NEVER create or modify files. `/ux spec` may author specification docs (`docs/specs/`, `docs/ux/`). Only `/ux component` and full lifecycle runs may mutate source code.
-- Autopilot Execution Mode (`--autopilot`): When `/ux <feature> --autopilot` is invoked, execute all 3 phases sequentially without stopping for user interaction. Autonomously adopt recommended stances for flow grilling, compile the 6-state spec, generate the production component, and verify via `audit_ux.py`. When `--autopilot` is omitted, require explicit user confirmation checkpoints between phases.
+- Autopilot Execution Mode (`--autopilot`) & Single-Handoff Gate: When `/ux <feature> --autopilot` is invoked, execute all 3 phases sequentially without stopping for user interaction. When `--autopilot` is omitted, require explicit user confirmation checkpoints between phases. If the user confirms with "LGTM", "Proceed", or "Accept all", immediately advance to the next phase without conversational preamble.
 - State Completeness Law: Every component MUST define all applicable states for its interaction model:
   • Views & Organisms: Empty, Loading, Populated, Partial/Stale, Error/Recovery, Unavailable/Forbidden.
   • Controls & Atoms: Default, Hover, Focus-visible, Pressed/Active, Disabled, Busy/Loading.
@@ -130,6 +131,12 @@ Phase 3: Component Generation (Production-Grade Accessible Code) Auto-advance)
 - **Safety**: Mutates frontend production source code.
 - **Stack & Convention Fidelity**: Autonomously inspect `package.json` and styles to generate idiomatic code matching the project's framework (React, Vue, Svelte, Web Components) and styling system (CSS tokens, Tailwind, CSS-in-JS).
 - **Code Implementation**: Write production-quality component code implementing all specified states, semantic elements, and `:focus-visible` rings.
+- **Universal Accessible Component Blueprints**:
+  Run `python3 "$SKILLS_DIR/ux/scripts/audit_ux.py" --template` for ready-to-paste blueprints:
+  - Accessible Button with focus ring & loading state (`<button type="button" aria-busy="false" className="focus-visible:ring-2 ...">`)
+  - Accessible Icon-Only Button (`<button type="button" aria-label="Action"><svg aria-hidden="true" /><span className="sr-only">Action</span></button>`)
+  - Accessible Form Field with Associated Label & Recovery (`<label htmlFor="id">...</label><input id="id" aria-invalid="true" aria-describedby="err-id" />`)
+  - Accessible Modal Dialog with ESC trap (`<dialog aria-labelledby="dialog-title" onKeyDown={(e) => e.key === "Escape" && onClose()}>`)
 - **Automated Verification**: Run static audit tool and paste receipt:
   ```bash
   python3 "$SKILLS_DIR/ux/scripts/audit_ux.py" src/components/ --fail-on error

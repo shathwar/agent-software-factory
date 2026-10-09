@@ -526,6 +526,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--timeout", type=float, default=60.0, help="Timeout per iteration in seconds (default: 60.0)")
     parser.add_argument("--audit-report", help="Path to Spike Report markdown file to validate")
     parser.add_argument("--audit-paths", nargs="*", help="File paths to audit for prototype sandbox isolation")
+    parser.add_argument("--probe", action="store_true", help="Run single-shot behavioral probe (checks single execution exit code and duration)")
+    parser.add_argument("--cleanup", type=Path, help="Directory to clean up (.scratch/<spike-name>) upon passing result")
     parser.add_argument("--json", action="store_true", help="Output results in JSON format")
 
     args = parser.parse_args(argv)
@@ -565,6 +567,33 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     cwd = Path(args.cwd).resolve() if args.cwd else None
 
+    # 3. Behavioral Probe Mode (Archetype 1)
+    if args.probe:
+        elapsed_ms, success = run_single_iteration(args.cmd, cwd=cwd, timeout_sec=args.timeout)
+        if args.cleanup and success and args.cleanup.exists():
+            import shutil
+            shutil.rmtree(args.cleanup, ignore_errors=True)
+
+        if args.json:
+            out = {
+                "probe": True,
+                "passed": success,
+                "elapsed_ms": elapsed_ms,
+                "cmd": args.cmd,
+            }
+            print(json.dumps(out, indent=2))
+            return 0 if success else 1
+
+        print(f"\n🧪 Behavioral Probe: {'PASSED' if success else 'FAILED'} ({elapsed_ms:.1f}ms)")
+        print(f"Command: {args.cmd}")
+        if success:
+            print("✅ Verdict: Pass. Probe succeeded.")
+            return 0
+        else:
+            print("❌ Verdict: Fail. Probe exited with failure or timed out.")
+            return 1
+
+    # 4. Benchmark Mode (Archetype 2)
     metrics = run_benchmark(
         cmd=args.cmd,
         iterations=args.iterations,
@@ -575,8 +604,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         timeout_sec=args.timeout
     )
 
+    table_str, passed = format_markdown_table(metrics, args.expected_p99, args.expected_rps, args.expected_err)
+
+    if args.cleanup and passed and args.cleanup.exists():
+        import shutil
+        shutil.rmtree(args.cleanup, ignore_errors=True)
+
     if args.json:
-        table_str, passed = format_markdown_table(metrics, args.expected_p99, args.expected_rps, args.expected_err)
         out = {
             "metrics": asdict(metrics),
             "passed": passed,
@@ -585,7 +619,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(out, indent=2))
         return 0 if passed else 1
 
-    table_str, passed = format_markdown_table(metrics, args.expected_p99, args.expected_rps, args.expected_err)
     print("")
     print(table_str)
     print("")

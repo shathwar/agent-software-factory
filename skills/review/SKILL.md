@@ -18,7 +18,9 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 - Evidence Requirement: Plausible failures remain hypotheses until concrete code trigger and impact are proven.
 - Judge Adjudication: NEVER return unadjudicated reviewer candidates. ALL reported findings must pass Judge validation.
 - Schema Compliance: ALL reported findings MUST strictly adhere to the 12-field finding schema.
-- Repair Ceiling: In `review-loop`, NEVER exceed 3 repair iterations. Halt immediately on unexpected test regressions.
+- Zero Linter Nits: NEVER report formatting, indentation, import ordering, or cosmetic style issues. Defer formatting strictly to automated tools (ruff, eslint, prettier). Focus 100% on correctness, concurrency, data invariants, and resilience.
+- Zero Manufactured Findings: A clean review ("READY TO DEPLOY" with green test receipts) is a valid, gold-standard outcome. NEVER invent speculative nitpicks.
+- Repair Ceiling & Fast-Path: In `review-loop`, NEVER exceed 3 repair iterations. For `autonomous` findings with concrete code fixes, apply the fix directly, verify tests stay green, and record `FOLDED <sha>` immediately.
 </hard_constraints>
 
 <turn_contract>
@@ -85,6 +87,9 @@ Review every active stage. Higher stages prioritise impact, not block later chec
 ### Plain-Language Directives
 - **Direct & Concrete**: State trigger, consequence, and smallest useful fix. No corporate fluff or filler.
 - **Keep Multi-Agent Invisible**: Keep agent handoffs, voting, and internal JSON invisible in reports.
+- **Tiered Scorecard**:
+  - *Small / Targeted Diffs (<100 lines)*: Output a compact scorecard including only the stages that are relevant or have findings, plus the Executive Summary and Test Receipts.
+  - *Full / Architectural Diffs (>100 lines or `/review full`)*: Output the full 11-stage matrix.
 - **Frontier Clarification Protocol**: If user decisions are required (`requires-human` findings or trade-offs), batch into a Decision Round:
   ```markdown
   ❓ **Q1** - **<Decision Title>**: <Context and tradeoffs>
@@ -101,7 +106,7 @@ Review every active stage. Higher stages prioritise impact, not block later chec
 - **Targeted Review Mode**: [e.g. Standard Code Change / Full Adversarial Review]
 - **Summary**: Concise assessment of changes, architecture, and operational risk.
 
-## Review Scorecard
+## Review Scorecard *(Compact for small diffs, full 11-stage for architectural changes)*
 | Stage / Area | Status | Principal Engineer Assessment |
 |---|---|---|
 | 0. **Spec Alignment** | [PASS / WARN / FAIL / SKIPPED] | Concrete observation |

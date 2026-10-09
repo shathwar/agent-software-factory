@@ -48,6 +48,83 @@ DEFAULT_ALLOWED_ARBITRARY = {
     "full", "fit-content", "min-content", "max-content", "screen",
 }
 
+ACCESSIBLE_PRIMITIVES_TEMPLATE = '''<!-- Universal Accessible Component Blueprints -->
+
+<!-- 1. Accessible Button with Focus Ring, Busy State, and Keyboard Handling -->
+<button
+  type="button"
+  disabled={isLoading || isDisabled}
+  aria-busy={isLoading}
+  className="inline-flex items-center justify-center px-4 py-2 font-medium rounded-md
+             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-600
+             disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+  onClick={handleClick}
+>
+  {isLoading ? (
+    <>
+      <svg className="animate-spin -ml-1 mr-2 h-4 w-4" aria-hidden="true" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+      </svg>
+      <span>Loading...</span>
+    </>
+  ) : (
+    children
+  )}
+</button>
+
+<!-- 2. Accessible Icon-Only Button -->
+<button
+  type="button"
+  aria-label="Close dialog"
+  className="p-2 rounded-full hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+  onClick={onClose}
+>
+  <svg aria-hidden="true" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+  </svg>
+  <span className="sr-only">Close</span>
+</button>
+
+<!-- 3. Accessible Form Field with Associated Label and Error Recovery -->
+<div className="flex flex-col gap-1.5">
+  <label htmlFor="user-email" className="text-sm font-medium text-gray-900">
+    Email address <span aria-hidden="true" className="text-red-600">*</span>
+  </label>
+  <input
+    id="user-email"
+    name="email"
+    type="email"
+    required
+    aria-invalid={Boolean(errorMessage)}
+    aria-describedby={errorMessage ? "email-error" : undefined}
+    className="px-3 py-2 border rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+  />
+  {errorMessage && (
+    <p id="email-error" role="alert" className="text-sm text-red-600 flex items-center gap-1">
+      <span>{errorMessage}</span>
+      <button type="button" onClick={onRetry} className="underline font-medium ml-1">Retry</button>
+    </p>
+  )}
+</div>
+
+<!-- 4. Accessible Modal Dialog with Trapped Focus & ESC Dismissal -->
+<dialog
+  ref={dialogRef}
+  aria-labelledby="dialog-title"
+  aria-describedby="dialog-desc"
+  className="p-6 rounded-lg shadow-xl backdrop:bg-black/50"
+  onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+>
+  <h2 id="dialog-title" className="text-lg font-bold">Dialog Title</h2>
+  <p id="dialog-desc" className="mt-2 text-sm text-gray-600">Dialog description body text.</p>
+  <div className="mt-4 flex justify-end gap-2">
+    <button type="button" onClick={onClose} className="px-4 py-2">Cancel</button>
+    <button type="button" onClick={onConfirm} className="px-4 py-2 bg-blue-600 text-white rounded">Confirm</button>
+  </div>
+</dialog>
+'''
+
 # Regex Patterns
 CLICK_HANDLER_PATTERN = re.compile(
     r"""<(div|span|p|section|article)\b([^>]*?)(?:onClick|@click|v-on:click|onclick)=([^>]*?)>""",
@@ -449,12 +526,21 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Quiet mode: suppress human-readable progress banners.",
     )
+    parser.add_argument(
+        "--template",
+        action="store_true",
+        help="Print universal accessible component blueprints (buttons, modals, form inputs) and exit.",
+    )
     return parser
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.template:
+        print(ACCESSIBLE_PRIMITIVES_TEMPLATE)
+        return 0
 
     fail_level_str = "warning" if args.strict else args.fail_on
     fail_threshold = SEVERITY_LEVELS.get(fail_level_str.upper(), 3)

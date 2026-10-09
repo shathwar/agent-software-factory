@@ -17,6 +17,8 @@ For script commands in the references, resolve `SKILLS_DIR` to the absolute pare
 - Facts vs. Decisions Law: NEVER ask questions answerable from code, schemas, or configs. Inspect autonomously.
 - Frontier Batching: NEVER drip questions one-by-one. Batch entire frontier into a single numbered round.
 - Recommended Stance: EVERY question MUST provide a concrete `➡️ Recommended Stance`.
+- Lazy Ergonomics: ALWAYS allow single-phrase confirmation ("LGTM", "Accept all", or "1") to adopt all recommended stances in a round without friction.
+- Tiered Ceremony: Scale ceremony to change size. Small/targeted changes (Tier 1: bugfix, local refactor, single-component enhancement) require at most 1 round and permit single uncontested options. Multi-system/high-risk architectural changes (Tier 2) execute full frontier grilling.
 - Ungrillable Questions: NEVER speculate on empirical limits. Spin off an isolated spike via `spike`.
 - Confirmation Gate: NEVER compile final ADR/OpenSpec until the user explicitly confirms the design frontier.
 </hard_constraints>
@@ -46,6 +48,11 @@ Verify before ending the turn:
 - Empirical questions (latency, throughput limits, UX feel) cannot be settled by debate.
 - Pause grilling on that branch. Run a timeboxed spike using [`spike`](../spike/SKILL.md) in `.scratch/`. Resume when measured data returns.
 
+### Principle 4: Tiered Ceremony & Senior Lazy Ergonomics
+- **Tier 1 (Targeted / Low-Risk)**: 1 batched round max (or proceed directly to spec if unambiguous). Permits single uncontested option in ADR.
+- **Tier 2 (Architectural / High-Risk)**: Full frontier tree exploration across the 5 systems domains.
+- **Lazy 1-Click Confirmation**: Never force the user to type lengthy responses. Always enable `LGTM` or `Accept all` to take all recommended stances.
+
 ---
 
 ## 2. Interview Execution Flow
@@ -60,8 +67,10 @@ User Proposal ➔ 1. Fact Discovery (Autonomous) ➔ 2. Frontier Rounds ➔ 3. C
 
 ❓ **Q1** - **<Decision Title>**: <Context, options, and trade-offs>
 ➡️ **Recommended Stance**: <Principal Architect recommendation with concrete rationale>
+
+👉 *Quick reply: Send "LGTM" or "Accept all" to accept all recommended stances, or specify numbers (e.g. `1: Option B`).*
 ```
-Allows rapid user response by number (e.g. `1: Recommended stance, 2: Option B`).
+Allows rapid user response by number or instant one-word approval.
 
 ---
 

@@ -28,12 +28,20 @@ In plain terms:
 ### Why Rounds?
 1. **Low Cognitive Switching**: One-by-one interrogation creates a high-friction ping-pong dynamic. Asking 20 disconnected questions at once creates overwhelming cognitive overload.
 2. **Optimal Density**: A typical well-run session resolves 25–40 questions across 3–5 rounds.
-3. **Number-based Responses**: Because each question in a round is numbered and carries a recommended stance, the user can review the frontier in parallel and answer succinctly:
+3. **Number-based or Instant Single-Word Responses**: Because each question in a round is numbered and carries a recommended stance, the user can review the frontier in parallel and answer succinctly:
    ```text
+   # Full approval in 1 second:
+   LGTM
+   # Or "Accept all"
+
+   # Or targeted overrides:
    1. Recommended stance.
    2. Option B (we must avoid Kafka due to operational complexity).
    3. No, keep it synchronous with a 2-second timeout.
    ```
+4. **Tiered Ceremony**: Not every change warrants 3–5 rounds.
+   - **Tier 1 (Targeted / Low-Risk)**: 1 batched round max (or proceed directly if uncontested). Allows single uncontested options in ADRs.
+   - **Tier 2 (Architectural / High-Risk)**: Full frontier tree exploration across the 5 systems domains.
 
 ### Structuring a Round
 Every question in a round must include:

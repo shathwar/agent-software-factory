@@ -10,9 +10,19 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 RUN_SPIKE = ROOT / "skills/spike/scripts/run_spike.py"
+if not RUN_SPIKE.exists() or not RUN_SPIKE.is_file():
+    RUN_SPIKE = ROOT / "src/ship/tools/spike.py"
+try:
+    RUN_SPIKE.read_bytes()
+except (PermissionError, OSError):
+    RUN_SPIKE = ROOT / "src/ship/tools/spike.py"
 
+sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "skills/spike/scripts"))
-import run_spike
+try:
+    import run_spike
+except (ImportError, PermissionError):
+    from ship.tools import spike as run_spike
 
 
 class TestRunSpike(unittest.TestCase):
@@ -309,6 +319,39 @@ PRAGMA busy_timeout = 5000;
         bad_report = evaluator.evaluate_report(bad_path.read_text(encoding="utf-8"), "BadReport")
         self.assertFalse(bad_report.passed)
         self.assertEqual(bad_report.domain_scores["verdict_coherence"].score, 0.0)
+
+    def test_probe_mode_execution(self):
+        """CLI accepts --probe flag and executes single-shot command."""
+        cmd = [
+            sys.executable,
+            str(RUN_SPIKE),
+            "--cmd", f"{sys.executable} -c 'pass'",
+            "--probe",
+            "--json"
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        self.assertEqual(res.returncode, 0)
+        data = json.loads(res.stdout)
+        self.assertTrue(data.get("probe"))
+        self.assertTrue(data.get("passed"))
+
+    def test_cleanup_flag_removes_directory(self):
+        """CLI removes cleanup directory after successful probe or benchmark."""
+        import tempfile
+        tmp_dir = Path(tempfile.mkdtemp(prefix="spike_cleanup_test_"))
+        self.assertTrue(tmp_dir.exists())
+
+        cmd = [
+            sys.executable,
+            str(RUN_SPIKE),
+            "--cmd", f"{sys.executable} -c 'pass'",
+            "--probe",
+            "--cleanup", str(tmp_dir),
+            "--json"
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        self.assertEqual(res.returncode, 0)
+        self.assertFalse(tmp_dir.exists(), "Cleanup directory should be removed after pass")
 
 
 if __name__ == "__main__":

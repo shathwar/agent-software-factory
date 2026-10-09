@@ -5,10 +5,14 @@ import sys
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "skills/debug/scripts"))
 sys.path.insert(0, str(ROOT / "tests/evaluation"))
 
-import verify_fix
+try:
+    import verify_fix
+except (ImportError, PermissionError):
+    from ship.tools import debug as verify_fix
 from evaluate_debug_rubric import DebugRubricEvaluator
 
 
@@ -170,6 +174,25 @@ diff --git a/tests/test_service.py b/tests/test_service.py
         result = verify_fix.audit_diff(diff)
         self.assertFalse(result.passed)
         self.assertTrue(any("Defensive null guard" in v for v in result.violations))
+
+    def test_audit_diff_defensive_null_guard_with_comment(self):
+        """Null guard tagged with # root-cause-guard is exempted from symptom masking violation."""
+        diff = """diff --git a/src/service.py b/src/service.py
+--- a/src/service.py
++++ b/src/service.py
+@@ -10,1 +10,2 @@
++    if item is None: return None  # root-cause-guard
+     return item.price
+diff --git a/tests/test_service.py b/tests/test_service.py
+--- a/tests/test_service.py
++++ b/tests/test_service.py
+@@ -1,1 +1,2 @@
++def test_service():
++    assert service(None) is None
+"""
+        result = verify_fix.audit_diff(diff)
+        self.assertTrue(result.passed)
+        self.assertEqual(len(result.violations), 0)
 
     def test_fixtures(self):
         """Test verification against all 4 adversarial fixtures."""

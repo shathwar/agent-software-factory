@@ -7,16 +7,16 @@
     "Correlated step start/result recording is available through AgentFlow, but capture is caller-reported and requires runtime use; expected evidence is not independently verified."
   ],
   "source_digests": {
-    "skills/design/SKILL.md": "84caa191369efc09e08091ea2e783decb13468e341e34da57819b8db3a477a48",
-    "skills/spike/SKILL.md": "2ed000064413f6558808da5724658c0a38e609834ac2abadfeba287340c0cec2",
-    "skills/tdd/SKILL.md": "a4c2802078b8251c8ddc1725e6feb305c1d75d28bccd90abebd5d47d9fc42d50",
-    "skills/simplify/SKILL.md": "9e7a06852b80872a83c68d5ee8d7c23f057fafb6dea42acaa07085cf9b11ecf4",
-    "skills/review/SKILL.md": "b2283333eacc6d81c501d3688b24929c7080c5dfaa8f18104073d00318cf6099",
+    "skills/design/SKILL.md": "f34d8d3e67a54097ab58263bd61eb870a84a13eaf512c65836afad5e19deb78b",
+    "skills/spike/SKILL.md": "96442849acec0cf3ed1d74a065a5fe46f12f8a2a68df10d3856caf50677b88e1",
+    "skills/tdd/SKILL.md": "0029b148966c49e2702bab2acfaed143cf613af3825f4be3664d678497d6402f",
+    "skills/simplify/SKILL.md": "22b6401efc7ef1bd242acf5fca97ac4ac6e5169e7077bf1c1a28c59e11f4b69c",
+    "skills/review/SKILL.md": "18af2bcff523afbfe72a585a8e1669ed224f410f465b3fedde120a3f7a2c7a40",
     "skills/review/references/review_pipeline.md": "67299c5862bb8a50b2f8d0d5e1021aee7b8fc41e6fc10b628f9a46d9df8ac1d2",
-    "skills/debug/SKILL.md": "634cefcd8ff3f0ec18e947b668a8c711a61eebf72185567a7ef35eb920c7471c",
-    "skills/evals/SKILL.md": "93a4bc3321f57bb1cf7302b0987ffcb9f27fb991ded17f4467624e9e2c773afa",
-    "skills/ux/SKILL.md": "360df1caa1807a0a6ea47c687d0204698004cd844effe9daf01378a4b3308241",
-    "skills/ship/SKILL.md": "06ae4a8184d9bf40d606f6f98159efa8a22f26d65a0ada7fbc135fd558e8f95c"
+    "skills/debug/SKILL.md": "c6b126b46990536900072753a5f05dcb6ad2b1d09ae9f8b57addbffd79f2c395",
+    "skills/evals/SKILL.md": "ac0ad2b1bf2d027b54004c74d407849a5eb26072d40c98840c10b8ffae7fe34c",
+    "skills/ux/SKILL.md": "8e11d776906ef088e10e5a00c33e6d61d5a8cce9c8cd11fccb03d8ad546e1574",
+    "skills/ship/SKILL.md": "ab10277b34abef06463fda691a3a498b3bd1454c8bd0ce7eeeaf059fdedfa25f"
   },
   "validators": {
     "turn": {

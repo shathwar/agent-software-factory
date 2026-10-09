@@ -15,10 +15,11 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 
 <hard_constraints>
 - Iron Law of Test-First: Writing new business logic without a failing test is FORBIDDEN. If writing autonomous code first: STOP, write test first.
+- Targeted Test Execution: During Red and Green micro-cycles, execute ONLY the targeted test file or test case using fail-fast/short traceback flags (e.g. `pytest -k <test> -q --tb=short`, `vitest run -t <test>`, `go test -run <test>`). NEVER run the full project test suite during micro-cycles. Reserve the full suite for Refactor phase or task completion.
 - Respect Existing & User Work: NEVER unilaterally delete or revert code written by the user. When onboarding to in-flight work or legacy codebases, wrap existing code in characterization tests first.
 - Dual-Speed Testing Rule: Use in-memory fakes for pure domain logic (Tier 1), but mandate ephemeral databases (SQLite, Testcontainers, local containers) for persistence/query logic (Tier 2). NEVER mock SQL clients or database engines.
-- Justified Exceptions: Pure configuration, documentation, rapid UI layout iterations, and throwaway prototype spikes are exempt from test-first execution.
-- Terminal Receipts: In Red phase, you MUST paste the terminal failure snippet showing the `AssertionError`. In Green phase, you MUST paste the runner summary showing passing tests. Use `verify_tdd.py --trim-receipt` to keep receipts compact.
+- Justified Exceptions & Anti-Tautology: Pure configuration, documentation, rapid UI layout iterations, throwaway prototype spikes, and pure declarative types/enums/DTOs are exempt from 1:1 unit test generation. NEVER write tautological tests that merely re-assert language syntax, enum values, or dataclass attributes without domain logic.
+- Terminal Receipts: In Red phase, you MUST paste the terminal failure snippet showing the `AssertionError`. In Green phase, you MUST paste the runner summary showing passing tests. Use `verify_tdd.py --trim-receipt` or `-q --tb=short` to keep receipts compact.
 - Minimum Viable Green: Write ONLY the bare minimum code needed to satisfy the assertion. Speculative code is prohibited.
 - Behavior Over Mocks: Assert on observable inputs, outputs, and state transitions. Never mock internal units or assert on private methods.
 </hard_constraints>
@@ -73,8 +74,8 @@ When adding features or fixing bugs in existing un-tested legacy backend codebas
 
 To prevent token exhaustion and turn latency, choose the appropriate execution model:
 
-- **Inline Micro-Cycle** *(Default for tasks < 150 lines)*: The primary agent executes Red ➔ Green ➔ Refactor directly in a single turn. No subagent dispatch overhead.
-- **Multi-Agent Roster** *(For major architectural features or complex isolation)*:
+- **Inline Micro-Cycle** *(Default for 95% of tasks)*: The primary agent executes Red ➔ Green ➔ Refactor directly in a single turn. Zero subagent dispatch overhead.
+- **Multi-Agent Roster** *(Specialized exception for multi-team or massive architectural migrations)*:
 
 ```text
 Specification ➔ 🔴 RED (test_driver) ➔ 🟢 GREEN (simplify_implementer) ➔ 🔵 REFACTOR (code_refactorer)
@@ -91,10 +92,10 @@ Specification ➔ 🔴 RED (test_driver) ➔ 🟢 GREEN (simplify_implementer) �
 ## 5. Step-by-Step Execution Protocol
 
 1. **Pick Atomic Requirement**: Take next unchecked task from `tasks.md` or next acceptance scenario (`WHEN / THEN`).
-2. **🔴 Phase 1 (Red)**: Write single isolated test using Arrange-Act-Assert. Run test runner. Confirm failure with failure trace.
-3. **🟢 Phase 2 (Green)**: Write minimum production code to satisfy test. Run test runner. Confirm green.
+2. **🔴 Phase 1 (Red)**: Write single isolated test using Arrange-Act-Assert. Run **targeted test runner** (e.g. `pytest -k <test> -q --tb=short`). Confirm failure with failure trace.
+3. **🟢 Phase 2 (Green)**: Write minimum production code to satisfy test. Run **targeted test runner**. Confirm green.
 4. **🧐 Phase 3 (Doubt Check)**: For non-trivial logic (branching, concurrency, boundary crossing, data mutation), run the [In-Flight Doubt Cycle](./references/doubt_cycle.md). Isolate diff + contract, strip reasoning, and probe for unstated assumptions or unhandled edge cases. Convert any discovered gaps into failing tests before advancing.
-5. **🔵 Phase 4 (Refactor)**: Remove duplication, improve naming. Verify tests remain 100% green.
+5. **🔵 Phase 4 (Refactor)**: Remove duplication, improve naming. Verify tests remain 100% green. Run full test suite before checking off task.
 6. **Advance**: Check off task `- [x]` in `tasks.md`.
 
 ---
@@ -124,6 +125,8 @@ python3 "$SKILLS_DIR/tdd/scripts/verify_tdd.py" --trim-receipt test_run.log
 | **Giant Leap** | Writing 5 tests or 200 lines of code at once. | Micro-steps. One test for simplest case first. |
 | **Whitebox Spy** | Asserting private method was called with exact args. | Assert public outcome. Keep internals free to change. |
 | **Assertless Test** | Running code without assertions ("didn't throw"). | Assert explicit return values or state mutations. |
+| **Tautological Test** | Testing language syntax or dataclass field existence. | Test behavioral contracts and business invariants; skip pure types. |
+| **Full-Suite Micro-Spam** | Running entire project suite on every 5-line edit. | Target specific test (`-k` / `-t` / `-run`) during Red/Green. |
 
 ---
 

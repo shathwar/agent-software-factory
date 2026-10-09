@@ -16,9 +16,10 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 <hard_constraints>
 - Local Preflight: On first use in a project or after an upgrade, run the installed inspector with `--doctor`. If the default Python is unsupported, select an available Python 3.10+ interpreter and use it consistently. Do not claim a successful preflight when checks fail.
 - Re-Entrant State: Inspect filesystem state (`inspect_lifecycle.py`) first. Resume cleanly; never re-run finished gates.
+- Express Ship Profile: For small, focused bugfixes or targeted enhancements (<50 lines diff), execute the streamlined flow: single-pass design (uncontested `tasks.md`), 1 targeted TDD cycle, compact review, and delivery. Scale ceremony to risk.
 - Harness Independence: The workflow does NOT depend on recursive subagents. Specialist activities execute as independent agent turns orchestrated by the workflow controller, supporting sequential execution or parallel passes where supported. Subagents are an optional optimization, never a core dependency. Disclose the execution mode honestly.
 - Git Restrictions: Checkpoints and Git notes create internal commit objects. Respect explicit no-Git-mutation restrictions; use local evidence and disclose skipped checkpoint/note capabilities as described in [team rollout](./references/team_rollout.md#git-mutation-restrictions).
-- Design Checkpoint: Record `inspect_lifecycle.py --checkpoint design`. NEVER proceed to implementation without explicit user confirmation of the ADR/OpenSpec package.
+- Design Checkpoint & Single-Handoff: Record `inspect_lifecycle.py --checkpoint design`. NEVER proceed to implementation without explicit user confirmation of the ADR/OpenSpec package. Upon confirmation (`"Proceed"` or `"LGTM"`), record approval and immediately execute Task 1 in that exact turn.
 - Test-First Law: In implementation, every task MUST follow strict Red-Green-Refactor with failing behavioral tests before code. Enforce `.agentflow.json` test commands when present.
 - Terminal Receipts: Gate transitions (implementation ➔ review and review ➔ delivery) REQUIRE pasting the raw terminal test runner output (exit code, test count, duration). Unsubstantiated claims of "tests pass" are rejected.
 - Replan Guard: If review detects a broken architectural invariant, preserve the working tree and return to design. Whole-checkout rollback is operator-authorized recovery, not an automatic review action; see [recovery boundaries](./references/headless_ci_guide.md#recovery-boundaries).
@@ -96,10 +97,11 @@ Read `workflow.profile` and `workflow.execution` from inspection output. Apply t
 4. Compile `docs/adr/ADR-<NNNN>-<change>.md` and `openspec/changes/<change>/`.
 5. Checkpoint specification: `python3 "$SKILLS_DIR/ship/scripts/inspect_lifecycle.py" --checkpoint design`.
 6. Capture the design digest before presenting the package for confirmation. After explicit authorization, record that same digest and the approver identity using [design approval receipts](./references/lifecycle_state_machine.md#local-workflow-and-design-approval). Explicit approval in the current conversation is sufficient; record it without asking again. Use the known session identity or `session-user`, and apply authorization only to the reviewed design. A checkpoint alone is not approval.
+7. **Single-Handoff Transition**: Present confirmation call-to-action: *"Reply 'Proceed' or 'LGTM' to approve specification and start implementation."* When the user confirms, record approval and immediately execute Task 1 in that exact turn.
 
 ### Implementation: Test-First Development
-Iterate sequentially through `openspec/changes/<change>/tasks.md`:
-1. **Red**: [Test Driver](../tdd/agents/test_driver.md) writes failing behavioral test; prove assertion failure.
+Iterate sequentially through `openspec/changes/<change>/tasks.md` using single-agent Inline Micro-Cycles:
+1. **Red**: [Test Driver](../tdd/agents/test_driver.md) writes failing behavioral test; prove assertion failure with targeted runner (`pytest -k <test> -q --tb=short`).
 2. **Green**: [Simplify Implementer](../tdd/agents/simplify_implementer.md) writes minimal code using [Laziness Ladder](../simplify/SKILL.md) and custom test commands defined in `.agentflow.json`.
 3. **Refactor**: [Code Refactorer](../tdd/agents/code_refactorer.md) cleans code; adds [debt markers](../simplify/references/debt_tracking.md) with ceilings.
 4. Mark task completed `- [x]` and repeat.

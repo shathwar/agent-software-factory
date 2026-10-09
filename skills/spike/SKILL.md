@@ -15,12 +15,15 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 
 <hard_constraints>
 - Sandbox Isolation: NEVER write prototype code in production paths (`src/`, `lib/`, `app/`). Work strictly in `.scratch/<spike-name>/`.
-- Falsifiable SLI: NEVER run a spike without a clear measurable hypothesis (e.g. p99 < 15ms at 5k RPS).
+- Dual Archetypes: Choose the minimal sufficient archetype:
+  • Archetype 1 (Behavioral Probe): Single-shot script (`probe.py`) to verify API capability, concurrency semantics, or failure modes. Zero statistical benchmarking overhead.
+  • Archetype 2 (Performance Benchmark): Statistical multi-run benchmark via `run_spike.py` for latency/throughput SLIs.
+- Falsifiable SLI / Hypothesis: NEVER run an open-ended spike without a clear measurable pass/fail criterion (behavioral assertion or numerical SLI like p99 < 15ms at 5k RPS).
 - Real Infrastructure Parity: For backend I/O spikes (Postgres, Redis, Kafka), use ephemeral local containers (`.scratch/<spike-name>/docker-compose.yml`) rather than synthetic in-memory fakes.
 - Measurement Scope: `run_spike.py` measures whole-command wall time, including process startup, and commands/second. For service latency or request throughput, use an in-process or load-test harness that records actual request timings and counts; retain its raw results. Never label command metrics as service SLIs.
 - Throwaway Rigor: NEVER merge scratch prototypes directly to main. Extract only architectural decisions and verified configs.
 - ADR / OpenSpec Bridge: Immediately sync the empirical verdict and SLI table into the active ADR (`docs/adr/`) or OpenSpec package.
-- Teardown Mandate: ALL ephemeral containers and processes MUST be torn down upon spike completion.
+- Teardown Mandate: ALL ephemeral containers and processes MUST be torn down upon spike completion. Use `--cleanup` to remove the scratch directory automatically.
 </hard_constraints>
 
 <turn_contract>
@@ -49,24 +52,29 @@ Verify before ending the turn:
 1. Formulate Hypothesis ➔ 2. Ephemeral Sandbox (.scratch/) ➔ 3. Automated Benchmark (run_spike.py) ➔ 4. Settle ADR
 ```
 
-1. **Hypothesis**: Define measurable threshold (e.g. *p99 latency < 10ms at 5,000 req/sec; zero deadlocks under 50 concurrent workers*).
+1. **Hypothesis**: Define measurable threshold:
+   - *Behavioral Probe*: e.g. `probe.py exits 0 and asserts streaming response is not buffered`.
+   - *Performance Benchmark*: e.g. `p99 latency < 10ms at 5,000 req/sec; zero deadlocks under 50 concurrent workers`.
 2. **Sandbox**: Create `.scratch/<spike-name>/`. If external infrastructure is required, launch local ephemeral containers via Docker Compose.
-3. **Automated Measure**: For whole-command benchmarks use the runner below. Its p99 includes process startup; warmup runs do not warm a newly launched interpreter or its connection pool. For service SLIs use the workload harness described in [measurement hygiene](./references/spike_guidelines.md#5-benchmarking--measurement-hygiene).
-   - **Tier A (Native MCP Tool)**: Call `ship_spike_run(command="python3 worker.py", iterations=1000, warmup=100, concurrency=20)`
-   - **Tier B (Packaged CLI)**:
-     ```bash
-     ship spike --cmd "python3 worker.py" --iterations 1000 --warmup 100 --concurrency 20 --expected-p99 10.0 --expected-runs-per-second 5000
-     ```
-   - **Tier C (Path Fallback)**:
-     ```bash
-     python3 "$SKILLS_DIR/spike/scripts/run_spike.py" \
-       --cmd "python3 worker.py" \
-       --iterations 1000 \
-       --warmup 100 \
-       --concurrency 20 \
-       --expected-p99 10.0 \
-       --expected-runs-per-second 5000
-     ```
+3. **Automated Measure**:
+   - **Archetype 1 (Behavioral Probe)**: Run probe script directly or via `run_spike.py --cmd "python3 probe.py" --probe --cleanup .scratch/<spike-name>`.
+   - **Archetype 2 (Performance Benchmark)**:
+     - **Tier A (Native MCP Tool)**: Call `ship_spike_run(command="python3 worker.py", iterations=1000, warmup=100, concurrency=20)`
+     - **Tier B (Packaged CLI)**:
+       ```bash
+       ship spike --cmd "python3 worker.py" --iterations 1000 --warmup 100 --concurrency 20 --expected-p99 10.0 --expected-runs-per-second 5000
+       ```
+     - **Tier C (Path Fallback)**:
+       ```bash
+       python3 "$SKILLS_DIR/spike/scripts/run_spike.py" \
+         --cmd "python3 worker.py" \
+         --iterations 1000 \
+         --warmup 100 \
+         --concurrency 20 \
+         --expected-p99 10.0 \
+         --expected-runs-per-second 5000 \
+         --cleanup .scratch/<spike-name>
+       ```
 4. **Deliver Verdict & Bridge**: Export results directly into the design ADR or OpenSpec package, clean up containers, and delete the scratch sandbox.
 
 ---
@@ -80,12 +88,12 @@ Output using this contract:
 
 ### 🎯 Empirical Question & Hypothesis
 - **Question**: <Unresolved question from design frontier>
-- **Hypothesis**: <Expected outcome with numerical threshold>
+- **Hypothesis**: <Expected outcome with numerical threshold or behavioral condition>
 
 ### 🧪 Methodology & Setup
 - **Sandbox**: `.scratch/<spike-name>/`
-- **Harness**: <Docker containers, concurrency level, warmup passes, duration>
-- **Measurement unit**: <request, transaction, or whole-command run; include startup/warmup scope and raw evidence path>
+- **Harness**: <Docker containers, concurrency level, warmup passes, or probe script>
+- **Measurement unit**: <request, transaction, whole-command run, or single-shot probe; raw evidence path>
 
 ### 📊 Empirical Results
 | Metric / Condition | Expected | Observed | Status |
@@ -94,6 +102,8 @@ Output using this contract:
 | Latency (p50) | - | 1.8ms | ℹ️ Recorded |
 | Latency (p99) | < 10ms | 4.2ms | ✅ Met |
 | Error Rate | < 0.1% | 0.0% | ✅ Met |
+
+*(Note: For behavioral probes, the table simply lists the behavioral conditions tested and ✅ Met / ❌ Breached).*
 
 ### ⚖️ Architectural Verdict
 - **Verdict**: **CONFIRMED / REFUTED / QUALIFIED**
@@ -104,6 +114,9 @@ Output using this contract:
 ```<lang>
 // Minimal verified configuration, connection pool settings, or helper
 ```
+
+### 📝 ADR Ready-to-Paste Block
+> **ADR Evidence (<Spike Name>)**: Tested via empirical <probe/benchmark>. Observed <key metric or behavior>. Verdict: **<CONFIRMED/REFUTED>**. Recommended stance adopted in ADR.
 ```
 
 ---

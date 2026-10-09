@@ -249,6 +249,27 @@ class TestAuditUX(unittest.TestCase):
         self.assertFalse(report_bad.passed)
         self.assertLess(report_bad.overall_score, 0.50)
 
+    def test_accessible_primitives_template(self):
+        """Verify universal accessible component blueprints content and structure."""
+        tmpl = ux.ACCESSIBLE_PRIMITIVES_TEMPLATE
+        self.assertIn("<button", tmpl)
+        self.assertIn("focus-visible:ring-2", tmpl)
+        self.assertIn("aria-label=\"Close dialog\"", tmpl)
+        self.assertIn("htmlFor=\"user-email\"", tmpl)
+        self.assertIn("<dialog", tmpl)
+
+    def test_template_cli_flag(self):
+        """Verify --template returns exit code 0."""
+        ret = ux.main(["--template"])
+        self.assertEqual(ret, 0)
+
+    def test_blueprints_pass_audit(self):
+        """The accessible blueprint templates themselves must pass audit with zero ERROR/CRITICAL violations."""
+        tmpl = ux.ACCESSIBLE_PRIMITIVES_TEMPLATE
+        violations = ux.audit_content(tmpl, "blueprint.tsx")
+        blocking = [v for v in violations if v.severity in ("CRITICAL", "ERROR")]
+        self.assertEqual(len(blocking), 0, f"Blueprint had blocking violations: {blocking}")
+
 
 if __name__ == "__main__":
     unittest.main()

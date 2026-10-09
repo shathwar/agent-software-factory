@@ -9,9 +9,19 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCAN_DEBT = ROOT / "skills" / "simplify" / "scripts" / "scan_debt.py"
+if not SCAN_DEBT.exists() or not SCAN_DEBT.is_file():
+    SCAN_DEBT = ROOT / "src" / "ship" / "tools" / "simplify.py"
+try:
+    SCAN_DEBT.read_bytes()
+except (PermissionError, OSError):
+    SCAN_DEBT = ROOT / "src" / "ship" / "tools" / "simplify.py"
 
+sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(SCAN_DEBT.parent))
-import scan_debt
+try:
+    import scan_debt
+except (ImportError, PermissionError):
+    from ship.tools import simplify as scan_debt
 
 
 class TestScanDebt(unittest.TestCase):
@@ -332,6 +342,17 @@ class TestScanDebt(unittest.TestCase):
         report_bad = evaluator.evaluate_code(bad_code, "BadCode")
         self.assertFalse(report_bad.passed)
         self.assertIn("Redundant 3rd-party dependency", report_bad.domain_scores["stdlib_first"].feedback[0])
+
+    def test_modern_redundant_dependencies_detected(self):
+        """Newly added redundant dependencies (axios, mock, six, etc.) are detected."""
+        findings = scan_debt.audit_code_simplicity("src/client.ts", content="import axios from 'axios';")
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0]["rule_id"], "SMP-DEP-001")
+
+        py_findings = scan_debt.audit_code_simplicity("src/test_shim.py", content="import mock\nimport six")
+        self.assertEqual(len(py_findings), 2)
+        rules = [f["rule_id"] for f in py_findings]
+        self.assertEqual(rules, ["SMP-DEP-001", "SMP-DEP-001"])
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 > **Zero Conversational Filler**: Never say "Certainly", "I'd be happy to", or provide conversational preamble. Start directly with error inspection, reproduction test execution, backward tracing, or surgical fix.
 
 <hard_constraints>
-- The Reproduction Mandate: NEVER modify production code before creating an automated reproduction test (or script) that reliably fails on current code. *Justified Exception*: For demonstrably non-deterministic bugs (heisenbugs, distributed split-brain, high-concurrency races, hardware/OS signal interrupts), multi-layer boundary logging, statistical stress scripts, or environment characterization tests may fulfill the mandate when a binary unit test is infeasible.
+- The Reproduction Mandate: NEVER modify production code before creating an automated reproduction test (or script) that reliably fails on current code. *Justified Exceptions*: (a) For demonstrably non-deterministic bugs (heisenbugs, distributed split-brain, high-concurrency races, hardware/OS signal interrupts), multi-layer boundary logging, statistical stress scripts, or environment characterization tests may fulfill the mandate when a binary unit test is infeasible. (b) For typo fixes in pure config/markdown/schema or self-verifying structural bugs (broken import, syntax error, static config value), an isolated unit test in `tests/` is exempted if verified by parser/linter/typecheck/compiler. When a function-level guard clause is genuinely at the root cause, tag with `# root-cause-guard` to satisfy the anti-masking scanner.
 - Root Cause Over Symptom: NEVER apply defensive masking (e.g. `if obj is not None:` at crash site, `except: pass`, raw fallbacks) that leaves corrupted state upstream. Fix at the origin.
 - Zero Test Weakening: NEVER loosen, delete, skip (`@pytest.mark.skip`, `xit`), or comment out existing test assertions to make the test suite pass.
 - The 2-Strike Rethink Rule: If 2 hypotheses fail at the same location, STOP. Your mental model is wrong. Discard theories, re-read the code from scratch, and form a fundamentally new hypothesis.
@@ -67,6 +67,9 @@ Bug Report / Log ➔ Phase 1: Investigate & Trace ➔ Phase 2: Pattern Analysis 
 ---
 
 ## 2. Multi-Agent Delegation Roster
+
+> [!TIP]
+> **Inline Default**: By default, execute all 4 phases inline in a single turn to eliminate delegation latency and token bloat. Only delegate to the 3-agent roster below when explicitly requested or when handling high-concurrency, cross-service distributed failures.
 
 | Role | Agent System Prompt | Mandate |
 |---|---|---|

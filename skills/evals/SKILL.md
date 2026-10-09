@@ -16,7 +16,9 @@ Set `SKILLS_DIR` to the absolute parent directory of this installed skill folder
 - Trace-First Observation: NEVER brainstorm synthetic or generic failure modes ("hallucination score", "toxicity") when traces exist. Ground all categories in observed failures from real user interactions.
 - Code-First Over Judges: Objective checks (JSON schemas, regex, tool call signatures, status codes, execution tests) MUST use deterministic code assertions. Reserve LLM judges strictly for subjective/semantic criteria.
 - Strictly Binary Judges: NEVER use Likert scales (1–5), letter grades, or floating-point quality scores for judges. Use binary Pass/Fail with explicit definitions and few-shot critiques preceding verdicts.
-- Data Split Isolation: NEVER evaluate a judge on its few-shot prompt examples. Split data into Train (15%), Dev (45%), and Test (40%). Run the held-out Test set strictly ONCE.
+- Tiered Data Split Isolation: NEVER evaluate a judge on its few-shot prompt examples.
+  - *Micro Tier (<50 traces)*: Use a 2-way split (2–5 few-shot seed examples + held-out test set). Prevent leakage without forcing artificial 3-way fractional math on small samples.
+  - *Production Tier (≥50 traces)*: Split data into Train (15%), Dev (45%), and Test (40%). Run the held-out Test set strictly ONCE.
 - TPR/TNR Over Accuracy: NEVER report raw accuracy or percent agreement on imbalanced datasets. Alignment MUST be reported via True Positive Rate (TPR) and True Negative Rate (TNR).
 - Bias Correction: When reporting aggregate production pass rates from an imperfect judge, apply the Rogan-Gladen correction with bootstrap confidence intervals.
 - Pin Model Snapshots: NEVER run production judges on floating model aliases (`gpt-4o`, `gemini-1.5-pro`). Pin exact dated snapshots to prevent silent eval drift.
@@ -33,6 +35,9 @@ Verify before ending the turn:
 ---
 
 ## 1. Fast Intent Router
+
+> [!TIP]
+> **Inline Default**: A single agent executes all eval workflows inline by default (sampling, rubric drafting, code assertion design, calibration calculation) to eliminate subagent delegation overhead. Specialist agents are reserved for batch annotation queues exceeding 100 traces.
 
 Identify the user's situation and immediately activate the matching workflow:
 
@@ -89,15 +94,26 @@ When criteria require semantic interpretation (tone, faithfulness, nuance):
    - Few-Shot Examples (Clear Pass, Clear Fail, Borderline Pass).
    - Structured JSON Output with **Critique preceding Result**.
    See [judge_rubric_templates.md](./references/judge_rubric_templates.md).
+3. **1-Click Ready-to-Run Pydantic Schema**:
+   Generate instantly via `python3 "$SKILLS_DIR/evals/scripts/score_calibration.py" --template` or drop in:
+   ```python
+   from pydantic import BaseModel, Field
+
+   class JudgeVerdict(BaseModel):
+       reasoning: str = Field(..., description="Step-by-step critique evaluating candidate against operational criteria.")
+       passed: bool = Field(..., description="Binary verdict: True if output satisfies criteria, False if any violation occurs.")
+   ```
 
 ### E. Evaluator Calibration & Rogan-Gladen Statistics
 Validate judges against human labels without data leakage:
-1. **Split Data**: Train (15%), Dev (45%), Test (40%).
+1. **Split Data**:
+   - Micro Tier (<50 traces): Few-shot seed (2–5 examples) + held-out test set.
+   - Production Tier (≥50 traces): Train (15%), Dev (45%), Test (40%).
 2. **Run Calibration CLI**:
    ```bash
    python3 "$SKILLS_DIR/evals/scripts/score_calibration.py" \
      --input test_predictions.jsonl \
-     --p-obs 0.82 \
+     --infer-p-obs \
      --bootstrap 2000
    ```
 3. **Threshold Gates**:
@@ -118,7 +134,7 @@ Decompose evaluation into independent stages:
 |---|---|---|
 | `scripts/sample_traces.py` | Stratified & diverse trace sampler | `--input <path> --count <n> --output <path>` |
 | `scripts/serve_review_app.py` | Local trace review & annotation server | `--samples <path> --port <int> --data-dir <path>` |
-| `scripts/score_calibration.py` | TPR/TNR, confusion matrix & Rogan-Gladen CIs | `--input <path> --p-obs <float> --bootstrap <int>` |
+| `scripts/score_calibration.py` | TPR/TNR, confusion matrix & Rogan-Gladen CIs | `--input <path> [--p-obs <float> \| --infer-p-obs] [--template] [--bootstrap <int>]` |
 
 ## Step observations
 

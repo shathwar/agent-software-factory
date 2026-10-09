@@ -20,8 +20,12 @@ from typing import List, Optional, Sequence, Tuple
 
 
 TOOL_MODULES = {
+    "debug": ("src/ship/tools/debug.py", "skills/debug/scripts/verify_fix.py"),
     "design": ("src/ship/tools/design.py", "skills/design/scripts/validate_design.py"),
+    "evals": ("src/ship/tools/evals.py", "skills/evals/scripts/score_calibration.py"),
+    "sample_traces": ("src/ship/tools/sample_traces.py", "skills/evals/scripts/sample_traces.py"),
     "simplify": ("src/ship/tools/simplify.py", "skills/simplify/scripts/scan_debt.py"),
+    "skill": ("src/ship/tools/skill.py", "skills/skill/scripts/validate_skill.py"),
     "tdd": ("src/ship/tools/tdd.py", "skills/tdd/scripts/verify_tdd.py"),
     "review": ("src/ship/tools/review.py", "skills/review/scripts/validate_report.py"),
     "spike": ("src/ship/tools/spike.py", "skills/spike/scripts/run_spike.py"),

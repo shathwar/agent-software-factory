@@ -170,16 +170,17 @@ def validate_adr_content(content: str, filename: str = "ADR.md") -> ValidationRe
             file_path=filename,
         ))
     else:
-        # Check for at least 2 options and one marked chosen
+        # Check for at least 2 options (or single uncontested option) and one marked chosen
         has_option_a = bool(re.search(r"###\s+Option\s+A\b", content, re.IGNORECASE))
         has_option_b = bool(re.search(r"###\s+Option\s+B\b", content, re.IGNORECASE))
+        has_uncontested = bool(re.search(r"\b(uncontested|single option|standard upgrade)\b", content, re.IGNORECASE))
         has_chosen_flag = bool(re.search(r"\(Chosen\)|Chosen:|Selected:", content, re.IGNORECASE))
 
-        if not (has_option_a and has_option_b):
+        if not ((has_option_a and has_option_b) or (has_option_a and has_uncontested)):
             findings.append(Finding(
                 rule_id="DES-ADR-009",
                 severity="ERROR",
-                message="Considered Options must explore at least Option A and Option B alternatives",
+                message="Considered Options must explore at least Option A and Option B alternatives, or designate Option A as (Uncontested)",
                 file_path=filename,
             ))
         if not has_chosen_flag:

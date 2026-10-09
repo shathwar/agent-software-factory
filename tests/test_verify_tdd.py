@@ -11,9 +11,19 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 VERIFY_TDD = ROOT / "skills/tdd/scripts/verify_tdd.py"
+if not VERIFY_TDD.exists() or not VERIFY_TDD.is_file():
+    VERIFY_TDD = ROOT / "src/ship/tools/tdd.py"
+try:
+    VERIFY_TDD.read_bytes()
+except (PermissionError, OSError):
+    VERIFY_TDD = ROOT / "src/ship/tools/tdd.py"
 
+sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "skills/tdd/scripts"))
-import verify_tdd
+try:
+    import verify_tdd
+except (ImportError, PermissionError):
+    from ship.tools import tdd as verify_tdd
 
 
 class TestVerifyTDD(unittest.TestCase):

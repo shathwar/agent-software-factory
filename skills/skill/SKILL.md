@@ -20,11 +20,13 @@ set to the consumer project.
 > Begin immediately with autonomous requirements analysis, structure generation, or deterministic validation.
 
 <hard_constraints>
-- Native Claude Skills Standard: EVERY generated skill MUST produce standard `SKILL.md` + `scripts/` + `references/` + `assets/` + `evals/`.
-- Deterministic Companion: EVERY skill MUST provide an executable `scripts/validate_<skill>.py` script.
-- SemVer & Version Invariant: EVERY skill MUST have an explicit `VERSION` file (starting at `1.0.0`) and `CHANGELOG.md`.
-- Compatibility Evaluated: EVERY skill MUST specify and validate its Skill × Model × Host compatibility matrix.
-- Behavioral Evals Included: EVERY skill MUST include structured behavioral evaluation scenarios in `evals/eval_cases.json`.
+- Tiered Skill Archetypes: Support both Micro Skills and Standard Enterprise Packages.
+  - *Micro / Self-Contained Skill*: Single, standalone `SKILL.md` (with frontmatter, `<hard_constraints>`, and `<turn_contract>`). Zero boilerplate directories required when instructions fit cleanly in one file.
+  - *Standard Enterprise Package*: Comprehensive capability producing standard `SKILL.md` + `VERSION` + `CHANGELOG.md` + `scripts/` + `references/` + `assets/` + `evals/`.
+- Deterministic Companion: Standard enterprise skills MUST provide an executable `scripts/validate_<skill>.py` script.
+- SemVer & Version Invariant: Standard enterprise skills MUST have an explicit `VERSION` file (starting at `1.0.0`) and `CHANGELOG.md`.
+- Compatibility Evaluated: Every skill MUST specify and validate its Skill × Model × Host compatibility matrix.
+- Behavioral Evals Included: Standard enterprise skills MUST include structured behavioral evaluation scenarios in `evals/eval_cases.json`.
 </hard_constraints>
 
 <turn_contract>
@@ -53,32 +55,46 @@ Requirements Analysis ➔ SKILL.md Generation ➔ scripts/ & references/ ➔ eva
    - `model` / `effort` / `allowed_tools`: Optional runtime execution & tool sandboxing configuration for Claude frontmatter.
    - `tools_required`: Required environment tools.
 
-2. **Native Claude Skills Output Generation**:
-   Generate standard directory layout:
-   ```text
-   <skill-name>/
-   ├── SKILL.md
-   ├── VERSION
-   ├── CHANGELOG.md
-   ├── scripts/
-   │   └── validate_<skill>.py
-   ├── references/
-   │   └── <skill>_guide.md
-   ├── assets/
-   │   └── manifest.json
-   └── evals/
-       └── eval_cases.json
+2. **Archetype Generation**:
+   - **Micro Skill** (`--micro`): Generates a single, self-contained `SKILL.md` with zero boilerplate directories.
+   - **Standard Skill**: Generates the complete 7-artifact enterprise package:
+     ```text
+     <skill-name>/
+     ├── SKILL.md
+     ├── VERSION
+     ├── CHANGELOG.md
+     ├── scripts/
+     │   └── validate_<skill>.py
+     ├── references/
+     │   └── <skill>_guide.md
+     ├── assets/
+     │   └── manifest.json
+     └── evals/
+         └── eval_cases.json
+     ```
+
+3. **Instant Scaffolding CLI**:
+   ```bash
+   # Scaffold an instant micro skill
+   python3 "$SKILLS_DIR/skill/scripts/validate_skill.py" --init my-utility --micro
+
+   # Scaffold a full enterprise package
+   python3 "$SKILLS_DIR/skill/scripts/validate_skill.py" --init my-feature
    ```
 
-3. **Skill × Model × Host Compatibility Matrix**:
+4. **Skill × Model × Host Compatibility Matrix**:
    Evaluate matrix across hosts (`claude_code`, `antigravity`, `cursor`, `codex`, `claude_desktop`) and models (`claude-3-7-sonnet`, `claude-3-5-sonnet`, `gpt-4o`, `gemini-2-0-pro`, `haiku`).
 
-4. **Packaging & Versioning**:
+5. **Packaging & Versioning**:
    Validate directory structure with `python3 -m ship.cli skill validate <path>` and package into `.tar.gz` or `.zip`.
 
 ## 2. Deterministic Verification
 
 Run the companion validator:
 ```bash
-python3 scripts/validate_skill.py --strict
+# Validate standard skill
+python3 "$SKILLS_DIR/skill/scripts/validate_skill.py" path/to/skill --strict
+
+# Validate micro skill
+python3 "$SKILLS_DIR/skill/scripts/validate_skill.py" path/to/skill --micro
 ```
