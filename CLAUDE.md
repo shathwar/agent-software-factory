@@ -24,6 +24,11 @@ This repository develops the **Agentic Software Factory** (AgentFlow / Ship Engi
 - Specialist tools in `src/ship/tools/` and `skills/*/scripts/` maintain byte-for-byte parity.
 - Always run `python3 scripts/verify/sync_parity.py --check` to ensure zero drift.
 
-### 5. Adversarial Code Review
+### 5. Language Boundaries & Architectural Enforcement
+- **TypeScript**: Factory runtime (Lifecycle Engine, state machine, CLI, MCP server, state ledger, and policy evaluator).
+- **Python**: Specialist verification only (AST analysis, Python syntax, and Ruff/pytest wrappers). All specialist scripts MUST declare PEP 723 metadata (`dependencies = []`) using stdlib only.
+- **Markdown + YAML**: Skill contracts (`SKILL.md`). Portable host interface decoupled from script implementation details.
+
+### 6. Adversarial Code Review
 - Adhere strictly to the 12-field finding schema in `skills/review/references/finding_schema.md`.
 - Zero unhandled CRITICAL or HIGH defects before delivery.

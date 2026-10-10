@@ -10,10 +10,10 @@ import sys
 TOOLS = frozenset({"debug", "design", "evals", "sample_traces", "simplify", "skill", "tdd", "review", "spike", "ux"})
 
 
-def bun_executable():
-    executable = os.environ.get("SHIP_BUN") or shutil.which("bun")
+def js_executable():
+    executable = os.environ.get("SHIP_NODE") or shutil.which("node")
     if not executable:
-        raise RuntimeError("Specialist tools require Bun 1.3+. Install Bun and add it to PATH, or set SHIP_BUN to its executable.")
+        raise RuntimeError("TypeScript runtime requires Node.js 22+. Install node and add it to PATH.")
     return executable
 
 
@@ -21,7 +21,7 @@ def call_tool(action, args=None, *, timeout=60):
     """Exchange one JSON request; never evaluate caller-supplied source or shell text here."""
     script = Path(__file__).resolve().parent / "tools" / "rpc.ts"
     result = subprocess.run(
-        [bun_executable(), str(script)],
+        [js_executable(), str(script)],
         input=json.dumps({"action": action, "args": args or {}}, default=str, allow_nan=False),
         capture_output=True, text=True, timeout=timeout,
     )
@@ -38,7 +38,7 @@ def run_tool_cli(tool, argv):
     if tool not in TOOLS:
         raise ValueError(f"Unknown specialist tool: {tool}")
     try:
-        result = subprocess.run([bun_executable(), str(Path(__file__).resolve().parent / "tools" / f"{tool}.ts"), *argv],
+        result = subprocess.run([js_executable(), str(Path(__file__).resolve().parent / "tools" / f"{tool}.ts"), *argv],
                                 input=sys.stdin.read() if "-" in argv else None, capture_output=True, text=True)
         sys.stdout.write(result.stdout)
         sys.stderr.write(result.stderr)
